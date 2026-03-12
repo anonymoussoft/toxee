@@ -1,0 +1,729 @@
+{
+  "@@locale": "ja",
+  "chats": "チャット",
+  "contacts": "連絡先",
+  "requests": "リクエスト",
+  "groups": "グループ",
+  "settings": "設定",
+  "searchConversations": "ニックネーム / グループ / メッセージで検索",
+  "searchContacts": "連絡先を検索",
+  "searchResults": "検索結果",
+  "enterKeywordToSearch": "キーワードを入力して検索",
+  "noResultsFound": "結果が見つかりません",
+  "searchSectionMessages": "メッセージ",
+  "searchSectionConversations": "会話",
+  "searchHint": "検索...",
+  "messageCount": "{count} 件のメッセージ",
+  "@messageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchChatHistory": "チャット履歴を検索",
+  "searchResultsCount": "「{keyword}」の検索結果が {count} 件あります",
+  "@searchResultsCount": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "keyword": {"type": "String"}
+    }
+  },
+  "openChat": "チャットを開く",
+  "relatedChats": "{count} 件の関連メッセージ",
+  "@relatedChats": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "newItem": "新規",
+  "addFriend": "友達を追加",
+  "createGroup": "グループを作成",
+  "friendUserId": "友達のユーザーID（16進数）",
+  "groupNameOptional": "グループ名（オプション）",
+  "typeMessage": "メッセージを入力",
+  "messageToGroup": "グループにメッセージ",
+  "selfId": "自分のID",
+  "appearance": "外観",
+  "light": "ライト",
+  "dark": "ダーク",
+  "language": "言語",
+  "english": "English",
+  "arabic": "العربية",
+  "japanese": "日本語",
+  "korean": "한국어",
+  "simplifiedChinese": "简体中文",
+  "traditionalChinese": "繁體中文",
+  "profile": "プロフィール",
+  "nickname": "ニックネーム",
+  "statusMessage": "ステータスメッセージ",
+  "saveProfile": "プロフィールを保存",
+  "ok": "OK",
+  "cancel": "キャンセル",
+  "group": "グループ",
+  "file": "ファイル",
+  "audio": "オーディオ",
+  "friendRequestSent": "友達リクエストを送信しました",
+  "joinGroup": "グループに参加",
+  "groupId": "グループID",
+  "createAndOpen": "作成して開く",
+  "joinAndOpen": "参加して開く",
+  "knownGroups": "既知のグループ",
+  "selectAChat": "チャットを選択",
+  "photo": "写真",
+  "video": "動画",
+  "autoAcceptFriendRequests": "友達リクエストを自動承認",
+  "autoAcceptFriendRequestsDesc": "受信した友達リクエストを自動的に承認",
+  "autoAcceptGroupInvites": "グループ招待を自動承認",
+  "autoAcceptGroupInvitesDesc": "受信したグループ招待を自動的に承認",
+  "bootstrapNodes": "Bootstrapノード",
+  "currentNode": "現在使用中のノード",
+  "viewAndTestNodes": "ノードを表示してテスト",
+  "currentlyOnlineNoReconnect": "現在オンラインです。再接続の必要はありません",
+  "addOrCreateGroup": "追加 / グループを作成",
+  "joinGroupById": "IDでグループに参加",
+  "enterGroupId": "グループIDを入力してください",
+  "requestMessage": "リクエストメッセージ",
+  "groupAlias": "ローカルグループ名（オプション）",
+  "joinAction": "参加リクエストを送信",
+  "joinSuccess": "参加リクエストを送信しました",
+  "joinFailed": "グループへの参加に失敗しました",
+  "groupName": "グループ名",
+  "enterGroupName": "グループ名を入力してください",
+  "createAction": "グループを作成",
+  "createSuccess": "グループを作成しました",
+  "createFailed": "グループの作成に失敗しました",
+  "createdGroupId": "新しいグループID",
+  "copyId": "IDをコピー",
+  "copied": "クリップボードにコピーしました",
+  "addFailed": "追加に失敗しました",
+  "enterId": "Tox IDを入力してください",
+  "invalidLength": "IDは64または76文字の16進数である必要があります",
+  "invalidCharacters": "16進数の文字のみを含めることができます",
+  "paste": "貼り付け",
+  "addContactHint": "友達のTox ID（64または76文字の16進数）を入力してください。",
+  "verificationMessage": "確認メッセージ",
+  "defaultFriendRequestMessage": "こんにちは、友達として追加したいです。",
+  "friendRequestMessageTooLong": "友達リクエストメッセージは921文字を超えることはできません",
+  "enterMessage": "メッセージを入力してください",
+  "autoAcceptedNewFriendRequest": "新しい友達リクエストを自動承認しました",
+  "scanQrCodeToAddContact": "QRコードをスキャンして連絡先に追加",
+  "generateCard": "名刺を生成",
+  "customCardText": "カスタム名刺テキスト",
+  "userId": "ユーザーID",
+  "saveImage": "画像を保存",
+  "copy": "コピー",
+  "fileCopiedSuccessfully": "ファイルをコピーしました",
+  "idCopiedToClipboard": "IDをクリップボードにコピーしました",
+  "establishingEncryptedChannel": "暗号化チャネルを確立中...",
+  "@establishingEncryptedChannel": {
+    "description": "Loading message shown when initializing Tox connection"
+  },
+  "checkingUserInfo": "ユーザー情報を確認中...",
+  "@checkingUserInfo": {
+    "description": "Message shown when checking user information during startup"
+  },
+  "initializingService": "サービスを初期化中...",
+  "@initializingService": {
+    "description": "Message shown when initializing the service during startup"
+  },
+  "loggingIn": "ログイン中...",
+  "@loggingIn": {
+    "description": "Message shown when logging in during startup"
+  },
+  "initializingSDK": "SDKを初期化中...",
+  "@initializingSDK": {
+    "description": "Message shown when initializing SDK during startup"
+  },
+  "updatingProfile": "プロフィールを更新中...",
+  "@updatingProfile": {
+    "description": "Message shown when updating profile during startup"
+  },
+  "initializationCompleted": "初期化が完了しました！",
+  "@initializationCompleted": {
+    "description": "Message shown when initialization is completed"
+  },
+  "loadingFriends": "友達情報を読み込み中...",
+  "@loadingFriends": {
+    "description": "Message shown when loading friends information during startup"
+  },
+  "inProgress": "進行中",
+  "@inProgress": {
+    "description": "Label shown for steps that are currently in progress"
+  },
+  "completed": "完了",
+  "@completed": {
+    "description": "Label shown for steps that have been completed"
+  },
+  "personalCard": "個人カード",
+  "appTitle": "toxee",
+  "startChat": "チャットを開始",
+  "pasteServerUserId": "サーバーのユーザーIDをここに貼り付け",
+  "groupProfile": "グループプロフィール",
+  "invalidGroupId": "無効なグループID",
+  "maintainer": "メンテナー: {maintainer}",
+  "success": "成功",
+  "failed": "失敗",
+  "error": "エラー: {error}",
+  "saved": "保存しました",
+  "failedToSave": "保存に失敗しました: {error}",
+  "copyFailed": "コピーに失敗しました: {error}",
+  "failedToUpdateAvatar": "アバターの更新に失敗しました: {error}",
+  "failedToLoadQr": "QRコードの読み込みに失敗しました",
+  "helloFromToxee": "toxee からの挨拶",
+  "attachFailed": "添付に失敗しました: {error}",
+  "autoFriendRequestFromToxee": "toxee からの自動友達リクエスト",
+  "reconnect": "再接続",
+  "reconnectConfirmMessage": "選択したBootstrapノードを使用して再接続します。続行しますか？",
+  "reconnectedWaiting": "再ログインしました。接続を待機中...",
+  "reconnectWithThisNode": "このノードで再接続",
+  "friendOfflineCannotSendFile": "友達がオフラインです。ファイルを送信できません。オンラインになるまでお待ちください。",
+  "friendOfflineSendCardFailed": "友達がオフラインです。名刺の送信に失敗しました",
+  "friendOfflineSendImageFailed": "友達がオフラインです。画像の送信に失敗しました",
+  "friendOfflineSendVideoFailed": "友達がオフラインです。動画の送信に失敗しました",
+  "friendOfflineSendFileFailed": "友達がオフラインです。ファイルの送信に失敗しました",
+  "userNotInFriendList": "このユーザーは友達リストにありません。",
+  "sendFailed": "送信に失敗しました: {error}",
+  "myId": "自分のID",
+  "sendPersonalCardToGroup": "個人カードをグループに送信",
+  "personalCardSent": "個人カードを送信しました",
+  "sentPersonalCardToGroup": "グループに個人カードを送信しました",
+  "bootstrapNodesTitle": "Bootstrapノード",
+  "refresh": "更新",
+  "retry": "再試行",
+  "lastPing": "最後のping: {seconds}秒前",
+  "testNode": "ノードをテスト",
+  "deleteAccount": "アカウント削除",
+  "deleteAccountConfirmMessage": "アカウントとすべてのデータは永久に削除され、復元できません。慎重に操作してください。",
+  "delete": "削除",
+  "deleteAccountEnterPasswordToConfirm": "削除を確認するには、現在のアカウントのパスワードを入力してください。",
+  "deleteAccountTypeWordToConfirm": "削除を確認するには、下に表示されている英単語を正しく入力してください。",
+  "deleteAccountConfirmWordPrompt": "確認のため、以下の単語を下の欄に入力してください: {word}",
+  "deleteAccountWrongWord": "入力した単語が正しくありません。",
+  "applications": "アプリ",
+  "applicationsComingSoon": "さらに多くのアプリが近日公開予定...",
+  "notificationSound": "通知音",
+  "notificationSoundDesc": "新しいメッセージ、友達申請、グループ申請時に音を再生",
+  "downloadsDirectory": "ダウンロードディレクトリ",
+  "selectDownloadsDirectory": "ダウンロードディレクトリを選択",
+  "changeDownloadsDirectory": "ダウンロードディレクトリを変更",
+  "downloadsDirectoryDesc": "ファイルダウンロードのデフォルトディレクトリを設定します。受信したファイル、オーディオ、ビデオはこのディレクトリに保存されます。",
+  "downloadsDirectorySet": "ダウンロードディレクトリが設定されました",
+  "downloadsDirectoryReset": "ダウンロードディレクトリがデフォルトにリセットされました",
+  "failedToSelectDirectory": "ディレクトリの選択に失敗しました",
+  "reset": "リセット",
+  "autoDownloadSizeLimit": "自動ダウンロードサイズ制限",
+  "sizeLimitInMB": "サイズ制限 (MB)",
+  "autoDownloadSizeLimitDesc": "このサイズより小さいファイルとすべての画像は自動的にダウンロードされます。このサイズより大きいファイルは手動でダウンロードボタンをクリックする必要があります。",
+  "autoDownloadSizeLimitSet": "自動ダウンロードサイズ制限が設定されました",
+  "invalidSizeLimit": "無効なサイズ制限です。1〜10000の数字を入力してください",
+  "save": "保存",
+  "routeSelection": "ルート選択",
+  "online": "ONLINE",
+  "offline": "OFFLINE",
+  "canOnlySelectOnlineNode": "オンラインノードのみ選択できます",
+  "canOnlySelectTestedNode": "テストに成功したノードのみ選択できます。まずノードをテストしてください",
+  "switchNode": "ノードを切り替え",
+  "switchNodeConfirm": "ノード {node} に切り替えますか？切り替え後、再接続が必要です。",
+  "nodeSwitched": "ノードが切り替えられました。再接続中...",
+  "selectThisNode": "このノードを選択",
+  "nodeSwitchFailed": "ノードの切り替えに失敗しました: {error}",
+  "manualNodeInput": "手動ノード入力",
+  "nodeHost": "ホスト",
+  "nodePort": "ポート",
+  "nodePublicKey": "公開鍵",
+  "setAsCurrentNode": "現在のノードとして設定",
+  "nodeTestSuccess": "ノードテスト成功",
+  "nodeTestFailed": "ノードテスト失敗",
+  "invalidNodeInfo": "有効なノード情報（ホスト、ポート、公開鍵）を入力してください",
+  "nodeSetSuccess": "ノードが現在のノードとして正常に設定されました",
+  "bootstrapNodeMode": "Bootstrapノードモード",
+  "manualMode": "手動指定",
+  "autoMode": "自動（ウェブから取得）",
+  "manualModeDesc": "Bootstrapノード情報を手動で指定",
+  "autoModeDesc": "ウェブから自動的にBootstrapノードを取得して使用",
+  "autoModeDescPrefix": "自動的に からBootstrapノードを取得して使用",
+  "logOut": "ログアウト",
+  "logOutConfirm": "ログアウトしてもよろしいですか？",
+  "autoLogin": "自動ログイン",
+  "autoLoginEnabled": "自動ログイン：有効",
+  "autoLoginDisabled": "自動ログイン：無効",
+  "autoLoginDesc": "有効にすると、アプリ起動時に自動的にログインします。",
+  "disable": "無効にする",
+  "enable": "有効にする",
+  "login": "ログイン",
+  "register": "登録",
+  "registerNewAccount": "新規アカウント登録",
+  "unnamedAccount": "名前のないアカウント",
+  "password": "パスワード",
+  "accountInfo": "アカウント情報",
+  "accountManagement": "アカウント管理",
+  "localAccounts": "ローカルアカウント",
+  "showMore": "さらに {count} 件表示",
+  "showLess": "折りたたむ",
+  "current": "現在",
+  "lastLogin": "最終ログイン",
+  "switchAccount": "アカウント切替",
+  "exportAccount": "アカウントエクスポート",
+  "importAccount": "アカウントインポート",
+  "setPassword": "パスワード設定",
+  "changePassword": "パスワード変更",
+  "enterPasswordToExport": "アカウントをエクスポートするためのパスワードを入力",
+  "enterPasswordToImport": "アカウントをインポートするためのパスワードを入力",
+  "enterPasswordForAccount": "アカウント \"{nickname}\" のパスワードを入力",
+  "invalidPassword": "パスワードが正しくありません",
+  "accountExportedSuccessfully": "アカウントが正常にエクスポートされました: {filePath}",
+  "accountImportedSuccessfully": "アカウントが正常にインポートされました",
+  "passwordSetSuccessfully": "パスワードが正常に設定されました",
+  "passwordRemoved": "パスワードが削除されました",
+  "failedToSwitchAccount": "アカウントの切替に失敗しました: {error}",
+  "failedToExportAccount": "アカウントのエクスポートに失敗しました: {error}",
+  "failedToImportAccount": "アカウントのインポートに失敗しました: {error}",
+  "failedToSetPassword": "パスワードの設定に失敗しました: {error}",
+  "noAccountToExport": "エクスポートするアカウントがありません",
+  "noAccountSelected": "アカウントが選択されていません",
+  "accountAlreadyExists": "アカウントが既に存在します",
+  "accountAlreadyExistsMessage": "このIDのアカウントが既に存在します。更新しますか？",
+  "update": "更新",
+  "switchAccountConfirm": "\"{nickname}\" に切り替えますか？現在のアカウントからログアウトされます。",
+  "savedAccounts": "保存されたアカウント",
+  "tapToSelectDoubleTapToLogin": "タップで選択、ダブルタップでクイックログイン",
+  "tapToLogIn": "タップしてログイン",
+  "switchToThisAccount": "このアカウントに切り替え",
+  "newPassword": "新しいパスワード",
+  "confirmPassword": "パスワード確認",
+  "leaveEmptyToRemovePassword": "空欄にするとパスワードを削除",
+  "passwordsDoNotMatch": "パスワードが一致しません",
+  "never": "未ログイン",
+  "justNow": "たった今",
+  "daysAgo": "{count} 日前",
+  "hoursAgo": "{count} 時間前",
+  "minutesAgo": "{count} 分前",
+  "thisAccountIsAlreadyLoggedIn": "このアカウントは既にログインしています",
+  "noServicesFound": "サービスが見つかりませんでした",
+  "addIrcChannel": "チャンネルを追加",
+  "@addIrcChannel": {
+    "description": "Button text to add an IRC channel"
+  },
+  "aliveIPsFound": "アクティブIPが見つかりました: {count}",
+  "@aliveIPsFound": {
+    "description": "Text showing number of alive IPs found",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aliveIPsList": "アクティブIPリスト",
+  "@aliveIPsList": {
+    "description": "Title for alive IPs list"
+  },
+  "bootstrapServiceFound": "Bootstrapサービスが見つかりました",
+  "@bootstrapServiceFound": {
+    "description": "Message when bootstrap service is found"
+  },
+  "bootstrapServiceRunning": "Bootstrapサービス実行中: {ip}:{port}",
+  "@bootstrapServiceRunning": {
+    "description": "Status text when bootstrap service is running",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "bootstrapServiceStatus": "サービスステータス",
+  "@bootstrapServiceStatus": {
+    "description": "Label for bootstrap service status"
+  },
+  "close": "閉じる",
+  "@close": {
+    "description": "Button text to close dialog"
+  },
+  "deleteAccountFailed": "アカウントの削除に失敗しました: {error}",
+  "@deleteAccountFailed": {
+    "description": "Error message when account deletion fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "directorySelectionNotSupported": "このプラットフォームではディレクトリ選択がサポートされていません",
+  "@directorySelectionNotSupported": {
+    "description": "Message shown when directory selection is not supported on the platform"
+  },
+  "enterIrcChannel": "IRCチャンネル名を入力してください",
+  "@enterIrcChannel": {
+    "description": "Validation error message for empty IRC channel name"
+  },
+  "failedToSendFile": "{label}の送信に失敗しました: {error}",
+  "@failedToSendFile": {
+    "description": "Error message when file sending fails",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToSendFriendRequest": "友達リクエストの送信に失敗しました: {error}",
+  "@failedToSendFriendRequest": {
+    "description": "Error message when friend request sending fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "fileDoesNotExist": "ファイルが存在しません",
+  "@fileDoesNotExist": {
+    "description": "Error message when file does not exist"
+  },
+  "fileIsEmpty": "ファイルが空です",
+  "@fileIsEmpty": {
+    "description": "Error message when file is empty"
+  },
+  "install": "インストール",
+  "@install": {
+    "description": "Button text to install an application"
+  },
+  "invalidIrcChannel": "IRCチャンネルは#または&で始める必要があります",
+  "@invalidIrcChannel": {
+    "description": "Validation error message for invalid IRC channel format"
+  },
+  "ipAddress": "IPアドレス",
+  "@ipAddress": {
+    "description": "Label for IP address"
+  },
+  "ircAppInstalled": "IRCチャンネルアプリがインストールされました",
+  "@ircAppInstalled": {
+    "description": "Message shown when IRC app is installed"
+  },
+  "ircAppNotInstalled": "まずアプリケーションページからIRCチャンネルアプリをインストールしてください",
+  "@ircAppNotInstalled": {
+    "description": "Error message when trying to join IRC channel without installing the app"
+  },
+  "ircAppUninstalled": "IRCチャンネルアプリがアンインストールされました",
+  "@ircAppUninstalled": {
+    "description": "Message shown when IRC app is uninstalled"
+  },
+  "ircChannelAddFailed": "IRCチャンネルの追加に失敗しました",
+  "@ircChannelAddFailed": {
+    "description": "Error message when adding IRC channel fails"
+  },
+  "ircChannelAdded": "IRCチャンネルが追加されました: {channel}",
+  "@ircChannelAdded": {
+    "description": "Message shown when IRC channel is added",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannelApp": "IRCチャンネル",
+  "@ircChannelApp": {
+    "description": "Title for IRC Channel application"
+  },
+  "ircChannelAppDesc": "IRCチャンネルをToxグループに接続してメッセージを同期",
+  "@ircChannelAppDesc": {
+    "description": "Description for IRC Channel application"
+  },
+  "ircChannelDesc": "IRCチャンネル名を入力してください（例：#channel）。このチャンネル用にToxグループが作成されます。",
+  "@ircChannelDesc": {
+    "description": "Description text for IRC channel dialog"
+  },
+  "ircChannelHint": "#チャンネル",
+  "@ircChannelHint": {
+    "description": "Placeholder text for IRC channel input"
+  },
+  "ircChannelName": "IRCチャンネル名",
+  "@ircChannelName": {
+    "description": "Label for IRC channel name input field"
+  },
+  "ircChannelPassword": "チャンネルパスワード",
+  "@ircChannelPassword": {
+    "description": "Label for IRC channel password input field"
+  },
+  "ircChannelPasswordHint": "パスワードがない場合は空欄のまま",
+  "@ircChannelPasswordHint": {
+    "description": "Placeholder text for IRC channel password input"
+  },
+  "ircChannelRemoved": "IRCチャンネルが削除されました: {channel}",
+  "@ircChannelRemoved": {
+    "description": "Message shown when IRC channel is removed",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannels": "IRCチャンネル",
+  "@ircChannels": {
+    "description": "Label for list of IRC channels"
+  },
+  "ircConfigSaved": "IRC設定が保存されました",
+  "@ircConfigSaved": {
+    "description": "Success message when IRC configuration is saved"
+  },
+  "ircCustomNickname": "カスタムIRCニックネーム",
+  "@ircCustomNickname": {
+    "description": "Label for custom IRC nickname input field"
+  },
+  "ircCustomNicknameHint": "空欄のままにすると自動生成されたニックネームを使用",
+  "@ircCustomNicknameHint": {
+    "description": "Hint text for custom IRC nickname input field"
+  },
+  "ircPort": "ポート",
+  "@ircPort": {
+    "description": "Label for IRC server port input"
+  },
+  "ircServer": "サーバー",
+  "@ircServer": {
+    "description": "Label for IRC server address input"
+  },
+  "ircServerConfig": "IRCサーバー設定",
+  "@ircServerConfig": {
+    "description": "Title for IRC server configuration section"
+  },
+  "ircServerRequired": "IRCサーバーアドレスは必須です",
+  "@ircServerRequired": {
+    "description": "Error message when IRC server address is empty"
+  },
+  "ircUseSasl": "SASL認証を使用",
+  "@ircUseSasl": {
+    "description": "Label for SASL authentication toggle"
+  },
+  "ircUseSaslDesc": "SASL認証にTox公開鍵を使用（NickServ登録が必要）",
+  "@ircUseSaslDesc": {
+    "description": "Description for SASL authentication option"
+  },
+  "join": "参加",
+  "@join": {
+    "description": "Button text to join"
+  },
+  "joinIrcChannel": "IRCチャンネルに参加",
+  "@joinIrcChannel": {
+    "description": "Button text and dialog title for joining IRC channel"
+  },
+  "lanMode": "LANモード",
+  "@lanMode": {
+    "description": "LAN bootstrap node mode option"
+  },
+  "lanModeDesc": "ローカルネットワークBootstrapサービスを使用",
+  "@lanModeDesc": {
+    "description": "Description for LAN mode"
+  },
+  "messageReceivers": "メッセージ受信者 ({count})",
+  "@messageReceivers": {
+    "description": "Title for message receivers dialog",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "nicknameTooLong": "ニックネームが長すぎます",
+  "@nicknameTooLong": {
+    "description": "Error message when nickname is too long"
+  },
+  "nicknameCannotBeEmpty": "ニックネームを入力してください",
+  "noAliveIPsFound": "アクティブIPが見つかりませんでした",
+  "@noAliveIPsFound": {
+    "description": "Message when no alive IPs are found"
+  },
+  "noBootstrapService": "Bootstrapサービスが見つかりませんでした",
+  "@noBootstrapService": {
+    "description": "Message when no bootstrap service is found"
+  },
+  "noReceivers": "受信者はいません",
+  "@noReceivers": {
+    "description": "Message shown when there are no message receivers"
+  },
+  "nodeNotTestedWarning": "注意: このノードはテストされていません。接続できない可能性があります。",
+  "@nodeNotTestedWarning": {
+    "description": "Warning message when selecting untested node"
+  },
+  "nodeTestFailedWarning": "注意: このノードのテストに失敗しました。接続できない可能性があります。",
+  "@nodeTestFailedWarning": {
+    "description": "Warning message when selecting failed node"
+  },
+  "notProbedYet": "まだプローブされていません",
+  "@notProbedYet": {
+    "description": "Status text when IP has not been probed"
+  },
+  "probeFailed": "Bootstrapサービスが見つかりませんでした",
+  "@probeFailed": {
+    "description": "Message when probe fails"
+  },
+  "probeSingleIP": "このIPをプローブ",
+  "@probeSingleIP": {
+    "description": "Button tooltip to probe single IP"
+  },
+  "probeStatus": "プローブステータス",
+  "@probeStatus": {
+    "description": "Label for probe status"
+  },
+  "probeSuccess": "Bootstrapサービスが見つかりました",
+  "@probeSuccess": {
+    "description": "Message when probe succeeds"
+  },
+  "probing": "プローブ中...",
+  "@probing": {
+    "description": "Text shown when probing"
+  },
+  "probingBootstrapServices": "Bootstrapサービスをプローブ中: {current}/{total}",
+  "@probingBootstrapServices": {
+    "description": "Progress text for probing bootstrap services",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "probingIP": "{ip}をプローブ中...",
+  "@probingIP": {
+    "description": "Text shown when probing an IP",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshAliveIPs": "アクティブIPを更新",
+  "@refreshAliveIPs": {
+    "description": "Button tooltip to refresh alive IPs list"
+  },
+  "remove": "削除",
+  "@remove": {
+    "description": "Button text to remove an item"
+  },
+  "removeIrcChannel": "IRCチャンネルを削除",
+  "@removeIrcChannel": {
+    "description": "Title for remove channel confirmation dialog"
+  },
+  "removeIrcChannelConfirm": "{channel}を削除してもよろしいですか？対応するグループから退出します。",
+  "@removeIrcChannelConfirm": {
+    "description": "Confirmation message for removing IRC channel",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "scanLanBootstrapServices": "LAN Bootstrapサービスをスキャン",
+  "@scanLanBootstrapServices": {
+    "description": "Button text to scan LAN bootstrap services"
+  },
+  "scanLanBootstrapServicesTitle": "LAN Bootstrapサービス",
+  "@scanLanBootstrapServicesTitle": {
+    "description": "Title for LAN bootstrap scan page"
+  },
+  "scanPort": "スキャンポート",
+  "@scanPort": {
+    "description": "Label for scan port input field"
+  },
+  "scanning": "スキャン中...",
+  "@scanning": {
+    "description": "Text shown when scanning"
+  },
+  "scanningAliveIPs": "アクティブIPをスキャン中: {current}/{total}",
+  "@scanningAliveIPs": {
+    "description": "Progress text for scanning alive IPs",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "serviceRunning": "実行中",
+  "@serviceRunning": {
+    "description": "Status text when service is running"
+  },
+  "serviceStopped": "停止",
+  "@serviceStopped": {
+    "description": "Status text when service is stopped"
+  },
+  "startLocalBootstrapService": "ローカルBootstrapサービスを開始",
+  "@startLocalBootstrapService": {
+    "description": "Button text to start local bootstrap service"
+  },
+  "startScan": "スキャンを開始",
+  "@startScan": {
+    "description": "Button text to start scanning"
+  },
+  "statusMessageTooLong": "ステータスメッセージが長すぎます",
+  "@statusMessageTooLong": {
+    "description": "Error message when status message is too long"
+  },
+  "stopLocalBootstrapService": "ローカルBootstrapサービスを停止",
+  "@stopLocalBootstrapService": {
+    "description": "Button text to stop local bootstrap service"
+  },
+  "uninstall": "アンインストール",
+  "@uninstall": {
+    "description": "Button text to uninstall an application"
+  },
+  "uninstallIrcApp": "IRCチャンネルアプリをアンインストール",
+  "@uninstallIrcApp": {
+    "description": "Title for uninstall confirmation dialog"
+  },
+  "uninstallIrcAppConfirm": "IRCチャンネルアプリをアンインストールしてもよろしいですか？すべてのIRCチャンネルが削除され、すべてのIRCグループから退出します。",
+  "@uninstallIrcAppConfirm": {
+    "description": "Confirmation message for uninstalling IRC app"
+  },
+  "useAsBootstrapNode": "Bootstrapノードとして使用",
+  "@useAsBootstrapNode": {
+    "description": "Button text to use service as bootstrap node"
+  },
+  "searchSummary": "{contacts}件の連絡先、{groups}件のグループ、{messages}件のメッセージスレッドが見つかりました",
+  "@searchSummary": {
+    "placeholders": {
+      "contacts": {
+        "type": "int"
+      },
+      "groups": {
+        "type": "int"
+      },
+      "messages": {
+        "type": "int"
+      }
+    }
+  },
+  "searchFailed": "検索に失敗しました。部分的な結果を表示しています",
+  "callVideoCall": "ビデオ通話",
+  "callAudioCall": "音声通話",
+  "callReject": "拒否",
+  "callAccept": "応答",
+  "callRemoteVideo": "相手の映像",
+  "callUnmute": "ミュート解除",
+  "callMute": "ミュート",
+  "callVideoOff": "ビデオオフ",
+  "callVideoOn": "ビデオオン",
+  "callSpeakerOff": "スピーカーオフ",
+  "callSpeakerOn": "スピーカーオン",
+  "callHangUp": "電話を切る",
+  "callEnded": "通話が終了しました",
+  "callPermissionMicrophoneRequired": "通話を続けるにはマイクへのアクセス許可が必要です。",
+  "callPermissionCameraRequired": "通話を続けるにはカメラへのアクセス許可が必要です。",
+  "callPermissionMicrophoneCameraRequired": "通話を続けるにはマイクとカメラへのアクセス許可が必要です。",
+  "callAudioInterrupted": "通話中に音声出力が変更されたか、中断されました。",
+  "callCalling": "発信中...",
+  "callMinimize": "最小化",
+  "callReturnToCall": "通話に戻る",
+  "callQualityGood": "接続良好",
+  "callQualityMedium": "接続普通",
+  "callQualityPoor": "接続不良",
+  "callQualityUnknown": "—",
+  "callQualityLabel": "通話品質"
+}

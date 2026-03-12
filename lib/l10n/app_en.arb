@@ -1,0 +1,1244 @@
+{
+  "@@locale": "en",
+  "chats": "Chats",
+  "contacts": "Contacts",
+  "requests": "Requests",
+  "groups": "Groups",
+  "settings": "Settings",
+  "searchConversations": "Search by nickname / group / message",
+  "@searchConversations": {
+    "description": "Search conversations by nickname, group name, or message content"
+  },
+  "searchContacts": "Search contacts",
+  "searchResults": "Search results",
+  "enterKeywordToSearch": "Enter a keyword to search",
+  "noResultsFound": "No results found",
+  "searchSectionMessages": "Messages",
+  "searchSectionConversations": "Conversations",
+  "searchHint": "Search...",
+  "messageCount": "{count} messages",
+  "@messageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchChatHistory": "Search Chat History",
+  "searchResultsCount": "There are {count} results for \"{keyword}\"",
+  "@searchResultsCount": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "keyword": {"type": "String"}
+    }
+  },
+  "openChat": "Open chat",
+  "relatedChats": "{count} related chats",
+  "@relatedChats": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "newItem": "New",
+  "@newItem": {
+    "description": "Label for new item button"
+  },
+  "addFriend": "Add Friend",
+  "createGroup": "Create Group",
+  "friendUserId": "Friend User ID (hex)",
+  "@friendUserId": {
+    "description": "Label for friend user ID input field"
+  },
+  "groupNameOptional": "Group name (optional)",
+  "typeMessage": "Type a message",
+  "messageToGroup": "Message to group",
+  "selfId": "Self ID",
+  "appearance": "Appearance",
+  "light": "Light",
+  "dark": "Dark",
+  "language": "Language",
+  "english": "English",
+  "arabic": "العربية",
+  "japanese": "日本語",
+  "korean": "한국어",
+  "simplifiedChinese": "简体中文",
+  "traditionalChinese": "繁體中文",
+  "profile": "Profile",
+  "nickname": "Nickname",
+  "statusMessage": "Status message",
+  "saveProfile": "Save Profile",
+  "ok": "OK",
+  "cancel": "Cancel",
+  "group": "Group",
+  "file": "File",
+  "audio": "Audio",
+  "friendRequestSent": "Friend request sent",
+  "joinGroup": "Join group",
+  "groupId": "Group ID",
+  "createAndOpen": "Create & Open",
+  "joinAndOpen": "Join & Open",
+  "knownGroups": "Known groups",
+  "selectAChat": "Select a chat",
+  "photo": "Photo",
+  "video": "Video",
+  "autoAcceptFriendRequests": "Auto-accept friend requests",
+  "@autoAcceptFriendRequests": {
+    "description": "Setting to automatically accept incoming friend requests"
+  },
+  "autoAcceptFriendRequestsDesc": "Accept incoming friend requests automatically",
+  "autoAcceptGroupInvites": "Auto-accept group invitations",
+  "@autoAcceptGroupInvites": {
+    "description": "Setting to automatically accept incoming group invitations"
+  },
+  "autoAcceptGroupInvitesDesc": "Accept incoming group invitations automatically",
+  "bootstrapNodes": "Bootstrap Nodes",
+  "currentNode": "Current Node",
+  "viewAndTestNodes": "View and Test Nodes",
+  "currentlyOnlineNoReconnect": "Currently online, no need to reconnect",
+  "addOrCreateGroup": "Add / Create Group",
+  "joinGroupById": "Join Group by ID",
+  "enterGroupId": "Please enter Group ID",
+  "requestMessage": "Request Message",
+  "groupAlias": "Local Group Name (optional)",
+  "joinAction": "Send Join Request",
+  "joinSuccess": "Join request sent",
+  "joinFailed": "Failed to join group",
+  "createGroup": "Create Group",
+  "groupName": "Group Name",
+  "enterGroupName": "Please enter Group Name",
+  "createAction": "Create Group",
+  "createSuccess": "Group created",
+  "createFailed": "Failed to create group",
+  "createdGroupId": "New Group ID",
+  "copyId": "Copy ID",
+  "copied": "Copied to clipboard",
+  "addFailed": "Add failed",
+  "enterId": "Please enter Tox ID",
+  "invalidLength": "ID must be 64 or 76 hexadecimal characters",
+  "invalidCharacters": "Can only contain hexadecimal characters",
+  "paste": "Paste",
+  "addContactHint": "Enter friend's Tox ID (64 or 76 hexadecimal characters).",
+  "verificationMessage": "Verification Message",
+  "defaultFriendRequestMessage": "Hello, I'd like to add you as a friend.",
+  "@defaultFriendRequestMessage": {
+    "description": "Default message for friend request"
+  },
+  "friendRequestMessageTooLong": "Friend request message cannot exceed 921 characters",
+  "@friendRequestMessageTooLong": {
+    "description": "Error message when friend request message exceeds maximum length"
+  },
+  "enterMessage": "Please enter a message",
+  "@enterMessage": {
+    "description": "Error message when message is empty"
+  },
+  "autoAcceptedNewFriendRequest": "Auto-accepted new friend request",
+  "scanQrCodeToAddContact": "Scan QR code to add me as contact",
+  "@scanQrCodeToAddContact": {
+    "description": "Text shown on QR code card"
+  },
+  "generateCard": "Generate Card",
+  "@generateCard": {
+    "description": "Button text to generate QR code card"
+  },
+  "customCardText": "Custom card text",
+  "@customCardText": {
+    "description": "Label for custom text input field below QR code"
+  },
+  "userId": "User ID",
+  "saveImage": "Save Image",
+  "copy": "Copy",
+  "fileCopiedSuccessfully": "File copied successfully",
+  "idCopiedToClipboard": "ID copied to clipboard",
+  "establishingEncryptedChannel": "Establishing encrypted channel...",
+  "@establishingEncryptedChannel": {
+    "description": "Loading message shown when initializing Tox connection"
+  },
+  "checkingUserInfo": "Checking user information...",
+  "@checkingUserInfo": {
+    "description": "Message shown when checking user information during startup"
+  },
+  "initializingService": "Initializing service...",
+  "@initializingService": {
+    "description": "Message shown when initializing the service during startup"
+  },
+  "loggingIn": "Logging in...",
+  "@loggingIn": {
+    "description": "Message shown when logging in during startup"
+  },
+  "initializingSDK": "Initializing SDK...",
+  "@initializingSDK": {
+    "description": "Message shown when initializing SDK during startup"
+  },
+  "updatingProfile": "Updating profile...",
+  "@updatingProfile": {
+    "description": "Message shown when updating profile during startup"
+  },
+  "initializationCompleted": "Initialization completed!",
+  "@initializationCompleted": {
+    "description": "Message shown when initialization is completed"
+  },
+  "loadingFriends": "Loading friends...",
+  "@loadingFriends": {
+    "description": "Message shown when loading friends information during startup"
+  },
+  "inProgress": "In Progress",
+  "@inProgress": {
+    "description": "Label shown for steps that are currently in progress"
+  },
+  "completed": "Completed",
+  "@completed": {
+    "description": "Label shown for steps that have been completed"
+  },
+  "personalCard": "Personal Card",
+  "@personalCard": {
+    "description": "Button label to send personal QR code card"
+  },
+  "appTitle": "toxee",
+  "startChat": "Start Chat",
+  "pasteServerUserId": "Paste the server User ID here",
+  "groupProfile": "Group Profile",
+  "invalidGroupId": "Invalid group ID",
+  "maintainer": "Maintainer: {maintainer}",
+  "@maintainer": {
+    "description": "Bootstrap node maintainer label",
+    "placeholders": {
+      "maintainer": {
+        "type": "String"
+      }
+    }
+  },
+  "success": "Success",
+  "failed": "Failed",
+  "error": "Error: {error}",
+  "@error": {
+    "description": "Error message with error details",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "saved": "Saved",
+  "failedToSave": "Failed to save: {error}",
+  "@failedToSave": {
+    "description": "Error message when save operation fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "copyFailed": "Copy failed: {error}",
+  "@copyFailed": {
+    "description": "Error message when copy operation fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToUpdateAvatar": "Failed to update avatar: {error}",
+  "@failedToUpdateAvatar": {
+    "description": "Error message when avatar update fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToLoadQr": "Failed to load QR",
+  "helloFromToxee": "Hello from toxee",
+  "attachFailed": "Attach failed: {error}",
+  "@attachFailed": {
+    "description": "Error message when attachment fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "autoFriendRequestFromToxee": "Auto friend request from toxee",
+  "reconnect": "Reconnect",
+  "reconnectConfirmMessage": "Will reconnect using the selected bootstrap node. Continue?",
+  "reconnectedWaiting": "Re-logged in, waiting for connection...",
+  "reconnectWithThisNode": "Reconnect with this node",
+  "friendOfflineCannotSendFile": "Friend is offline. Cannot send file. Please wait until they are online.",
+  "friendOfflineSendCardFailed": "Friend is offline. Failed to send personal card.",
+  "friendOfflineSendImageFailed": "Friend is offline. Failed to send image.",
+  "friendOfflineSendVideoFailed": "Friend is offline. Failed to send video.",
+  "friendOfflineSendFileFailed": "Friend is offline. Failed to send file.",
+  "userNotInFriendList": "User is not in your friend list.",
+  "sendFailed": "Send failed: {error}",
+  "@sendFailed": {
+    "description": "Error message when send operation fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "myId": "My ID",
+  "sendPersonalCardToGroup": "Send Personal Card to Group",
+  "personalCardSent": "Personal Card sent",
+  "sentPersonalCardToGroup": "Sent Personal Card to group",
+  "bootstrapNodesTitle": "Bootstrap Nodes",
+  "refresh": "Refresh",
+  "retry": "Retry",
+  "lastPing": "Last ping: {seconds}s ago",
+  "@lastPing": {
+    "description": "Last ping time for bootstrap node",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "testNode": "Test node",
+  "deleteAccount": "Delete Account",
+  "@deleteAccount": {
+    "description": "Button text for account deletion"
+  },
+  "deleteAccountConfirmMessage": "Your account and all data will be permanently deleted and cannot be recovered. Please proceed with caution.",
+  "@deleteAccountConfirmMessage": {
+    "description": "Confirmation message for account deletion"
+  },
+  "delete": "Delete",
+  "@delete": {
+    "description": "Confirmation button text for account deletion"
+  },
+  "deleteAccountEnterPasswordToConfirm": "Enter your account password to confirm deletion.",
+  "deleteAccountTypeWordToConfirm": "Type the word shown below to confirm deletion.",
+  "deleteAccountConfirmWordPrompt": "Type the following word in the box below to confirm: {word}",
+  "@deleteAccountConfirmWordPrompt": {
+    "placeholders": {
+      "word": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteAccountWrongWord": "The word you entered is incorrect.",
+  "applications": "Applications",
+  "@applications": {
+    "description": "Applications page title"
+  },
+  "applicationsComingSoon": "More applications coming soon...",
+  "@applicationsComingSoon": {
+    "description": "Message shown on applications page when no apps are available"
+  },
+  "notificationSound": "Notification Sound",
+  "@notificationSound": {
+    "description": "Title for notification sound setting"
+  },
+  "notificationSoundDesc": "Play sound for new messages, friend requests, and group requests",
+  "@notificationSoundDesc": {
+    "description": "Description for notification sound setting"
+  },
+  "downloadsDirectory": "Downloads Directory",
+  "selectDownloadsDirectory": "Select Downloads Directory",
+  "changeDownloadsDirectory": "Change Downloads Directory",
+  "downloadsDirectoryDesc": "Set the default directory for file downloads. Received files, audio, and videos will be saved to this directory.",
+  "downloadsDirectorySet": "Downloads directory set",
+  "downloadsDirectoryReset": "Downloads directory reset to default",
+  "failedToSelectDirectory": "Failed to select directory",
+  "reset": "Reset",
+  "autoDownloadSizeLimit": "Auto Download Size Limit",
+  "sizeLimitInMB": "Size Limit (MB)",
+  "autoDownloadSizeLimitDesc": "Files smaller than this size and all images will be downloaded automatically. Files larger than this size require manual download via the download button.",
+  "autoDownloadSizeLimitSet": "Auto download size limit set to",
+  "invalidSizeLimit": "Invalid size limit, please enter a number between 1 and 10000",
+  "save": "Save",
+  "testNode": "Test Node",
+  "@testNode": {
+    "description": "Button text to test current bootstrap node"
+  },
+  "routeSelection": "Route Selection",
+  "@routeSelection": {
+    "description": "Button text to open route selection page"
+  },
+  "online": "ONLINE",
+  "@online": {
+    "description": "Online status text"
+  },
+  "offline": "OFFLINE",
+  "@offline": {
+    "description": "Offline status text"
+  },
+  "canOnlySelectOnlineNode": "Can only select online nodes",
+  "@canOnlySelectOnlineNode": {
+    "description": "Error message when trying to select offline node"
+  },
+  "canOnlySelectTestedNode": "Can only select successfully tested nodes, please test the node first",
+  "@canOnlySelectTestedNode": {
+    "description": "Error message when trying to select untested node"
+  },
+  "switchNode": "Switch Node",
+  "@switchNode": {
+    "description": "Title for node switch confirmation dialog"
+  },
+  "switchNodeConfirm": "Are you sure you want to switch to node {node}? Reconnection is required after switching.",
+  "@switchNodeConfirm": {
+    "description": "Confirmation message for node switch",
+    "placeholders": {
+      "node": {
+        "type": "String"
+      }
+    }
+  },
+  "nodeSwitched": "Node switched, reconnecting...",
+  "@nodeSwitched": {
+    "description": "Message shown after successful node switch"
+  },
+  "selectThisNode": "Select this node",
+  "@selectThisNode": {
+    "description": "Tooltip for node selection button"
+  },
+  "nodeSwitchFailed": "Node switch failed: {error}",
+  "@nodeSwitchFailed": {
+    "description": "Error message when node switch fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannelApp": "IRC Channel",
+  "@ircChannelApp": {
+    "description": "Title for IRC Channel application"
+  },
+  "ircChannelAppDesc": "Connect IRC channels to Tox groups for message synchronization",
+  "@ircChannelAppDesc": {
+    "description": "Description for IRC Channel application"
+  },
+  "install": "Install",
+  "@install": {
+    "description": "Button text to install an application"
+  },
+  "uninstall": "Uninstall",
+  "@uninstall": {
+    "description": "Button text to uninstall an application"
+  },
+  "ircAppInstalled": "IRC Channel app installed",
+  "@ircAppInstalled": {
+    "description": "Message shown when IRC app is installed"
+  },
+  "ircAppUninstalled": "IRC Channel app uninstalled",
+  "@ircAppUninstalled": {
+    "description": "Message shown when IRC app is uninstalled"
+  },
+  "uninstallIrcApp": "Uninstall IRC Channel App",
+  "@uninstallIrcApp": {
+    "description": "Title for uninstall confirmation dialog"
+  },
+  "uninstallIrcAppConfirm": "Are you sure you want to uninstall the IRC Channel app? All IRC channels will be removed and you will leave all IRC groups.",
+  "@uninstallIrcAppConfirm": {
+    "description": "Confirmation message for uninstalling IRC app"
+  },
+  "addIrcChannel": "Add Channel",
+  "@addIrcChannel": {
+    "description": "Button text to add an IRC channel"
+  },
+  "ircChannels": "IRC Channels",
+  "@ircChannels": {
+    "description": "Label for list of IRC channels"
+  },
+  "ircServerConfig": "IRC Server Configuration",
+  "@ircServerConfig": {
+    "description": "Title for IRC server configuration section"
+  },
+  "ircServer": "Server",
+  "@ircServer": {
+    "description": "Label for IRC server address input"
+  },
+  "ircPort": "Port",
+  "@ircPort": {
+    "description": "Label for IRC server port input"
+  },
+  "ircUseSasl": "Use SASL Authentication",
+  "@ircUseSasl": {
+    "description": "Label for SASL authentication toggle"
+  },
+  "ircUseSaslDesc": "Use Tox public key for SASL authentication (requires NickServ registration)",
+  "@ircUseSaslDesc": {
+    "description": "Description for SASL authentication option"
+  },
+  "ircServerRequired": "IRC server address is required",
+  "@ircServerRequired": {
+    "description": "Error message when IRC server address is empty"
+  },
+  "ircConfigSaved": "IRC configuration saved",
+  "@ircConfigSaved": {
+    "description": "Success message when IRC configuration is saved"
+  },
+  "ircChannelAdded": "IRC channel added: {channel}",
+  "@ircChannelAdded": {
+    "description": "Message shown when IRC channel is added",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannelAddFailed": "Failed to add IRC channel",
+  "@ircChannelAddFailed": {
+    "description": "Error message when adding IRC channel fails"
+  },
+  "ircChannelRemoved": "IRC channel removed: {channel}",
+  "@ircChannelRemoved": {
+    "description": "Message shown when IRC channel is removed",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "removeIrcChannel": "Remove IRC Channel",
+  "@removeIrcChannel": {
+    "description": "Title for remove channel confirmation dialog"
+  },
+  "removeIrcChannelConfirm": "Are you sure you want to remove {channel}? You will leave the corresponding group.",
+  "@removeIrcChannelConfirm": {
+    "description": "Confirmation message for removing IRC channel",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "remove": "Remove",
+  "@remove": {
+    "description": "Button text to remove an item"
+  },
+  "joinIrcChannel": "Join IRC Channel",
+  "@joinIrcChannel": {
+    "description": "Button text and dialog title for joining IRC channel"
+  },
+  "ircChannelName": "IRC Channel Name",
+  "@ircChannelName": {
+    "description": "Label for IRC channel name input field"
+  },
+  "ircChannelHint": "#channel",
+  "@ircChannelHint": {
+    "description": "Placeholder text for IRC channel input"
+  },
+  "ircChannelDesc": "Enter the IRC channel name (e.g., #channel). A Tox group will be created for this channel.",
+  "@ircChannelDesc": {
+    "description": "Description text for IRC channel dialog"
+  },
+  "enterIrcChannel": "Please enter IRC channel name",
+  "@enterIrcChannel": {
+    "description": "Validation error message for empty IRC channel name"
+  },
+  "invalidIrcChannel": "IRC channel must start with # or &",
+  "@invalidIrcChannel": {
+    "description": "Validation error message for invalid IRC channel format"
+  },
+  "join": "Join",
+  "@join": {
+    "description": "Button text to join"
+  },
+  "ircAppNotInstalled": "Please install the IRC Channel app from the Applications page first",
+  "@ircAppNotInstalled": {
+    "description": "Error message when trying to join IRC channel without installing the app"
+  },
+  "ircChannelPassword": "Channel Password",
+  "@ircChannelPassword": {
+    "description": "Label for IRC channel password input field"
+  },
+  "ircChannelPasswordHint": "Leave empty if no password",
+  "@ircChannelPasswordHint": {
+    "description": "Placeholder text for IRC channel password input"
+  },
+  "ircCustomNickname": "Custom IRC Nickname",
+  "@ircCustomNickname": {
+    "description": "Label for custom IRC nickname input field"
+  },
+  "ircCustomNicknameHint": "Leave empty to use auto-generated nickname",
+  "@ircCustomNicknameHint": {
+    "description": "Hint text for custom IRC nickname input field"
+  },
+  "deleteAccountFailed": "Failed to delete account: {error}",
+  "@deleteAccountFailed": {
+    "description": "Error message when account deletion fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "directorySelectionNotSupported": "Directory selection is not supported on this platform",
+  "@directorySelectionNotSupported": {
+    "description": "Message shown when directory selection is not supported on the platform"
+  },
+  "failedToSendFriendRequest": "Failed to send friend request: {error}",
+  "@failedToSendFriendRequest": {
+    "description": "Error message when friend request sending fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "fileDoesNotExist": "File does not exist",
+  "@fileDoesNotExist": {
+    "description": "Error message when file does not exist"
+  },
+  "fileIsEmpty": "File is empty",
+  "@fileIsEmpty": {
+    "description": "Error message when file is empty"
+  },
+  "failedToSendFile": "Failed to send {label}: {error}",
+  "@failedToSendFile": {
+    "description": "Error message when file sending fails",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noReceivers": "No receivers yet",
+  "@noReceivers": {
+    "description": "Message shown when there are no message receivers"
+  },
+  "messageReceivers": "Message Receivers ({count})",
+  "@messageReceivers": {
+    "description": "Title for message receivers dialog",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "close": "Close",
+  "@close": {
+    "description": "Button text to close dialog"
+  },
+  "nodeNotTestedWarning": "Note: This node has not been tested and may not be connectable.",
+  "@nodeNotTestedWarning": {
+    "description": "Warning message when selecting untested node"
+  },
+  "nodeTestFailedWarning": "Note: This node test failed and may not be connectable.",
+  "@nodeTestFailedWarning": {
+    "description": "Warning message when selecting failed node"
+  },
+  "nicknameTooLong": "Nickname too long",
+  "@nicknameTooLong": {
+    "description": "Error message when nickname is too long"
+  },
+  "nicknameCannotBeEmpty": "Nickname cannot be empty",
+  "@nicknameCannotBeEmpty": {
+    "description": "Validation error when nickname field is empty"
+  },
+  "statusMessageTooLong": "Status message too long",
+  "@statusMessageTooLong": {
+    "description": "Error message when status message is too long"
+  },
+  "manualNodeInput": "Manual Node Input",
+  "@manualNodeInput": {
+    "description": "Title for manual node input section"
+  },
+  "nodeHost": "Host",
+  "@nodeHost": {
+    "description": "Label for node host input field"
+  },
+  "nodePort": "Port",
+  "@nodePort": {
+    "description": "Label for node port input field"
+  },
+  "nodePublicKey": "Public Key",
+  "@nodePublicKey": {
+    "description": "Label for node public key input field"
+  },
+  "setAsCurrentNode": "Set as Current Node",
+  "@setAsCurrentNode": {
+    "description": "Button text to set manually entered node as current"
+  },
+  "nodeTestSuccess": "Node test successful",
+  "@nodeTestSuccess": {
+    "description": "Message shown when node test succeeds"
+  },
+  "nodeTestFailed": "Node test failed",
+  "@nodeTestFailed": {
+    "description": "Message shown when node test fails"
+  },
+  "invalidNodeInfo": "Please enter valid node information (host, port, and public key)",
+  "@invalidNodeInfo": {
+    "description": "Error message when node information is invalid"
+  },
+  "nodeSetSuccess": "Node set as current successfully",
+  "@nodeSetSuccess": {
+    "description": "Message shown when node is successfully set as current"
+  },
+  "bootstrapNodeMode": "Bootstrap Node Mode",
+  "@bootstrapNodeMode": {
+    "description": "Title for bootstrap node mode selection"
+  },
+  "manualMode": "Manual",
+  "@manualMode": {
+    "description": "Manual bootstrap node mode option"
+  },
+  "autoMode": "Auto (Fetch from Web)",
+  "@autoMode": {
+    "description": "Auto bootstrap node mode option that fetches from web"
+  },
+  "manualModeDesc": "Manually specify bootstrap node information",
+  "@manualModeDesc": {
+    "description": "Description for manual mode"
+  },
+  "autoModeDesc": "Automatically fetch and use bootstrap nodes from web",
+  "@autoModeDesc": {
+    "description": "Description for auto mode"
+  },
+  "autoModeDescPrefix": "Automatically fetch and use bootstrap nodes from ",
+  "@autoModeDescPrefix": {
+    "description": "Prefix text for auto mode description with clickable link"
+  },
+  "lanMode": "LAN Mode",
+  "@lanMode": {
+    "description": "LAN bootstrap node mode option"
+  },
+  "lanModeDesc": "Use local network bootstrap service",
+  "@lanModeDesc": {
+    "description": "Description for LAN mode"
+  },
+  "startLocalBootstrapService": "Start Local Bootstrap Service",
+  "@startLocalBootstrapService": {
+    "description": "Button text to start local bootstrap service"
+  },
+  "stopLocalBootstrapService": "Stop Local Bootstrap Service",
+  "@stopLocalBootstrapService": {
+    "description": "Button text to stop local bootstrap service"
+  },
+  "bootstrapServiceStatus": "Service Status",
+  "@bootstrapServiceStatus": {
+    "description": "Label for bootstrap service status"
+  },
+  "serviceRunning": "Running",
+  "@serviceRunning": {
+    "description": "Status text when service is running"
+  },
+  "serviceStopped": "Stopped",
+  "@serviceStopped": {
+    "description": "Status text when service is stopped"
+  },
+  "scanLanBootstrapServices": "Scan LAN Bootstrap Services",
+  "@scanLanBootstrapServices": {
+    "description": "Button text to scan LAN bootstrap services"
+  },
+  "scanLanBootstrapServicesTitle": "LAN Bootstrap Services",
+  "@scanLanBootstrapServicesTitle": {
+    "description": "Title for LAN bootstrap scan page"
+  },
+  "scanPort": "Scan Port",
+  "@scanPort": {
+    "description": "Label for scan port input field"
+  },
+  "startScan": "Start Scan",
+  "@startScan": {
+    "description": "Button text to start scanning"
+  },
+  "scanningAliveIPs": "Scanning alive IPs: {current}/{total}",
+  "@scanningAliveIPs": {
+    "description": "Progress text for scanning alive IPs",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "probingBootstrapServices": "Probing bootstrap services: {current}/{total}",
+  "@probingBootstrapServices": {
+    "description": "Progress text for probing bootstrap services",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "scanning": "Scanning...",
+  "@scanning": {
+    "description": "Text shown when scanning"
+  },
+  "probing": "Probing...",
+  "@probing": {
+    "description": "Text shown when probing"
+  },
+  "aliveIPsFound": "Alive IPs found: {count}",
+  "@aliveIPsFound": {
+    "description": "Text showing number of alive IPs found",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noAliveIPsFound": "No alive IPs found",
+  "@noAliveIPsFound": {
+    "description": "Message when no alive IPs are found"
+  },
+  "bootstrapServiceFound": "Bootstrap service found",
+  "@bootstrapServiceFound": {
+    "description": "Message when bootstrap service is found"
+  },
+  "noBootstrapService": "No bootstrap service",
+  "@noBootstrapService": {
+    "description": "Message when no bootstrap service is found"
+  },
+  "noServicesFound": "No services found",
+  "@noServicesFound": {
+    "description": "Message when no bootstrap services are found during scan"
+  },
+  "useAsBootstrapNode": "Use as Bootstrap Node",
+  "@useAsBootstrapNode": {
+    "description": "Button text to use service as bootstrap node"
+  },
+  "ipAddress": "IP Address",
+  "@ipAddress": {
+    "description": "Label for IP address"
+  },
+  "probeStatus": "Probe Status",
+  "@probeStatus": {
+    "description": "Label for probe status"
+  },
+  "probeSingleIP": "Probe this IP",
+  "@probeSingleIP": {
+    "description": "Button tooltip to probe single IP"
+  },
+  "probingIP": "Probing {ip}...",
+  "@probingIP": {
+    "description": "Text shown when probing an IP",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshAliveIPs": "Refresh Alive IPs",
+  "@refreshAliveIPs": {
+    "description": "Button tooltip to refresh alive IPs list"
+  },
+  "aliveIPsList": "Alive IPs List",
+  "@aliveIPsList": {
+    "description": "Title for alive IPs list"
+  },
+  "notProbedYet": "Not probed yet",
+  "@notProbedYet": {
+    "description": "Status text when IP has not been probed"
+  },
+  "probeSuccess": "Bootstrap service found",
+  "@probeSuccess": {
+    "description": "Message when probe succeeds"
+  },
+  "probeFailed": "No bootstrap service",
+  "@probeFailed": {
+    "description": "Message when probe fails"
+  },
+  "bootstrapServiceRunning": "Bootstrap service running: {ip}:{port}",
+  "@bootstrapServiceRunning": {
+    "description": "Status text when bootstrap service is running",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "logOut": "Log Out",
+  "@logOut": {
+    "description": "Button text to log out"
+  },
+  "logOutConfirm": "Are you sure you want to log out?",
+  "@logOutConfirm": {
+    "description": "Confirmation message when logging out"
+  },
+  "autoLogin": "Auto Login",
+  "@autoLogin": {
+    "description": "Label for auto login setting"
+  },
+  "autoLoginEnabled": "Auto Login: Enabled",
+  "@autoLoginEnabled": {
+    "description": "Status text when auto login is enabled"
+  },
+  "autoLoginDisabled": "Auto Login: Disabled",
+  "@autoLoginDisabled": {
+    "description": "Status text when auto login is disabled"
+  },
+  "autoLoginDesc": "After enabling, you will be automatically logged in when you start the application.",
+  "@autoLoginDesc": {
+    "description": "Description for auto login feature"
+  },
+  "disable": "Disable",
+  "@disable": {
+    "description": "Button text to disable auto login"
+  },
+  "enable": "Enable",
+  "@enable": {
+    "description": "Button text to enable auto login"
+  },
+  "login": "Login",
+  "@login": {
+    "description": "Button text to login"
+  },
+  "register": "Register",
+  "registerNewAccount": "Register new account",
+  "@registerNewAccount": {
+    "description": "Label for register new account list item"
+  },
+  "unnamedAccount": "Unnamed Account",
+  "@unnamedAccount": {
+    "description": "Display name when account has no nickname"
+  },
+  "@register": {
+    "description": "Button text to register"
+  },
+  "accountInfo": "Account Info",
+  "@accountInfo": {
+    "description": "Title for account information section"
+  },
+  "accountManagement": "Account Management",
+  "@accountManagement": {
+    "description": "Title for account management section"
+  },
+  "localAccounts": "Local Accounts",
+  "@localAccounts": {
+    "description": "Label for local accounts list"
+  },
+  "showMore": "Show {count} more",
+  "@showMore": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "showLess": "Show less",
+  "current": "Current",
+  "@current": {
+    "description": "Label for current account"
+  },
+  "lastLogin": "Last Login",
+  "@lastLogin": {
+    "description": "Label for last login time"
+  },
+  "switchAccount": "Switch Account",
+  "@switchAccount": {
+    "description": "Button text to switch account"
+  },
+  "exportAccount": "Export Account",
+  "@exportAccount": {
+    "description": "Button text to export account"
+  },
+  "importAccount": "Import Account",
+  "@importAccount": {
+    "description": "Button text to import account"
+  },
+  "setPassword": "Set Password",
+  "@setPassword": {
+    "description": "Button text to set password"
+  },
+  "changePassword": "Change Password",
+  "@changePassword": {
+    "description": "Title for change password dialog"
+  },
+  "enterPasswordToExport": "Enter password to export account",
+  "@enterPasswordToExport": {
+    "description": "Prompt for password when exporting account"
+  },
+  "enterPasswordToImport": "Enter password to import account",
+  "@enterPasswordToImport": {
+    "description": "Prompt for password when importing account"
+  },
+  "enterPasswordForAccount": "Enter password for account \"{nickname}\"",
+  "@enterPasswordForAccount": {
+    "description": "Prompt for password for specific account",
+    "placeholders": {
+      "nickname": {
+        "type": "String"
+      }
+    }
+  },
+  "invalidPassword": "Invalid password",
+  "@invalidPassword": {
+    "description": "Error message for invalid password"
+  },
+  "accountExportedSuccessfully": "Account exported successfully to: {filePath}",
+  "@accountExportedSuccessfully": {
+    "description": "Success message when account is exported",
+    "placeholders": {
+      "filePath": {
+        "type": "String"
+      }
+    }
+  },
+  "accountImportedSuccessfully": "Account imported successfully",
+  "@accountImportedSuccessfully": {
+    "description": "Success message when account is imported"
+  },
+  "passwordSetSuccessfully": "Password set successfully",
+  "@passwordSetSuccessfully": {
+    "description": "Success message when password is set"
+  },
+  "passwordRemoved": "Password removed",
+  "@passwordRemoved": {
+    "description": "Success message when password is removed"
+  },
+  "failedToSwitchAccount": "Failed to switch account: {error}",
+  "@failedToSwitchAccount": {
+    "description": "Error message when account switch fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToExportAccount": "Failed to export account: {error}",
+  "@failedToExportAccount": {
+    "description": "Error message when account export fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToImportAccount": "Failed to import account: {error}",
+  "@failedToImportAccount": {
+    "description": "Error message when account import fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToSetPassword": "Failed to set password: {error}",
+  "@failedToSetPassword": {
+    "description": "Error message when setting password fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noAccountToExport": "No account to export",
+  "@noAccountToExport": {
+    "description": "Error message when no account is available to export"
+  },
+  "noAccountSelected": "No account selected",
+  "@noAccountSelected": {
+    "description": "Error message when no account is selected"
+  },
+  "accountAlreadyExists": "Account Already Exists",
+  "@accountAlreadyExists": {
+    "description": "Title for dialog when account already exists"
+  },
+  "accountAlreadyExistsMessage": "An account with this ID already exists. Do you want to update it?",
+  "@accountAlreadyExistsMessage": {
+    "description": "Message when account already exists"
+  },
+  "update": "Update",
+  "@update": {
+    "description": "Button text to update account"
+  },
+  "switchAccountConfirm": "Are you sure you want to switch to \"{nickname}\"? You will be logged out of the current account.",
+  "@switchAccountConfirm": {
+    "description": "Confirmation message when switching account",
+    "placeholders": {
+      "nickname": {
+        "type": "String"
+      }
+    }
+  },
+  "savedAccounts": "Saved Accounts",
+  "@savedAccounts": {
+    "description": "Title for saved accounts list"
+  },
+  "tapToSelectDoubleTapToLogin": "Tap to select, double-tap to quick login",
+  "@tapToSelectDoubleTapToLogin": {
+    "description": "Hint text for account selection"
+  },
+  "tapToLogIn": "Tap to log in",
+  "@tapToLogIn": {
+    "description": "Hint text: tap saved account to log in"
+  },
+  "switchToThisAccount": "Switch to this account",
+  "@switchToThisAccount": {
+    "description": "Tooltip for switch account button"
+  },
+  "password": "Password",
+  "@password": {
+    "description": "Label for password input field"
+  },
+  "newPassword": "New Password",
+  "@newPassword": {
+    "description": "Label for new password input"
+  },
+  "confirmPassword": "Confirm Password",
+  "@confirmPassword": {
+    "description": "Label for confirm password input"
+  },
+  "leaveEmptyToRemovePassword": "Leave empty to remove password",
+  "@leaveEmptyToRemovePassword": {
+    "description": "Hint for password input when changing password"
+  },
+  "passwordsDoNotMatch": "Passwords do not match",
+  "@passwordsDoNotMatch": {
+    "description": "Error message when passwords don't match"
+  },
+  "never": "Never",
+  "@never": {
+    "description": "Text for never logged in"
+  },
+  "justNow": "Just now",
+  "@justNow": {
+    "description": "Text for just logged in"
+  },
+  "daysAgo": "{count} day{plural} ago",
+  "@daysAgo": {
+    "description": "Text for days ago",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "plural": {
+        "type": "String"
+      }
+    }
+  },
+  "hoursAgo": "{count} hour{plural} ago",
+  "@hoursAgo": {
+    "description": "Text for hours ago",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "plural": {
+        "type": "String"
+      }
+    }
+  },
+  "minutesAgo": "{count} minute{plural} ago",
+  "@minutesAgo": {
+    "description": "Text for minutes ago",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "plural": {
+        "type": "String"
+      }
+    }
+  },
+  "thisAccountIsAlreadyLoggedIn": "This account is already logged in",
+  "@thisAccountIsAlreadyLoggedIn": {
+    "description": "Message when trying to switch to current account"
+  },
+  "upgradeRequiredTitle": "Please upgrade the app",
+  "@upgradeRequiredTitle": {
+    "description": "Title on upgrade required screen"
+  },
+  "upgradeRequiredMessage": "Your data was saved by a newer version of the app (data version: {storedVersion}). This version supports up to {currentVersion}. Please install the latest update to continue.",
+  "@upgradeRequiredMessage": {
+    "description": "Message on upgrade required screen",
+    "placeholders": {
+      "storedVersion": {"type": "int"},
+      "currentVersion": {"type": "int"}
+    }
+  },
+  "upgradeAppTitle": "toxee",
+  "@upgradeAppTitle": {
+    "description": "App title on upgrade required screen"
+  },
+  "hide": "Hide",
+  "@hide": {
+    "description": "Tooltip to hide sidebar"
+  },
+  "pressBackAgainToExit": "Press back again to exit",
+  "@pressBackAgainToExit": {
+    "description": "SnackBar message when user presses back once; press again to exit app"
+  },
+  "startupFailed": "Startup Failed",
+  "@startupFailed": {
+    "description": "Error page title when startup fails"
+  },
+  "unknownError": "Unknown error",
+  "@unknownError": {
+    "description": "Fallback when error message is null"
+  },
+  "goToLogin": "Go to Login",
+  "@goToLogin": {
+    "description": "Button to go to login from startup error"
+  },
+  "conference": "Conference",
+  "@conference": {
+    "description": "Group type option for conference"
+  },
+  "defaultJoinRequestMessage": "Hi, please invite me into this group",
+  "@defaultJoinRequestMessage": {
+    "description": "Default message when requesting to join a group"
+  },
+  "userNotFoundPleaseRegister": "User not found. Please register first.",
+  "nicknameDoesNotMatch": "Nickname does not match. Please use the registered nickname or register a new account.",
+  "accountAlreadyExistsPleaseLogin": "Account already exists. Please login instead or use a different nickname.",
+  "profileNotFoundImportRestore": "Profile not found for this account. Please import or restore backup.",
+  "failedToInitializeTIMManager": "Failed to initialize TIMManager SDK",
+  "failedToGetToxId": "Failed to get Tox ID",
+  "failedToGenerateToxId": "Failed to generate Tox ID",
+  "registrationCouldNotCreateProfile": "Registration could not create a unique profile. Please try again.",
+  "importedAccount": "Imported Account",
+  "unknown": "Unknown",
+  "sendingToGroupsNotSupported": "Sending {label} to groups is not supported yet",
+  "@sendingToGroupsNotSupported": {
+    "placeholders": {"label": {"type": "String"}}
+  },
+  "noLabelSelected": "No {label} selected",
+  "@noLabelSelected": {
+    "placeholders": {"label": {"type": "String"}}
+  },
+  "searchSummary": "Found {contacts} contacts, {groups} groups, {messages} message threads",
+  "@searchSummary": {
+    "placeholders": {
+      "contacts": {
+        "type": "int"
+      },
+      "groups": {
+        "type": "int"
+      },
+      "messages": {
+        "type": "int"
+      }
+    }
+  },
+  "searchFailed": "Search failed, showing partial results",
+  "callVideoCall": "Video call",
+  "callAudioCall": "Audio call",
+  "callReject": "Reject",
+  "callAccept": "Accept",
+  "callRemoteVideo": "Remote video",
+  "callUnmute": "Unmute",
+  "callMute": "Mute",
+  "callVideoOff": "Video off",
+  "callVideoOn": "Video on",
+  "callSpeakerOff": "Speaker off",
+  "callSpeakerOn": "Speaker on",
+  "callHangUp": "Hang up",
+  "callEnded": "Call ended",
+  "callPermissionMicrophoneRequired": "Microphone permission is required to continue the call.",
+  "callPermissionCameraRequired": "Camera permission is required to continue the call.",
+  "callPermissionMicrophoneCameraRequired": "Microphone and camera permissions are required to continue the call.",
+  "callAudioInterrupted": "Audio output changed or was interrupted during the call.",
+  "callCalling": "Calling...",
+  "callMinimize": "Minimize",
+  "callReturnToCall": "Return to call",
+  "callQualityGood": "Good connection",
+  "callQualityMedium": "Fair connection",
+  "callQualityPoor": "Poor connection",
+  "callQualityUnknown": "—",
+  "callQualityLabel": "Call quality"
+}

@@ -1,0 +1,729 @@
+{
+  "@@locale": "zh_Hant",
+  "chats": "聊天",
+  "contacts": "聯絡人",
+  "requests": "請求",
+  "groups": "群組",
+  "settings": "設定",
+  "searchConversations": "按暱稱/群/訊息搜尋",
+  "searchContacts": "搜尋聯絡人",
+  "searchResults": "搜尋結果",
+  "enterKeywordToSearch": "請輸入關鍵詞搜尋",
+  "noResultsFound": "未找到結果",
+  "searchSectionMessages": "訊息",
+  "searchSectionConversations": "會話",
+  "searchHint": "搜尋...",
+  "messageCount": "{count} 條訊息",
+  "@messageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchChatHistory": "搜尋聊天記錄",
+  "searchResultsCount": "共有 {count} 條與「{keyword}」相關的結果",
+  "@searchResultsCount": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "keyword": {"type": "String"}
+    }
+  },
+  "openChat": "打開聊天",
+  "relatedChats": "{count} 條相關訊息",
+  "@relatedChats": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "newItem": "新建",
+  "addFriend": "新增好友",
+  "createGroup": "建立群聊",
+  "friendUserId": "好友 User ID（十六進位）",
+  "groupNameOptional": "群名稱（選填）",
+  "typeMessage": "輸入訊息",
+  "messageToGroup": "發送到群組",
+  "selfId": "我的ID",
+  "appearance": "外觀",
+  "light": "淺色",
+  "dark": "深色",
+  "language": "語言",
+  "english": "English",
+  "arabic": "العربية",
+  "japanese": "日本語",
+  "korean": "한국어",
+  "simplifiedChinese": "簡體中文",
+  "traditionalChinese": "繁體中文",
+  "profile": "資料",
+  "nickname": "暱稱",
+  "statusMessage": "簽名",
+  "saveProfile": "儲存資料",
+  "ok": "確定",
+  "cancel": "取消",
+  "group": "群",
+  "file": "檔案",
+  "audio": "音訊",
+  "friendRequestSent": "好友請求已發送",
+  "joinGroup": "加入群聊",
+  "groupId": "群ID",
+  "createAndOpen": "建立並開啟",
+  "joinAndOpen": "加入並開啟",
+  "knownGroups": "已知群組",
+  "selectAChat": "請選擇一個會話",
+  "photo": "圖片",
+  "video": "影片",
+  "autoAcceptFriendRequests": "自動接受好友申請",
+  "autoAcceptFriendRequestsDesc": "收到好友申請時自動通過",
+  "autoAcceptGroupInvites": "自動接受群組邀請",
+  "autoAcceptGroupInvitesDesc": "收到群組邀請時自動接受",
+  "bootstrapNodes": "Bootstrap 節點",
+  "currentNode": "目前節點",
+  "viewAndTestNodes": "查看並測試節點",
+  "currentlyOnlineNoReconnect": "目前已連線，無需重新連線",
+  "addOrCreateGroup": "新增 / 建立群組",
+  "joinGroupById": "透過 ID 加入群組",
+  "enterGroupId": "請輸入群組 ID",
+  "requestMessage": "申請留言",
+  "groupAlias": "本地群名稱（選填）",
+  "joinAction": "發送入群申請",
+  "joinSuccess": "入群申請已發送",
+  "joinFailed": "入群失敗",
+  "groupName": "群名稱",
+  "enterGroupName": "請輸入群名稱",
+  "createAction": "建立群聊",
+  "createSuccess": "群聊已建立",
+  "createFailed": "建立群聊失敗",
+  "createdGroupId": "新群組 ID",
+  "copyId": "複製 ID",
+  "copied": "已複製到剪貼板",
+  "addFailed": "新增失敗",
+  "enterId": "請輸入 Tox ID",
+  "invalidLength": "ID 必須為 64 或 76 位十六進位字元",
+  "invalidCharacters": "只能包含十六進位字元",
+  "paste": "貼上",
+  "addContactHint": "輸入好友的 Tox ID（64 或 76 位十六進位字元）。",
+  "verificationMessage": "驗證訊息",
+  "defaultFriendRequestMessage": "你好，我想添加你為好友。",
+  "friendRequestMessageTooLong": "好友請求訊息不能超過 921 個字元",
+  "enterMessage": "請輸入訊息",
+  "autoAcceptedNewFriendRequest": "已自動接受新的好友申請",
+  "scanQrCodeToAddContact": "掃描 QR 碼，新增我為聯絡人",
+  "generateCard": "生成名片",
+  "customCardText": "自訂名片文字",
+  "userId": "用戶ID",
+  "saveImage": "儲存圖片",
+  "copy": "複製",
+  "fileCopiedSuccessfully": "檔案複製成功",
+  "idCopiedToClipboard": "ID已複製到剪貼板",
+  "establishingEncryptedChannel": "正在建立 加密通道...",
+  "@establishingEncryptedChannel": {
+    "description": "Loading message shown when initializing Tox connection"
+  },
+  "checkingUserInfo": "正在檢查用戶資訊...",
+  "@checkingUserInfo": {
+    "description": "Message shown when checking user information during startup"
+  },
+  "initializingService": "正在初始化服務...",
+  "@initializingService": {
+    "description": "Message shown when initializing the service during startup"
+  },
+  "loggingIn": "正在登入...",
+  "@loggingIn": {
+    "description": "Message shown when logging in during startup"
+  },
+  "initializingSDK": "正在初始化 SDK...",
+  "@initializingSDK": {
+    "description": "Message shown when initializing SDK during startup"
+  },
+  "updatingProfile": "正在更新個人資料...",
+  "@updatingProfile": {
+    "description": "Message shown when updating profile during startup"
+  },
+  "initializationCompleted": "初始化完成！",
+  "@initializationCompleted": {
+    "description": "Message shown when initialization is completed"
+  },
+  "loadingFriends": "正在載入好友資訊...",
+  "@loadingFriends": {
+    "description": "Message shown when loading friends information during startup"
+  },
+  "inProgress": "進行中",
+  "@inProgress": {
+    "description": "Label shown for steps that are currently in progress"
+  },
+  "completed": "完成",
+  "@completed": {
+    "description": "Label shown for steps that have been completed"
+  },
+  "personalCard": "個人名片",
+  "appTitle": "toxee",
+  "startChat": "開始聊天",
+  "pasteServerUserId": "在此貼上伺服器用戶ID",
+  "groupProfile": "群組資料",
+  "invalidGroupId": "無效的群組ID",
+  "maintainer": "維護者: {maintainer}",
+  "success": "成功",
+  "failed": "失敗",
+  "error": "錯誤: {error}",
+  "saved": "已儲存",
+  "failedToSave": "儲存失敗: {error}",
+  "copyFailed": "複製失敗: {error}",
+  "failedToUpdateAvatar": "更新頭像失敗: {error}",
+  "failedToLoadQr": "載入 QR 碼失敗",
+  "helloFromToxee": "來自 toxee 的問候",
+  "attachFailed": "附件失敗: {error}",
+  "autoFriendRequestFromToxee": "來自 toxee 的自動好友請求",
+  "reconnect": "重新連線",
+  "reconnectConfirmMessage": "將使用選定的 Bootstrap 節點重新連線。是否繼續？",
+  "reconnectedWaiting": "已發起重新連線，正在等待建立連線...",
+  "reconnectWithThisNode": "使用此節點重新連線",
+  "friendOfflineCannotSendFile": "好友不在線，無法發送檔案。請等待好友上線後再試。",
+  "friendOfflineSendCardFailed": "好友不在線，發送名片失敗",
+  "friendOfflineSendImageFailed": "好友不在線，發送圖片失敗",
+  "friendOfflineSendVideoFailed": "好友不在線，發送視頻失敗",
+  "friendOfflineSendFileFailed": "好友不在線，發送檔案失敗",
+  "userNotInFriendList": "該用戶不在您的好友列表中。",
+  "sendFailed": "發送失敗: {error}",
+  "myId": "我的ID",
+  "sendPersonalCardToGroup": "發送個人名片到群組",
+  "personalCardSent": "個人名片已發送",
+  "sentPersonalCardToGroup": "已發送個人名片到群組",
+  "bootstrapNodesTitle": "Bootstrap 節點",
+  "refresh": "重新整理",
+  "retry": "重試",
+  "lastPing": "最後ping: {seconds}秒前",
+  "testNode": "測試節點",
+  "deleteAccount": "註銷帳號",
+  "deleteAccountConfirmMessage": "註銷後帳號與所有數據將永久刪除且無法找回，請謹慎操作。",
+  "delete": "註銷",
+  "deleteAccountEnterPasswordToConfirm": "請輸入當前帳號密碼以確認註銷。",
+  "deleteAccountTypeWordToConfirm": "請正確輸入下方顯示的英文單詞以確認註銷。",
+  "deleteAccountConfirmWordPrompt": "請在下框輸入以下單詞以確認: {word}",
+  "deleteAccountWrongWord": "輸入的單詞不正確",
+  "applications": "應用",
+  "applicationsComingSoon": "更多應用即將推出...",
+  "notificationSound": "通知聲音",
+  "notificationSoundDesc": "新消息、好友申請和群組申請時播放聲音",
+  "downloadsDirectory": "下載目錄",
+  "selectDownloadsDirectory": "選擇下載目錄",
+  "changeDownloadsDirectory": "更改下載目錄",
+  "downloadsDirectoryDesc": "設置默認的文件下載目錄。接收的文件、音頻和視頻將保存到此目錄。",
+  "downloadsDirectorySet": "下載目錄已設置",
+  "downloadsDirectoryReset": "下載目錄已重置為默認",
+  "failedToSelectDirectory": "選擇目錄失敗",
+  "reset": "重置",
+  "autoDownloadSizeLimit": "自動下載大小限制",
+  "sizeLimitInMB": "大小限制 (MB)",
+  "autoDownloadSizeLimitDesc": "小於此大小的文件和所有圖片將自動下載。大於此大小的文件需要手動點擊下載按鈕。",
+  "autoDownloadSizeLimitSet": "自動下載大小限制已設置為",
+  "invalidSizeLimit": "無效的大小限制，請輸入 1-10000 之間的數字",
+  "save": "保存",
+  "routeSelection": "線路選擇",
+  "online": "ONLINE",
+  "offline": "OFFLINE",
+  "canOnlySelectOnlineNode": "只能選擇在線節點",
+  "canOnlySelectTestedNode": "只能選擇已測試成功的節點，請先測試節點",
+  "switchNode": "切換節點",
+  "switchNodeConfirm": "確定切換到節點 {node} 嗎？切換後將重新連線。",
+  "nodeSwitched": "已切換節點，正在重新連線...",
+  "selectThisNode": "切換到此節點",
+  "nodeSwitchFailed": "節點切換失敗: {error}",
+  "manualNodeInput": "手動輸入節點",
+  "nodeHost": "主機",
+  "nodePort": "端口",
+  "nodePublicKey": "公鑰",
+  "setAsCurrentNode": "設置為當前節點",
+  "nodeTestSuccess": "節點測試成功",
+  "nodeTestFailed": "節點測試失敗",
+  "invalidNodeInfo": "請輸入有效的節點信息（主機、端口和公鑰）",
+  "nodeSetSuccess": "已設為目前節點",
+  "bootstrapNodeMode": "Bootstrap 節點模式",
+  "manualMode": "手動指定",
+  "autoMode": "自動（從網頁拉取）",
+  "manualModeDesc": "手動指定 Bootstrap 節點資訊",
+  "autoModeDesc": "自動從網頁拉取並使用 Bootstrap 節點",
+  "autoModeDescPrefix": "自動從 ",
+  "logOut": "登出",
+  "logOutConfirm": "確定要登出嗎？",
+  "autoLogin": "自動登入",
+  "autoLoginEnabled": "自動登入：已啟用",
+  "autoLoginDisabled": "自動登入：已停用",
+  "autoLoginDesc": "啟用後，啟動應用時將自動登入。",
+  "disable": "停用",
+  "enable": "啟用",
+  "login": "登入",
+  "register": "註冊",
+  "registerNewAccount": "註冊新帳號",
+  "unnamedAccount": "未命名帳號",
+  "password": "密碼",
+  "accountInfo": "帳戶資訊",
+  "accountManagement": "帳號管理",
+  "localAccounts": "本地帳號",
+  "showMore": "顯示更多（還有 {count} 個）",
+  "showLess": "收起",
+  "current": "當前",
+  "lastLogin": "最近登入",
+  "switchAccount": "切換帳號",
+  "exportAccount": "匯出帳號",
+  "importAccount": "匯入帳號",
+  "setPassword": "設定密碼",
+  "changePassword": "修改密碼",
+  "enterPasswordToExport": "輸入密碼以匯出帳號",
+  "enterPasswordToImport": "輸入密碼以匯入帳號",
+  "enterPasswordForAccount": "輸入帳號 \"{nickname}\" 的密碼",
+  "invalidPassword": "密碼錯誤",
+  "accountExportedSuccessfully": "帳號已成功匯出到: {filePath}",
+  "accountImportedSuccessfully": "帳號匯入成功",
+  "passwordSetSuccessfully": "密碼設定成功",
+  "passwordRemoved": "密碼已移除",
+  "failedToSwitchAccount": "切換帳號失敗: {error}",
+  "failedToExportAccount": "匯出帳號失敗: {error}",
+  "failedToImportAccount": "匯入帳號失敗: {error}",
+  "failedToSetPassword": "設定密碼失敗: {error}",
+  "noAccountToExport": "沒有可匯出的帳號",
+  "noAccountSelected": "未選擇帳號",
+  "accountAlreadyExists": "帳號已存在",
+  "accountAlreadyExistsMessage": "已存在相同ID的帳號。是否要更新它？",
+  "update": "更新",
+  "switchAccountConfirm": "確定要切換到 \"{nickname}\" 嗎？您將被登出當前帳號。",
+  "savedAccounts": "已儲存的帳號",
+  "tapToSelectDoubleTapToLogin": "點擊選擇，雙擊快速登入",
+  "tapToLogIn": "點擊登入",
+  "switchToThisAccount": "切換到此帳號",
+  "newPassword": "新密碼",
+  "confirmPassword": "確認密碼",
+  "leaveEmptyToRemovePassword": "留空以移除密碼",
+  "passwordsDoNotMatch": "密碼不匹配",
+  "never": "從未",
+  "justNow": "剛剛",
+  "daysAgo": "{count} 天前",
+  "hoursAgo": "{count} 小時前",
+  "minutesAgo": "{count} 分鐘前",
+  "thisAccountIsAlreadyLoggedIn": "此帳號已登入",
+  "noServicesFound": "未找到服務",
+  "addIrcChannel": "添加頻道",
+  "@addIrcChannel": {
+    "description": "Button text to add an IRC channel"
+  },
+  "aliveIPsFound": "找到活躍IP: {count}",
+  "@aliveIPsFound": {
+    "description": "Text showing number of alive IPs found",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aliveIPsList": "活躍IP列表",
+  "@aliveIPsList": {
+    "description": "Title for alive IPs list"
+  },
+  "bootstrapServiceFound": "發現 Bootstrap 服務",
+  "@bootstrapServiceFound": {
+    "description": "Message when bootstrap service is found"
+  },
+  "bootstrapServiceRunning": "Bootstrap 服務運行中: {ip}:{port}",
+  "@bootstrapServiceRunning": {
+    "description": "Status text when bootstrap service is running",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "bootstrapServiceStatus": "Bootstrap 服務狀態",
+  "@bootstrapServiceStatus": {
+    "description": "Label for bootstrap service status"
+  },
+  "close": "關閉",
+  "@close": {
+    "description": "Button text to close dialog"
+  },
+  "deleteAccountFailed": "註銷失敗: {error}",
+  "@deleteAccountFailed": {
+    "description": "Error message when account deletion fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "directorySelectionNotSupported": "此平台不支持目錄選擇",
+  "@directorySelectionNotSupported": {
+    "description": "Message shown when directory selection is not supported on the platform"
+  },
+  "enterIrcChannel": "請輸入IRC頻道名稱",
+  "@enterIrcChannel": {
+    "description": "Validation error message for empty IRC channel name"
+  },
+  "failedToSendFile": "發送 {label} 失敗: {error}",
+  "@failedToSendFile": {
+    "description": "Error message when file sending fails",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToSendFriendRequest": "發送好友請求失敗: {error}",
+  "@failedToSendFriendRequest": {
+    "description": "Error message when friend request sending fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "fileDoesNotExist": "文件不存在",
+  "@fileDoesNotExist": {
+    "description": "Error message when file does not exist"
+  },
+  "fileIsEmpty": "文件為空",
+  "@fileIsEmpty": {
+    "description": "Error message when file is empty"
+  },
+  "install": "安裝",
+  "@install": {
+    "description": "Button text to install an application"
+  },
+  "invalidIrcChannel": "IRC頻道必須以 # 或 & 開頭",
+  "@invalidIrcChannel": {
+    "description": "Validation error message for invalid IRC channel format"
+  },
+  "ipAddress": "IP地址",
+  "@ipAddress": {
+    "description": "Label for IP address"
+  },
+  "ircAppInstalled": "IRC頻道應用已安裝",
+  "@ircAppInstalled": {
+    "description": "Message shown when IRC app is installed"
+  },
+  "ircAppNotInstalled": "請先從應用頁面安裝IRC頻道應用",
+  "@ircAppNotInstalled": {
+    "description": "Error message when trying to join IRC channel without installing the app"
+  },
+  "ircAppUninstalled": "IRC頻道應用已卸載",
+  "@ircAppUninstalled": {
+    "description": "Message shown when IRC app is uninstalled"
+  },
+  "ircChannelAddFailed": "添加IRC頻道失敗",
+  "@ircChannelAddFailed": {
+    "description": "Error message when adding IRC channel fails"
+  },
+  "ircChannelAdded": "IRC頻道已添加: {channel}",
+  "@ircChannelAdded": {
+    "description": "Message shown when IRC channel is added",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannelApp": "IRC頻道",
+  "@ircChannelApp": {
+    "description": "Title for IRC Channel application"
+  },
+  "ircChannelAppDesc": "將IRC頻道連接到Tox群組以實現消息同步",
+  "@ircChannelAppDesc": {
+    "description": "Description for IRC Channel application"
+  },
+  "ircChannelDesc": "輸入IRC頻道名稱（例如：#channel）。將為此頻道創建一個Tox群組。",
+  "@ircChannelDesc": {
+    "description": "Description text for IRC channel dialog"
+  },
+  "ircChannelHint": "#頻道",
+  "@ircChannelHint": {
+    "description": "Placeholder text for IRC channel input"
+  },
+  "ircChannelName": "IRC頻道名稱",
+  "@ircChannelName": {
+    "description": "Label for IRC channel name input field"
+  },
+  "ircChannelPassword": "頻道密碼",
+  "@ircChannelPassword": {
+    "description": "Label for IRC channel password input field"
+  },
+  "ircChannelPasswordHint": "無密碼時留空",
+  "@ircChannelPasswordHint": {
+    "description": "Placeholder text for IRC channel password input"
+  },
+  "ircChannelRemoved": "IRC頻道已移除: {channel}",
+  "@ircChannelRemoved": {
+    "description": "Message shown when IRC channel is removed",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannels": "IRC頻道",
+  "@ircChannels": {
+    "description": "Label for list of IRC channels"
+  },
+  "ircConfigSaved": "IRC配置已保存",
+  "@ircConfigSaved": {
+    "description": "Success message when IRC configuration is saved"
+  },
+  "ircCustomNickname": "自定義IRC暱稱",
+  "@ircCustomNickname": {
+    "description": "Label for custom IRC nickname input field"
+  },
+  "ircCustomNicknameHint": "留空則使用自動生成的暱稱",
+  "@ircCustomNicknameHint": {
+    "description": "Hint text for custom IRC nickname input field"
+  },
+  "ircPort": "端口",
+  "@ircPort": {
+    "description": "Label for IRC server port input"
+  },
+  "ircServer": "伺服器",
+  "@ircServer": {
+    "description": "Label for IRC server address input"
+  },
+  "ircServerConfig": "IRC伺服器配置",
+  "@ircServerConfig": {
+    "description": "Title for IRC server configuration section"
+  },
+  "ircServerRequired": "IRC伺服器地址不能為空",
+  "@ircServerRequired": {
+    "description": "Error message when IRC server address is empty"
+  },
+  "ircUseSasl": "使用SASL認證",
+  "@ircUseSasl": {
+    "description": "Label for SASL authentication toggle"
+  },
+  "ircUseSaslDesc": "使用Tox公鑰進行SASL認證（需要註冊NickServ）",
+  "@ircUseSaslDesc": {
+    "description": "Description for SASL authentication option"
+  },
+  "join": "加入",
+  "@join": {
+    "description": "Button text to join"
+  },
+  "joinIrcChannel": "加入IRC頻道",
+  "@joinIrcChannel": {
+    "description": "Button text and dialog title for joining IRC channel"
+  },
+  "lanMode": "局域網 Bootstrap",
+  "@lanMode": {
+    "description": "LAN bootstrap node mode option"
+  },
+  "lanModeDesc": "使用局域網內的 Bootstrap 服務",
+  "@lanModeDesc": {
+    "description": "Description for LAN mode"
+  },
+  "messageReceivers": "消息接收者 ({count})",
+  "@messageReceivers": {
+    "description": "Title for message receivers dialog",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "nicknameTooLong": "暱稱過長",
+  "@nicknameTooLong": {
+    "description": "Error message when nickname is too long"
+  },
+  "nicknameCannotBeEmpty": "暱稱不能為空",
+  "noAliveIPsFound": "未找到活躍IP",
+  "@noAliveIPsFound": {
+    "description": "Message when no alive IPs are found"
+  },
+  "noBootstrapService": "未發現 Bootstrap 服務",
+  "@noBootstrapService": {
+    "description": "Message when no bootstrap service is found"
+  },
+  "noReceivers": "暫無接收者",
+  "@noReceivers": {
+    "description": "Message shown when there are no message receivers"
+  },
+  "nodeNotTestedWarning": "注意：此節點尚未測試，可能無法連接。",
+  "@nodeNotTestedWarning": {
+    "description": "Warning message when selecting untested node"
+  },
+  "nodeTestFailedWarning": "注意：此節點測試失敗，可能無法連接。",
+  "@nodeTestFailedWarning": {
+    "description": "Warning message when selecting failed node"
+  },
+  "notProbedYet": "尚未探測",
+  "@notProbedYet": {
+    "description": "Status text when IP has not been probed"
+  },
+  "probeFailed": "未發現 Bootstrap 服務",
+  "@probeFailed": {
+    "description": "Message when probe fails"
+  },
+  "probeSingleIP": "探測該 IP",
+  "@probeSingleIP": {
+    "description": "Button tooltip to probe single IP"
+  },
+  "probeStatus": "探測狀態",
+  "@probeStatus": {
+    "description": "Label for probe status"
+  },
+  "probeSuccess": "發現 Bootstrap 服務",
+  "@probeSuccess": {
+    "description": "Message when probe succeeds"
+  },
+  "probing": "探測中...",
+  "@probing": {
+    "description": "Text shown when probing"
+  },
+  "probingBootstrapServices": "探測 Bootstrap 服務: {current}/{total}",
+  "@probingBootstrapServices": {
+    "description": "Progress text for probing bootstrap services",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "probingIP": "探測 {ip}...",
+  "@probingIP": {
+    "description": "Text shown when probing an IP",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshAliveIPs": "刷新活躍IP",
+  "@refreshAliveIPs": {
+    "description": "Button tooltip to refresh alive IPs list"
+  },
+  "remove": "移除",
+  "@remove": {
+    "description": "Button text to remove an item"
+  },
+  "removeIrcChannel": "移除IRC頻道",
+  "@removeIrcChannel": {
+    "description": "Title for remove channel confirmation dialog"
+  },
+  "removeIrcChannelConfirm": "確定要移除 {channel} 嗎？您將退出對應的群組。",
+  "@removeIrcChannelConfirm": {
+    "description": "Confirmation message for removing IRC channel",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "scanLanBootstrapServices": "掃描局域網 Bootstrap 服務",
+  "@scanLanBootstrapServices": {
+    "description": "Button text to scan LAN bootstrap services"
+  },
+  "scanLanBootstrapServicesTitle": "局域網 Bootstrap 服務",
+  "@scanLanBootstrapServicesTitle": {
+    "description": "Title for LAN bootstrap scan page"
+  },
+  "scanPort": "掃描端口",
+  "@scanPort": {
+    "description": "Label for scan port input field"
+  },
+  "scanning": "掃描中...",
+  "@scanning": {
+    "description": "Text shown when scanning"
+  },
+  "scanningAliveIPs": "掃描活躍IP: {current}/{total}",
+  "@scanningAliveIPs": {
+    "description": "Progress text for scanning alive IPs",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "serviceRunning": "運行中",
+  "@serviceRunning": {
+    "description": "Status text when service is running"
+  },
+  "serviceStopped": "已停止",
+  "@serviceStopped": {
+    "description": "Status text when service is stopped"
+  },
+  "startLocalBootstrapService": "啟動本地 Bootstrap 服務",
+  "@startLocalBootstrapService": {
+    "description": "Button text to start local bootstrap service"
+  },
+  "startScan": "開始掃描",
+  "@startScan": {
+    "description": "Button text to start scanning"
+  },
+  "statusMessageTooLong": "簽名過長",
+  "@statusMessageTooLong": {
+    "description": "Error message when status message is too long"
+  },
+  "stopLocalBootstrapService": "停止本地 Bootstrap 服務",
+  "@stopLocalBootstrapService": {
+    "description": "Button text to stop local bootstrap service"
+  },
+  "uninstall": "卸載",
+  "@uninstall": {
+    "description": "Button text to uninstall an application"
+  },
+  "uninstallIrcApp": "卸載IRC頻道應用",
+  "@uninstallIrcApp": {
+    "description": "Title for uninstall confirmation dialog"
+  },
+  "uninstallIrcAppConfirm": "確定要卸載IRC頻道應用嗎？所有IRC頻道將被移除，您將退出所有IRC群組。",
+  "@uninstallIrcAppConfirm": {
+    "description": "Confirmation message for uninstalling IRC app"
+  },
+  "useAsBootstrapNode": "設為 Bootstrap 節點",
+  "@useAsBootstrapNode": {
+    "description": "Button text to use service as bootstrap node"
+  },
+  "searchSummary": "找到 {contacts} 個聯絡人、{groups} 個群組、{messages} 條訊息線索",
+  "@searchSummary": {
+    "placeholders": {
+      "contacts": {
+        "type": "int"
+      },
+      "groups": {
+        "type": "int"
+      },
+      "messages": {
+        "type": "int"
+      }
+    }
+  },
+  "searchFailed": "搜尋失敗，顯示部分結果",
+  "callVideoCall": "視訊通話",
+  "callAudioCall": "語音通話",
+  "callReject": "拒絕",
+  "callAccept": "接聽",
+  "callRemoteVideo": "對方畫面",
+  "callUnmute": "取消靜音",
+  "callMute": "靜音",
+  "callVideoOff": "關閉視訊",
+  "callVideoOn": "開啟視訊",
+  "callSpeakerOff": "關閉揚聲器",
+  "callSpeakerOn": "開啟揚聲器",
+  "callHangUp": "掛斷",
+  "callEnded": "通話已結束",
+  "callPermissionMicrophoneRequired": "繼續通話需要麥克風權限。",
+  "callPermissionCameraRequired": "繼續通話需要相機權限。",
+  "callPermissionMicrophoneCameraRequired": "繼續通話需要麥克風和相機權限。",
+  "callAudioInterrupted": "通話過程中音訊輸出發生變化或被中斷。",
+  "callCalling": "撥打中...",
+  "callMinimize": "最小化",
+  "callReturnToCall": "返回通話",
+  "callQualityGood": "連線良好",
+  "callQualityMedium": "連線一般",
+  "callQualityPoor": "連線較差",
+  "callQualityUnknown": "—",
+  "callQualityLabel": "通話品質"
+}

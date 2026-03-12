@@ -1,0 +1,729 @@
+{
+  "@@locale": "ar",
+  "chats": "الدردشات",
+  "contacts": "جهات الاتصال",
+  "requests": "الطلبات",
+  "groups": "المجموعات",
+  "settings": "الإعدادات",
+  "searchConversations": "البحث بالاسم المستعار / المجموعة / الرسالة",
+  "searchContacts": "البحث في جهات الاتصال",
+  "searchResults": "نتائج البحث",
+  "enterKeywordToSearch": "أدخل كلمة للبحث",
+  "noResultsFound": "لم يتم العثور على نتائج",
+  "searchSectionMessages": "الرسائل",
+  "searchSectionConversations": "المحادثات",
+  "searchHint": "بحث...",
+  "messageCount": "{count} رسائل",
+  "@messageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchChatHistory": "البحث في سجل الدردشة",
+  "searchResultsCount": "هناك {count} نتائج لـ \"{keyword}\"",
+  "@searchResultsCount": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "keyword": {"type": "String"}
+    }
+  },
+  "openChat": "فتح الدردشة",
+  "relatedChats": "{count} رسائل ذات صلة",
+  "@relatedChats": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "newItem": "جديد",
+  "addFriend": "إضافة صديق",
+  "createGroup": "إنشاء مجموعة",
+  "friendUserId": "معرف المستخدم للصديق (hex)",
+  "groupNameOptional": "اسم المجموعة (اختياري)",
+  "typeMessage": "اكتب رسالة",
+  "messageToGroup": "رسالة إلى المجموعة",
+  "selfId": "معرفي",
+  "appearance": "المظهر",
+  "light": "فاتح",
+  "dark": "داكن",
+  "language": "اللغة",
+  "english": "English",
+  "arabic": "العربية",
+  "japanese": "日本語",
+  "korean": "한국어",
+  "simplifiedChinese": "简体中文",
+  "traditionalChinese": "繁體中文",
+  "profile": "الملف الشخصي",
+  "nickname": "الاسم المستعار",
+  "statusMessage": "رسالة الحالة",
+  "saveProfile": "حفظ الملف الشخصي",
+  "ok": "موافق",
+  "cancel": "إلغاء",
+  "group": "مجموعة",
+  "file": "ملف",
+  "audio": "صوتي",
+  "friendRequestSent": "تم إرسال طلب الصداقة",
+  "joinGroup": "انضم إلى المجموعة",
+  "groupId": "معرف المجموعة",
+  "createAndOpen": "إنشاء وفتح",
+  "joinAndOpen": "انضم وافتح",
+  "knownGroups": "المجموعات المعروفة",
+  "selectAChat": "اختر محادثة",
+  "photo": "صورة",
+  "video": "فيديو",
+  "autoAcceptFriendRequests": "قبول طلبات الصداقة تلقائياً",
+  "autoAcceptFriendRequestsDesc": "قبول طلبات الصداقة الواردة تلقائياً",
+  "autoAcceptGroupInvites": "قبول دعوات المجموعة تلقائياً",
+  "autoAcceptGroupInvitesDesc": "قبول دعوات المجموعة الواردة تلقائياً",
+  "bootstrapNodes": "عقد Bootstrap",
+  "currentNode": "العقدة الحالية",
+  "viewAndTestNodes": "عرض واختبار العقد",
+  "currentlyOnlineNoReconnect": "متصل حالياً، لا حاجة لإعادة الاتصال",
+  "addOrCreateGroup": "إضافة / إنشاء مجموعة",
+  "joinGroupById": "انضم إلى المجموعة بالمعرف",
+  "enterGroupId": "يرجى إدخال معرف المجموعة",
+  "requestMessage": "رسالة الطلب",
+  "groupAlias": "اسم المجموعة المحلي (اختياري)",
+  "joinAction": "إرسال طلب الانضمام",
+  "joinSuccess": "تم إرسال طلب الانضمام",
+  "joinFailed": "فشل الانضمام إلى المجموعة",
+  "groupName": "اسم المجموعة",
+  "enterGroupName": "يرجى إدخال اسم المجموعة",
+  "createAction": "إنشاء مجموعة",
+  "createSuccess": "تم إنشاء المجموعة",
+  "createFailed": "فشل إنشاء المجموعة",
+  "createdGroupId": "معرف المجموعة الجديدة",
+  "copyId": "نسخ المعرف",
+  "copied": "تم النسخ إلى الحافظة",
+  "addFailed": "فشل الإضافة",
+  "enterId": "يرجى إدخال Tox ID",
+  "invalidLength": "يجب أن يكون المعرف 64 أو 76 حرفاً سداسياً عشرياً",
+  "invalidCharacters": "يمكن أن يحتوي فقط على أحرف سداسية عشرية",
+  "paste": "لصق",
+  "addContactHint": "أدخل Tox ID للصديق (64 أو 76 حرفاً سداسياً عشرياً).",
+  "verificationMessage": "رسالة التحقق",
+  "defaultFriendRequestMessage": "مرحباً، أود إضافتك كصديق.",
+  "friendRequestMessageTooLong": "لا يمكن أن تتجاوز رسالة طلب الصداقة 921 حرفاً",
+  "enterMessage": "يرجى إدخال رسالة",
+  "autoAcceptedNewFriendRequest": "تم قبول طلب الصداقة الجديد تلقائياً",
+  "scanQrCodeToAddContact": "امسح رمز QR لإضافتي كجهة اتصال",
+  "generateCard": "إنشاء بطاقة",
+  "customCardText": "نص البطاقة المخصص",
+  "userId": "معرف المستخدم",
+  "saveImage": "حفظ الصورة",
+  "copy": "نسخ",
+  "fileCopiedSuccessfully": "تم نسخ الملف بنجاح",
+  "idCopiedToClipboard": "تم نسخ المعرف إلى الحافظة",
+  "establishingEncryptedChannel": "جاري إنشاء قناة مشفرة...",
+  "@establishingEncryptedChannel": {
+    "description": "Loading message shown when initializing Tox connection"
+  },
+  "checkingUserInfo": "جارٍ التحقق من معلومات المستخدم...",
+  "@checkingUserInfo": {
+    "description": "Message shown when checking user information during startup"
+  },
+  "initializingService": "جارٍ تهيئة الخدمة...",
+  "@initializingService": {
+    "description": "Message shown when initializing the service during startup"
+  },
+  "loggingIn": "جارٍ تسجيل الدخول...",
+  "@loggingIn": {
+    "description": "Message shown when logging in during startup"
+  },
+  "initializingSDK": "جارٍ تهيئة SDK...",
+  "@initializingSDK": {
+    "description": "Message shown when initializing SDK during startup"
+  },
+  "updatingProfile": "جارٍ تحديث الملف الشخصي...",
+  "@updatingProfile": {
+    "description": "Message shown when updating profile during startup"
+  },
+  "initializationCompleted": "اكتملت التهيئة!",
+  "@initializationCompleted": {
+    "description": "Message shown when initialization is completed"
+  },
+  "loadingFriends": "جارٍ تحميل معلومات الأصدقاء...",
+  "@loadingFriends": {
+    "description": "Message shown when loading friends information during startup"
+  },
+  "inProgress": "قيد التنفيذ",
+  "@inProgress": {
+    "description": "Label shown for steps that are currently in progress"
+  },
+  "completed": "مكتمل",
+  "@completed": {
+    "description": "Label shown for steps that have been completed"
+  },
+  "personalCard": "البطاقة الشخصية",
+  "appTitle": "toxee",
+  "startChat": "بدء الدردشة",
+  "pasteServerUserId": "الصق معرف المستخدم للخادم هنا",
+  "groupProfile": "ملف المجموعة",
+  "invalidGroupId": "معرف المجموعة غير صالح",
+  "maintainer": "المشرف: {maintainer}",
+  "success": "نجح",
+  "failed": "فشل",
+  "error": "خطأ: {error}",
+  "saved": "تم الحفظ",
+  "failedToSave": "فشل الحفظ: {error}",
+  "copyFailed": "فشل النسخ: {error}",
+  "failedToUpdateAvatar": "فشل تحديث الصورة الرمزية: {error}",
+  "failedToLoadQr": "فشل تحميل رمز QR",
+  "helloFromToxee": "تحية من toxee",
+  "attachFailed": "فشل المرفق: {error}",
+  "autoFriendRequestFromToxee": "طلب صداقة تلقائي من toxee",
+  "reconnect": "إعادة الاتصال",
+  "reconnectConfirmMessage": "سيتم إعادة الاتصال باستخدام عقدة Bootstrap المحددة. هل تريد المتابعة؟",
+  "reconnectedWaiting": "تم تسجيل الدخول مرة أخرى، في انتظار الاتصال...",
+  "reconnectWithThisNode": "إعادة الاتصال بهذه العقدة",
+  "friendOfflineCannotSendFile": "الصديق غير متصل. لا يمكن إرسال الملف. يرجى الانتظار حتى يكون متصلاً.",
+  "friendOfflineSendCardFailed": "الصديق غير متصل. فشل إرسال البطاقة الشخصية.",
+  "friendOfflineSendImageFailed": "الصديق غير متصل. فشل إرسال الصورة.",
+  "friendOfflineSendVideoFailed": "الصديق غير متصل. فشل إرسال الفيديو.",
+  "friendOfflineSendFileFailed": "الصديق غير متصل. فشل إرسال الملف.",
+  "userNotInFriendList": "هذا المستخدم غير موجود في قائمة أصدقائك.",
+  "sendFailed": "فشل الإرسال: {error}",
+  "myId": "معرفي",
+  "sendPersonalCardToGroup": "إرسال البطاقة الشخصية إلى المجموعة",
+  "personalCardSent": "تم إرسال البطاقة الشخصية",
+  "sentPersonalCardToGroup": "تم إرسال البطاقة الشخصية إلى المجموعة",
+  "bootstrapNodesTitle": "عقد Bootstrap",
+  "refresh": "تحديث",
+  "retry": "إعادة المحاولة",
+  "lastPing": "آخر ping: منذ {seconds} ثانية",
+  "testNode": "اختبار العقدة",
+  "deleteAccount": "حذف الحساب",
+  "deleteAccountConfirmMessage": "سيتم حذف حسابك وجميع البيانات نهائياً ولا يمكن استردادها. يرجى المتابعة بحذر.",
+  "delete": "حذف",
+  "deleteAccountEnterPasswordToConfirm": "أدخل كلمة مرور حسابك لتأكيد الحذف.",
+  "deleteAccountTypeWordToConfirm": "أدخل الكلمة الإنجليزية المعروضة أدناه بشكل صحيح لتأكيد الحذف.",
+  "deleteAccountConfirmWordPrompt": "أدخل الكلمة التالية في المربع أدناه للتأكيد: {word}",
+  "deleteAccountWrongWord": "الكلمة التي أدخلتها غير صحيحة.",
+  "applications": "التطبيقات",
+  "applicationsComingSoon": "المزيد من التطبيقات قريباً...",
+  "notificationSound": "صوت الإشعارات",
+  "notificationSoundDesc": "تشغيل الصوت عند تلقي رسائل جديدة وطلبات الصداقة وطلبات المجموعة",
+  "downloadsDirectory": "مجلد التنزيلات",
+  "selectDownloadsDirectory": "اختر مجلد التنزيلات",
+  "changeDownloadsDirectory": "تغيير مجلد التنزيلات",
+  "downloadsDirectoryDesc": "قم بتعيين المجلد الافتراضي لتنزيل الملفات. سيتم حفظ الملفات والصوتيات والفيديوهات المستلمة في هذا المجلد.",
+  "downloadsDirectorySet": "تم تعيين مجلد التنزيلات",
+  "downloadsDirectoryReset": "تم إعادة تعيين مجلد التنزيلات إلى الافتراضي",
+  "failedToSelectDirectory": "فشل في اختيار المجلد",
+  "reset": "إعادة تعيين",
+  "autoDownloadSizeLimit": "حد حجم التنزيل التلقائي",
+  "sizeLimitInMB": "حد الحجم (MB)",
+  "autoDownloadSizeLimitDesc": "سيتم تنزيل الملفات الأصغر من هذا الحجم وجميع الصور تلقائياً. تتطلب الملفات الأكبر من هذا الحجم التنزيل اليدوي عبر زر التنزيل.",
+  "autoDownloadSizeLimitSet": "تم تعيين حد حجم التنزيل التلقائي إلى",
+  "invalidSizeLimit": "حد حجم غير صالح، يرجى إدخال رقم بين 1 و 10000",
+  "save": "حفظ",
+  "routeSelection": "اختيار المسار",
+  "online": "ONLINE",
+  "offline": "OFFLINE",
+  "canOnlySelectOnlineNode": "يمكن اختيار العقد المتصلة فقط",
+  "canOnlySelectTestedNode": "يمكن اختيار العقد التي تم اختبارها بنجاح فقط، يرجى اختبار العقدة أولاً",
+  "switchNode": "تبديل العقدة",
+  "switchNodeConfirm": "هل أنت متأكد من أنك تريد التبديل إلى العقدة {node}؟ يلزم إعادة الاتصال بعد التبديل.",
+  "nodeSwitched": "تم تبديل العقدة، جاري إعادة الاتصال...",
+  "selectThisNode": "اختيار هذه العقدة",
+  "nodeSwitchFailed": "فشل تبديل العقدة: {error}",
+  "manualNodeInput": "إدخال العقدة يدوياً",
+  "nodeHost": "الخادم",
+  "nodePort": "المنفذ",
+  "nodePublicKey": "المفتاح العام",
+  "setAsCurrentNode": "تعيين كعقدة حالية",
+  "nodeTestSuccess": "نجح اختبار العقدة",
+  "nodeTestFailed": "فشل اختبار العقدة",
+  "invalidNodeInfo": "يرجى إدخال معلومات عقدة صالحة (الخادم والمنفذ والمفتاح العام)",
+  "nodeSetSuccess": "تم تعيين العقدة كعقدة حالية بنجاح",
+  "bootstrapNodeMode": "وضع عقدة Bootstrap",
+  "manualMode": "يدوي",
+  "autoMode": "تلقائي (جلب من الويب)",
+  "manualModeDesc": "تحديد معلومات عقدة Bootstrap يدوياً",
+  "autoModeDesc": "جلب واستخدام عقد Bootstrap تلقائياً من الويب",
+  "autoModeDescPrefix": "جلب واستخدام عقد Bootstrap تلقائياً من ",
+  "logOut": "تسجيل الخروج",
+  "logOutConfirm": "هل أنت متأكد أنك تريد تسجيل الخروج؟",
+  "autoLogin": "تسجيل الدخول التلقائي",
+  "autoLoginEnabled": "تسجيل الدخول التلقائي: مفعّل",
+  "autoLoginDisabled": "تسجيل الدخول التلقائي: معطّل",
+  "autoLoginDesc": "بعد التفعيل، سيتم تسجيل الدخول تلقائياً عند بدء التطبيق.",
+  "disable": "تعطيل",
+  "enable": "تفعيل",
+  "login": "تسجيل الدخول",
+  "register": "التسجيل",
+  "registerNewAccount": "تسجيل حساب جديد",
+  "unnamedAccount": "حساب بدون اسم",
+  "password": "كلمة المرور",
+  "accountInfo": "معلومات الحساب",
+  "accountManagement": "إدارة الحساب",
+  "localAccounts": "الحسابات المحلية",
+  "showMore": "عرض {count} المزيد",
+  "showLess": "إخفاء",
+  "current": "الحالي",
+  "lastLogin": "آخر تسجيل دخول",
+  "switchAccount": "تبديل الحساب",
+  "exportAccount": "تصدير الحساب",
+  "importAccount": "استيراد الحساب",
+  "setPassword": "تعيين كلمة المرور",
+  "changePassword": "تغيير كلمة المرور",
+  "enterPasswordToExport": "أدخل كلمة المرور لتصدير الحساب",
+  "enterPasswordToImport": "أدخل كلمة المرور لاستيراد الحساب",
+  "enterPasswordForAccount": "أدخل كلمة مرور الحساب \"{nickname}\"",
+  "invalidPassword": "كلمة المرور غير صحيحة",
+  "accountExportedSuccessfully": "تم تصدير الحساب بنجاح إلى: {filePath}",
+  "accountImportedSuccessfully": "تم استيراد الحساب بنجاح",
+  "passwordSetSuccessfully": "تم تعيين كلمة المرور بنجاح",
+  "passwordRemoved": "تم إزالة كلمة المرور",
+  "failedToSwitchAccount": "فشل تبديل الحساب: {error}",
+  "failedToExportAccount": "فشل تصدير الحساب: {error}",
+  "failedToImportAccount": "فشل استيراد الحساب: {error}",
+  "failedToSetPassword": "فشل تعيين كلمة المرور: {error}",
+  "noAccountToExport": "لا يوجد حساب للتصدير",
+  "noAccountSelected": "لم يتم اختيار حساب",
+  "accountAlreadyExists": "الحساب موجود بالفعل",
+  "accountAlreadyExistsMessage": "يوجد حساب بهذا المعرف بالفعل. هل تريد تحديثه؟",
+  "update": "تحديث",
+  "switchAccountConfirm": "هل أنت متأكد أنك تريد التبديل إلى \"{nickname}\"؟ سيتم تسجيل الخروج من الحساب الحالي.",
+  "savedAccounts": "الحسابات المحفوظة",
+  "tapToSelectDoubleTapToLogin": "اضغط للاختيار، اضغط مرتين لتسجيل الدخول السريع",
+  "tapToLogIn": "اضغط لتسجيل الدخول",
+  "switchToThisAccount": "التبديل إلى هذا الحساب",
+  "newPassword": "كلمة المرور الجديدة",
+  "confirmPassword": "تأكيد كلمة المرور",
+  "leaveEmptyToRemovePassword": "اتركه فارغاً لإزالة كلمة المرور",
+  "passwordsDoNotMatch": "كلمات المرور غير متطابقة",
+  "never": "أبداً",
+  "justNow": "الآن",
+  "daysAgo": "منذ {count} يوم{plural}",
+  "hoursAgo": "منذ {count} ساعة{plural}",
+  "minutesAgo": "منذ {count} دقيقة{plural}",
+  "thisAccountIsAlreadyLoggedIn": "هذا الحساب مسجل دخول بالفعل",
+  "noServicesFound": "لم يتم العثور على خدمات",
+  "addIrcChannel": "إضافة قناة",
+  "@addIrcChannel": {
+    "description": "Button text to add an IRC channel"
+  },
+  "aliveIPsFound": "تم العثور على عناوين IP نشطة: {count}",
+  "@aliveIPsFound": {
+    "description": "Text showing number of alive IPs found",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aliveIPsList": "قائمة عناوين IP النشطة",
+  "@aliveIPsList": {
+    "description": "Title for alive IPs list"
+  },
+  "bootstrapServiceFound": "تم العثور على خدمة Bootstrap",
+  "@bootstrapServiceFound": {
+    "description": "Message when bootstrap service is found"
+  },
+  "bootstrapServiceRunning": "خدمة Bootstrap قيد التشغيل: {ip}:{port}",
+  "@bootstrapServiceRunning": {
+    "description": "Status text when bootstrap service is running",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "bootstrapServiceStatus": "حالة الخدمة",
+  "@bootstrapServiceStatus": {
+    "description": "Label for bootstrap service status"
+  },
+  "close": "إغلاق",
+  "@close": {
+    "description": "Button text to close dialog"
+  },
+  "deleteAccountFailed": "فشل حذف الحساب: {error}",
+  "@deleteAccountFailed": {
+    "description": "Error message when account deletion fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "directorySelectionNotSupported": "اختيار المجلد غير مدعوم على هذه المنصة",
+  "@directorySelectionNotSupported": {
+    "description": "Message shown when directory selection is not supported on the platform"
+  },
+  "enterIrcChannel": "يرجى إدخال اسم قناة IRC",
+  "@enterIrcChannel": {
+    "description": "Validation error message for empty IRC channel name"
+  },
+  "failedToSendFile": "فشل إرسال {label}: {error}",
+  "@failedToSendFile": {
+    "description": "Error message when file sending fails",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToSendFriendRequest": "فشل إرسال طلب الصداقة: {error}",
+  "@failedToSendFriendRequest": {
+    "description": "Error message when friend request sending fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "fileDoesNotExist": "الملف غير موجود",
+  "@fileDoesNotExist": {
+    "description": "Error message when file does not exist"
+  },
+  "fileIsEmpty": "الملف فارغ",
+  "@fileIsEmpty": {
+    "description": "Error message when file is empty"
+  },
+  "install": "تثبيت",
+  "@install": {
+    "description": "Button text to install an application"
+  },
+  "invalidIrcChannel": "يجب أن تبدأ قناة IRC بـ # أو &",
+  "@invalidIrcChannel": {
+    "description": "Validation error message for invalid IRC channel format"
+  },
+  "ipAddress": "عنوان IP",
+  "@ipAddress": {
+    "description": "Label for IP address"
+  },
+  "ircAppInstalled": "تم تثبيت تطبيق قناة IRC",
+  "@ircAppInstalled": {
+    "description": "Message shown when IRC app is installed"
+  },
+  "ircAppNotInstalled": "يرجى تثبيت تطبيق قناة IRC من صفحة التطبيقات أولاً",
+  "@ircAppNotInstalled": {
+    "description": "Error message when trying to join IRC channel without installing the app"
+  },
+  "ircAppUninstalled": "تم إلغاء تثبيت تطبيق قناة IRC",
+  "@ircAppUninstalled": {
+    "description": "Message shown when IRC app is uninstalled"
+  },
+  "ircChannelAddFailed": "فشل إضافة قناة IRC",
+  "@ircChannelAddFailed": {
+    "description": "Error message when adding IRC channel fails"
+  },
+  "ircChannelAdded": "تمت إضافة قناة IRC: {channel}",
+  "@ircChannelAdded": {
+    "description": "Message shown when IRC channel is added",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannelApp": "قناة IRC",
+  "@ircChannelApp": {
+    "description": "Title for IRC Channel application"
+  },
+  "ircChannelAppDesc": "ربط قنوات IRC بمجموعات Tox لمزامنة الرسائل",
+  "@ircChannelAppDesc": {
+    "description": "Description for IRC Channel application"
+  },
+  "ircChannelDesc": "أدخل اسم قناة IRC (مثلاً: #channel). سيتم إنشاء مجموعة Tox لهذه القناة.",
+  "@ircChannelDesc": {
+    "description": "Description text for IRC channel dialog"
+  },
+  "ircChannelHint": "#قناة",
+  "@ircChannelHint": {
+    "description": "Placeholder text for IRC channel input"
+  },
+  "ircChannelName": "اسم قناة IRC",
+  "@ircChannelName": {
+    "description": "Label for IRC channel name input field"
+  },
+  "ircChannelPassword": "كلمة مرور القناة",
+  "@ircChannelPassword": {
+    "description": "Label for IRC channel password input field"
+  },
+  "ircChannelPasswordHint": "اتركه فارغاً إذا لم تكن هناك كلمة مرور",
+  "@ircChannelPasswordHint": {
+    "description": "Placeholder text for IRC channel password input"
+  },
+  "ircChannelRemoved": "تمت إزالة قناة IRC: {channel}",
+  "@ircChannelRemoved": {
+    "description": "Message shown when IRC channel is removed",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannels": "قنوات IRC",
+  "@ircChannels": {
+    "description": "Label for list of IRC channels"
+  },
+  "ircConfigSaved": "تم حفظ إعدادات IRC",
+  "@ircConfigSaved": {
+    "description": "Success message when IRC configuration is saved"
+  },
+  "ircCustomNickname": "اسم مستعار مخصص لـ IRC",
+  "@ircCustomNickname": {
+    "description": "Label for custom IRC nickname input field"
+  },
+  "ircCustomNicknameHint": "اتركه فارغاً لاستخدام الاسم المستعار المُنشأ تلقائياً",
+  "@ircCustomNicknameHint": {
+    "description": "Hint text for custom IRC nickname input field"
+  },
+  "ircPort": "المنفذ",
+  "@ircPort": {
+    "description": "Label for IRC server port input"
+  },
+  "ircServer": "الخادم",
+  "@ircServer": {
+    "description": "Label for IRC server address input"
+  },
+  "ircServerConfig": "إعدادات خادم IRC",
+  "@ircServerConfig": {
+    "description": "Title for IRC server configuration section"
+  },
+  "ircServerRequired": "عنوان خادم IRC مطلوب",
+  "@ircServerRequired": {
+    "description": "Error message when IRC server address is empty"
+  },
+  "ircUseSasl": "استخدام مصادقة SASL",
+  "@ircUseSasl": {
+    "description": "Label for SASL authentication toggle"
+  },
+  "ircUseSaslDesc": "استخدام المفتاح العام لـ Tox لمصادقة SASL (يتطلب تسجيل NickServ)",
+  "@ircUseSaslDesc": {
+    "description": "Description for SASL authentication option"
+  },
+  "join": "انضمام",
+  "@join": {
+    "description": "Button text to join"
+  },
+  "joinIrcChannel": "الانضمام إلى قناة IRC",
+  "@joinIrcChannel": {
+    "description": "Button text and dialog title for joining IRC channel"
+  },
+  "lanMode": "وضع LAN",
+  "@lanMode": {
+    "description": "LAN bootstrap node mode option"
+  },
+  "lanModeDesc": "استخدام خدمة Bootstrap للشبكة المحلية",
+  "@lanModeDesc": {
+    "description": "Description for LAN mode"
+  },
+  "messageReceivers": "مستقبلو الرسائل ({count})",
+  "@messageReceivers": {
+    "description": "Title for message receivers dialog",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "nicknameTooLong": "الاسم المستعار طويل جداً",
+  "@nicknameTooLong": {
+    "description": "Error message when nickname is too long"
+  },
+  "nicknameCannotBeEmpty": "الاسم المستعار لا يمكن أن يكون فارغاً",
+  "noAliveIPsFound": "لم يتم العثور على عناوين IP نشطة",
+  "@noAliveIPsFound": {
+    "description": "Message when no alive IPs are found"
+  },
+  "noBootstrapService": "لم يتم العثور على خدمة Bootstrap",
+  "@noBootstrapService": {
+    "description": "Message when no bootstrap service is found"
+  },
+  "noReceivers": "لا يوجد مستقبلون بعد",
+  "@noReceivers": {
+    "description": "Message shown when there are no message receivers"
+  },
+  "nodeNotTestedWarning": "ملاحظة: لم يتم اختبار هذه العقدة وقد لا تكون قابلة للاتصال.",
+  "@nodeNotTestedWarning": {
+    "description": "Warning message when selecting untested node"
+  },
+  "nodeTestFailedWarning": "ملاحظة: فشل اختبار هذه العقدة وقد لا تكون قابلة للاتصال.",
+  "@nodeTestFailedWarning": {
+    "description": "Warning message when selecting failed node"
+  },
+  "notProbedYet": "لم يتم التحقق بعد",
+  "@notProbedYet": {
+    "description": "Status text when IP has not been probed"
+  },
+  "probeFailed": "لم يتم العثور على خدمة Bootstrap",
+  "@probeFailed": {
+    "description": "Message when probe fails"
+  },
+  "probeSingleIP": "التحقق من عنوان IP هذا",
+  "@probeSingleIP": {
+    "description": "Button tooltip to probe single IP"
+  },
+  "probeStatus": "حالة التحقق",
+  "@probeStatus": {
+    "description": "Label for probe status"
+  },
+  "probeSuccess": "تم العثور على خدمة Bootstrap",
+  "@probeSuccess": {
+    "description": "Message when probe succeeds"
+  },
+  "probing": "جارٍ التحقق...",
+  "@probing": {
+    "description": "Text shown when probing"
+  },
+  "probingBootstrapServices": "جارٍ التحقق من خدمات Bootstrap: {current}/{total}",
+  "@probingBootstrapServices": {
+    "description": "Progress text for probing bootstrap services",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "probingIP": "جارٍ التحقق من {ip}...",
+  "@probingIP": {
+    "description": "Text shown when probing an IP",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshAliveIPs": "تحديث عناوين IP النشطة",
+  "@refreshAliveIPs": {
+    "description": "Button tooltip to refresh alive IPs list"
+  },
+  "remove": "إزالة",
+  "@remove": {
+    "description": "Button text to remove an item"
+  },
+  "removeIrcChannel": "إزالة قناة IRC",
+  "@removeIrcChannel": {
+    "description": "Title for remove channel confirmation dialog"
+  },
+  "removeIrcChannelConfirm": "هل أنت متأكد أنك تريد إزالة {channel}؟ ستغادر المجموعة المقابلة.",
+  "@removeIrcChannelConfirm": {
+    "description": "Confirmation message for removing IRC channel",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "scanLanBootstrapServices": "فحص خدمات Bootstrap للشبكة المحلية",
+  "@scanLanBootstrapServices": {
+    "description": "Button text to scan LAN bootstrap services"
+  },
+  "scanLanBootstrapServicesTitle": "خدمات Bootstrap للشبكة المحلية",
+  "@scanLanBootstrapServicesTitle": {
+    "description": "Title for LAN bootstrap scan page"
+  },
+  "scanPort": "منفذ الفحص",
+  "@scanPort": {
+    "description": "Label for scan port input field"
+  },
+  "scanning": "جارٍ الفحص...",
+  "@scanning": {
+    "description": "Text shown when scanning"
+  },
+  "scanningAliveIPs": "جارٍ فحص عناوين IP النشطة: {current}/{total}",
+  "@scanningAliveIPs": {
+    "description": "Progress text for scanning alive IPs",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "serviceRunning": "قيد التشغيل",
+  "@serviceRunning": {
+    "description": "Status text when service is running"
+  },
+  "serviceStopped": "متوقف",
+  "@serviceStopped": {
+    "description": "Status text when service is stopped"
+  },
+  "startLocalBootstrapService": "بدء خدمة Bootstrap المحلية",
+  "@startLocalBootstrapService": {
+    "description": "Button text to start local bootstrap service"
+  },
+  "startScan": "بدء الفحص",
+  "@startScan": {
+    "description": "Button text to start scanning"
+  },
+  "statusMessageTooLong": "رسالة الحالة طويلة جداً",
+  "@statusMessageTooLong": {
+    "description": "Error message when status message is too long"
+  },
+  "stopLocalBootstrapService": "إيقاف خدمة Bootstrap المحلية",
+  "@stopLocalBootstrapService": {
+    "description": "Button text to stop local bootstrap service"
+  },
+  "uninstall": "إلغاء التثبيت",
+  "@uninstall": {
+    "description": "Button text to uninstall an application"
+  },
+  "uninstallIrcApp": "إلغاء تثبيت تطبيق قناة IRC",
+  "@uninstallIrcApp": {
+    "description": "Title for uninstall confirmation dialog"
+  },
+  "uninstallIrcAppConfirm": "هل أنت متأكد أنك تريد إلغاء تثبيت تطبيق قناة IRC؟ سيتم إزالة جميع قنوات IRC وستغادر جميع مجموعات IRC.",
+  "@uninstallIrcAppConfirm": {
+    "description": "Confirmation message for uninstalling IRC app"
+  },
+  "useAsBootstrapNode": "استخدام كعقدة Bootstrap",
+  "@useAsBootstrapNode": {
+    "description": "Button text to use service as bootstrap node"
+  },
+  "searchSummary": "تم العثور على {contacts} جهة اتصال و{groups} مجموعة و{messages} سلسلة رسائل",
+  "@searchSummary": {
+    "placeholders": {
+      "contacts": {
+        "type": "int"
+      },
+      "groups": {
+        "type": "int"
+      },
+      "messages": {
+        "type": "int"
+      }
+    }
+  },
+  "searchFailed": "فشل البحث، عرض نتائج جزئية",
+  "callVideoCall": "مكالمة فيديو",
+  "callAudioCall": "مكالمة صوتية",
+  "callReject": "رفض",
+  "callAccept": "قبول",
+  "callRemoteVideo": "فيديو الطرف الآخر",
+  "callUnmute": "إلغاء كتم الصوت",
+  "callMute": "كتم الصوت",
+  "callVideoOff": "إيقاف الفيديو",
+  "callVideoOn": "تشغيل الفيديو",
+  "callSpeakerOff": "إيقاف السماعة",
+  "callSpeakerOn": "تشغيل السماعة",
+  "callHangUp": "إنهاء المكالمة",
+  "callEnded": "انتهت المكالمة",
+  "callPermissionMicrophoneRequired": "يلزم إذن الميكروفون لمتابعة المكالمة.",
+  "callPermissionCameraRequired": "يلزم إذن الكاميرا لمتابعة المكالمة.",
+  "callPermissionMicrophoneCameraRequired": "يلزم إذن الميكروفون والكاميرا لمتابعة المكالمة.",
+  "callAudioInterrupted": "تم تغيير إخراج الصوت أو انقطاعه أثناء المكالمة.",
+  "callCalling": "جارٍ الاتصال...",
+  "callMinimize": "تصغير",
+  "callReturnToCall": "العودة إلى المكالمة",
+  "callQualityGood": "اتصال جيد",
+  "callQualityMedium": "اتصال مقبول",
+  "callQualityPoor": "اتصال ضعيف",
+  "callQualityUnknown": "—",
+  "callQualityLabel": "جودة المكالمة"
+}

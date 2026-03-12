@@ -1,0 +1,568 @@
+{
+  "@@locale": "zh",
+  "chats": "聊天",
+  "contacts": "联系人",
+  "requests": "请求",
+  "groups": "群组",
+  "settings": "设置",
+  "searchConversations": "按昵称/群/消息搜索",
+  "searchContacts": "搜索联系人",
+  "searchResults": "搜索结果",
+  "enterKeywordToSearch": "请输入关键词搜索",
+  "noResultsFound": "未找到结果",
+  "searchSectionMessages": "消息",
+  "searchSectionConversations": "会话",
+  "searchHint": "搜索...",
+  "messageCount": "{count} 条消息",
+  "@messageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchChatHistory": "搜索聊天记录",
+  "searchResultsCount": "共有 {count} 条与「{keyword}」相关的结果",
+  "@searchResultsCount": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "keyword": {"type": "String"}
+    }
+  },
+  "openChat": "打开聊天",
+  "relatedChats": "{count} 条相关消息",
+  "@relatedChats": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "newItem": "新建",
+  "addFriend": "添加好友",
+  "createGroup": "创建群聊",
+  "friendUserId": "好友 User ID（十六进制）",
+  "groupNameOptional": "群名称（可选）",
+  "typeMessage": "输入消息",
+  "messageToGroup": "发送到群组",
+  "selfId": "我的ID",
+  "appearance": "外观",
+  "light": "浅色",
+  "dark": "深色",
+  "language": "语言",
+  "english": "English",
+  "arabic": "العربية",
+  "japanese": "日本語",
+  "korean": "한국어",
+  "simplifiedChinese": "简体中文",
+  "traditionalChinese": "繁體中文",
+  "profile": "资料",
+  "nickname": "昵称",
+  "statusMessage": "签名",
+  "saveProfile": "保存资料",
+  "ok": "确定",
+  "cancel": "取消",
+  "group": "群",
+  "file": "文件",
+  "audio": "音频",
+  "friendRequestSent": "好友请求已发送",
+  "joinGroup": "加入群聊",
+  "groupId": "群ID",
+  "createAndOpen": "创建并打开",
+  "joinAndOpen": "加入并打开",
+  "knownGroups": "已知群组",
+  "selectAChat": "请选择一个会话",
+  "photo": "图片",
+  "video": "视频",
+  "autoAcceptFriendRequests": "自动接受好友申请",
+  "autoAcceptFriendRequestsDesc": "收到好友申请时自动通过",
+  "autoAcceptGroupInvites": "自动接受群组邀请",
+  "autoAcceptGroupInvitesDesc": "收到群组邀请时自动接受",
+  "bootstrapNodes": "Bootstrap 节点",
+  "currentNode": "当前节点",
+  "viewAndTestNodes": "查看并测试节点",
+  "currentlyOnlineNoReconnect": "当前已连接，无需重新连接",
+  "addOrCreateGroup": "添加 / 创建群组",
+  "joinGroupById": "通过 ID 加入群组",
+  "enterGroupId": "请输入群组 ID",
+  "requestMessage": "申请留言",
+  "groupAlias": "本地群名称（可选）",
+  "joinAction": "发送入群申请",
+  "joinSuccess": "入群申请已发送",
+  "joinFailed": "入群失败",
+  "groupName": "群名称",
+  "enterGroupName": "请输入群名称",
+  "createAction": "创建群聊",
+  "createSuccess": "群聊已创建",
+  "createFailed": "创建群聊失败",
+  "createdGroupId": "新群组 ID",
+  "copyId": "复制 ID",
+  "copied": "已复制到剪切板",
+  "addFailed": "添加失败",
+  "enterId": "请输入 Tox ID",
+  "invalidLength": "ID 必须为 64 或 76 位十六进制字符",
+  "invalidCharacters": "只能包含十六进制字符",
+  "paste": "粘贴",
+  "addContactHint": "输入好友的 Tox ID（64 或 76 位十六进制字符）。",
+  "verificationMessage": "验证信息",
+  "defaultFriendRequestMessage": "你好，我想添加你为好友。",
+  "friendRequestMessageTooLong": "好友请求消息不能超过 921 个字符",
+  "enterMessage": "请输入消息",
+  "autoAcceptedNewFriendRequest": "已自动接受新的好友申请",
+  "scanQrCodeToAddContact": "扫描二维码，添加我为联系人",
+  "generateCard": "生成名片",
+  "customCardText": "自定义名片文字",
+  "userId": "用户ID",
+  "saveImage": "保存图片",
+  "copy": "复制",
+  "fileCopiedSuccessfully": "文件复制成功",
+  "idCopiedToClipboard": "ID已复制到剪切板",
+  "establishingEncryptedChannel": "正在建立 加密通道...",
+  "@establishingEncryptedChannel": {
+    "description": "Loading message shown when initializing Tox connection"
+  },
+  "checkingUserInfo": "正在检查用户信息...",
+  "@checkingUserInfo": {
+    "description": "Message shown when checking user information during startup"
+  },
+  "initializingService": "正在初始化服务...",
+  "@initializingService": {
+    "description": "Message shown when initializing the service during startup"
+  },
+  "loggingIn": "正在登录...",
+  "@loggingIn": {
+    "description": "Message shown when logging in during startup"
+  },
+  "initializingSDK": "正在初始化 SDK...",
+  "@initializingSDK": {
+    "description": "Message shown when initializing SDK during startup"
+  },
+  "updatingProfile": "正在更新个人资料...",
+  "@updatingProfile": {
+    "description": "Message shown when updating profile during startup"
+  },
+  "initializationCompleted": "初始化完成！",
+  "@initializationCompleted": {
+    "description": "Message shown when initialization is completed"
+  },
+  "loadingFriends": "正在加载好友信息...",
+  "@loadingFriends": {
+    "description": "Message shown when loading friends information during startup"
+  },
+  "inProgress": "进行中",
+  "@inProgress": {
+    "description": "Label shown for steps that are currently in progress"
+  },
+  "completed": "完成",
+  "@completed": {
+    "description": "Label shown for steps that have been completed"
+  },
+  "personalCard": "个人名片",
+  "appTitle": "toxee",
+  "startChat": "开始聊天",
+  "pasteServerUserId": "在此粘贴服务器用户ID",
+  "groupProfile": "群组资料",
+  "invalidGroupId": "无效的群组ID",
+  "maintainer": "维护者: {maintainer}",
+  "success": "成功",
+  "failed": "失败",
+  "error": "错误: {error}",
+  "saved": "已保存",
+  "failedToSave": "保存失败: {error}",
+  "copyFailed": "复制失败: {error}",
+  "failedToUpdateAvatar": "更新头像失败: {error}",
+  "failedToLoadQr": "加载二维码失败",
+  "helloFromToxee": "来自 toxee 的问候",
+  "attachFailed": "附件失败: {error}",
+  "autoFriendRequestFromToxee": "来自 toxee 的自动好友请求",
+  "reconnect": "重新连接",
+  "reconnectConfirmMessage": "将使用选定的 Bootstrap 节点重新连接。是否继续？",
+  "reconnectedWaiting": "已发起重新连接，正在等待建立连接...",
+  "reconnectWithThisNode": "使用此节点重新连接",
+  "friendOfflineCannotSendFile": "好友不在线，无法发送文件。请等待好友上线后再试。",
+  "friendOfflineSendCardFailed": "好友不在线，发送名片失败",
+  "friendOfflineSendImageFailed": "好友不在线，发送图片失败",
+  "friendOfflineSendVideoFailed": "好友不在线，发送视频失败",
+  "friendOfflineSendFileFailed": "好友不在线，发送文件失败",
+  "userNotInFriendList": "该用户不在您的好友列表中。",
+  "sendFailed": "发送失败: {error}",
+  "myId": "我的ID",
+  "sendPersonalCardToGroup": "发送个人名片到群组",
+  "personalCardSent": "个人名片已发送",
+  "sentPersonalCardToGroup": "已发送个人名片到群组",
+  "bootstrapNodesTitle": "Bootstrap 节点",
+  "refresh": "刷新",
+  "retry": "重试",
+  "lastPing": "最后ping: {seconds}秒前",
+  "testNode": "测试节点",
+  "deleteAccount": "注销账号",
+  "deleteAccountConfirmMessage": "注销后账号与所有数据将永久删除且无法找回，请谨慎操作。",
+  "delete": "注销",
+  "deleteAccountEnterPasswordToConfirm": "请输入当前账号密码以确认注销。",
+  "deleteAccountTypeWordToConfirm": "请正确输入下方显示的英文单词以确认注销。",
+  "deleteAccountConfirmWordPrompt": "请在下框输入以下单词以确认: {word}",
+  "deleteAccountWrongWord": "输入的单词不正确",
+  "applications": "应用",
+  "applicationsComingSoon": "更多应用即将推出...",
+  "notificationSound": "通知声音",
+  "notificationSoundDesc": "新消息、好友申请和群组申请时播放声音",
+  "downloadsDirectory": "下载目录",
+  "selectDownloadsDirectory": "选择下载目录",
+  "changeDownloadsDirectory": "更改下载目录",
+  "downloadsDirectoryDesc": "设置默认的文件下载目录。接收的文件、音频和视频将保存到此目录。",
+  "downloadsDirectorySet": "下载目录已设置",
+  "downloadsDirectoryReset": "下载目录已重置为默认",
+  "failedToSelectDirectory": "选择目录失败",
+  "reset": "重置",
+  "autoDownloadSizeLimit": "自动下载大小限制",
+  "sizeLimitInMB": "大小限制 (MB)",
+  "autoDownloadSizeLimitDesc": "小于此大小的文件和所有图片将自动下载。大于此大小的文件需要手动点击下载按钮。",
+  "autoDownloadSizeLimitSet": "自动下载大小限制已设置为",
+  "invalidSizeLimit": "无效的大小限制，请输入 1-10000 之间的数字",
+  "save": "保存",
+  "routeSelection": "线路选择",
+  "online": "ONLINE",
+  "offline": "OFFLINE",
+  "canOnlySelectOnlineNode": "只能选择在线节点",
+  "canOnlySelectTestedNode": "只能选择已测试成功的节点，请先测试节点",
+  "switchNode": "切换节点",
+  "switchNodeConfirm": "确定切换到节点 {node} 吗？切换后将重新连接。",
+  "nodeSwitched": "已切换节点，正在重新连接...",
+  "selectThisNode": "切换到此节点",
+  "nodeSwitchFailed": "节点切换失败: {error}",
+  "ircChannelApp": "IRC频道",
+  "ircChannelAppDesc": "将IRC频道连接到Tox群组以实现消息同步",
+  "install": "安装",
+  "uninstall": "卸载",
+  "ircAppInstalled": "IRC频道应用已安装",
+  "ircAppUninstalled": "IRC频道应用已卸载",
+  "uninstallIrcApp": "卸载IRC频道应用",
+  "uninstallIrcAppConfirm": "确定要卸载IRC频道应用吗？所有IRC频道将被移除，您将退出所有IRC群组。",
+  "addIrcChannel": "添加频道",
+  "ircChannels": "IRC频道",
+  "ircServerConfig": "IRC服务器配置",
+  "@ircServerConfig": {
+    "description": "IRC服务器配置部分标题"
+  },
+  "ircServer": "服务器",
+  "@ircServer": {
+    "description": "IRC服务器地址输入标签"
+  },
+  "ircPort": "端口",
+  "@ircPort": {
+    "description": "IRC服务器端口输入标签"
+  },
+  "ircUseSasl": "使用SASL认证",
+  "@ircUseSasl": {
+    "description": "SASL认证开关标签"
+  },
+  "ircUseSaslDesc": "使用Tox公钥进行SASL认证（需要注册NickServ）",
+  "@ircUseSaslDesc": {
+    "description": "SASL认证选项说明"
+  },
+  "ircServerRequired": "IRC服务器地址不能为空",
+  "@ircServerRequired": {
+    "description": "IRC服务器地址为空时的错误消息"
+  },
+  "ircConfigSaved": "IRC配置已保存",
+  "@ircConfigSaved": {
+    "description": "IRC配置保存成功消息"
+  },
+  "ircChannelAdded": "IRC频道已添加: {channel}",
+  "ircChannelAddFailed": "添加IRC频道失败",
+  "ircChannelRemoved": "IRC频道已移除: {channel}",
+  "removeIrcChannel": "移除IRC频道",
+  "removeIrcChannelConfirm": "确定要移除 {channel} 吗？您将退出对应的群组。",
+  "remove": "移除",
+  "joinIrcChannel": "加入IRC频道",
+  "ircChannelName": "IRC频道名称",
+  "ircChannelHint": "#频道",
+  "ircChannelDesc": "输入IRC频道名称（例如：#channel）。将为此频道创建一个Tox群组。",
+  "enterIrcChannel": "请输入IRC频道名称",
+  "invalidIrcChannel": "IRC频道必须以 # 或 & 开头",
+  "join": "加入",
+  "ircAppNotInstalled": "请先从应用页面安装IRC频道应用",
+  "ircChannelPassword": "频道密码",
+  "ircChannelPasswordHint": "无密码时留空",
+  "ircCustomNickname": "自定义IRC昵称",
+  "ircCustomNicknameHint": "留空则使用自动生成的昵称",
+  "deleteAccountFailed": "注销失败: {error}",
+  "directorySelectionNotSupported": "此平台不支持目录选择",
+  "failedToSendFriendRequest": "发送好友请求失败: {error}",
+  "fileDoesNotExist": "文件不存在",
+  "fileIsEmpty": "文件为空",
+  "failedToSendFile": "发送 {label} 失败: {error}",
+  "noReceivers": "暂无接收者",
+  "messageReceivers": "消息接收者 ({count})",
+  "close": "关闭",
+  "nodeNotTestedWarning": "注意：此节点尚未测试，可能无法连接。",
+  "nodeTestFailedWarning": "注意：此节点测试失败，可能无法连接。",
+  "nicknameTooLong": "昵称过长",
+  "nicknameCannotBeEmpty": "昵称不能为空",
+  "statusMessageTooLong": "签名过长",
+  "manualNodeInput": "手动输入节点",
+  "nodeHost": "主机",
+  "nodePort": "端口",
+  "nodePublicKey": "公钥",
+  "setAsCurrentNode": "设置为当前节点",
+  "nodeTestSuccess": "节点测试成功",
+  "nodeTestFailed": "节点测试失败",
+  "invalidNodeInfo": "请输入有效的节点信息（主机、端口和公钥）",
+  "nodeSetSuccess": "已设为当前节点",
+  "bootstrapNodeMode": "Bootstrap 节点模式",
+  "manualMode": "手动指定",
+  "autoMode": "自动（从网页拉取）",
+  "manualModeDesc": "手动指定 Bootstrap 节点信息",
+  "autoModeDesc": "自动从网页拉取并使用 Bootstrap 节点",
+  "autoModeDescPrefix": "自动从 ",
+  "logOut": "退出登录",
+  "autoLogin": "自动登录",
+  "autoLoginEnabled": "自动登录：已启用",
+  "autoLoginDisabled": "自动登录：已禁用",
+  "autoLoginDesc": "启用后，启动应用时将自动登录。",
+  "disable": "禁用",
+  "enable": "启用",
+  "login": "登录",
+  "register": "注册",
+  "registerNewAccount": "注册新账号",
+  "unnamedAccount": "未命名账号",
+  "password": "密码",
+  "accountInfo": "账户信息",
+  "switchToThisAccount": "切换到此账号",
+  "newPassword": "新密码",
+  "confirmPassword": "确认密码",
+  "leaveEmptyToRemovePassword": "留空以移除密码",
+  "passwordsDoNotMatch": "密码不匹配",
+  "never": "从未",
+  "justNow": "刚刚",
+  "daysAgo": "{count} 天前",
+  "hoursAgo": "{count} 小时前",
+  "minutesAgo": "{count} 分钟前",
+  "thisAccountIsAlreadyLoggedIn": "此账号已登录",
+  "noServicesFound": "未找到服务",
+  "accountAlreadyExists": "账号已存在",
+  "accountAlreadyExistsMessage": "已存在相同ID的账号。是否要更新它？",
+  "accountExportedSuccessfully": "账号已成功导出到: {filePath}",
+  "accountImportedSuccessfully": "账号导入成功",
+  "accountManagement": "账号管理",
+  "aliveIPsFound": "找到活跃IP: {count}",
+  "@aliveIPsFound": {
+    "description": "Text showing number of alive IPs found",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aliveIPsList": "活跃IP列表",
+  "@aliveIPsList": {
+    "description": "Title for alive IPs list"
+  },
+  "bootstrapServiceFound": "发现 Bootstrap 服务",
+  "@bootstrapServiceFound": {
+    "description": "Message when bootstrap service is found"
+  },
+  "bootstrapServiceRunning": "Bootstrap 服务运行中: {ip}:{port}",
+  "@bootstrapServiceRunning": {
+    "description": "Status text when bootstrap service is running",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "bootstrapServiceStatus": "Bootstrap 服务状态",
+  "@bootstrapServiceStatus": {
+    "description": "Label for bootstrap service status"
+  },
+  "changePassword": "修改密码",
+  "current": "当前",
+  "enterPasswordForAccount": "输入账号 \"{nickname}\" 的密码",
+  "enterPasswordToExport": "输入密码以导出账号",
+  "enterPasswordToImport": "输入密码以导入账号",
+  "exportAccount": "导出账号",
+  "failedToExportAccount": "导出账号失败: {error}",
+  "failedToImportAccount": "导入账号失败: {error}",
+  "failedToSetPassword": "设置密码失败: {error}",
+  "failedToSwitchAccount": "切换账号失败: {error}",
+  "importAccount": "导入账号",
+  "invalidPassword": "密码错误",
+  "ipAddress": "IP地址",
+  "@ipAddress": {
+    "description": "Label for IP address"
+  },
+  "lanMode": "局域网 Bootstrap",
+  "@lanMode": {
+    "description": "LAN bootstrap node mode option"
+  },
+  "lanModeDesc": "使用局域网内的 Bootstrap 服务",
+  "@lanModeDesc": {
+    "description": "Description for LAN mode"
+  },
+  "lastLogin": "最近登录",
+  "localAccounts": "本地账号",
+  "showMore": "显示更多（还有 {count} 个）",
+  "showLess": "收起",
+  "logOutConfirm": "确定要退出登录吗？",
+  "noAccountSelected": "未选择账号",
+  "noAccountToExport": "没有可导出的账号",
+  "noAliveIPsFound": "未找到活跃IP",
+  "@noAliveIPsFound": {
+    "description": "Message when no alive IPs are found"
+  },
+  "noBootstrapService": "未发现 Bootstrap 服务",
+  "@noBootstrapService": {
+    "description": "Message when no bootstrap service is found"
+  },
+  "notProbedYet": "尚未探测",
+  "@notProbedYet": {
+    "description": "Status text when IP has not been probed"
+  },
+  "passwordRemoved": "密码已移除",
+  "passwordSetSuccessfully": "密码设置成功",
+  "probeFailed": "未发现 Bootstrap 服务",
+  "@probeFailed": {
+    "description": "Message when probe fails"
+  },
+  "probeSingleIP": "探测该 IP",
+  "@probeSingleIP": {
+    "description": "Button tooltip to probe single IP"
+  },
+  "probeStatus": "探测状态",
+  "@probeStatus": {
+    "description": "Label for probe status"
+  },
+  "probeSuccess": "发现 Bootstrap 服务",
+  "@probeSuccess": {
+    "description": "Message when probe succeeds"
+  },
+  "probing": "探测中...",
+  "@probing": {
+    "description": "Text shown when probing"
+  },
+  "probingBootstrapServices": "探测 Bootstrap 服务: {current}/{total}",
+  "@probingBootstrapServices": {
+    "description": "Progress text for probing bootstrap services",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "probingIP": "探测 {ip}...",
+  "@probingIP": {
+    "description": "Text shown when probing an IP",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshAliveIPs": "刷新活跃IP",
+  "@refreshAliveIPs": {
+    "description": "Button tooltip to refresh alive IPs list"
+  },
+  "savedAccounts": "已保存的账号",
+  "scanLanBootstrapServices": "扫描局域网 Bootstrap 服务",
+  "@scanLanBootstrapServices": {
+    "description": "Button text to scan LAN bootstrap services"
+  },
+  "scanLanBootstrapServicesTitle": "局域网 Bootstrap 服务",
+  "@scanLanBootstrapServicesTitle": {
+    "description": "Title for LAN bootstrap scan page"
+  },
+  "scanPort": "扫描端口",
+  "@scanPort": {
+    "description": "Label for scan port input field"
+  },
+  "scanning": "扫描中...",
+  "@scanning": {
+    "description": "Text shown when scanning"
+  },
+  "scanningAliveIPs": "扫描活跃IP: {current}/{total}",
+  "@scanningAliveIPs": {
+    "description": "Progress text for scanning alive IPs",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "serviceRunning": "运行中",
+  "@serviceRunning": {
+    "description": "Status text when service is running"
+  },
+  "serviceStopped": "已停止",
+  "@serviceStopped": {
+    "description": "Status text when service is stopped"
+  },
+  "setPassword": "设置密码",
+  "startLocalBootstrapService": "启动本地 Bootstrap 服务",
+  "@startLocalBootstrapService": {
+    "description": "Button text to start local bootstrap service"
+  },
+  "startScan": "开始扫描",
+  "@startScan": {
+    "description": "Button text to start scanning"
+  },
+  "stopLocalBootstrapService": "停止本地 Bootstrap 服务",
+  "@stopLocalBootstrapService": {
+    "description": "Button text to stop local bootstrap service"
+  },
+  "switchAccount": "切换账号",
+  "switchAccountConfirm": "确定要切换到 \"{nickname}\" 吗？您将被登出当前账号。",
+  "tapToSelectDoubleTapToLogin": "点击选择，双击快速登录",
+  "tapToLogIn": "点击登录",
+  "update": "更新",
+  "useAsBootstrapNode": "设为 Bootstrap 节点",
+  "@useAsBootstrapNode": {
+    "description": "Button text to use service as bootstrap node"
+  },
+  "searchSummary": "找到 {contacts} 个联系人、{groups} 个群组、{messages} 条消息线索",
+  "@searchSummary": {
+    "placeholders": {
+      "contacts": {
+        "type": "int"
+      },
+      "groups": {
+        "type": "int"
+      },
+      "messages": {
+        "type": "int"
+      }
+    }
+  },
+  "searchFailed": "搜索失败，显示部分结果",
+  "callVideoCall": "视频通话",
+  "callAudioCall": "语音通话",
+  "callReject": "拒绝",
+  "callAccept": "接听",
+  "callRemoteVideo": "对方画面",
+  "callUnmute": "取消静音",
+  "callMute": "静音",
+  "callVideoOff": "关闭视频",
+  "callVideoOn": "开启视频",
+  "callSpeakerOff": "关闭扬声器",
+  "callSpeakerOn": "开启扬声器",
+  "callHangUp": "挂断",
+  "callEnded": "通话已结束",
+  "callPermissionMicrophoneRequired": "继续通话需要麦克风权限。",
+  "callPermissionCameraRequired": "继续通话需要相机权限。",
+  "callPermissionMicrophoneCameraRequired": "继续通话需要麦克风和相机权限。",
+  "callAudioInterrupted": "通话过程中音频输出发生变化或被中断。",
+  "callCalling": "呼叫中...",
+  "callMinimize": "最小化",
+  "callReturnToCall": "返回通话",
+  "callQualityGood": "连接良好",
+  "callQualityMedium": "连接一般",
+  "callQualityPoor": "连接较差",
+  "callQualityUnknown": "—",
+  "callQualityLabel": "通话质量"
+}

@@ -1,0 +1,343 @@
+import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'prefs.dart';
+
+/// Centralized paths for app data (settings dir, avatars, downloads, history).
+/// Uses platform path_provider under the hood; use this instead of calling
+/// getApplicationSupportDirectory() and building paths manually.
+abstract final class AppPaths {
+  /// Application support directory (persistent, backed up on iOS).
+  static Future<Directory> get applicationSupport async {
+    return getApplicationSupportDirectory();
+  }
+
+  /// Path string for application support directory.
+  static Future<String> get applicationSupportPath async {
+    return (await applicationSupport).path;
+  }
+
+  /// Directory for chat history JSON files: `<appSupport>/chat_history`.
+  static Future<Directory> get chatHistory async {
+    final base = await applicationSupportPath;
+    return Directory(p.join(base, 'chat_history'));
+  }
+
+  static Future<String> get chatHistoryPath async {
+    return (await chatHistory).path;
+  }
+
+  /// Directory for avatar images: `<appSupport>/avatars`.
+  static Future<Directory> get avatars async {
+    final base = await applicationSupportPath;
+    return Directory(p.join(base, 'avatars'));
+  }
+
+  static Future<String> get avatarsPath async {
+    return (await avatars).path;
+  }
+
+  /// Directory for received files: `<appSupport>/file_recv`.
+  static Future<Directory> get fileRecv async {
+    final base = await applicationSupportPath;
+    return Directory(p.join(base, 'file_recv'));
+  }
+
+  static Future<String> get fileRecvPath async {
+    return (await fileRecv).path;
+  }
+
+  /// Path for offline message queue JSON: `<appSupport>/offline_message_queue.json`.
+  static Future<String> get offlineMessageQueueFilePath async {
+    final base = await applicationSupportPath;
+    return p.join(base, 'offline_message_queue.json');
+  }
+
+  /// Directory for Tox profile files: `<appSupport>/tim2tox`.
+  static Future<Directory> get toxProfileDir async {
+    final base = await applicationSupportPath;
+    return Directory(p.join(base, 'tim2tox'));
+  }
+
+  /// Path for a Tox profile file for the given [toxId]: `<appSupport>/tim2tox/tox_profile_<toxId>.tox`.
+  static Future<String> toxProfilePath(String toxId) async {
+    final dir = await toxProfileDir;
+    return p.join(dir.path, 'tox_profile_$toxId.tox');
+  }
+
+  /// Persistent root directory for multi-account tox profiles (outside app dir when possible).
+  /// Uses [Prefs.getProfileStorageRoot] if set; otherwise platform default:
+  /// macOS: ~/Library/Application Support/toxee/profiles
+  /// Linux: ~/.config/toxee/profiles or $XDG_DATA_HOME
+  /// Windows: %APPDATA%/toxee/profiles
+  /// Fallback: app Application Support when custom root not set.
+  static Future<String> getProfileStorageRoot() async {
+    final custom = await Prefs.getProfileStorageRoot();
+    if (custom != null && custom.isNotEmpty) return custom;
+    if (Platform.isMacOS) {
+      final home = Platform.environment['HOME'];
+      if (home != null && home.isNotEmpty) {
+        return p.join(home, 'Library', 'Application Support', 'toxee', 'profiles');
+      }
+    }
+    if (Platform.isLinux) {
+      final dataHome = Platform.environment['XDG_DATA_HOME'];
+      if (dataHome != null && dataHome.isNotEmpty) {
+        return p.join(dataHome, 'toxee', 'profiles');
+      }
+      final home = Platform.environment['HOME'];
+      if (home != null && home.isNotEmpty) {
+        return p.join(home, '.config', 'toxee', 'profiles');
+      }
+    }
+    if (Platform.isWindows) {
+      final appData = Platform.environment['APPDATA'];
+      if (appData != null && appData.isNotEmpty) {
+        return p.join(appData, 'toxee', 'profiles');
+      }
+    }
+    final base = await applicationSupportPath;
+    return p.join(base, 'profiles');
+  }
+
+  /// Short directory name for one account: p_<first 16 hex chars of toxId>.
+  static const int _profileDirPrefixLen = 16;
+  static const String _profileDirPrefix = 'p_';
+
+  /// Directory for the given [toxId] under profile storage root (short name: p_<toxId first 16 chars>).
+  /// Native expects this path as initPath; it will create tox_profile.tox inside it.
+  static Future<String> getProfileDirectoryForToxId(String toxId) async {
+    final root = await getProfileStorageRoot();
+    final normalized = toxId.trim();
+    final first16 = normalized.length >= _profileDirPrefixLen
+        ? normalized.substring(0, _profileDirPrefixLen)
+        : normalized;
+    return p.join(root, '$_profileDirPrefix$first16');
+  }
+
+  /// Path to the tox_profile.tox file inside a profile directory (for existence check / import).
+  static String profileFileInDirectory(String profileDir) {
+    return p.join(profileDir, 'tox_profile.tox');
+  }
+
+  /// Resolves the tox profile file for [toxId] by trying primary and fallback locations.
+  /// Returns the path of the first existing file, or null if none found.
+  /// Tries: (1) profile storage root p_<first16>/tox_profile.tox,
+  /// (2) app support profiles/p_<first16>/tox_profile.tox,
+  /// (3) legacy appSupport/tim2tox/tox_profile_<toxId>.tox.
+  static Future<String?> resolveToxProfilePath(String toxId) async {
+    final normalized = toxId.trim();
+    final first16 = normalized.length >= _profileDirPrefixLen
+        ? normalized.substring(0, _profileDirPrefixLen)
+        : normalized;
+
+    // 1. Primary: profile storage root / p_<first16> / tox_profile.tox
+    final profileDir = await getProfileDirectoryForToxId(normalized);
+    final primary = profileFileInDirectory(profileDir);
+    final primaryFile = File(primary);
+    if (await primaryFile.exists()) return primary;
+
+    // 2. Fallback: app support profiles (e.g. when root differed or sandbox path)
+    final base = await applicationSupportPath;
+    final appSupportProfile =
+        p.join(base, 'profiles', '$_profileDirPrefix$first16', 'tox_profile.tox');
+    if (await File(appSupportProfile).exists()) return appSupportProfile;
+
+    // 3. Legacy: appSupport/tim2tox/tox_profile_<fullToxId>.tox
+    final legacy = await toxProfilePath(normalized);
+    if (await File(legacy).exists()) return legacy;
+
+    return null;
+  }
+
+  /// Account prefix (first 16 chars of toxId) for data directory naming. Same as used in p_<prefix> profile dirs.
+  static String _accountPrefix(String toxId) {
+    final normalized = toxId.trim();
+    return normalized.length >= _profileDirPrefixLen
+        ? normalized.substring(0, _profileDirPrefixLen)
+        : normalized;
+  }
+
+  /// Per-account data root: `<appSupport>/account_data/<prefix>`. One dir per account for chat history, offline queue, etc.
+  static Future<String> getAccountDataRoot(String toxId) async {
+    final base = await applicationSupportPath;
+    return p.join(base, 'account_data', _accountPrefix(toxId));
+  }
+
+  /// Chat history directory for the given account: `<accountDataRoot>/chat_history`.
+  static Future<String> getAccountChatHistoryPath(String toxId) async {
+    final root = await getAccountDataRoot(toxId);
+    return p.join(root, 'chat_history');
+  }
+
+  /// Offline message queue file for the given account: `<accountDataRoot>/offline_message_queue.json`.
+  static Future<String> getAccountOfflineQueueFilePath(String toxId) async {
+    final root = await getAccountDataRoot(toxId);
+    return p.join(root, 'offline_message_queue.json');
+  }
+
+  /// Avatars directory for the given account (optional): `<accountDataRoot>/avatars`.
+  static Future<String> getAccountAvatarsPath(String toxId) async {
+    final root = await getAccountDataRoot(toxId);
+    return p.join(root, 'avatars');
+  }
+
+  /// File receive directory for the given account (optional): `<accountDataRoot>/file_recv`.
+  static Future<String> getAccountFileRecvPath(String toxId) async {
+    final root = await getAccountDataRoot(toxId);
+    return p.join(root, 'file_recv');
+  }
+
+  /// Migrates legacy global chat_history and offline_message_queue into account_data/<prefix>/ once.
+  /// Safe to call every time; only copies when legacy data exists and account dir is empty/missing.
+  static Future<void> migrateAccountDataFromLegacy(String toxId) async {
+    final accountRoot = await getAccountDataRoot(toxId);
+    final accountHistoryDir = Directory(p.join(accountRoot, 'chat_history'));
+    final accountQueuePath = p.join(accountRoot, 'offline_message_queue.json');
+    final legacyHistoryPath = await chatHistoryPath;
+    final legacyQueuePath = await offlineMessageQueueFilePath;
+
+    final legacyHistoryDir = Directory(legacyHistoryPath);
+    if (await legacyHistoryDir.exists()) {
+      final legacyFiles = await legacyHistoryDir.list().where((e) => e is File).toList();
+      if (legacyFiles.isNotEmpty) {
+        await accountHistoryDir.create(recursive: true);
+        for (final e in legacyFiles) {
+          final file = e as File;
+          final dest = File(p.join(accountHistoryDir.path, p.basename(file.path)));
+          if (!await dest.exists()) await file.copy(dest.path);
+        }
+      }
+    }
+
+    final legacyQueueFile = File(legacyQueuePath);
+    if (await legacyQueueFile.exists()) {
+      await Directory(accountRoot).create(recursive: true);
+      final destQueue = File(accountQueuePath);
+      if (!await destQueue.exists()) await legacyQueueFile.copy(accountQueuePath);
+    }
+
+    // Migrate avatars from global <appSupport>/avatars/ to per-account directory
+    final globalAvatarsPath = await avatarsPath;
+    final accountAvatarsPath = await getAccountAvatarsPath(toxId);
+    final accountAvatarsDir = Directory(accountAvatarsPath);
+    final globalAvatarsDir = Directory(globalAvatarsPath);
+    if (await globalAvatarsDir.exists()) {
+      final prefix = _accountPrefix(toxId);
+      final globalFiles = await globalAvatarsDir.list().where((e) => e is File).toList();
+      if (globalFiles.isNotEmpty) {
+        await accountAvatarsDir.create(recursive: true);
+        for (final e in globalFiles) {
+          final file = e as File;
+          final baseName = p.basename(file.path);
+          // Migrate self avatars matching this account's prefix
+          // and friend avatars (friend_<id>_avatar.ext) for all friends
+          if (baseName.startsWith('avatar_$prefix') ||
+              baseName.startsWith('self_avatar') ||
+              baseName.startsWith('friend_')) {
+            final dest = File(p.join(accountAvatarsPath, baseName));
+            if (!await dest.exists()) {
+              await file.copy(dest.path);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /// Directory for app logs: `<appSupport>/logs`.
+  static Future<Directory> get logsDir async {
+    final base = await applicationSupportPath;
+    return Directory(p.join(base, 'logs'));
+  }
+
+  /// Platform default downloads directory (e.g. user's Downloads folder).
+  /// Use when the user has not set a custom downloads directory in settings.
+  static Future<Directory?> get defaultDownloadsDirectory async {
+    if (Platform.isAndroid) {
+      return getExternalStorageDirectory();
+    }
+    return getDownloadsDirectory();
+  }
+
+  /// Get the downloads directory for the current platform, respecting user configuration.
+  /// Priority: user-configured > system Downloads > app documents fallback.
+  /// Centralised logic shared by FfiChatService and AccountExportService.
+  static Future<String> getDownloadsPath() async {
+    // 1. Check user-configured custom path (from settings page)
+    final custom = await Prefs.getDownloadsDirectory();
+    if (custom != null && custom.isNotEmpty) {
+      final dir = Directory(custom);
+      if (await dir.exists()) return custom;
+      try {
+        await dir.create(recursive: true);
+        return custom;
+      } catch (_) {}
+    }
+
+    // 2. Desktop: system Downloads via path_provider, with manual fallback
+    if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
+      try {
+        final dir = await getDownloadsDirectory();
+        if (dir != null) {
+          if (!await dir.exists()) await dir.create(recursive: true);
+          return dir.path;
+        }
+      } catch (_) {}
+      // Manual fallback
+      if (Platform.isMacOS || Platform.isLinux) {
+        final home = Platform.environment['HOME'];
+        if (home != null) {
+          final dir = Directory(p.join(home, 'Downloads'));
+          if (!await dir.exists()) await dir.create(recursive: true);
+          return dir.path;
+        }
+      } else if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        if (userProfile != null) {
+          final dir = Directory(p.join(userProfile, 'Downloads'));
+          if (!await dir.exists()) await dir.create(recursive: true);
+          return dir.path;
+        }
+      }
+    }
+
+    // 3. Android: use external storage Download via path_provider
+    if (Platform.isAndroid) {
+      try {
+        final extDir = await getExternalStorageDirectory();
+        if (extDir != null) {
+          // extDir is <appExternalDir>/files; navigate up to shared storage Download
+          final downloadDir = Directory(
+              p.join(extDir.parent.parent.parent.parent.path, 'Download'));
+          if (await downloadDir.exists()) return downloadDir.path;
+        }
+      } catch (_) {}
+      // Fallback: app documents/Downloads
+      final appDir = await getApplicationDocumentsDirectory();
+      final fallback = Directory(p.join(appDir.path, 'Downloads'));
+      if (!await fallback.exists()) await fallback.create(recursive: true);
+      return fallback.path;
+    }
+
+    // 4. iOS: app documents/Downloads (accessible via Files app if UIFileSharingEnabled)
+    if (Platform.isIOS) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final dir = Directory(p.join(appDir.path, 'Downloads'));
+      if (!await dir.exists()) await dir.create(recursive: true);
+      return dir.path;
+    }
+
+    // Ultimate fallback
+    final base = await applicationSupportPath;
+    final dir = Directory(p.join(base, 'Downloads'));
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir.path;
+  }
+
+  /// Path for the main app log file: `<appSupport>/flutter_client.log`.
+  static Future<String> get logFilePath async {
+    final base = await applicationSupportPath;
+    return p.join(base, 'flutter_client.log');
+  }
+}

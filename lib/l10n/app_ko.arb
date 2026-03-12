@@ -1,0 +1,729 @@
+{
+  "@@locale": "ko",
+  "chats": "채팅",
+  "contacts": "연락처",
+  "requests": "요청",
+  "groups": "그룹",
+  "settings": "설정",
+  "searchConversations": "닉네임 / 그룹 / 메시지로 검색",
+  "searchContacts": "연락처 검색",
+  "searchResults": "검색 결과",
+  "enterKeywordToSearch": "키워드를 입력하여 검색",
+  "noResultsFound": "결과를 찾을 수 없습니다",
+  "searchSectionMessages": "메시지",
+  "searchSectionConversations": "대화",
+  "searchHint": "검색...",
+  "messageCount": "{count}개의 메시지",
+  "@messageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchChatHistory": "채팅 기록 검색",
+  "searchResultsCount": "\"{keyword}\"에 대한 결과가 {count}개 있습니다",
+  "@searchResultsCount": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "keyword": {"type": "String"}
+    }
+  },
+  "openChat": "채팅 열기",
+  "relatedChats": "관련 메시지 {count}개",
+  "@relatedChats": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "newItem": "새로 만들기",
+  "addFriend": "친구 추가",
+  "createGroup": "그룹 만들기",
+  "friendUserId": "친구 사용자 ID (16진수)",
+  "groupNameOptional": "그룹 이름 (선택 사항)",
+  "typeMessage": "메시지 입력",
+  "messageToGroup": "그룹에 메시지",
+  "selfId": "내 ID",
+  "appearance": "모양",
+  "light": "라이트",
+  "dark": "다크",
+  "language": "언어",
+  "english": "English",
+  "arabic": "العربية",
+  "japanese": "日本語",
+  "korean": "한국어",
+  "simplifiedChinese": "简体中文",
+  "traditionalChinese": "繁體中文",
+  "profile": "프로필",
+  "nickname": "닉네임",
+  "statusMessage": "상태 메시지",
+  "saveProfile": "프로필 저장",
+  "ok": "확인",
+  "cancel": "취소",
+  "group": "그룹",
+  "file": "파일",
+  "audio": "오디오",
+  "friendRequestSent": "친구 요청을 보냈습니다",
+  "joinGroup": "그룹에 참가",
+  "groupId": "그룹 ID",
+  "createAndOpen": "만들고 열기",
+  "joinAndOpen": "참가하고 열기",
+  "knownGroups": "알려진 그룹",
+  "selectAChat": "채팅 선택",
+  "photo": "사진",
+  "video": "비디오",
+  "autoAcceptFriendRequests": "친구 요청 자동 수락",
+  "autoAcceptFriendRequestsDesc": "들어오는 친구 요청을 자동으로 수락",
+  "autoAcceptGroupInvites": "그룹 초대 자동 수락",
+  "autoAcceptGroupInvitesDesc": "들어오는 그룹 초대를 자동으로 수락",
+  "bootstrapNodes": "Bootstrap 노드",
+  "currentNode": "현재 사용 중인 노드",
+  "viewAndTestNodes": "노드 보기 및 테스트",
+  "currentlyOnlineNoReconnect": "현재 온라인 상태입니다. 재연결할 필요가 없습니다",
+  "addOrCreateGroup": "추가 / 그룹 만들기",
+  "joinGroupById": "ID로 그룹에 참가",
+  "enterGroupId": "그룹 ID를 입력하세요",
+  "requestMessage": "요청 메시지",
+  "groupAlias": "로컬 그룹 이름 (선택 사항)",
+  "joinAction": "참가 요청 보내기",
+  "joinSuccess": "참가 요청을 보냈습니다",
+  "joinFailed": "그룹 참가에 실패했습니다",
+  "groupName": "그룹 이름",
+  "enterGroupName": "그룹 이름을 입력하세요",
+  "createAction": "그룹 만들기",
+  "createSuccess": "그룹을 만들었습니다",
+  "createFailed": "그룹 만들기에 실패했습니다",
+  "createdGroupId": "새 그룹 ID",
+  "copyId": "ID 복사",
+  "copied": "클립보드에 복사했습니다",
+  "addFailed": "추가에 실패했습니다",
+  "enterId": "Tox ID를 입력하세요",
+  "invalidLength": "ID는 64자 또는 76자의 16진수 문자여야 합니다",
+  "invalidCharacters": "16진수 문자만 포함할 수 있습니다",
+  "paste": "붙여넣기",
+  "addContactHint": "친구의 Tox ID (64자 또는 76자의 16진수 문자)를 입력하세요.",
+  "verificationMessage": "확인 메시지",
+  "defaultFriendRequestMessage": "안녕하세요, 친구로 추가하고 싶습니다.",
+  "friendRequestMessageTooLong": "친구 요청 메시지는 921자를 초과할 수 없습니다",
+  "enterMessage": "메시지를 입력하세요",
+  "autoAcceptedNewFriendRequest": "새 친구 요청을 자동으로 수락했습니다",
+  "scanQrCodeToAddContact": "QR 코드를 스캔하여 연락처에 추가",
+  "generateCard": "명함 생성",
+  "customCardText": "사용자 정의 명함 텍스트",
+  "userId": "사용자 ID",
+  "saveImage": "이미지 저장",
+  "copy": "복사",
+  "fileCopiedSuccessfully": "파일을 복사했습니다",
+  "idCopiedToClipboard": "ID를 클립보드에 복사했습니다",
+  "establishingEncryptedChannel": "암호화 채널 설정 중...",
+  "@establishingEncryptedChannel": {
+    "description": "Loading message shown when initializing Tox connection"
+  },
+  "checkingUserInfo": "사용자 정보 확인 중...",
+  "@checkingUserInfo": {
+    "description": "Message shown when checking user information during startup"
+  },
+  "initializingService": "서비스 초기화 중...",
+  "@initializingService": {
+    "description": "Message shown when initializing the service during startup"
+  },
+  "loggingIn": "로그인 중...",
+  "@loggingIn": {
+    "description": "Message shown when logging in during startup"
+  },
+  "initializingSDK": "SDK 초기화 중...",
+  "@initializingSDK": {
+    "description": "Message shown when initializing SDK during startup"
+  },
+  "updatingProfile": "프로필 업데이트 중...",
+  "@updatingProfile": {
+    "description": "Message shown when updating profile during startup"
+  },
+  "initializationCompleted": "초기화 완료!",
+  "@initializationCompleted": {
+    "description": "Message shown when initialization is completed"
+  },
+  "loadingFriends": "친구 정보 로딩 중...",
+  "@loadingFriends": {
+    "description": "Message shown when loading friends information during startup"
+  },
+  "inProgress": "진행 중",
+  "@inProgress": {
+    "description": "Label shown for steps that are currently in progress"
+  },
+  "completed": "완료",
+  "@completed": {
+    "description": "Label shown for steps that have been completed"
+  },
+  "personalCard": "개인 명함",
+  "appTitle": "toxee",
+  "startChat": "채팅 시작",
+  "pasteServerUserId": "서버 사용자 ID를 여기에 붙여넣기",
+  "groupProfile": "그룹 프로필",
+  "invalidGroupId": "잘못된 그룹 ID",
+  "maintainer": "유지 관리자: {maintainer}",
+  "success": "성공",
+  "failed": "실패",
+  "error": "오류: {error}",
+  "saved": "저장됨",
+  "failedToSave": "저장 실패: {error}",
+  "copyFailed": "복사 실패: {error}",
+  "failedToUpdateAvatar": "아바타 업데이트 실패: {error}",
+  "failedToLoadQr": "QR 코드 로드 실패",
+  "helloFromToxee": "toxee로부터의 인사",
+  "attachFailed": "첨부 실패: {error}",
+  "autoFriendRequestFromToxee": "toxee로부터의 자동 친구 요청",
+  "reconnect": "재연결",
+  "reconnectConfirmMessage": "선택한 Bootstrap 노드를 사용하여 재연결합니다. 계속하시겠습니까?",
+  "reconnectedWaiting": "다시 로그인했습니다. 연결 대기 중...",
+  "reconnectWithThisNode": "이 노드로 재연결",
+  "friendOfflineCannotSendFile": "친구가 오프라인입니다. 파일을 보낼 수 없습니다. 온라인 상태가 될 때까지 기다려주세요.",
+  "friendOfflineSendCardFailed": "친구가 오프라인입니다. 명함 전송 실패",
+  "friendOfflineSendImageFailed": "친구가 오프라인입니다. 이미지 전송 실패",
+  "friendOfflineSendVideoFailed": "친구가 오프라인입니다. 비디오 전송 실패",
+  "friendOfflineSendFileFailed": "친구가 오프라인입니다. 파일 전송 실패",
+  "userNotInFriendList": "이 사용자는 친구 목록에 없습니다.",
+  "sendFailed": "전송 실패: {error}",
+  "myId": "내 ID",
+  "sendPersonalCardToGroup": "개인 명함을 그룹에 보내기",
+  "personalCardSent": "개인 명함을 보냈습니다",
+  "sentPersonalCardToGroup": "그룹에 개인 명함을 보냈습니다",
+  "bootstrapNodesTitle": "Bootstrap 노드",
+  "refresh": "새로고침",
+  "retry": "다시 시도",
+  "lastPing": "마지막 ping: {seconds}초 전",
+  "testNode": "노드 테스트",
+  "deleteAccount": "계정 삭제",
+  "deleteAccountConfirmMessage": "계정과 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다. 신중하게 진행하세요.",
+  "delete": "삭제",
+  "deleteAccountEnterPasswordToConfirm": "삭제를 확인하려면 현재 계정 비밀번호를 입력하세요.",
+  "deleteAccountTypeWordToConfirm": "삭제를 확인하려면 아래에 표시된 영어 단어를 정확히 입력하세요.",
+  "deleteAccountConfirmWordPrompt": "확인을 위해 아래 상자에 다음 단어를 입력하세요: {word}",
+  "deleteAccountWrongWord": "입력한 단어가 올바르지 않습니다.",
+  "applications": "앱",
+  "applicationsComingSoon": "더 많은 앱이 곧 출시됩니다...",
+  "notificationSound": "알림 소리",
+  "notificationSoundDesc": "새 메시지, 친구 요청 및 그룹 요청 시 소리 재생",
+  "downloadsDirectory": "다운로드 디렉토리",
+  "selectDownloadsDirectory": "다운로드 디렉토리 선택",
+  "changeDownloadsDirectory": "다운로드 디렉토리 변경",
+  "downloadsDirectoryDesc": "파일 다운로드의 기본 디렉토리를 설정합니다. 수신한 파일, 오디오 및 비디오는 이 디렉토리에 저장됩니다.",
+  "downloadsDirectorySet": "다운로드 디렉토리가 설정되었습니다",
+  "downloadsDirectoryReset": "다운로드 디렉토리가 기본값으로 재설정되었습니다",
+  "failedToSelectDirectory": "디렉토리 선택 실패",
+  "reset": "재설정",
+  "autoDownloadSizeLimit": "자동 다운로드 크기 제한",
+  "sizeLimitInMB": "크기 제한 (MB)",
+  "autoDownloadSizeLimitDesc": "이 크기보다 작은 파일과 모든 이미지는 자동으로 다운로드됩니다. 이 크기보다 큰 파일은 수동으로 다운로드 버튼을 클릭해야 합니다.",
+  "autoDownloadSizeLimitSet": "자동 다운로드 크기 제한이 설정되었습니다",
+  "invalidSizeLimit": "유효하지 않은 크기 제한입니다. 1-10000 사이의 숫자를 입력하세요",
+  "save": "저장",
+  "routeSelection": "경로 선택",
+  "online": "ONLINE",
+  "offline": "OFFLINE",
+  "canOnlySelectOnlineNode": "온라인 노드만 선택할 수 있습니다",
+  "canOnlySelectTestedNode": "테스트에 성공한 노드만 선택할 수 있습니다. 먼저 노드를 테스트하세요",
+  "switchNode": "노드 전환",
+  "switchNodeConfirm": "노드 {node}로 전환하시겠습니까? 전환 후 재연결이 필요합니다.",
+  "nodeSwitched": "노드가 전환되었습니다. 재연결 중...",
+  "selectThisNode": "이 노드 선택",
+  "nodeSwitchFailed": "노드 전환 실패: {error}",
+  "manualNodeInput": "수동 노드 입력",
+  "nodeHost": "호스트",
+  "nodePort": "포트",
+  "nodePublicKey": "공개 키",
+  "setAsCurrentNode": "현재 노드로 설정",
+  "nodeTestSuccess": "노드 테스트 성공",
+  "nodeTestFailed": "노드 테스트 실패",
+  "invalidNodeInfo": "유효한 노드 정보(호스트, 포트, 공개 키)를 입력하세요",
+  "nodeSetSuccess": "노드가 현재 노드로 성공적으로 설정되었습니다",
+  "bootstrapNodeMode": "Bootstrap 노드 모드",
+  "manualMode": "수동 지정",
+  "autoMode": "자동 (웹에서 가져오기)",
+  "manualModeDesc": "Bootstrap 노드 정보를 수동으로 지정",
+  "autoModeDesc": "웹에서 자동으로 Bootstrap 노드를 가져와 사용",
+  "autoModeDescPrefix": "자동으로 에서 Bootstrap 노드를 가져와 사용",
+  "logOut": "로그아웃",
+  "logOutConfirm": "로그아웃하시겠습니까?",
+  "autoLogin": "자동 로그인",
+  "autoLoginEnabled": "자동 로그인: 활성화됨",
+  "autoLoginDisabled": "자동 로그인: 비활성화됨",
+  "autoLoginDesc": "활성화하면 앱 시작 시 자동으로 로그인됩니다.",
+  "disable": "비활성화",
+  "enable": "활성화",
+  "login": "로그인",
+  "register": "등록",
+  "registerNewAccount": "새 계정 등록",
+  "unnamedAccount": "이름 없는 계정",
+  "password": "비밀번호",
+  "accountInfo": "계정 정보",
+  "accountManagement": "계정 관리",
+  "localAccounts": "로컬 계정",
+  "showMore": "{count}개 더 보기",
+  "showLess": "접기",
+  "current": "현재",
+  "lastLogin": "최근 로그인",
+  "switchAccount": "계정 전환",
+  "exportAccount": "계정 내보내기",
+  "importAccount": "계정 가져오기",
+  "setPassword": "비밀번호 설정",
+  "changePassword": "비밀번호 변경",
+  "enterPasswordToExport": "계정을 내보내려면 비밀번호를 입력하세요",
+  "enterPasswordToImport": "계정을 가져오려면 비밀번호를 입력하세요",
+  "enterPasswordForAccount": "계정 \"{nickname}\"의 비밀번호를 입력하세요",
+  "invalidPassword": "비밀번호가 올바르지 않습니다",
+  "accountExportedSuccessfully": "계정이 성공적으로 내보내졌습니다: {filePath}",
+  "accountImportedSuccessfully": "계정이 성공적으로 가져와졌습니다",
+  "passwordSetSuccessfully": "비밀번호가 성공적으로 설정되었습니다",
+  "passwordRemoved": "비밀번호가 제거되었습니다",
+  "failedToSwitchAccount": "계정 전환 실패: {error}",
+  "failedToExportAccount": "계정 내보내기 실패: {error}",
+  "failedToImportAccount": "계정 가져오기 실패: {error}",
+  "failedToSetPassword": "비밀번호 설정 실패: {error}",
+  "noAccountToExport": "내보낼 계정이 없습니다",
+  "noAccountSelected": "계정이 선택되지 않았습니다",
+  "accountAlreadyExists": "계정이 이미 존재합니다",
+  "accountAlreadyExistsMessage": "이 ID의 계정이 이미 존재합니다. 업데이트하시겠습니까?",
+  "update": "업데이트",
+  "switchAccountConfirm": "\"{nickname}\"로 전환하시겠습니까? 현재 계정에서 로그아웃됩니다.",
+  "savedAccounts": "저장된 계정",
+  "tapToSelectDoubleTapToLogin": "탭하여 선택, 더블 탭하여 빠른 로그인",
+  "tapToLogIn": "탭하여 로그인",
+  "switchToThisAccount": "이 계정으로 전환",
+  "newPassword": "새 비밀번호",
+  "confirmPassword": "비밀번호 확인",
+  "leaveEmptyToRemovePassword": "비워두면 비밀번호 제거",
+  "passwordsDoNotMatch": "비밀번호가 일치하지 않습니다",
+  "never": "없음",
+  "justNow": "방금",
+  "daysAgo": "{count}일 전",
+  "hoursAgo": "{count}시간 전",
+  "minutesAgo": "{count}분 전",
+  "thisAccountIsAlreadyLoggedIn": "이 계정은 이미 로그인되어 있습니다",
+  "noServicesFound": "서비스를 찾을 수 없습니다",
+  "addIrcChannel": "채널 추가",
+  "@addIrcChannel": {
+    "description": "Button text to add an IRC channel"
+  },
+  "aliveIPsFound": "활성 IP 발견: {count}",
+  "@aliveIPsFound": {
+    "description": "Text showing number of alive IPs found",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aliveIPsList": "활성 IP 목록",
+  "@aliveIPsList": {
+    "description": "Title for alive IPs list"
+  },
+  "bootstrapServiceFound": "Bootstrap 서비스 발견",
+  "@bootstrapServiceFound": {
+    "description": "Message when bootstrap service is found"
+  },
+  "bootstrapServiceRunning": "Bootstrap 서비스 실행 중: {ip}:{port}",
+  "@bootstrapServiceRunning": {
+    "description": "Status text when bootstrap service is running",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "bootstrapServiceStatus": "서비스 상태",
+  "@bootstrapServiceStatus": {
+    "description": "Label for bootstrap service status"
+  },
+  "close": "닫기",
+  "@close": {
+    "description": "Button text to close dialog"
+  },
+  "deleteAccountFailed": "계정 삭제 실패: {error}",
+  "@deleteAccountFailed": {
+    "description": "Error message when account deletion fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "directorySelectionNotSupported": "이 플랫폼에서는 디렉토리 선택이 지원되지 않습니다",
+  "@directorySelectionNotSupported": {
+    "description": "Message shown when directory selection is not supported on the platform"
+  },
+  "enterIrcChannel": "IRC 채널 이름을 입력하세요",
+  "@enterIrcChannel": {
+    "description": "Validation error message for empty IRC channel name"
+  },
+  "failedToSendFile": "{label} 전송 실패: {error}",
+  "@failedToSendFile": {
+    "description": "Error message when file sending fails",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToSendFriendRequest": "친구 요청 전송 실패: {error}",
+  "@failedToSendFriendRequest": {
+    "description": "Error message when friend request sending fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "fileDoesNotExist": "파일이 존재하지 않습니다",
+  "@fileDoesNotExist": {
+    "description": "Error message when file does not exist"
+  },
+  "fileIsEmpty": "파일이 비어 있습니다",
+  "@fileIsEmpty": {
+    "description": "Error message when file is empty"
+  },
+  "install": "설치",
+  "@install": {
+    "description": "Button text to install an application"
+  },
+  "invalidIrcChannel": "IRC 채널은 # 또는 &로 시작해야 합니다",
+  "@invalidIrcChannel": {
+    "description": "Validation error message for invalid IRC channel format"
+  },
+  "ipAddress": "IP 주소",
+  "@ipAddress": {
+    "description": "Label for IP address"
+  },
+  "ircAppInstalled": "IRC 채널 앱이 설치되었습니다",
+  "@ircAppInstalled": {
+    "description": "Message shown when IRC app is installed"
+  },
+  "ircAppNotInstalled": "먼저 애플리케이션 페이지에서 IRC 채널 앱을 설치하세요",
+  "@ircAppNotInstalled": {
+    "description": "Error message when trying to join IRC channel without installing the app"
+  },
+  "ircAppUninstalled": "IRC 채널 앱이 제거되었습니다",
+  "@ircAppUninstalled": {
+    "description": "Message shown when IRC app is uninstalled"
+  },
+  "ircChannelAddFailed": "IRC 채널 추가 실패",
+  "@ircChannelAddFailed": {
+    "description": "Error message when adding IRC channel fails"
+  },
+  "ircChannelAdded": "IRC 채널이 추가되었습니다: {channel}",
+  "@ircChannelAdded": {
+    "description": "Message shown when IRC channel is added",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannelApp": "IRC 채널",
+  "@ircChannelApp": {
+    "description": "Title for IRC Channel application"
+  },
+  "ircChannelAppDesc": "IRC 채널을 Tox 그룹에 연결하여 메시지 동기화",
+  "@ircChannelAppDesc": {
+    "description": "Description for IRC Channel application"
+  },
+  "ircChannelDesc": "IRC 채널 이름을 입력하세요 (예: #channel). 이 채널에 대한 Tox 그룹이 생성됩니다.",
+  "@ircChannelDesc": {
+    "description": "Description text for IRC channel dialog"
+  },
+  "ircChannelHint": "#채널",
+  "@ircChannelHint": {
+    "description": "Placeholder text for IRC channel input"
+  },
+  "ircChannelName": "IRC 채널 이름",
+  "@ircChannelName": {
+    "description": "Label for IRC channel name input field"
+  },
+  "ircChannelPassword": "채널 비밀번호",
+  "@ircChannelPassword": {
+    "description": "Label for IRC channel password input field"
+  },
+  "ircChannelPasswordHint": "비밀번호가 없으면 비워두세요",
+  "@ircChannelPasswordHint": {
+    "description": "Placeholder text for IRC channel password input"
+  },
+  "ircChannelRemoved": "IRC 채널이 제거되었습니다: {channel}",
+  "@ircChannelRemoved": {
+    "description": "Message shown when IRC channel is removed",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "ircChannels": "IRC 채널",
+  "@ircChannels": {
+    "description": "Label for list of IRC channels"
+  },
+  "ircConfigSaved": "IRC 설정이 저장되었습니다",
+  "@ircConfigSaved": {
+    "description": "Success message when IRC configuration is saved"
+  },
+  "ircCustomNickname": "사용자 정의 IRC 닉네임",
+  "@ircCustomNickname": {
+    "description": "Label for custom IRC nickname input field"
+  },
+  "ircCustomNicknameHint": "비워두면 자동 생성된 닉네임을 사용합니다",
+  "@ircCustomNicknameHint": {
+    "description": "Hint text for custom IRC nickname input field"
+  },
+  "ircPort": "포트",
+  "@ircPort": {
+    "description": "Label for IRC server port input"
+  },
+  "ircServer": "서버",
+  "@ircServer": {
+    "description": "Label for IRC server address input"
+  },
+  "ircServerConfig": "IRC 서버 설정",
+  "@ircServerConfig": {
+    "description": "Title for IRC server configuration section"
+  },
+  "ircServerRequired": "IRC 서버 주소는 필수입니다",
+  "@ircServerRequired": {
+    "description": "Error message when IRC server address is empty"
+  },
+  "ircUseSasl": "SASL 인증 사용",
+  "@ircUseSasl": {
+    "description": "Label for SASL authentication toggle"
+  },
+  "ircUseSaslDesc": "SASL 인증에 Tox 공개 키 사용 (NickServ 등록 필요)",
+  "@ircUseSaslDesc": {
+    "description": "Description for SASL authentication option"
+  },
+  "join": "참가",
+  "@join": {
+    "description": "Button text to join"
+  },
+  "joinIrcChannel": "IRC 채널 참가",
+  "@joinIrcChannel": {
+    "description": "Button text and dialog title for joining IRC channel"
+  },
+  "lanMode": "LAN 모드",
+  "@lanMode": {
+    "description": "LAN bootstrap node mode option"
+  },
+  "lanModeDesc": "로컬 네트워크 Bootstrap 서비스 사용",
+  "@lanModeDesc": {
+    "description": "Description for LAN mode"
+  },
+  "messageReceivers": "메시지 수신자 ({count})",
+  "@messageReceivers": {
+    "description": "Title for message receivers dialog",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "nicknameTooLong": "닉네임이 너무 깁니다",
+  "@nicknameTooLong": {
+    "description": "Error message when nickname is too long"
+  },
+  "nicknameCannotBeEmpty": "닉네임을 입력해 주세요",
+  "noAliveIPsFound": "활성 IP를 찾을 수 없습니다",
+  "@noAliveIPsFound": {
+    "description": "Message when no alive IPs are found"
+  },
+  "noBootstrapService": "Bootstrap 서비스를 찾을 수 없습니다",
+  "@noBootstrapService": {
+    "description": "Message when no bootstrap service is found"
+  },
+  "noReceivers": "아직 수신자가 없습니다",
+  "@noReceivers": {
+    "description": "Message shown when there are no message receivers"
+  },
+  "nodeNotTestedWarning": "참고: 이 노드는 테스트되지 않았으며 연결할 수 없을 수 있습니다.",
+  "@nodeNotTestedWarning": {
+    "description": "Warning message when selecting untested node"
+  },
+  "nodeTestFailedWarning": "참고: 이 노드 테스트가 실패했으며 연결할 수 없을 수 있습니다.",
+  "@nodeTestFailedWarning": {
+    "description": "Warning message when selecting failed node"
+  },
+  "notProbedYet": "아직 프로브되지 않음",
+  "@notProbedYet": {
+    "description": "Status text when IP has not been probed"
+  },
+  "probeFailed": "Bootstrap 서비스를 찾을 수 없습니다",
+  "@probeFailed": {
+    "description": "Message when probe fails"
+  },
+  "probeSingleIP": "이 IP 프로브",
+  "@probeSingleIP": {
+    "description": "Button tooltip to probe single IP"
+  },
+  "probeStatus": "프로브 상태",
+  "@probeStatus": {
+    "description": "Label for probe status"
+  },
+  "probeSuccess": "Bootstrap 서비스 발견",
+  "@probeSuccess": {
+    "description": "Message when probe succeeds"
+  },
+  "probing": "프로브 중...",
+  "@probing": {
+    "description": "Text shown when probing"
+  },
+  "probingBootstrapServices": "Bootstrap 서비스 프로브 중: {current}/{total}",
+  "@probingBootstrapServices": {
+    "description": "Progress text for probing bootstrap services",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "probingIP": "{ip} 프로브 중...",
+  "@probingIP": {
+    "description": "Text shown when probing an IP",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshAliveIPs": "활성 IP 새로고침",
+  "@refreshAliveIPs": {
+    "description": "Button tooltip to refresh alive IPs list"
+  },
+  "remove": "제거",
+  "@remove": {
+    "description": "Button text to remove an item"
+  },
+  "removeIrcChannel": "IRC 채널 제거",
+  "@removeIrcChannel": {
+    "description": "Title for remove channel confirmation dialog"
+  },
+  "removeIrcChannelConfirm": "{channel}을(를) 제거하시겠습니까? 해당 그룹에서 나가게 됩니다.",
+  "@removeIrcChannelConfirm": {
+    "description": "Confirmation message for removing IRC channel",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "scanLanBootstrapServices": "LAN Bootstrap 서비스 스캔",
+  "@scanLanBootstrapServices": {
+    "description": "Button text to scan LAN bootstrap services"
+  },
+  "scanLanBootstrapServicesTitle": "LAN Bootstrap 서비스",
+  "@scanLanBootstrapServicesTitle": {
+    "description": "Title for LAN bootstrap scan page"
+  },
+  "scanPort": "스캔 포트",
+  "@scanPort": {
+    "description": "Label for scan port input field"
+  },
+  "scanning": "스캔 중...",
+  "@scanning": {
+    "description": "Text shown when scanning"
+  },
+  "scanningAliveIPs": "활성 IP 스캔 중: {current}/{total}",
+  "@scanningAliveIPs": {
+    "description": "Progress text for scanning alive IPs",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "serviceRunning": "실행 중",
+  "@serviceRunning": {
+    "description": "Status text when service is running"
+  },
+  "serviceStopped": "중지됨",
+  "@serviceStopped": {
+    "description": "Status text when service is stopped"
+  },
+  "startLocalBootstrapService": "로컬 Bootstrap 서비스 시작",
+  "@startLocalBootstrapService": {
+    "description": "Button text to start local bootstrap service"
+  },
+  "startScan": "스캔 시작",
+  "@startScan": {
+    "description": "Button text to start scanning"
+  },
+  "statusMessageTooLong": "상태 메시지가 너무 깁니다",
+  "@statusMessageTooLong": {
+    "description": "Error message when status message is too long"
+  },
+  "stopLocalBootstrapService": "로컬 Bootstrap 서비스 중지",
+  "@stopLocalBootstrapService": {
+    "description": "Button text to stop local bootstrap service"
+  },
+  "uninstall": "제거",
+  "@uninstall": {
+    "description": "Button text to uninstall an application"
+  },
+  "uninstallIrcApp": "IRC 채널 앱 제거",
+  "@uninstallIrcApp": {
+    "description": "Title for uninstall confirmation dialog"
+  },
+  "uninstallIrcAppConfirm": "IRC 채널 앱을 제거하시겠습니까? 모든 IRC 채널이 제거되고 모든 IRC 그룹에서 나가게 됩니다.",
+  "@uninstallIrcAppConfirm": {
+    "description": "Confirmation message for uninstalling IRC app"
+  },
+  "useAsBootstrapNode": "Bootstrap 노드로 사용",
+  "@useAsBootstrapNode": {
+    "description": "Button text to use service as bootstrap node"
+  },
+  "searchSummary": "연락처 {contacts}개, 그룹 {groups}개, 메시지 스레드 {messages}개를 찾았습니다",
+  "@searchSummary": {
+    "placeholders": {
+      "contacts": {
+        "type": "int"
+      },
+      "groups": {
+        "type": "int"
+      },
+      "messages": {
+        "type": "int"
+      }
+    }
+  },
+  "searchFailed": "검색에 실패했습니다. 부분 결과를 표시합니다",
+  "callVideoCall": "영상 통화",
+  "callAudioCall": "음성 통화",
+  "callReject": "거절",
+  "callAccept": "수락",
+  "callRemoteVideo": "상대 화면",
+  "callUnmute": "음소거 해제",
+  "callMute": "음소거",
+  "callVideoOff": "영상 끄기",
+  "callVideoOn": "영상 켜기",
+  "callSpeakerOff": "스피커 끄기",
+  "callSpeakerOn": "스피커 켜기",
+  "callHangUp": "통화 종료",
+  "callEnded": "통화가 종료되었습니다",
+  "callPermissionMicrophoneRequired": "통화를 계속하려면 마이크 권한이 필요합니다.",
+  "callPermissionCameraRequired": "통화를 계속하려면 카메라 권한이 필요합니다.",
+  "callPermissionMicrophoneCameraRequired": "통화를 계속하려면 마이크 및 카메라 권한이 필요합니다.",
+  "callAudioInterrupted": "통화 중 오디오 출력이 변경되었거나 중단되었습니다.",
+  "callCalling": "전화 거는 중...",
+  "callMinimize": "최소화",
+  "callReturnToCall": "통화로 돌아가기",
+  "callQualityGood": "연결 양호",
+  "callQualityMedium": "연결 보통",
+  "callQualityPoor": "연결 불량",
+  "callQualityUnknown": "—",
+  "callQualityLabel": "통화 품질"
+}

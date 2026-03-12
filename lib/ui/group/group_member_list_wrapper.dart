@@ -1,0 +1,171 @@
+// Wrapper to refresh member list before opening the member list page
+import 'package:flutter/material.dart';
+import 'package:tencent_cloud_chat_common/tencent_cloud_chat_common.dart';
+import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
+import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_group_member_list.dart';
+import '../../sdk_fake/fake_uikit_core.dart';
+import '../../util/responsive_layout.dart';
+
+class GroupMemberListWrapper extends StatefulWidget {
+  final V2TimGroupInfo groupInfo;
+  final List<V2TimGroupMemberFullInfo> memberInfoList;
+
+  const GroupMemberListWrapper({
+    Key? key,
+    required this.groupInfo,
+    required this.memberInfoList,
+  }) : super(key: key);
+
+  @override
+  State<StatefulWidget> createState() => GroupMemberListWrapperState();
+}
+
+class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListWrapper> {
+  List<V2TimGroupMemberFullInfo> _currentMemberList = [];
+  Map<String, int> _lastMessageTimeMap = {};
+  bool _isLoading = true;
+  bool _isRefreshing = false; // Prevent duplicate calls
+  bool _hasLoaded = false; // Track if we've already loaded to prevent reloads on widget rebuilds
+
+  void _enrichAvatars(List<V2TimGroupMemberFullInfo> members) {
+    final contactList = TencentCloudChat.instance.dataInstance.contact.contactList;
+    final friendFaceUrls = <String, String>{};
+    final friendNickNames = <String, String>{};
+    for (final friend in contactList) {
+      final faceUrl = friend.userProfile?.faceUrl;
+      if (faceUrl != null && faceUrl.isNotEmpty) {
+        friendFaceUrls[friend.userID] = faceUrl;
+      }
+      final nickName = friend.userProfile?.nickName;
+      if (nickName != null && nickName.isNotEmpty) {
+        friendNickNames[friend.userID] = nickName;
+      }
+    }
+    for (final member in members) {
+      if (member.faceUrl == null || member.faceUrl!.isEmpty) {
+        member.faceUrl = friendFaceUrls[member.userID];
+      }
+      if (member.nickName == null || member.nickName!.isEmpty) {
+        member.nickName = friendNickNames[member.userID];
+      }
+    }
+  }
+
+  Map<String, int> _buildLastMessageTimeMap(String groupID) {
+    try {
+      final ffi = FakeUIKit.instance.im?.ffi;
+      if (ffi == null) return {};
+      final persistence = ffi.messageHistoryPersistence;
+      final messages = persistence.getHistory(groupID);
+      final map = <String, int>{};
+      for (final msg in messages) {
+        final sec = msg.timestamp.millisecondsSinceEpoch ~/ 1000;
+        final prev = map[msg.fromUserId];
+        if (prev == null || sec > prev) {
+          map[msg.fromUserId] = sec;
+        }
+      }
+      return map;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshMemberList();
+  }
+
+  @override
+  void didUpdateWidget(GroupMemberListWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only refresh if groupID changed and we haven't loaded yet
+    if (oldWidget.groupInfo.groupID != widget.groupInfo.groupID && !_hasLoaded) {
+      _refreshMemberList();
+    }
+  }
+
+  Future<void> _refreshMemberList() async {
+    // Prevent duplicate calls - only load once per widget instance
+    if (_isRefreshing || _hasLoaded) {
+      return;
+    }
+
+    _isRefreshing = true;
+    try {
+      // Call data layer directly to get fresh data from native
+      // (bypass GroupMemberListDebouncer to avoid stale cached data)
+      final updatedList = await TencentCloudChat.instance.dataInstance.groupProfile
+          .loadGroupMemberList(
+        groupID: widget.groupInfo.groupID,
+        loadGroupAdminAndOwnerOnly: false,
+      );
+
+      if (mounted) {
+        // Deduplicate by userID (defense in depth)
+        final seen = <String>{};
+        final dedupedList = updatedList
+            .whereType<V2TimGroupMemberFullInfo>()
+            .where((m) => seen.add(m.userID))
+            .toList();
+        _enrichAvatars(dedupedList);
+        // Load group history from disk so in-memory cache is populated before building time map
+        try {
+          final ffi = FakeUIKit.instance.im?.ffi;
+          if (ffi != null) {
+            await ffi.messageHistoryPersistence.loadHistory(widget.groupInfo.groupID);
+          }
+        } catch (_) {
+          // Ignore load errors; time map will be empty
+        }
+        final timeMap = _buildLastMessageTimeMap(widget.groupInfo.groupID);
+        if (!mounted) return;
+        setState(() {
+          _currentMemberList = dedupedList;
+          _lastMessageTimeMap = timeMap;
+          _isLoading = false;
+          _hasLoaded = true; // Mark as loaded to prevent reloads
+        });
+      }
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
+  @override
+  Widget defaultBuilder(BuildContext context) {
+    if (_isLoading || _isRefreshing) {
+      return TencentCloudChatThemeWidget(
+        build: (context, colorTheme, textStyle) => Scaffold(
+          appBar: AppBar(
+            leadingWidth: 56 + ResponsiveLayout.responsiveHorizontalPadding(context),
+            leading: Padding(
+              padding: EdgeInsets.only(left: ResponsiveLayout.responsiveHorizontalPadding(context)),
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back_ios_rounded),
+                color: colorTheme.primaryColor,
+              ),
+            ),
+            scrolledUnderElevation: 0.0,
+          ),
+          body: SafeArea(
+            child: Center(
+            child: CircularProgressIndicator(
+              color: colorTheme.primaryColor,
+            ),
+          ),
+          ),
+        ),
+      );
+    }
+
+    // Use the original implementation with refreshed member list
+    return TencentCloudChatGroupMemberList(
+      groupInfo: widget.groupInfo,
+      memberInfoList: _currentMemberList.isNotEmpty ? _currentMemberList : widget.memberInfoList,
+      lastMessageTimeMap: _lastMessageTimeMap,
+    );
+  }
+}

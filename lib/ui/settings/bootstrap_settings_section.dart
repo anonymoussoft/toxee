@@ -1,0 +1,1053 @@
+import 'package:flutter/material.dart';
+import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../util/app_theme_config.dart';
+import '../../util/bootstrap_nodes.dart';
+import '../../util/lan_bootstrap_service.dart';
+import '../../util/platform_utils.dart';
+import '../../util/prefs.dart';
+import '../../i18n/app_localizations.dart';
+import '../widgets/section_header.dart';
+import 'bootstrap_nodes_page.dart';
+
+/// Shared bootstrap node settings section. Layout and behavior match [SettingsPage].
+/// When [service] is null (e.g. login settings), test and route/scan actions that
+/// require the service are hidden or use Prefs-only behavior.
+class BootstrapSettingsSection extends StatefulWidget {
+  const BootstrapSettingsSection({
+    super.key,
+    this.service,
+    this.colorTheme,
+  });
+
+  /// When null, test node and "Route selection" / "Scan LAN" use Prefs-only or are hidden.
+  final FfiChatService? service;
+
+  /// Theme from [TencentCloudChatThemeWidget]. If null, Material theme colors are used.
+  final dynamic colorTheme;
+
+  @override
+  State<BootstrapSettingsSection> createState() => _BootstrapSettingsSectionState();
+}
+
+class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
+  ({String host, int port, String pubkey})? _currentBootstrapNode;
+  final TextEditingController _manualHostController = TextEditingController();
+  final TextEditingController _manualPortController = TextEditingController();
+  final TextEditingController _manualPubkeyController = TextEditingController();
+  bool _manualInputExpanded = false;
+  String _bootstrapNodeMode = 'auto';
+
+  bool _testingCurrentNode = false;
+  String? _nodeTestResult;
+  int? _nodeLatency;
+  bool _testingManualNode = false;
+  String? _manualNodeTestResult;
+  int? _manualNodeLatency;
+
+  bool _lanBootstrapServiceRunning = false;
+  String? _lanBootstrapServiceIP;
+  int? _lanBootstrapServicePort;
+  String? _lanBootstrapServicePubkey;
+  final TextEditingController _lanBootstrapPortController = TextEditingController();
+
+  dynamic get _colorTheme => widget.colorTheme;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBootstrapNodeMode();
+    _loadCurrentBootstrapNode();
+    _loadLanBootstrapServiceState();
+    Prefs.getLanBootstrapPort().then((p) {
+      if (mounted) {
+        _lanBootstrapPortController.text = p.toString();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _manualHostController.dispose();
+    _manualPortController.dispose();
+    _manualPubkeyController.dispose();
+    _lanBootstrapPortController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBootstrapNodeMode() async {
+    var mode = await Prefs.getBootstrapNodeMode();
+    if (!PlatformUtils.isDesktop && mode == 'lan') {
+      await Prefs.setBootstrapNodeMode('auto');
+      mode = 'auto';
+    }
+    if (mounted) setState(() => _bootstrapNodeMode = mode);
+  }
+
+  Future<void> _setBootstrapNodeMode(String mode) async {
+    if (!PlatformUtils.isDesktop && mode == 'lan') return;
+    await Prefs.setBootstrapNodeMode(mode);
+    if (mounted) {
+      setState(() => _bootstrapNodeMode = mode);
+      if (mode == 'auto') {
+        await _loadAndUseAutoNode();
+      } else if (mode == 'manual') {
+        await _loadCurrentBootstrapNode();
+      } else if (mode == 'lan') {
+        await _loadLanBootstrapServiceState();
+      }
+    }
+  }
+
+  Future<void> _loadAndUseAutoNode() async {
+    try {
+      final nodes = await BootstrapNodesService.fetchNodes();
+      if (nodes.isEmpty) return;
+      final onlineNode = nodes.firstWhere(
+        (n) => n.status == 'ONLINE',
+        orElse: () => nodes.first,
+      );
+      if (widget.service != null) {
+        await widget.service!.addBootstrapNode(
+          onlineNode.ipv4,
+          onlineNode.port,
+          onlineNode.publicKey,
+        );
+      }
+      await Prefs.setCurrentBootstrapNode(
+        onlineNode.ipv4,
+        onlineNode.port,
+        onlineNode.publicKey,
+      );
+      await _loadCurrentBootstrapNode();
+    } catch (_) {}
+  }
+
+  Future<void> _loadCurrentBootstrapNode() async {
+    final node = await Prefs.getCurrentBootstrapNode();
+    if (mounted) {
+      setState(() {
+        _currentBootstrapNode = node;
+        _nodeTestResult = null;
+        _nodeLatency = null;
+        if (node != null) {
+          _manualHostController.text = node.host;
+          _manualPortController.text = node.port.toString();
+          _manualPubkeyController.text = node.pubkey;
+        }
+      });
+    }
+    if (_manualPortController.text.isEmpty) {
+      _manualPortController.text = '33445';
+    }
+  }
+
+  Future<void> _loadLanBootstrapServiceState() async {
+    final running = await Prefs.getLanBootstrapServiceRunning();
+    if (running) {
+      final info = await LanBootstrapServiceManager.instance.getBootstrapServiceInfo();
+      if (mounted) {
+        setState(() {
+          _lanBootstrapServiceRunning = true;
+          if (info != null) {
+            _lanBootstrapServiceIP = info.ip;
+            _lanBootstrapServicePort = info.port;
+            _lanBootstrapServicePubkey = info.pubkey;
+          }
+        });
+      }
+    } else if (mounted) {
+      setState(() {
+        _lanBootstrapServiceRunning = false;
+        _lanBootstrapServiceIP = null;
+        _lanBootstrapServicePort = null;
+        _lanBootstrapServicePubkey = null;
+      });
+    }
+    final port = await Prefs.getLanBootstrapPort();
+    if (mounted) _lanBootstrapPortController.text = port.toString();
+  }
+
+  Future<void> _testCurrentNode() async {
+    if (_currentBootstrapNode == null) return;
+    setState(() {
+      _testingCurrentNode = true;
+      _nodeTestResult = null;
+      _nodeLatency = null;
+    });
+    try {
+      final start = DateTime.now();
+      bool success;
+      if (widget.service != null) {
+        success = await widget.service!.addBootstrapNode(
+          _currentBootstrapNode!.host,
+          _currentBootstrapNode!.port,
+          _currentBootstrapNode!.pubkey,
+        );
+      } else {
+        // TCP probe fallback when service is not available (login settings)
+        final result = await LanBootstrapServiceManager.probeBootstrapService(
+          _currentBootstrapNode!.host,
+          _currentBootstrapNode!.port,
+        );
+        success = result != null && result.isAvailable;
+      }
+      final latency = DateTime.now().difference(start).inMilliseconds;
+      if (mounted) {
+        setState(() {
+          _testingCurrentNode = false;
+          _nodeTestResult = success ? 'success' : 'failed';
+          _nodeLatency = success ? latency : null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _testingCurrentNode = false;
+          _nodeTestResult = 'failed';
+          _nodeLatency = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _testManualNode() async {
+    final host = _manualHostController.text.trim();
+    final portText = _manualPortController.text.trim();
+    final pubkey = _manualPubkeyController.text.trim();
+    if (host.isEmpty || portText.isEmpty || pubkey.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.invalidNodeInfo),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
+    final port = int.tryParse(portText);
+    if (port == null || port <= 0 || port > 65535) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.invalidNodeInfo),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
+    setState(() {
+      _testingManualNode = true;
+      _manualNodeTestResult = null;
+      _manualNodeLatency = null;
+    });
+    try {
+      final start = DateTime.now();
+      bool success;
+      if (widget.service != null) {
+        success = await widget.service!.addBootstrapNode(host, port, pubkey);
+      } else {
+        // TCP probe fallback when service is not available (login settings)
+        final result = await LanBootstrapServiceManager.probeBootstrapService(host, port);
+        success = result != null && result.isAvailable;
+      }
+      final latency = DateTime.now().difference(start).inMilliseconds;
+      if (mounted) {
+        setState(() {
+          _testingManualNode = false;
+          _manualNodeTestResult = success ? 'success' : 'failed';
+          _manualNodeLatency = success ? latency : null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success
+                  ? AppLocalizations.of(context)!.nodeTestSuccess
+                  : AppLocalizations.of(context)!.nodeTestFailed,
+            ),
+            backgroundColor: success
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _testingManualNode = false;
+          _manualNodeTestResult = 'failed';
+          _manualNodeLatency = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${AppLocalizations.of(context)!.nodeTestFailed}: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _setManualNodeAsCurrent() async {
+    if (_manualNodeTestResult != 'success') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.canOnlySelectTestedNode),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
+    final host = _manualHostController.text.trim();
+    final portText = _manualPortController.text.trim();
+    final pubkey = _manualPubkeyController.text.trim();
+    if (host.isEmpty || portText.isEmpty || pubkey.isEmpty) return;
+    final port = int.tryParse(portText);
+    if (port == null || port <= 0 || port > 65535) return;
+    try {
+      await Prefs.setCurrentBootstrapNode(host, port, pubkey);
+      await _loadCurrentBootstrapNode();
+      if (mounted) {
+        setState(() => _manualInputExpanded = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.nodeSetSuccess),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.nodeSwitchFailed(e.toString())),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _startLanBootstrapService() async {
+    final port = int.tryParse(_lanBootstrapPortController.text.trim()) ?? 33445;
+    if (port <= 0 || port > 65535) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.invalidNodeInfo),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
+    await Prefs.setLanBootstrapPort(port);
+    final success = await LanBootstrapServiceManager.instance.startLocalBootstrapService(port);
+    if (mounted) {
+      await _loadLanBootstrapServiceState();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? AppLocalizations.of(context)!.serviceRunning
+                : 'Failed to start bootstrap service',
+          ),
+          backgroundColor: success
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _stopLanBootstrapService() async {
+    await LanBootstrapServiceManager.instance.stopLocalBootstrapService();
+    if (mounted) {
+      await _loadLanBootstrapServiceState();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.serviceStopped)),
+      );
+    }
+  }
+
+  bool _isValidPubkey(String pubkey) {
+    if (pubkey.length != 64) return false;
+    return RegExp(r'^[0-9A-Fa-f]{64}$').hasMatch(pubkey);
+  }
+
+  Color _secondaryColor(BuildContext context) {
+    if (_colorTheme != null && _colorTheme.secondaryColor != null) {
+      return _colorTheme.secondaryColor as Color;
+    }
+    return Theme.of(context).colorScheme.surfaceContainerHighest;
+  }
+
+  Color _primaryColor(BuildContext context) {
+    if (_colorTheme != null && _colorTheme.primaryColor != null) {
+      return _colorTheme.primaryColor as Color;
+    }
+    return Theme.of(context).colorScheme.primary;
+  }
+
+  Color _secondaryTextColor(BuildContext context) {
+    if (_colorTheme != null && _colorTheme.secondaryTextColor != null) {
+      return _colorTheme.secondaryTextColor as Color;
+    }
+    return Theme.of(context).colorScheme.onSurfaceVariant;
+  }
+
+  Color _primaryTextColor(BuildContext context) {
+    if (_colorTheme != null && _colorTheme.primaryTextColor != null) {
+      return _colorTheme.primaryTextColor as Color;
+    }
+    return Theme.of(context).colorScheme.onSurface;
+  }
+
+  Color _dividerColor(BuildContext context) {
+    if (_colorTheme != null && _colorTheme.dividerColor != null) {
+      return _colorTheme.dividerColor as Color;
+    }
+    return Theme.of(context).dividerColor;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final secondaryColor = _secondaryColor(context);
+    final primaryColor = _primaryColor(context);
+    final secondaryTextColor = _secondaryTextColor(context);
+    final primaryTextColor = _primaryTextColor(context);
+    final dividerColor = _dividerColor(context);
+    final hasService = widget.service != null;
+
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader(title: l10n.bootstrapNodes),
+            const SizedBox(height: 8),
+            Text(
+              l10n.bootstrapNodeMode,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            if (PlatformUtils.isDesktop)
+              _buildModeRow(context, l10n, primaryColor, secondaryTextColor, hasService)
+            else
+              _buildModeRowMobile(context, l10n, primaryColor, secondaryTextColor),
+            const SizedBox(height: 8),
+            const Divider(),
+            const SizedBox(height: 8),
+            if (_bootstrapNodeMode == 'manual' || _currentBootstrapNode != null) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_currentBootstrapNode != null) ...[
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: secondaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                          border: Border.all(color: dividerColor),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.network_ping, size: 16, color: primaryColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  l10n.currentNode,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: secondaryTextColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${_currentBootstrapNode!.host}:${_currentBootstrapNode!.port}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: primaryTextColor,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                            if (_currentBootstrapNode!.pubkey.length > 20)
+                              Text(
+                                '${_currentBootstrapNode!.pubkey.substring(0, 20)}...',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: secondaryTextColor,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            if (_nodeTestResult != null) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: _nodeTestResult == 'success'
+                                          ? Theme.of(context).colorScheme.primary
+                                          : Theme.of(context).colorScheme.error,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _nodeTestResult == 'success'
+                                        ? l10n.online
+                                        : l10n.offline,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: _nodeTestResult == 'success'
+                                          ? Theme.of(context).colorScheme.primary
+                                          : Theme.of(context).colorScheme.error,
+                                    ),
+                                  ),
+                                  if (_nodeLatency != null && _nodeTestResult == 'success') ...[
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '${_nodeLatency}ms',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: secondaryTextColor,
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_currentBootstrapNode != null)
+                        OutlinedButton.icon(
+                          icon: _testingCurrentNode
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.speed, size: 18),
+                          label: Text(l10n.testNode),
+                          onPressed: !_testingCurrentNode ? _testCurrentNode : null,
+                        ),
+                      if (_bootstrapNodeMode == 'auto') ...[
+                        if (_currentBootstrapNode != null) const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                            icon: const Icon(Icons.network_check, size: 18),
+                            label: Text(l10n.routeSelection),
+                            onPressed: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => BootstrapNodesPage(
+                                    service: widget.service,
+                                    onNodeSelected: () async {
+                                      if (mounted) await _loadCurrentBootstrapNode();
+                                    },
+                                  ),
+                                ),
+                              );
+                              await Future.delayed(const Duration(milliseconds: 200));
+                              if (mounted) {
+                                await _loadCurrentBootstrapNode();
+                                setState(() {});
+                              }
+                            },
+                          ),
+                      ],
+                      if (_bootstrapNodeMode == 'manual') ...[
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          icon: Icon(
+                            _manualInputExpanded ? Icons.expand_less : Icons.expand_more,
+                            size: 18,
+                          ),
+                          label: Text(l10n.manualNodeInput),
+                          onPressed: () {
+                            setState(() => _manualInputExpanded = !_manualInputExpanded);
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ],
+            if (_bootstrapNodeMode == 'lan') ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+              Text(
+                l10n.startLocalBootstrapService,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              if (PlatformUtils.isWindows)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'On Windows, the firewall may block incoming connections; allow the app if prompted.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: secondaryTextColor,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              if (PlatformUtils.isLinux)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'On Linux, network operations may require appropriate permissions or firewall rules.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: secondaryTextColor,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _lanBootstrapPortController,
+                      keyboardType: TextInputType.number,
+                      textAlignVertical: TextAlignVertical.center,
+                      decoration: InputDecoration(
+                        labelText: l10n.nodePort,
+                        hintText: '33445',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    icon: _lanBootstrapServiceRunning
+                        ? const Icon(Icons.stop, size: 18)
+                        : const Icon(Icons.play_arrow, size: 18),
+                    label: Text(
+                      _lanBootstrapServiceRunning
+                          ? l10n.stopLocalBootstrapService
+                          : l10n.startLocalBootstrapService,
+                    ),
+                    onPressed: _lanBootstrapServiceRunning
+                        ? _stopLanBootstrapService
+                        : _startLanBootstrapService,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    '${l10n.bootstrapServiceStatus}: ',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  Text(
+                    _lanBootstrapServiceRunning
+                        ? l10n.serviceRunning
+                        : l10n.serviceStopped,
+                    style: TextStyle(
+                      color: _lanBootstrapServiceRunning
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              if (_lanBootstrapServiceRunning &&
+                  _lanBootstrapServiceIP != null &&
+                  _lanBootstrapServicePort != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: secondaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                    border: Border.all(color: dividerColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${l10n.ipAddress}: $_lanBootstrapServiceIP',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          color: primaryTextColor,
+                        ),
+                      ),
+                      Text(
+                        '${l10n.nodePort}: $_lanBootstrapServicePort',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          color: primaryTextColor,
+                        ),
+                      ),
+                      if (_lanBootstrapServicePubkey != null)
+                        Text(
+                          '${l10n.nodePublicKey}: ${_lanBootstrapServicePubkey!.substring(0, 16)}...',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            color: secondaryTextColor,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+            if (_bootstrapNodeMode == 'manual')
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                child: _manualInputExpanded
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 16),
+                          const Divider(),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: TextField(
+                                  controller: _manualHostController,
+                                  textAlignVertical: TextAlignVertical.center,
+                                  decoration: InputDecoration(
+                                    labelText: l10n.nodeHost,
+                                    hintText: 'example.com',
+                                    border: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                                    ),
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 1,
+                                child: TextField(
+                                  controller: _manualPortController,
+                                  keyboardType: TextInputType.number,
+                                  textAlignVertical: TextAlignVertical.center,
+                                  decoration: InputDecoration(
+                                    labelText: l10n.nodePort,
+                                    hintText: '33445',
+                                    border: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                                    ),
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _manualPubkeyController,
+                            maxLines: 2,
+                            textAlignVertical: TextAlignVertical.center,
+                            decoration: InputDecoration(
+                              labelText: l10n.nodePublicKey,
+                              hintText: 'Public key (hex)',
+                              border: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                              ),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              labelStyle: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (_manualNodeTestResult != null) ...[
+                            Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: _manualNodeTestResult == 'success'
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).colorScheme.error,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _manualNodeTestResult == 'success'
+                                      ? l10n.nodeTestSuccess
+                                      : l10n.nodeTestFailed,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: _manualNodeTestResult == 'success'
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                                if (_manualNodeLatency != null &&
+                                    _manualNodeTestResult == 'success') ...[
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${_manualNodeLatency}ms',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: secondaryTextColor,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  icon: _testingManualNode
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.speed, size: 18),
+                                  label: Text(l10n.testNode),
+                                  onPressed: !_testingManualNode ? _testManualNode : null,
+                                ),
+                              ),
+                              if (_manualNodeTestResult == 'success') ...[
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    icon: const Icon(Icons.check_circle, size: 18),
+                                    label: Text(l10n.setAsCurrentNode),
+                                    onPressed: hasService
+                                        ? _setManualNodeAsCurrent
+                                        : () async {
+                                            final host = _manualHostController.text.trim();
+                                            final portText = _manualPortController.text.trim();
+                                            final pubkey = _manualPubkeyController.text.trim();
+                                            if (host.isEmpty ||
+                                                portText.isEmpty ||
+                                                pubkey.isEmpty ||
+                                                !_isValidPubkey(pubkey)) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(l10n.invalidNodeInfo),
+                                                  backgroundColor:
+                                                      Theme.of(context).colorScheme.error,
+                                                ),
+                                              );
+                                              return;
+                                            }
+                                            final port = int.tryParse(portText);
+                                            if (port == null || port <= 0 || port > 65535) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(l10n.invalidNodeInfo),
+                                                  backgroundColor:
+                                                      Theme.of(context).colorScheme.error,
+                                                ),
+                                              );
+                                              return;
+                                            }
+                                            await Prefs.setCurrentBootstrapNode(host, port, pubkey);
+                                            await _loadCurrentBootstrapNode();
+                                            if (mounted) {
+                                              setState(() => _manualInputExpanded = false);
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(l10n.nodeSetSuccess),
+                                                  backgroundColor:
+                                                      Theme.of(context).colorScheme.primary,
+                                                ),
+                                              );
+                                            }
+                                          },
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeRow(
+    BuildContext context,
+    AppLocalizations l10n,
+    Color primaryColor,
+    Color secondaryTextColor,
+    bool hasService,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: RadioListTile<String>(
+            contentPadding: EdgeInsets.zero,
+            value: 'manual',
+            groupValue: _bootstrapNodeMode,
+            title: Text(l10n.manualMode),
+            subtitle: Text(l10n.manualModeDesc, style: const TextStyle(fontSize: 11)),
+            onChanged: (v) {
+              if (v != null) _setBootstrapNodeMode(v);
+            },
+          ),
+        ),
+        Expanded(
+          child: RadioListTile<String>(
+            contentPadding: EdgeInsets.zero,
+            value: 'auto',
+            groupValue: _bootstrapNodeMode,
+            title: Text(l10n.autoMode),
+            subtitle: GestureDetector(
+              onTap: () async {
+                final url = Uri.parse('https://nodes.tox.chat/');
+                if (await canLaunchUrl(url)) {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: RichText(
+                text: TextSpan(
+                  style: TextStyle(fontSize: 11, color: secondaryTextColor),
+                  children: [
+                    TextSpan(text: l10n.autoModeDescPrefix),
+                    TextSpan(
+                      text: 'https://nodes.tox.chat/',
+                      style: TextStyle(
+                        color: primaryColor,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            onChanged: (v) {
+              if (v != null) _setBootstrapNodeMode(v);
+            },
+          ),
+        ),
+        Expanded(
+          child: RadioListTile<String>(
+            contentPadding: EdgeInsets.zero,
+            value: 'lan',
+            groupValue: _bootstrapNodeMode,
+            title: Text(l10n.lanMode),
+            subtitle: Text(l10n.lanModeDesc, style: const TextStyle(fontSize: 11)),
+            onChanged: (v) {
+              if (v != null) _setBootstrapNodeMode(v);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModeRowMobile(
+    BuildContext context,
+    AppLocalizations l10n,
+    Color primaryColor,
+    Color secondaryTextColor,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: RadioListTile<String>(
+            contentPadding: EdgeInsets.zero,
+            value: 'manual',
+            groupValue: _bootstrapNodeMode,
+            title: Text(l10n.manualMode),
+            subtitle: Text(l10n.manualModeDesc, style: const TextStyle(fontSize: 11)),
+            onChanged: (v) {
+              if (v != null) _setBootstrapNodeMode(v);
+            },
+          ),
+        ),
+        Expanded(
+          child: RadioListTile<String>(
+            contentPadding: EdgeInsets.zero,
+            value: 'auto',
+            groupValue: _bootstrapNodeMode,
+            title: Text(l10n.autoMode),
+            subtitle: GestureDetector(
+              onTap: () async {
+                final url = Uri.parse('https://nodes.tox.chat/');
+                if (await canLaunchUrl(url)) {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: RichText(
+                text: TextSpan(
+                  style: TextStyle(fontSize: 11, color: secondaryTextColor),
+                  children: [
+                    TextSpan(text: l10n.autoModeDescPrefix),
+                    TextSpan(
+                      text: 'https://nodes.tox.chat/',
+                      style: TextStyle(
+                        color: primaryColor,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            onChanged: (v) {
+              if (v != null) _setBootstrapNodeMode(v);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}

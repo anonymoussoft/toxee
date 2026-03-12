@@ -1,0 +1,948 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+
+import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
+import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
+import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import 'package:tencent_cloud_chat_sdk/native_im/adapter/tim_manager.dart';
+import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
+import '../adapters/shared_prefs_adapter.dart';
+import '../adapters/logger_adapter.dart';
+import '../adapters/bootstrap_adapter.dart';
+import 'home_page.dart';
+import 'login_settings_page.dart';
+import 'register_page.dart';
+import 'widgets/app_page_route.dart';
+import 'widgets/app_snackbar.dart';
+import 'widgets/error_banner.dart';
+import 'widgets/stagger_list_item.dart';
+import '../util/prefs.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../i18n/app_localizations.dart';
+import '../util/responsive_layout.dart';
+import '../util/app_theme_config.dart';
+import '../util/logger.dart';
+import '../util/app_paths.dart';
+import '../util/account_export_service.dart';
+
+import '../util/account_service.dart';
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _nicknameController = TextEditingController();
+  final _statusMessageController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _busy = false;
+  String? _error;
+  FfiChatService? _service;
+  List<Map<String, String>> _accountList = [];
+  String? _verifiedPassword; // Password already verified by _quickLogin, avoids re-prompting in _login
+  final TextEditingController _manualHostController = TextEditingController();
+  final TextEditingController _manualPortController = TextEditingController();
+  final TextEditingController _manualPubkeyController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nicknameController.dispose();
+    _statusMessageController.dispose();
+    _manualHostController.dispose();
+    _manualPortController.dispose();
+    _manualPubkeyController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to text changes to update UI
+    _nicknameController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _statusMessageController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    // Load account list
+    _loadAccountList();
+    // Load settings
+    _loadSettings();
+    // Load saved nickname and status message if available (for backward compatibility)
+    Prefs.getNickname().then((v) {
+      if (v != null && mounted) {
+        _nicknameController.text = v;
+        setState(() {});
+      }
+    });
+    Prefs.getStatusMessage().then((v) {
+      if (v != null && mounted) {
+        _statusMessageController.text = v;
+      }
+    });
+  }
+
+  Future<void> _loadAccountList() async {
+    final accounts = await Prefs.getAccountList();
+    if (mounted) {
+      setState(() {
+        _accountList = accounts;
+      });
+    }
+  }
+
+  Widget _buildAccountAvatar(
+    Map<String, String> account,
+    String nickname,
+    dynamic colorTheme,
+  ) {
+    final avatarPath = account['avatarPath'];
+    final hasAvatar = avatarPath != null &&
+        avatarPath.isNotEmpty &&
+        File(avatarPath).existsSync();
+    if (hasAvatar) {
+      return CircleAvatar(
+        backgroundImage: FileImage(File(avatarPath)),
+        radius: 24,
+      );
+    }
+    return CircleAvatar(
+      backgroundColor: colorTheme.primaryColor,
+      radius: 24,
+      child: Text(
+        nickname.isNotEmpty ? nickname[0].toUpperCase() : 'A',
+        style: TextStyle(
+          color: colorTheme.onPrimary,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _showPasswordDialog(String title) async {
+    final passwordController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: passwordController,
+          obscureText: true,
+          textAlignVertical: TextAlignVertical.center,
+          decoration: InputDecoration(
+            labelText: AppLocalizations.of(context)!.password,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+            ),
+          ),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text(AppLocalizations.of(context)!.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(passwordController.text),
+            child: Text(AppLocalizations.of(context)!.ok),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Dialog with password + confirm password; returns password if both match, null on cancel or mismatch.
+  Future<String?> _showConfirmPasswordDialog(String title) async {
+    final passwordController = TextEditingController();
+    final confirmController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              textAlignVertical: TextAlignVertical.center,
+              decoration: InputDecoration(
+                labelText: AppLocalizations.of(context)!.password,
+                hintText: AppLocalizations.of(context)!.ircChannelPasswordHint,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmController,
+              obscureText: true,
+              textAlignVertical: TextAlignVertical.center,
+              decoration: InputDecoration(
+                labelText: AppLocalizations.of(context)!.confirmPassword,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text(AppLocalizations.of(context)!.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              final pwd = passwordController.text;
+              if (pwd != confirmController.text) {
+                AppSnackBar.showError(context, AppLocalizations.of(context)!.passwordsDoNotMatch);
+                return;
+              }
+              Navigator.of(context).pop(pwd);
+            },
+            child: Text(AppLocalizations.of(context)!.ok),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _quickLogin(Map<String, String> account) async {
+    final toxId = account['toxId'];
+    if (toxId == null || toxId.isEmpty) return;
+
+    // Check if account has password
+    final hasPassword = await Prefs.hasAccountPassword(toxId);
+    if (hasPassword) {
+      final password = await _showPasswordDialog(AppLocalizations.of(context)!.enterPasswordForAccount(account['nickname'] ?? ''));
+      if (password == null) return; // User cancelled
+
+      final isValid = await Prefs.verifyAccountPassword(toxId, password);
+      if (!isValid) {
+        if (mounted) {
+          setState(() {
+            _error = AppLocalizations.of(context)!.invalidPassword;
+          });
+          AppSnackBar.showError(context, AppLocalizations.of(context)!.invalidPassword);
+        }
+        return;
+      }
+      // Store verified password so _login() won't prompt again
+      _verifiedPassword = password;
+    }
+
+    // Fill controllers for _login() without expanding the nickname/signature form
+    _nicknameController.text = account['nickname'] ?? '';
+    _statusMessageController.text = account['statusMessage'] ?? '';
+    await _login();
+  }
+
+  Future<void> _loadSettings() async {
+    await _loadCurrentBootstrapNode();
+    if (_manualPortController.text.isEmpty) {
+      _manualPortController.text = '33445';
+    }
+  }
+
+  Future<void> _loadCurrentBootstrapNode() async {
+    final node = await Prefs.getCurrentBootstrapNode();
+    if (mounted && node != null) {
+      setState(() {
+        _manualHostController.text = node.host;
+        _manualPortController.text = node.port.toString();
+        _manualPubkeyController.text = node.pubkey;
+      });
+    }
+  }
+
+  /// Initialize TIMManager SDK (required for binary replacement mode)
+  /// This ensures _isInitSDK is set to true, allowing SDK operations to work
+  /// 
+  /// Standard pattern from chat-demo-flutter:
+  /// - chat-demo-flutter calls TencentCloudChat.controller.initUIKit() which internally
+  ///   calls TUILogin.instance.login() for non-Web platforms
+  /// - TUILogin.instance.login() automatically calls initSDK before login
+  /// - Since we're using binary replacement mode with FfiChatService, we need to manually
+  ///   call initSDK to ensure _isInitSDK is set to true
+  Future<void> _initTIMManagerSDK() async {
+    try {
+      // Check if SDK is already initialized
+      if (TIMManager.instance.isInitSDK()) {
+        AppLogger.log('[LoginPage] TIMManager SDK already initialized');
+        return;
+      }
+      
+      AppLogger.log('[LoginPage] Initializing TIMManager SDK...');
+      
+      // Initialize SDK with a dummy SDKAppID (0 is used as placeholder)
+      // The actual SDK initialization is done by FfiChatService.init() which calls tim2tox_ffi_init()
+      // This call ensures _isInitSDK is set to true by calling DartInitSDK in the C++ layer
+      final result = await TIMManager.instance.initSDK(
+        sdkAppID: 0, // Placeholder, actual initialization is done by FfiChatService
+        logLevel: LogLevelEnum.V2TIM_LOG_INFO,
+        uiPlatform: 0, // Flutter FFI platform (APIType::FlutterFFI: 0x1 << 6 = 64)
+      );
+      
+      if (result) {
+        AppLogger.log('[LoginPage] TIMManager SDK initialized successfully, _isInitSDK=${TIMManager.instance.isInitSDK()}');
+      } else {
+        AppLogger.log('[LoginPage] TIMManager SDK initialization failed, _isInitSDK=${TIMManager.instance.isInitSDK()}');
+        throw Exception(AppLocalizations.of(context)!.failedToInitializeTIMManager);
+      }
+    } catch (e, stackTrace) {
+      AppLogger.logError('[LoginPage] Error initializing TIMManager SDK: $e', e, stackTrace);
+      rethrow; // Re-throw to prevent navigation if SDK initialization fails
+    }
+  }
+
+  Future<void> _login() async {
+    if (_busy) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final nickname = _nicknameController.text.trim();
+      final statusMessage = _statusMessageController.text.trim();
+
+      if (nickname.isEmpty) {
+        throw Exception('${l10n.nickname} cannot be empty');
+      }
+
+      // Check if user exists in account list
+      final account = await Prefs.getAccountByNickname(nickname);
+      if (account == null) {
+        // Fallback: check old single account storage (for backward compatibility)
+        final savedNickname = await Prefs.getNickname();
+        if (savedNickname == null || savedNickname.trim().isEmpty) {
+          throw Exception(l10n.userNotFoundPleaseRegister);
+        }
+        if (savedNickname.trim() != nickname) {
+          throw Exception(l10n.nicknameDoesNotMatch);
+        }
+      }
+
+      // Resolve password: use pre-verified password from _quickLogin, or prompt
+      String? password;
+      final toxIdForLogin = account?['toxId'];
+      if (toxIdForLogin != null && toxIdForLogin.isNotEmpty) {
+        final hasPassword = await Prefs.hasAccountPassword(toxIdForLogin);
+        if (hasPassword) {
+          password = _verifiedPassword;
+          _verifiedPassword = null;
+          if (password == null || password.isEmpty) {
+            if (!mounted) return;
+            password = await _showPasswordDialog(
+              AppLocalizations.of(context)!.enterPasswordForAccount(account?['nickname'] ?? nickname),
+            );
+            if (password == null || password.isEmpty) {
+              throw Exception(AppLocalizations.of(context)!.invalidPassword);
+            }
+            final ok = await Prefs.verifyAccountPassword(toxIdForLogin, password);
+            if (!ok) {
+              throw Exception(AppLocalizations.of(context)!.invalidPassword);
+            }
+          }
+        }
+      }
+
+      // Initialize service via AccountService
+      if (toxIdForLogin != null && toxIdForLogin.isNotEmpty) {
+        final service = await AccountService.initializeServiceForAccount(
+          toxId: toxIdForLogin,
+          nickname: nickname,
+          statusMessage: statusMessage,
+          password: password,
+        );
+        _service = service;
+
+        await _initTIMManagerSDK();
+
+        // Save nickname/status for backward compatibility
+        await Prefs.setNickname(nickname);
+        await Prefs.setStatusMessage(statusMessage);
+
+        // Update account list entry (with avatar)
+        final avatarForAccount = account != null ? (account['avatarPath'] ?? '') : '';
+        await Prefs.addAccount(
+          toxId: service.selfId,
+          nickname: nickname,
+          statusMessage: statusMessage,
+          avatarPath: avatarForAccount.isNotEmpty ? avatarForAccount : null,
+        );
+
+        await _loadAccountList();
+
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(AppPageRoute(
+          page: HomePage(service: service),
+        ));
+      } else {
+        // Legacy account without toxId — fallback to raw init
+        final prefs = await SharedPreferences.getInstance();
+        _service = FfiChatService(
+          preferencesService: SharedPreferencesAdapter(prefs),
+          loggerService: AppLoggerAdapter(),
+          bootstrapService: BootstrapNodesAdapter(prefs),
+        );
+        final service = _service!;
+        await service.init();
+        await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
+        await _initTIMManagerSDK();
+
+        final toxId = service.selfId;
+        await Prefs.setNickname(nickname);
+        await Prefs.setStatusMessage(statusMessage);
+        await Prefs.setCurrentAccountToxId(toxId);
+        await Prefs.addAccount(toxId: toxId, nickname: nickname, statusMessage: statusMessage);
+        await service.updateSelfProfile(nickname: nickname, statusMessage: statusMessage);
+        await service.startPolling();
+        await _loadAccountList();
+
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(AppPageRoute(
+          page: HomePage(service: service),
+        ));
+      }
+    } catch (e, stackTrace) {
+      AppLogger.logError('[LoginPage] Login failed: $e', e, stackTrace);
+      if (mounted) {
+        final message = e is Exception ? e.toString().replaceFirst('Exception: ', '') : e.toString();
+        setState(() {
+          _error = message;
+        });
+        AppSnackBar.showError(context, message);
+      }
+    } finally {
+      setState(() {
+        _busy = false;
+      });
+    }
+  }
+
+  /// Import a tox_profile.tox file: pick file, extract toxId, write to p_<toxId>/tox_profile.tox, add account.
+  Future<void> _importToxProfile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['tox', 'zip'],
+      );
+      if (result == null || result.files.single.path == null) return;
+      final filePath = result.files.single.path!;
+      final isZip = filePath.toLowerCase().endsWith('.zip');
+
+      String? password;
+      Map<String, dynamic> accountData;
+      try {
+        // Use full backup import for .zip files, legacy import for .tox
+        if (isZip) {
+          accountData = await AccountExportService.importFullBackup(
+            filePath: filePath,
+            password: password,
+          );
+        } else {
+          accountData = await AccountExportService.importAccountData(
+            filePath: filePath,
+            password: password,
+          );
+        }
+      } catch (e) {
+        if (e.toString().contains('Password required') || e.toString().contains('password')) {
+          if (!mounted) return;
+          password = await _showConfirmPasswordDialog(AppLocalizations.of(context)!.enterPasswordToImport);
+          if (password == null) return;
+          if (isZip) {
+            accountData = await AccountExportService.importFullBackup(
+              filePath: filePath,
+              password: password,
+            );
+          } else {
+            accountData = await AccountExportService.importAccountData(
+              filePath: filePath,
+              password: password,
+            );
+          }
+        } else {
+          rethrow;
+        }
+      }
+
+      final toxId = accountData['toxId'] as String;
+      final toxProfile = accountData['toxProfile'] as Uint8List?;
+      final importedNickname = (accountData['nickname'] as String?) ?? '';
+
+      // Check for existing account
+      final existingAccount = await Prefs.getAccountByToxId(toxId);
+      if (existingAccount != null) {
+        if (mounted) {
+          setState(() {
+            _error = AppLocalizations.of(context)!.accountAlreadyExists;
+          });
+        }
+        return;
+      }
+
+      // For .tox imports, write the profile manually (zip imports already wrote it)
+      if (!isZip && toxProfile != null) {
+        final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
+        final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
+        if (await File(profileFilePath).exists()) {
+          if (mounted) {
+            setState(() {
+              _error = AppLocalizations.of(context)!.accountAlreadyExists;
+            });
+          }
+          return;
+        }
+        await Directory(profileDir).create(recursive: true);
+        await File(profileFilePath).writeAsBytes(toxProfile);
+      }
+
+      final displayNickname = importedNickname.isNotEmpty
+          ? importedNickname
+          : AppLocalizations.of(context)!.importedAccount;
+      await Prefs.addAccount(
+        toxId: toxId,
+        nickname: displayNickname,
+        statusMessage: '',
+        autoLogin: false,
+        autoAcceptFriends: false,
+        notificationSoundEnabled: true,
+      );
+      if (password != null && password.isNotEmpty) {
+        await Prefs.setAccountPassword(toxId, password);
+      }
+      await _loadAccountList();
+      if (mounted) {
+        setState(() => _error = null);
+        AppSnackBar.showSuccess(context, AppLocalizations.of(context)!.accountImportedSuccessfully);
+      }
+    } catch (e, stackTrace) {
+      AppLogger.logError('[LoginPage] Import tox profile failed: $e', e, stackTrace);
+      if (mounted) {
+        setState(() {
+          _error = AppLocalizations.of(context)!.failedToImportAccount(e.toString());
+        });
+      }
+    }
+  }
+
+  /// Show bottom sheet menu for account management (long-press on account card).
+  void _showAccountManagementMenu(Map<String, String> account) {
+    final toxId = account['toxId'] ?? '';
+    final nickname = account['nickname'] ?? '';
+    if (toxId.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                nickname.isNotEmpty ? nickname : AppLocalizations.of(context)!.unnamedAccount,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: Text(AppLocalizations.of(context)!.exportAccount),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _exportAccountFromLoginPage(toxId, nickname);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
+              title: Text(
+                AppLocalizations.of(context)!.deleteAccount,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _confirmDeleteAccountFromLoginPage(toxId, nickname);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Export a non-active account's profile from the login page.
+  Future<void> _exportAccountFromLoginPage(String toxId, String nickname) async {
+    try {
+      final filePath = await AccountExportService.exportAccountData(toxId: toxId);
+      if (mounted) {
+        AppSnackBar.showSuccess(context, AppLocalizations.of(context)!.accountExportedSuccessfully(filePath));
+      }
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showError(context, AppLocalizations.of(context)!.failedToExportAccount(e.toString()));
+      }
+    }
+  }
+
+  /// Confirm and delete an account from the login page (no running service).
+  Future<void> _confirmDeleteAccountFromLoginPage(String toxId, String nickname) async {
+    // Check if account has password — require password for verification
+    final hasPassword = await Prefs.hasAccountPassword(toxId);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final inputController = TextEditingController();
+        return AlertDialog(
+          title: Text(AppLocalizations.of(ctx)!.deleteAccount),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(AppLocalizations.of(ctx)!.deleteAccountConfirmMessage),
+              const SizedBox(height: 12),
+              if (hasPassword) ...[
+                Text(AppLocalizations.of(ctx)!.deleteAccountEnterPasswordToConfirm),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: inputController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: AppLocalizations.of(ctx)!.password,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Text(AppLocalizations.of(ctx)!.deleteAccountTypeWordToConfirm),
+                const SizedBox(height: 8),
+                Text(
+                  AppLocalizations.of(ctx)!.deleteAccountConfirmWordPrompt('delete'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: inputController,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(AppLocalizations.of(ctx)!.cancel),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(ctx).colorScheme.error,
+              ),
+              onPressed: () async {
+                if (hasPassword) {
+                  final ok = await Prefs.verifyAccountPassword(toxId, inputController.text);
+                  if (!ok) {
+                    if (ctx.mounted) {
+                      AppSnackBar.showError(ctx, AppLocalizations.of(ctx)!.invalidPassword);
+                    }
+                    return;
+                  }
+                } else {
+                  if (inputController.text.trim().toLowerCase() != 'delete') {
+                    if (ctx.mounted) {
+                      AppSnackBar.showError(ctx, AppLocalizations.of(ctx)!.deleteAccountWrongWord);
+                    }
+                    return;
+                  }
+                }
+                Navigator.of(ctx).pop(true);
+              },
+              child: Text(AppLocalizations.of(ctx)!.deleteAccount),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      try {
+        await AccountService.deleteAccountWithoutService(toxId: toxId);
+        await _loadAccountList();
+        if (mounted) {
+          AppSnackBar.showSuccess(context, '${AppLocalizations.of(context)!.deleteAccount}: $nickname');
+        }
+      } catch (e) {
+        if (mounted) {
+          AppSnackBar.showError(context, e.toString());
+        }
+      }
+    }
+  }
+
+  void _openSettings() async {
+    await Navigator.of(context).push<void>(AppPageRoute(
+      page: const LoginSettingsPage(),
+    ));
+    if (mounted) _loadSettings();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return TencentCloudChatThemeWidget(
+      build: (context, colorTheme, textStyle) => Scaffold(
+        appBar: AppBar(
+          title: const SizedBox.shrink(),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: _openSettings,
+            ),
+            SizedBox(width: ResponsiveLayout.responsiveHorizontalPadding(context)),
+          ],
+        ),
+        body: SafeArea(
+          child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark
+                  ? [AppThemeConfig.darkGradientStart, AppThemeConfig.darkGradientEnd]
+                  : [AppThemeConfig.lightGradientStart, AppThemeConfig.lightGradientEnd],
+            ),
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: ResponsiveLayout.responsiveValue<double>(
+                  context,
+                  mobile: 500.0,
+                  tablet: 600.0,
+                  desktop: 700.0,
+                ),
+              ),
+              child: Padding(
+                padding: ResponsiveLayout.responsivePadding(context),
+                child: Form(
+                  key: _formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Saved accounts list (main content)
+                        if (_accountList.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              AppLocalizations.of(context)!.savedAccounts,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          ..._accountList.asMap().entries.map((entry) {
+                                  final i = entry.key;
+                                  final account = entry.value;
+                                  final nickname = account['nickname'] ?? '';
+                                  final statusMsg = account['statusMessage'] ?? '';
+                                  final lastLogin = account['lastLoginTime'];
+                                  final toxId = account['toxId'] ?? '';
+                                  final toxIdPrefix = toxId.length >= 8 ? toxId.substring(0, 8) : toxId;
+
+                                  String formatLastLogin(String? isoString) {
+                                    if (isoString == null || isoString.isEmpty) return AppLocalizations.of(context)!.never;
+                                    try {
+                                      final dateTime = DateTime.parse(isoString);
+                                      final now = DateTime.now();
+                                      final difference = now.difference(dateTime);
+
+                                      if (difference.inDays > 0) {
+                                        return AppLocalizations.of(context)!.daysAgo(difference.inDays, difference.inDays > 1 ? 's' : '');
+                                      } else if (difference.inHours > 0) {
+                                        return AppLocalizations.of(context)!.hoursAgo(difference.inHours, difference.inHours > 1 ? 's' : '');
+                                      } else if (difference.inMinutes > 0) {
+                                        return AppLocalizations.of(context)!.minutesAgo(difference.inMinutes, difference.inMinutes > 1 ? 's' : '');
+                                      } else {
+                                        return AppLocalizations.of(context)!.justNow;
+                                      }
+                                    } catch (e) {
+                                      return AppLocalizations.of(context)!.unknown;
+                                    }
+                                  }
+
+                                  return StaggeredListItem(index: i, child: Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+                                    ),
+                                    elevation: 1,
+                                    child: MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: InkWell(
+                                        onTap: () => _quickLogin(account),
+                                        onLongPress: () => _showAccountManagementMenu(account),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12),
+                                        child: Row(
+                                          children: [
+                                            _buildAccountAvatar(account, nickname, colorTheme),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    nickname.isNotEmpty ? nickname : AppLocalizations.of(context)!.unnamedAccount,
+                                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  if (statusMsg.isNotEmpty)
+                                                    Text(
+                                                      statusMsg,
+                                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                        color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  const SizedBox(height: 4),
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        '${AppLocalizations.of(context)!.userId}: $toxIdPrefix...',
+                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                          fontSize: 11,
+                                                          fontFamily: 'monospace',
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Text(
+                                                        '• ${formatLastLogin(lastLogin)}',
+                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.chevron_right,
+                                              color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.5),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    ),
+                                  ));
+                                }).toList(),
+                        ],
+                        // Import tox_profile.tox
+                        Card(
+                          margin: const EdgeInsets.only(top: 8, bottom: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+                          ),
+                          elevation: 1,
+                          child: InkWell(
+                            onTap: _busy ? null : _importToxProfile,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.upload_file,
+                                    color: colorTheme.primaryColor,
+                                    size: 28,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    AppLocalizations.of(context)!.importAccount,
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      color: colorTheme.primaryColor,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // "Register new account" — opens RegisterPage (like settings)
+                        Card(
+                          margin: const EdgeInsets.only(top: 0, bottom: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+                          ),
+                          elevation: 1,
+                          child: InkWell(
+                            onTap: _busy
+                                ? null
+                                : () async {
+                                    await Navigator.of(context).push<void>(AppPageRoute(
+                                      page: const RegisterPage(),
+                                    ));
+                                    if (mounted) _loadAccountList();
+                                  },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.person_add, color: colorTheme.primaryColor, size: 28),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    AppLocalizations.of(context)!.registerNewAccount,
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      color: colorTheme.primaryColor,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_error != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: ErrorBanner(message: _error!),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        ),
+      ),
+    );
+  }
+}
+
+
