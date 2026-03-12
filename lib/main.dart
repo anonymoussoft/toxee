@@ -9,8 +9,6 @@ import 'package:tencent_cloud_chat_common/widgets/material_app.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:tencent_cloud_chat_sdk/native_im/adapter/tim_manager.dart';
-import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'ui/login_page.dart';
 import 'ui/home_page.dart';
@@ -33,6 +31,7 @@ import 'adapters/bootstrap_adapter.dart';
 import 'util/bootstrap_nodes.dart';
 import 'util/app_theme_config.dart';
 import 'util/account_service.dart';
+import 'util/app_bootstrap_coordinator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tencent_cloud_chat_sdk/native_im/bindings/native_library_manager.dart';
 import 'package:tencent_cloud_chat_common/data/theme/tencent_cloud_chat_theme.dart';
@@ -568,44 +567,6 @@ class _StartupGateState extends State<_StartupGate> {
     super.dispose();
   }
 
-  /// Initialize TIMManager SDK (required for binary replacement mode)
-  /// This ensures _isInitSDK is set to true, allowing SDK operations to work
-  Future<void> _initTIMManagerSDK() async {
-    try {
-      // Check if SDK is already initialized
-      if (TIMManager.instance.isInitSDK()) {
-        AppLogger.log('[StartupGate] TIMManager SDK already initialized');
-        return;
-      }
-
-      AppLogger.log('[StartupGate] Initializing TIMManager SDK...');
-
-      // Initialize SDK with a dummy SDKAppID (0 is used as placeholder)
-      // The actual SDK initialization is done by FfiChatService.init() which calls tim2tox_ffi_init()
-      // This call ensures _isInitSDK is set to true by calling DartInitSDK in the C++ layer
-      final result = await TIMManager.instance.initSDK(
-        sdkAppID:
-            0, // Placeholder, actual initialization is done by FfiChatService
-        logLevel: LogLevelEnum.V2TIM_LOG_INFO,
-        uiPlatform:
-            0, // Flutter FFI platform (APIType::FlutterFFI: 0x1 << 6 = 64)
-      );
-
-      if (result) {
-        AppLogger.log(
-            '[StartupGate] TIMManager SDK initialized successfully, _isInitSDK=${TIMManager.instance.isInitSDK()}');
-      } else {
-        AppLogger.log(
-            '[StartupGate] TIMManager SDK initialization failed, _isInitSDK=${TIMManager.instance.isInitSDK()}');
-        throw Exception('Failed to initialize TIMManager SDK');
-      }
-    } catch (e, stackTrace) {
-      AppLogger.logError(
-          '[StartupGate] Error initializing TIMManager SDK: $e', e, stackTrace);
-      rethrow; // Re-throw to prevent navigation if SDK initialization fails
-    }
-  }
-
   void _updateStep(StartupStep step) {
     if (mounted) {
       setState(() {
@@ -756,24 +717,10 @@ class _StartupGateState extends State<_StartupGate> {
             nickname: nick, statusMessage: statusMsg ?? '');
       }
 
-      // OPTIMIZATION: Start FakeUIKit early, before connection waiting
-      FakeUIKit.instance.startWithFfi(service);
-
-      // Step 3: Initialize SDK
+      // Step 3–5: Bootstrap runtime (FakeUIKit, SDK, polling) via coordinator
       _updateStep(StartupStep.loggingIn);
-      await _initTIMManagerSDK();
-      if (mounted) _updateStep(StartupStep.initializingSDK);
-
-      // Step 4: Start polling
-      _updateStep(StartupStep.updatingProfile);
-      AppLogger.log(
-          '[main.dart] About to call startPolling, service type: ${service.runtimeType}');
-      await service.startPolling().then((_) {
-        AppLogger.log('[main.dart] startPolling completed successfully');
-      }).catchError((e, stackTrace) {
-        AppLogger.logError('[main.dart] startPolling failed', e, stackTrace);
-      });
-      AppLogger.log('[main.dart] startPolling call initiated (async)');
+      await AppBootstrapCoordinator.boot(service);
+      if (!mounted) return;
 
       // Step 6: Connect
       _updateStep(StartupStep.connecting);

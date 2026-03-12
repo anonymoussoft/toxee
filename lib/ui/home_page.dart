@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import '../util/disposable_bag.dart';
 import '../util/prefs.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import '../util/locale_controller.dart';
@@ -77,7 +78,6 @@ import 'home/home_utils.dart';
 import '../util/app_theme_config.dart';
 import '../util/app_tray.dart';
 import '../util/lan_bootstrap_service.dart';
-import '../util/prefs.dart';
 import '../util/platform_utils.dart';
 import 'add_friend_dialog.dart';
 import 'add_group_dialog.dart';
@@ -138,11 +138,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String? _lanBootstrapServiceIP;
   int? _lanBootstrapServicePort;
   Timer? _bootstrapServiceStatusTimer;
+  final _bag = DisposableBag();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _bag.add(() => WidgetsBinding.instance.removeObserver(this));
     // HYBRID MODE: Using both binary replacement (for most operations) and Platform interface (for history queries)
     // This allows:
     // - Most operations to use binary replacement (TIMManager.instance -> NativeLibraryManager -> Dart* functions)
@@ -323,6 +325,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         });
       }
     });
+    _bag.add(() => _connectionStatusSub?.cancel());
     
     // Load and monitor LAN bootstrap service status (desktop only)
     if (PlatformUtils.isDesktop) {
@@ -331,6 +334,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         const Duration(seconds: 2),
         (_) => _loadBootstrapServiceStatus(),
       );
+      _bag.add(() => _bootstrapServiceStatusTimer?.cancel());
     }
     
     // Listen to UIKit conversation unread count changes
@@ -360,6 +364,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         unawaited(_updateTray());
       }
     });
+    _bag.add(() => _conversationDataSub?.cancel());
     
     // Listen to UIKit contact application unread count changes
     _contactDataSub = TencentCloudChat.instance.eventBusInstance
@@ -382,6 +387,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         unawaited(_updateTray());
       }
     });
+    _bag.add(() => _contactDataSub?.cancel());
     
     // Listen for group quit/dismiss events to refresh conversation list
     // This ensures conversation list is updated when groups are quit or dismissed
@@ -513,6 +519,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         }
       }
     });
+    _bag.add(() => _groupProfileDataSub?.cancel());
     
     // Use UIKit's built-in desktop split view (conversation list + message pane)
     conv_pkg.TencentCloudChatConversationManager.config.setConfigs(useDesktopMode: true);
@@ -809,7 +816,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     // Use 15s interval to reduce GetFriendList frequency (was 5s; fake_im still refreshes every 5s)
     _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) => _load());
-    Prefs.getLocalFriends().then((s) => setState(() => _localFriends = s));
+    _bag.add(() => _refreshTimer?.cancel());
+    unawaited(_loadLocalFriends());
     // Load auto-accept friends setting using Tox ID
     final toxId = widget.service.selfId;
     if (toxId.isNotEmpty) {
@@ -835,6 +843,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       setState(() {}); // refresh unread badges, no snackbar
       unawaited(_updateTray());
     });
+    _bag.add(() => _msgSub?.cancel());
     
     // Listen to file transfer progress updates
     // Note: Progress updates are handled in FakeChatMessageProvider
@@ -943,6 +952,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         });
       }
     });
+    _bag.add(() => _friendsSub?.cancel());
 
     // Replay the current contact list for late subscribers.
     // FakeIM may have already emitted contacts before _friendsSub was established
@@ -971,6 +981,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (mounted) setState(() {});
       unawaited(_updateTray());
     });
+    _bag.add(() => _appsSub?.cancel());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_updateTray());
     });
@@ -1111,17 +1122,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _refreshTimer?.cancel();
-    _refreshTimer = null;
-    _msgSub?.cancel();
-    _friendsSub?.cancel();
-    _appsSub?.cancel();
-    _connectionStatusSub?.cancel();
-    _conversationDataSub?.cancel();
-    _contactDataSub?.cancel();
-    _groupProfileDataSub?.cancel();
+    _bag.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadLocalFriends() async {
+    final friends = await Prefs.getLocalFriends();
+    if (!mounted) return;
+    setState(() {
+      _localFriends = friends;
+    });
   }
 
   Future<void> _load() async {

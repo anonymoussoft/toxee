@@ -1,10 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:ui';
+import 'package:cryptography/cryptography.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as crypto;
 
 import 'tox_utils.dart';
+
+part 'prefs/window_prefs.dart';
+part 'prefs/security_prefs.dart';
+part 'prefs/account_prefs.dart';
+part 'prefs/chat_prefs.dart';
 
 class Prefs {
   static const _kServerId = 'server_id';
@@ -53,6 +61,11 @@ class Prefs {
   static const _kPasswordSaltPrefix = 'account_password_salt_';
   static String _passwordSaltKey(String toxId) => '$_kPasswordSaltPrefix$toxId';
 
+  /// PBKDF2 stored hash prefix (new format); without it we treat as legacy SHA256.
+  static const _kPbkdf2Prefix = 'pbkdf2:';
+  static const int _pbkdf2Iterations = 150000;
+  static const int _pbkdf2Bits = 256;
+
   // Per-account settings keys (scoped by account prefix, replacing JSON storage)
   static const _kAccountAutoAcceptFriends = 'acct_auto_accept_friends';
   static const _kAccountAutoAcceptGroupInvites = 'acct_auto_accept_group_invites';
@@ -63,6 +76,9 @@ class Prefs {
   static SharedPreferences? _cachedPrefs;
   static bool _accountToxIdCached = false;
   static String? _cachedCurrentAccountToxId;
+
+  /// Secure storage for IRC channel passwords (platform Keystore/Keychain).
+  static FlutterSecureStorage get _secureStorage => const FlutterSecureStorage();
 
   /// Initialize the Prefs cache. Must be called once at app startup after
   /// SharedPreferences.getInstance() returns (typically in main()).
@@ -300,23 +316,15 @@ class Prefs {
   }
 
   static Future<Set<String>> getLocalFriends() async {
-    final current = await getCurrentAccountToxId();
-    if (current == null || current.isEmpty) return <String>{};
     final p = await _getPrefs();
-    final key = _scopedKey(_kLocalFriends, current);
-    final list = p.getStringList(key) ?? const <String>[];
-    return list.toSet();
+    final current = await getCurrentAccountToxId();
+    return _getLocalFriendsImpl(p, current, _scopedKey);
   }
 
   static Future<void> setLocalFriends(Set<String> ids) async {
-    final current = await getCurrentAccountToxId();
-    if (current == null || current.isEmpty) return;
     final p = await _getPrefs();
-    final key = _scopedKey(_kLocalFriends, current);
-    final success = await p.setStringList(key, ids.toList());
-    if (!success) {
-      throw Exception('Failed to save local friends to SharedPreferences');
-    }
+    final current = await getCurrentAccountToxId();
+    return _setLocalFriendsImpl(p, current, ids, _scopedKey);
   }
 
   static Future<String?> getLanguageCode() async {
@@ -952,32 +960,22 @@ class Prefs {
   // IRC App management
   static Future<bool> getIrcAppInstalled() async {
     final p = await _getPrefs();
-    return p.getBool(_kIrcAppInstalled) ?? false;
+    return _getIrcAppInstalledImpl(p);
   }
 
   static Future<void> setIrcAppInstalled(bool installed) async {
     final p = await _getPrefs();
-    await p.setBool(_kIrcAppInstalled, installed);
+    return _setIrcAppInstalledImpl(p, installed);
   }
 
   static Future<List<String>> getIrcChannels() async {
     final p = await _getPrefs();
-    final channelsJson = p.getString(_kIrcChannels);
-    if (channelsJson == null || channelsJson.isEmpty) {
-      return [];
-    }
-    try {
-      final List<dynamic> decoded = jsonDecode(channelsJson);
-      return decoded.cast<String>();
-    } catch (e) {
-      return [];
-    }
+    return _getIrcChannelsImpl(p);
   }
 
   static Future<void> setIrcChannels(List<String> channels) async {
     final p = await _getPrefs();
-    final channelsJson = jsonEncode(channels);
-    await p.setString(_kIrcChannels, channelsJson);
+    return _setIrcChannelsImpl(p, channels);
   }
 
   static Future<void> addIrcChannel(String channel) async {
@@ -997,53 +995,70 @@ class Prefs {
   }
 
   static Future<String?> getIrcChannelPassword(String channel) async {
+    final key = _ircChannelPasswordKey(channel);
+    // Prefer secure storage
+    final fromSecure = await _secureStorage.read(key: key);
+    if (fromSecure != null && fromSecure.isNotEmpty) return fromSecure;
+    // Migrate from legacy SharedPreferences
     final p = await _getPrefs();
-    return p.getString(_ircChannelPasswordKey(channel));
+    final legacy = p.getString(key);
+    if (legacy != null) {
+      await _secureStorage.write(key: key, value: legacy);
+      await p.remove(key);
+      return legacy;
+    }
+    return null;
   }
 
   static Future<void> setIrcChannelPassword(String channel, String? password) async {
-    final p = await _getPrefs();
+    final key = _ircChannelPasswordKey(channel);
     if (password == null || password.isEmpty) {
-      await p.remove(_ircChannelPasswordKey(channel));
+      await _secureStorage.delete(key: key);
+      final p = await _getPrefs();
+      await p.remove(key);
     } else {
-      await p.setString(_ircChannelPasswordKey(channel), password);
+      await _secureStorage.write(key: key, value: password);
+      final p = await _getPrefs();
+      await p.remove(key);
     }
   }
 
   static Future<void> removeIrcChannelPassword(String channel) async {
+    final key = _ircChannelPasswordKey(channel);
+    await _secureStorage.delete(key: key);
     final p = await _getPrefs();
-    await p.remove(_ircChannelPasswordKey(channel));
+    await p.remove(key);
   }
 
   // IRC Server Configuration
   static Future<String> getIrcServer() async {
     final p = await _getPrefs();
-    return p.getString(_kIrcServer) ?? 'irc.libera.chat';
+    return _getIrcServerImpl(p);
   }
 
   static Future<void> setIrcServer(String server) async {
     final p = await _getPrefs();
-    await p.setString(_kIrcServer, server);
+    return _setIrcServerImpl(p, server);
   }
 
   static Future<int> getIrcPort() async {
     final p = await _getPrefs();
-    return p.getInt(_kIrcPort) ?? 6667;
+    return _getIrcPortImpl(p);
   }
 
   static Future<void> setIrcPort(int port) async {
     final p = await _getPrefs();
-    await p.setInt(_kIrcPort, port);
+    return _setIrcPortImpl(p, port);
   }
 
   static Future<bool> getIrcUseSasl() async {
     final p = await _getPrefs();
-    return p.getBool(_kIrcUseSasl) ?? false;
+    return _getIrcUseSaslImpl(p);
   }
 
   static Future<void> setIrcUseSasl(bool useSasl) async {
     final p = await _getPrefs();
-    await p.setBool(_kIrcUseSasl, useSasl);
+    return _setIrcUseSaslImpl(p, useSasl);
   }
 
   // Account list management for multiple accounts
@@ -1054,22 +1069,12 @@ class Prefs {
   /// toxId is the primary key for account identification
   static Future<List<Map<String, String>>> getAccountList() async {
     final p = await _getPrefs();
-    final accountsJson = p.getString(_kAccountList);
-    if (accountsJson == null || accountsJson.isEmpty) {
-      return [];
-    }
-    try {
-      final List<dynamic> decoded = jsonDecode(accountsJson);
-      return decoded.map((e) => Map<String, String>.from(e)).toList();
-    } catch (e) {
-      return [];
-    }
+    return _getAccountListImpl(p);
   }
 
   static Future<void> setAccountList(List<Map<String, String>> accounts) async {
     final p = await _getPrefs();
-    final accountsJson = jsonEncode(accounts);
-    await p.setString(_kAccountList, accountsJson);
+    return _setAccountListImpl(p, accounts);
   }
 
   /// Add or update an account in the list
@@ -1243,7 +1248,8 @@ class Prefs {
     return p.getString(_accountPasswordKey(toxId));
   }
 
-  /// Set account password (stores salt + SHA256 hash).
+  /// Set account password (stores salt + PBKDF2 hash).
+  /// New accounts use PBKDF2; legacy SHA256 hashes are migrated on next successful verify.
   static Future<void> setAccountPassword(String toxId, String password) async {
     if (toxId.isEmpty) {
       throw ArgumentError('toxId cannot be empty');
@@ -1252,18 +1258,23 @@ class Prefs {
       await removeAccountPassword(toxId);
       return;
     }
-    // Generate random salt (32 hex chars derived from timestamp + toxId)
-    final saltSource = '${DateTime.now().microsecondsSinceEpoch}_${toxId}_salt';
-    final saltHash = sha256.convert(utf8.encode(saltSource));
-    final salt = saltHash.toString().substring(0, 32);
-
-    // Hash: SHA256(salt + password)
-    final bytes = utf8.encode('$salt$password');
-    final hash = sha256.convert(bytes);
+    final salt = List<int>.generate(32, (_) => Random.secure().nextInt(256));
+    final pbkdf2 = Pbkdf2(
+      macAlgorithm: Hmac.sha256(),
+      iterations: _pbkdf2Iterations,
+      bits: _pbkdf2Bits,
+    );
+    final secretKey = await pbkdf2.deriveKeyFromPassword(
+      password: password,
+      nonce: salt,
+    );
+    final hashBytes = await secretKey.extractBytes();
+    final storedHash = '$_kPbkdf2Prefix${base64Encode(hashBytes)}';
+    final storedSalt = base64Encode(salt);
 
     final p = await _getPrefs();
-    await p.setString(_accountPasswordKey(toxId), hash.toString());
-    await p.setString(_passwordSaltKey(toxId), salt);
+    await p.setString(_accountPasswordKey(toxId), storedHash);
+    await p.setString(_passwordSaltKey(toxId), storedSalt);
   }
 
   /// Remove account password and its salt.
@@ -1277,32 +1288,57 @@ class Prefs {
   }
 
   /// Verify account password.
-  /// Supports both salted (new) and unsalted (legacy) hashes.
+  /// Supports PBKDF2 (new) and SHA256 salted/unsalted (legacy); migrates legacy on success.
   static Future<bool> verifyAccountPassword(String toxId, String password) async {
     if (toxId.isEmpty || password.isEmpty) return false;
 
     final storedHash = await getAccountPasswordHash(toxId);
     if (storedHash == null) return false;
 
+    if (storedHash.startsWith(_kPbkdf2Prefix)) {
+      final p = await _getPrefs();
+      final saltBase64 = p.getString(_passwordSaltKey(toxId));
+      if (saltBase64 == null) return false;
+      List<int> salt;
+      try {
+        salt = base64Decode(saltBase64);
+      } catch (_) {
+        return false;
+      }
+      final pbkdf2 = Pbkdf2(
+        macAlgorithm: Hmac.sha256(),
+        iterations: _pbkdf2Iterations,
+        bits: _pbkdf2Bits,
+      );
+      final secretKey = await pbkdf2.deriveKeyFromPassword(
+        password: password,
+        nonce: salt,
+      );
+      final hashBytes = await secretKey.extractBytes();
+      final expected = base64Encode(hashBytes);
+      final actual = storedHash.substring(_kPbkdf2Prefix.length);
+      return actual == expected;
+    }
+
+    // Legacy SHA256 (salted or unsalted)
     final p = await _getPrefs();
     final salt = p.getString(_passwordSaltKey(toxId));
-
     if (salt != null && salt.isNotEmpty) {
-      // Salted verification
       final bytes = utf8.encode('$salt$password');
-      final hash = sha256.convert(bytes);
-      return storedHash == hash.toString();
-    } else {
-      // Legacy unsalted verification (pre-migration)
-      final bytes = utf8.encode(password);
-      final hash = sha256.convert(bytes);
+      final hash = crypto.sha256.convert(bytes);
       if (storedHash == hash.toString()) {
-        // Auto-migrate: re-hash with salt on successful legacy verification
         await setAccountPassword(toxId, password);
         return true;
       }
       return false;
     }
+    final bytes = utf8.encode(password);
+    final hash = crypto.sha256.convert(bytes);
+    if (storedHash == hash.toString()) {
+      await setAccountPassword(toxId, password);
+      return true;
+    }
+    return false;
   }
 
   // --- Window/layout state (desktop) ---
@@ -1310,31 +1346,22 @@ class Prefs {
   /// Saved window bounds (left, top, width, height). Null if not set or invalid.
   static Future<Rect?> getWindowBounds() async {
     final p = await _getPrefs();
-    final s = p.getString(_kWindowBounds);
-    if (s == null || s.isEmpty) return null;
-    final parts = s.split(',');
-    if (parts.length != 4) return null;
-    final values = parts.map((e) => double.tryParse(e.trim())).toList();
-    if (values.any((v) => v == null)) return null;
-    return Rect.fromLTWH(values[0]!, values[1]!, values[2]!, values[3]!);
+    return _getWindowBoundsImpl(p);
   }
 
   static Future<void> setWindowBounds(Rect rect) async {
     final p = await _getPrefs();
-    await p.setString(
-      _kWindowBounds,
-      '${rect.left},${rect.top},${rect.width},${rect.height}',
-    );
+    return _setWindowBoundsImpl(p, rect);
   }
 
   static Future<bool> getWindowMaximized() async {
     final p = await _getPrefs();
-    return p.getBool(_kWindowMaximized) ?? false;
+    return _getWindowMaximizedImpl(p);
   }
 
   static Future<void> setWindowMaximized(bool value) async {
     final p = await _getPrefs();
-    await p.setBool(_kWindowMaximized, value);
+    return _setWindowMaximizedImpl(p, value);
   }
 
   /// Saved splitter position (e.g. conversation list width in logical pixels, or ratio 0.0–1.0). Null if not set.

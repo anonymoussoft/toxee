@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop_for_t
   fc_native_video_thumbnail
   file_selector_windows
+  flutter_secure_storage_windows
   image_clipboard
   pasteboard
   permission_handler_windows

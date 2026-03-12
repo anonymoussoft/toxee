@@ -22,6 +22,8 @@ class FakeIM {
   static const topicGroupDeleted = 'FakeGroupDeleted';
 
   Timer? _refreshTimer;
+  Timer? _startupFastPollTimer;
+  Timer? _startupSlowPollTimer;
   final Map<String, bool> _typingPrev = {};
   Set<String> _previousFriendIds = {};
   Set<String> _previousGroupIds = {};
@@ -74,16 +76,18 @@ class FakeIM {
       const slowPollDuration = 10; // 10 * 2s = 20 seconds
       
       // Fast polling phase: 500ms intervals for first 10 seconds
-      Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      _startupFastPollTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
         startupPollCount++;
         if (startupPollCount >= fastPollDuration) {
           timer.cancel();
+          _startupFastPollTimer = null;
           // Switch to slower polling
           int slowPollCount = 0;
-          Timer.periodic(const Duration(seconds: 2), (slowTimer) async {
+          _startupSlowPollTimer = Timer.periodic(const Duration(seconds: 2), (slowTimer) async {
             slowPollCount++;
             if (slowPollCount >= slowPollDuration) {
               slowTimer.cancel();
+              _startupSlowPollTimer = null;
               return;
             }
             
@@ -203,6 +207,10 @@ class FakeIM {
   void dispose() {
     _refreshTimer?.cancel();
     _refreshTimer = null;
+    _startupFastPollTimer?.cancel();
+    _startupSlowPollTimer?.cancel();
+    _startupFastPollTimer = null;
+    _startupSlowPollTimer = null;
     _typingPrev.clear();
     _previousFriendIds.clear();
     _previousGroupIds.clear();

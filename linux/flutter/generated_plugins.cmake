@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_linux
   desktop_drop_for_t
   file_selector_linux
+  flutter_secure_storage_linux
   image_clipboard
   open_file_linux
   pasteboard
