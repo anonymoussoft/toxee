@@ -68,6 +68,7 @@ class _SettingsPageState extends State<SettingsPage> {
   
   // Account management
   List<Map<String, String>> _accountList = [];
+  String? _currentAccountToxId; // Real Tox ID from Prefs (service.selfId is UIKit placeholder)
   bool _accountListExpanded = false;
   static const int _accountListPreviewCount = 3;
   Timer? _lastLoginTimeUpdateTimer;
@@ -117,7 +118,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadAutoLogin() async {
-    final toxId = widget.service.selfId;
+    final toxId = _currentAccountToxId ?? await Prefs.getCurrentAccountToxId() ?? widget.service.selfId;
     if (toxId.isNotEmpty) {
       final enabled = await Prefs.getAutoLogin(toxId);
       if (mounted) {
@@ -129,7 +130,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _setAutoLogin(bool value) async {
-    final toxId = widget.service.selfId;
+    final toxId = _currentAccountToxId ?? await Prefs.getCurrentAccountToxId() ?? widget.service.selfId;
     if (toxId.isNotEmpty) {
       await Prefs.setAutoLogin(value, toxId);
       if (mounted) {
@@ -151,12 +152,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadAccountList() async {
     final accounts = await Prefs.getAccountList();
+    final currentToxId = await Prefs.getCurrentAccountToxId();
     if (mounted) {
       setState(() {
+        _currentAccountToxId = currentToxId;
         _accountList = List<Map<String, String>>.from(accounts)
           ..sort((a, b) {
-            final aIsCurrent = compareToxIds(a['toxId'] ?? '', widget.service.selfId);
-            final bIsCurrent = compareToxIds(b['toxId'] ?? '', widget.service.selfId);
+            final currentId = _currentAccountToxId ?? widget.service.selfId;
+            final aIsCurrent = compareToxIds(a['toxId'] ?? '', currentId);
+            final bIsCurrent = compareToxIds(b['toxId'] ?? '', currentId);
             if (aIsCurrent) return -1;
             if (bIsCurrent) return 1;
             return 0;
@@ -213,7 +217,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final toxId = account['toxId'];
     if (toxId == null || toxId.isEmpty) return;
 
-    final currentToxId = widget.service.selfId;
+    final currentToxId = _currentAccountToxId ?? widget.service.selfId;
     if (compareToxIds(toxId, currentToxId)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

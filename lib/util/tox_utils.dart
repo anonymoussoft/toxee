@@ -26,15 +26,26 @@ String normalizeToxId(String id) {
 /// Compares two Tox IDs for equality after normalization.
 /// 
 /// This is useful when comparing IDs that might be in different formats
-/// (e.g., one is 64 characters, the other is 76 characters).
+/// (e.g., one is 64 characters, the other is 76 characters, or a 16-char
+/// profile prefix vs full public key).
 /// 
 /// Parameters:
 /// - [id1]: First ID to compare
 /// - [id2]: Second ID to compare
 /// 
 /// Returns:
-/// - true if the normalized IDs are equal, false otherwise
+/// - true if the normalized IDs are equal or one is a prefix of the other
+///   (for same-account matching when list stores 16-char prefix and service uses 64-char).
 bool compareToxIds(String id1, String id2) {
-  return normalizeToxId(id1) == normalizeToxId(id2);
+  final n1 = normalizeToxId(id1).trim();
+  final n2 = normalizeToxId(id2).trim();
+  if (n1 == n2) return true;
+  // Allow prefix match so 16-char profile prefix matches full 64-char public key (same account)
+  if (n1.length >= 16 && n2.length >= 16) {
+    final longer = n1.length >= n2.length ? n1 : n2;
+    final shorter = n1.length < n2.length ? n1 : n2;
+    return longer.length >= 64 && longer.startsWith(shorter);
+  }
+  return false;
 }
 

@@ -1,7 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
@@ -17,12 +15,11 @@ import '../util/prefs.dart';
 import '../i18n/app_localizations.dart';
 import '../util/responsive_layout.dart';
 import '../util/app_theme_config.dart';
-import '../util/logger.dart';
-import '../util/app_paths.dart';
 import '../util/account_export_service.dart';
 
 import '../util/account_service.dart';
 import '../auth/login_use_case.dart';
+import 'login/login_page_controller.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, this.loginUseCase});
@@ -42,6 +39,7 @@ class _LoginPageState extends State<LoginPage> {
   FfiChatService? _service;
   List<Map<String, String>> _accountList = [];
   String? _verifiedPassword; // Password already verified by _quickLogin, avoids re-prompting in _login
+  late final LoginPageController _loginController;
   final TextEditingController _manualHostController = TextEditingController();
   final TextEditingController _manualPortController = TextEditingController();
   final TextEditingController _manualPubkeyController = TextEditingController();
@@ -59,6 +57,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+    _loginController = LoginPageController(loginUseCase: widget.loginUseCase);
     // Listen to text changes to update UI
     _nicknameController.addListener(() {
       if (mounted) setState(() {});
@@ -261,219 +260,122 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _login() async {
     if (_busy) return;
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
     final l10n = AppLocalizations.of(context)!;
     setState(() {
       _busy = true;
       _error = null;
     });
-    FfiChatService? createdService;
-    try {
-      final nickname = _nicknameController.text.trim();
-      final statusMessage = _statusMessageController.text.trim();
 
-      if (nickname.isEmpty) {
-        throw Exception('${l10n.nickname} cannot be empty');
+    final nickname = _nicknameController.text.trim();
+    final statusMessage = _statusMessageController.text.trim();
+    if (nickname.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _error = '${l10n.nickname} cannot be empty';
+          _busy = false;
+        });
+        AppSnackBar.showError(context, _error!);
       }
+      return;
+    }
 
-      final account = await Prefs.getUniqueAccountByNickname(nickname);
-      String? password;
-      final toxIdForLogin = account?['toxId'];
-      if (toxIdForLogin != null && toxIdForLogin.isNotEmpty) {
-        final hasPassword = await Prefs.hasAccountPassword(toxIdForLogin);
-        if (hasPassword) {
-          password = _verifiedPassword;
-          _verifiedPassword = null;
+    String? password;
+    final account = await Prefs.getUniqueAccountByNickname(nickname);
+    final toxIdForLogin = account?['toxId'];
+    if (toxIdForLogin != null && toxIdForLogin.isNotEmpty) {
+      final hasPassword = await Prefs.hasAccountPassword(toxIdForLogin);
+      if (hasPassword) {
+        password = _verifiedPassword;
+        _verifiedPassword = null;
+        if (password == null || password.isEmpty) {
+          if (!mounted) {
+            setState(() => _busy = false);
+            return;
+          }
+          password = await _showPasswordDialog(
+            l10n.enterPasswordForAccount(account?['nickname'] ?? nickname),
+          );
           if (password == null || password.isEmpty) {
-            if (!mounted) return;
-            password = await _showPasswordDialog(
-              l10n.enterPasswordForAccount(account?['nickname'] ?? nickname),
-            );
-            if (password == null || password.isEmpty) {
-              throw Exception(l10n.invalidPassword);
+            if (mounted) {
+              setState(() {
+                _error = l10n.invalidPassword;
+                _busy = false;
+              });
+              AppSnackBar.showError(context, l10n.invalidPassword);
             }
-            final ok = await Prefs.verifyAccountPassword(toxIdForLogin, password);
-            if (!ok) {
-              throw Exception(l10n.invalidPassword);
+            return;
+          }
+          final ok = await Prefs.verifyAccountPassword(toxIdForLogin, password);
+          if (!ok) {
+            if (mounted) {
+              setState(() {
+                _error = l10n.invalidPassword;
+                _busy = false;
+              });
+              AppSnackBar.showError(context, l10n.invalidPassword);
             }
+            return;
           }
         }
       }
+    }
 
-      final useCase = widget.loginUseCase ?? LoginUseCase();
-      final result = await useCase.execute(LoginParams(
-        nickname: nickname,
-        statusMessage: statusMessage,
-        password: password,
-      ));
+    final result = await _loginController.login(
+      nickname: nickname,
+      statusMessage: statusMessage,
+      password: password,
+    );
 
-      createdService = result.service;
-      await _loadAccountList();
-
-      if (!mounted) {
-        await createdService.dispose();
-        return;
+    if (!mounted) {
+      if (result is LoginControllerSuccess) {
+        await result.service.dispose();
       }
+      setState(() => _busy = false);
+      return;
+    }
 
-      _service = createdService;
-      Navigator.of(context).pushReplacement(AppPageRoute(
-        page: HomePage(service: createdService),
-      ));
-    } catch (e, stackTrace) {
-      await createdService?.dispose();
-      AppLogger.logError('[LoginPage] Login failed: $e', e, stackTrace);
-      if (mounted) {
-        final message = e is Exception ? e.toString().replaceFirst('Exception: ', '') : e.toString();
-        setState(() {
-          _error = message;
-        });
+    setState(() => _busy = false);
+    switch (result) {
+      case LoginControllerSuccess(:final service):
+        await _loadAccountList();
+        if (!mounted) return;
+        _service = service;
+        Navigator.of(context).pushReplacement(
+          AppPageRoute(page: HomePage(service: service)),
+        );
+        break;
+      case LoginControllerFailure(:final message):
+        setState(() => _error = message);
         AppSnackBar.showError(context, message);
-      }
-    } finally {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-      });
+        break;
     }
   }
 
-  /// Import a tox_profile.tox file: pick file, extract toxId, write to p_<toxId>/tox_profile.tox, add account.
+  /// Import a tox_profile.tox or .zip file via [LoginPageController].
   Future<void> _importToxProfile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['tox', 'zip'],
-      );
-      if (result == null || result.files.single.path == null) return;
-      final filePath = result.files.single.path!;
-      final isZip = filePath.toLowerCase().endsWith('.zip');
-
-      String? password;
-      Map<String, dynamic> accountData;
-
-      if (isZip) {
-        // ZIP: check account collision before any disk writes (importFullBackup writes profile/history/avatars/prefs).
-        final metadata = await AccountExportService.readFullBackupMetadata(filePath);
-        final toxId = metadata['toxId']!;
-        final existingAccount = await Prefs.getAccountByToxId(toxId);
-        if (existingAccount != null) {
-          if (mounted) {
-            setState(() {
-              _error = AppLocalizations.of(context)!.accountAlreadyExists;
-            });
-          }
-          return;
-        }
-        final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
-        final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
-        if (await File(profileFilePath).exists()) {
-          if (mounted) {
-            setState(() {
-              _error = AppLocalizations.of(context)!.accountAlreadyExists;
-            });
-          }
-          return;
-        }
-        try {
-          accountData = await AccountExportService.importFullBackup(
-            filePath: filePath,
-            password: password,
-          );
-        } catch (e) {
-          if (e.toString().contains('Password required') || e.toString().contains('password')) {
-            if (!mounted) return;
-            password = await _showConfirmPasswordDialog(AppLocalizations.of(context)!.enterPasswordToImport);
-            if (password == null) return;
-            accountData = await AccountExportService.importFullBackup(
-              filePath: filePath,
-              password: password,
-            );
-          } else {
-            rethrow;
-          }
-        }
-      } else {
-        try {
-          accountData = await AccountExportService.importAccountData(
-            filePath: filePath,
-            password: password,
-          );
-        } catch (e) {
-          if (e.toString().contains('Password required') || e.toString().contains('password')) {
-            if (!mounted) return;
-            password = await _showConfirmPasswordDialog(AppLocalizations.of(context)!.enterPasswordToImport);
-            if (password == null) return;
-            accountData = await AccountExportService.importAccountData(
-              filePath: filePath,
-              password: password,
-            );
-          } else {
-            rethrow;
-          }
-        }
-      }
-
-      final toxId = accountData['toxId'] as String;
-      final toxProfile = accountData['toxProfile'] as Uint8List?;
-      final importedNickname = (accountData['nickname'] as String?) ?? '';
-
-      // Check for existing account (.tox path only; ZIP already checked above)
-      if (!isZip) {
-        final existingAccount = await Prefs.getAccountByToxId(toxId);
-        if (existingAccount != null) {
-          if (mounted) {
-            setState(() {
-              _error = AppLocalizations.of(context)!.accountAlreadyExists;
-            });
-          }
-          return;
-        }
-      }
-
-      // For .tox imports, write the profile manually (zip imports already wrote it)
-      if (!isZip && toxProfile != null) {
-        final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
-        final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
-        if (await File(profileFilePath).exists()) {
-          if (mounted) {
-            setState(() {
-              _error = AppLocalizations.of(context)!.accountAlreadyExists;
-            });
-          }
-          return;
-        }
-        await Directory(profileDir).create(recursive: true);
-        await File(profileFilePath).writeAsBytes(toxProfile);
-      }
-
-      final displayNickname = importedNickname.isNotEmpty
-          ? importedNickname
-          : AppLocalizations.of(context)!.importedAccount;
-      await Prefs.addAccount(
-        toxId: toxId,
-        nickname: displayNickname,
-        statusMessage: '',
-        autoLogin: false,
-        autoAcceptFriends: false,
-        notificationSoundEnabled: true,
-      );
-      if (password != null && password.isNotEmpty) {
-        await Prefs.setAccountPassword(toxId, password);
-      }
-      await _loadAccountList();
-      if (mounted) {
+    final result = await _loginController.importAccount(
+      requestPassword: (prompt) => _showConfirmPasswordDialog(
+        AppLocalizations.of(context)!.enterPasswordToImport,
+      ),
+    );
+    if (!mounted) return;
+    switch (result) {
+      case ImportSuccess():
+        await _loadAccountList();
+        if (!mounted) return;
         setState(() => _error = null);
-        AppSnackBar.showSuccess(context, AppLocalizations.of(context)!.accountImportedSuccessfully);
-      }
-    } catch (e, stackTrace) {
-      AppLogger.logError('[LoginPage] Import tox profile failed: $e', e, stackTrace);
-      if (mounted) {
-        setState(() {
-          _error = AppLocalizations.of(context)!.failedToImportAccount(e.toString());
-        });
-      }
+        AppSnackBar.showSuccess(
+          context,
+          AppLocalizations.of(context)!.accountImportedSuccessfully,
+        );
+        break;
+      case ImportFailure(:final message):
+        setState(() => _error = message);
+        if (message != 'No file selected' && message != 'Cancelled') {
+          AppSnackBar.showError(context, message);
+        }
+        break;
     }
   }
 

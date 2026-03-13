@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'ui/widgets/app_page_route.dart';
 import 'package:tencent_cloud_chat_common/widgets/material_app.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
+import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'ui/login_page.dart';
@@ -13,23 +14,18 @@ import 'ui/home_page.dart';
 import 'ui/startup_loading_screen.dart';
 import 'ui/upgrade_required_screen.dart';
 import 'sdk_fake/fake_uikit_core.dart';
-import 'util/prefs.dart';
 import 'util/theme_controller.dart';
 import 'util/locale_controller.dart';
 import 'i18n/app_localizations.dart';
 import 'util/logger.dart';
-import 'util/platform_utils.dart';
-import 'adapters/logger_adapter.dart';
 import 'call/call_overlay.dart';
 import 'call/call_effects_listener.dart';
-import 'adapters/shared_prefs_adapter.dart';
-import 'adapters/bootstrap_adapter.dart';
-import 'util/bootstrap_nodes.dart';
 import 'util/app_theme_config.dart';
 import 'util/account_service.dart';
-import 'util/app_bootstrap_coordinator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tencent_cloud_chat_common/data/theme/tencent_cloud_chat_theme.dart';
+import 'startup/startup_outcome.dart';
+import 'startup/startup_session_use_case.dart';
+import 'startup/startup_step.dart';
 
 import 'bootstrap/app_bootstrap.dart';
 import 'bootstrap/app_bootstrap_result.dart';
@@ -153,6 +149,11 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> {
         return ValueListenableBuilder<Locale>(
           valueListenable: AppLocale.locale,
           builder: (context, locale, __) {
+            // Sync app locale to UIKit immediately so chat, contact, profile, and
+            // group list see the new language before any child builds.
+            try {
+              TencentCloudChatIntl().setLocale(locale);
+            } catch (_) {}
             return TencentCloudChatMaterialApp(
               title: 'Toxee',
               debugShowCheckedModeBanner: false,
@@ -338,17 +339,26 @@ class _StartupGateState extends State<_StartupGate> {
   Timer? _timeoutTimer;
   StreamSubscription<bool>? _connectionSub;
   StartupStep _currentStep = StartupStep.checkingUserInfo;
+  FfiChatService? _serviceWaitingForConnection;
+  late final StartupSessionUseCase _startupUseCase;
 
   @override
   void initState() {
     super.initState();
-    _decide();
+    _startupUseCase = StartupSessionUseCase();
+    _runStartup();
   }
 
   @override
   void dispose() {
     _timeoutTimer?.cancel();
     _connectionSub?.cancel();
+    if (_serviceWaitingForConnection != null) {
+      unawaited(AccountService.teardownCurrentSession(
+        service: _serviceWaitingForConnection,
+        reEncryptProfile: true,
+      ));
+    }
     super.dispose();
   }
 
@@ -358,6 +368,72 @@ class _StartupGateState extends State<_StartupGate> {
         _currentStep = step;
       });
     }
+  }
+
+  Future<void> _runStartup() async {
+    final outcome = await _startupUseCase.execute(
+      onStepChanged: _updateStep,
+      loadFriends: _loadFriendsInfo,
+    );
+    if (!mounted) return;
+    switch (outcome) {
+      case StartupShowLogin():
+        setState(() => _checking = false);
+        break;
+      case StartupShowError(:final message):
+        setState(() {
+          _error = message;
+          _checking = false;
+        });
+        break;
+      case StartupOpenHome(:final service):
+        unawaited(Navigator.of(context).pushReplacement(
+          AppPageRoute(page: HomePage(service: service)),
+        ).then((_) {}));
+        break;
+      case StartupWaitForConnection(:final service):
+        setState(() {
+          _waitingForConnection = true;
+          _serviceWaitingForConnection = service;
+        });
+        _waitForConnectionAndNavigate(service);
+        break;
+    }
+  }
+
+  void _waitForConnectionAndNavigate(FfiChatService service) {
+    _timeoutTimer = Timer(const Duration(seconds: 20), () {
+      if (!mounted) return;
+      _connectionSub?.cancel();
+      _updateStep(StartupStep.completed);
+      unawaited(Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        _serviceWaitingForConnection = null;
+        unawaited(Navigator.of(context).pushReplacement(
+          AppPageRoute(page: HomePage(service: service)),
+        ).then((_) {}));
+      }));
+    });
+
+    _connectionSub = service.connectionStatusStream.listen((isConnected) {
+      if (!isConnected || !mounted || !_waitingForConnection) return;
+      _timeoutTimer?.cancel();
+      _connectionSub?.cancel();
+      _updateStep(StartupStep.loadingFriends);
+      unawaited(_onConnectionReady(service));
+    });
+  }
+
+  Future<void> _onConnectionReady(FfiChatService service) async {
+    await _loadFriendsInfo(service);
+    if (!mounted) return;
+    _updateStep(StartupStep.completed);
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+    _serviceWaitingForConnection = null;
+    unawaited(Navigator.of(context).pushReplacement(
+      AppPageRoute(page: HomePage(service: service)),
+    ).then((_) {}));
   }
 
   Future<void> _loadFriendsInfo(FfiChatService service) async {
@@ -418,180 +494,13 @@ class _StartupGateState extends State<_StartupGate> {
     }
   }
 
-  Future<void> _decide() async {
-    try {
-      // Step 1: Check user information
-      _updateStep(StartupStep.checkingUserInfo);
-      final nick = await Prefs.getNickname();
-      final statusMsg = await Prefs.getStatusMessage();
-      final autoLogin = await Prefs.getAutoLogin();
-      if (!mounted) return;
-
-      // Check if user has registered (has nickname)
-      if (nick == null || nick.trim().isEmpty) {
-        setState(
-            () => _checking = false); // show registration/login (LoginPage)
-        return;
-      }
-
-      // Check auto-login setting
-      if (!autoLogin) {
-        setState(() => _checking = false); // show login page
-        return;
-      }
-
-      // Step 2: Initialize service
-      _updateStep(StartupStep.initializingService);
-
-      // Ensure bootstrap node is configured before service init (for first-time startup)
-      var mode = await Prefs.getBootstrapNodeMode();
-      if (!PlatformUtils.isDesktop && mode == 'lan') {
-        await Prefs.setBootstrapNodeMode('auto');
-        mode = 'auto';
-      }
-      if (mode == 'auto') {
-        final existingNode = await Prefs.getCurrentBootstrapNode();
-        if (existingNode == null) {
-          try {
-            final nodes = await BootstrapNodesService.fetchNodes();
-            if (nodes.isNotEmpty) {
-              final onlineNode = nodes.firstWhere(
-                (node) => node.status == 'ONLINE',
-                orElse: () => nodes.first,
-              );
-              await Prefs.setCurrentBootstrapNode(
-                onlineNode.ipv4,
-                onlineNode.port,
-                onlineNode.publicKey,
-              );
-              AppLogger.log(
-                  '[main.dart] Auto-fetched and saved bootstrap node for first-time startup');
-            }
-          } catch (e) {
-            AppLogger.logError(
-                '[main.dart] Failed to fetch bootstrap node on first startup',
-                e,
-                null);
-          }
-        }
-      }
-
-      Map<String, String>? account;
-      try {
-        account = await Prefs.getUniqueAccountByNickname(nick);
-      } on StateError {
-        // Duplicate nickname: cannot resolve account for auto-login; show login page
-        if (mounted) setState(() => _checking = false);
-        return;
-      }
-      final toxIdForStartup = account?['toxId'];
-
-      FfiChatService service;
-      if (toxIdForStartup != null && toxIdForStartup.isNotEmpty) {
-        // Use AccountService for account initialization (startPolling=false so we control the flow)
-        service = await AccountService.initializeServiceForAccount(
-          toxId: toxIdForStartup,
-          nickname: nick,
-          statusMessage: statusMsg ?? '',
-          startPolling: false,
-        );
-      } else {
-        // Legacy account without toxId
-        final prefs = await SharedPreferences.getInstance();
-        service = FfiChatService(
-          preferencesService: SharedPreferencesAdapter(prefs),
-          loggerService: AppLoggerAdapter(),
-          bootstrapService: BootstrapNodesAdapter(prefs),
-        );
-        await service.init();
-        await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-        await service.updateSelfProfile(
-            nickname: nick, statusMessage: statusMsg ?? '');
-      }
-
-      // Step 3–5: Bootstrap runtime (FakeUIKit, SDK, polling) via coordinator
-      _updateStep(StartupStep.loggingIn);
-      await AppBootstrapCoordinator.boot(service);
-      if (!mounted) return;
-
-      // Step 6: Connect
-      _updateStep(StartupStep.connecting);
-
-      // Check if already connected
-      if (service.isConnected) {
-        if (!mounted) return;
-
-        // Step 7: Load friends information
-        _updateStep(StartupStep.loadingFriends);
-        await _loadFriendsInfo(service);
-
-        if (!mounted) return;
-        _updateStep(StartupStep.completed);
-        // Small delay to show completion state
-        await Future.delayed(const Duration(milliseconds: 500));
-        Navigator.of(context).pushReplacement(
-          AppPageRoute(page: HomePage(service: service)),
-        );
-        return;
-      }
-
-      // Wait for connection with timeout
-      setState(() {
-        _waitingForConnection = true;
-      });
-
-      // Set 20s timeout
-      _timeoutTimer = Timer(const Duration(seconds: 20), () {
-        if (mounted) {
-          _connectionSub?.cancel();
-          _updateStep(StartupStep.completed);
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) {
-              Navigator.of(context).pushReplacement(
-                AppPageRoute(page: HomePage(service: service)),
-              );
-            }
-          });
-        }
-      });
-
-      // Listen for connection status
-      _connectionSub =
-          service.connectionStatusStream.listen((isConnected) async {
-        if (isConnected && mounted && _waitingForConnection) {
-          _timeoutTimer?.cancel();
-          _connectionSub?.cancel();
-
-          // Step 7: Load friends information
-          _updateStep(StartupStep.loadingFriends);
-          await _loadFriendsInfo(service);
-
-          if (!mounted) return;
-          _updateStep(StartupStep.completed);
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) {
-              Navigator.of(context).pushReplacement(
-                AppPageRoute(page: HomePage(service: service)),
-              );
-            }
-          });
-        }
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _checking = false;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_checking || _waitingForConnection) {
       return StartupLoadingScreen(
         currentStep: _currentStep,
         errorMessage: _error,
-        onRetry: _error != null ? _decide : null,
+        onRetry: _error != null ? _runStartup : null,
         onGoToLogin: _error != null
             ? () {
                 Navigator.of(context).pushReplacement(
@@ -605,7 +514,7 @@ class _StartupGateState extends State<_StartupGate> {
       return StartupLoadingScreen(
         currentStep: _currentStep,
         errorMessage: _error,
-        onRetry: _decide,
+        onRetry: _runStartup,
         onGoToLogin: () {
           Navigator.of(context).pushReplacement(
             AppPageRoute(page: const LoginPage()),

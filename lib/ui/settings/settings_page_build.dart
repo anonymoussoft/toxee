@@ -229,7 +229,9 @@ extension _SettingsPageBuild on _SettingsPageState {
                       final account = _accountList[index];
                       final accountToxId = account['toxId'] ?? '';
                       final lastLogin = account['lastLoginTime'];
-                      final isCurrentAccount = compareToxIds(accountToxId, widget.service.selfId);
+                      // Use Prefs current Tox ID; widget.service.selfId is UIKit placeholder (e.g. FlutterUIKitClient)
+                      final currentId = _currentAccountToxId ?? widget.service.selfId;
+                      final isCurrentAccount = compareToxIds(accountToxId, currentId);
                       return _AccountCardItem(
                         account: account,
                         isCurrentAccount: isCurrentAccount,
