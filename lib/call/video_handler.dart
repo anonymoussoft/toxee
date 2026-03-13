@@ -1,9 +1,12 @@
 import 'dart:ui' as ui;
 import 'package:camera/camera.dart';
+import 'package:camera_macos/camera_macos.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tim2tox_dart/service/toxav_service.dart';
+
+import '../util/logger.dart';
 import 'call_video_transform.dart';
 
 class VideoPlaneData {
@@ -175,6 +178,10 @@ class VideoHandler extends ChangeNotifier {
   List<CameraDescription>? _cameras;
   int _cameraIndex = 0;
 
+  /// macOS-only: when using camera_macos (official camera plugin has no macOS impl).
+  bool _usingMacOSCamera = false;
+  int? _macosTextureId;
+
   /// Throttle: skip frames to reduce CPU/bandwidth usage (~15fps max).
   DateTime _lastFrameTime = DateTime.fromMillisecondsSinceEpoch(0);
   static const _minFrameInterval = Duration(milliseconds: 66); // ~15fps
@@ -187,24 +194,85 @@ class VideoHandler extends ChangeNotifier {
 
   /// Whether the local camera preview is ready.
   bool get isLocalPreviewReady =>
-      _controller != null && _controller!.value.isInitialized;
+      (_controller != null && _controller!.value.isInitialized) ||
+      (_usingMacOSCamera && _macosTextureId != null);
 
   /// Start camera capture and send YUV420 frames to ToxAV.
-  /// On platforms where the camera plugin is not implemented (e.g. macOS desktop),
-  /// catches [MissingPluginException], leaves local preview empty but allows
-  /// the call UI and remote video to work.
+  /// On macOS uses [camera_macos] (official camera plugin has no macOS impl);
+  /// that triggers the system camera permission dialog and provides the stream.
   Future<void> startCapture(int friendNumber, ToxAVService avService) async {
     if (_capturing) return;
     _friendNumber = friendNumber;
     _avService = avService;
     _capturing = true;
+
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      try {
+        final devices = await CameraMacOS.instance
+            .listDevices(deviceType: CameraMacOSDeviceType.video);
+        if (devices.isEmpty) {
+          _capturing = false;
+          notifyListeners();
+          debugPrint(
+              '[VideoHandler] startCapture macOS: no video devices. '
+              'Allow Camera in System Settings → Privacy & Security.');
+          AppLogger.log(
+              '[VideoHandler] startCapture macOS: no video devices (check Camera permission)');
+          return;
+        }
+        final deviceId =
+            devices[_cameraIndex % devices.length].deviceId;
+        final args = await CameraMacOS.instance.initialize(
+          deviceId: deviceId,
+          cameraMacOSMode: CameraMacOSMode.video,
+        );
+        if (args == null) {
+          throw StateError('camera_macos initialize returned null');
+        }
+        final textureId = args.textureId;
+        if (textureId == null) {
+          throw StateError('camera_macos initialize returned null textureId');
+        }
+        _macosTextureId = textureId;
+        _usingMacOSCamera = true;
+        notifyListeners();
+        await CameraMacOS.instance.startImageStream(
+          (CameraImageData? data) {
+            if (data != null) _onMacOSCameraImage(data);
+          },
+          onError: (e) {
+            debugPrint('[VideoHandler] macOS image stream error: $e');
+            AppLogger.log('[VideoHandler] macOS image stream error: $e');
+          },
+        );
+        AppLogger.log(
+            '[VideoHandler] macOS capture started (camera_macos stream active)');
+      } catch (e) {
+        _capturing = false;
+        _usingMacOSCamera = false;
+        _macosTextureId = null;
+        notifyListeners();
+        debugPrint('[VideoHandler] startCapture macOS camera_macos error: $e');
+        AppLogger.log('[VideoHandler] startCapture macOS camera_macos error: $e');
+        debugPrint(
+            '[VideoHandler] On macOS: ensure Camera is allowed in '
+            'System Settings → Privacy & Security.');
+        AppLogger.log(
+            '[VideoHandler] On macOS: ensure Camera is allowed in '
+            'System Settings → Privacy & Security.');
+      }
+      return;
+    }
+
     try {
       _cameras ??= await availableCameras();
       if (_cameras == null || _cameras!.isEmpty) {
         _capturing = false;
         notifyListeners();
         debugPrint(
-            '[VideoHandler] startCapture: no cameras available (e.g. desktop)');
+            '[VideoHandler] startCapture: no cameras available. '
+            'On macOS: allow Camera in System Settings → Privacy & Security, '
+            'and close other apps using the camera.');
         return;
       }
       final camera = _cameras![_cameraIndex % _cameras!.length];
@@ -214,24 +282,66 @@ class VideoHandler extends ChangeNotifier {
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
       await _controller!.initialize();
-      notifyListeners(); // Notify UI that local preview is ready
+      notifyListeners();
       await _controller!.startImageStream(_onCameraImage);
+      AppLogger.log('[VideoHandler] capture started (camera stream active)');
     } on MissingPluginException catch (e) {
       _capturing = false;
       notifyListeners();
       debugPrint(
           '[VideoHandler] startCapture: camera plugin not implemented on this '
-          'platform (e.g. macOS), local preview disabled: $e');
+          'platform, local preview disabled: $e');
+      AppLogger.log(
+          '[VideoHandler] startCapture: camera plugin not implemented: $e');
     } catch (e) {
       _capturing = false;
       notifyListeners();
       debugPrint('[VideoHandler] startCapture error: $e');
+      AppLogger.log('[VideoHandler] startCapture error: $e');
+    }
+  }
+
+  /// Handles frames from camera_macos (ARGB8888) on macOS; converts to YUV and sends.
+  void _onMacOSCameraImage(CameraImageData data) {
+    if (!_capturing || _avService == null) return;
+    final now = DateTime.now();
+    if (now.difference(_lastFrameTime) < _minFrameInterval) return;
+    _lastFrameTime = now;
+
+    try {
+      final converted = RgbToYuv420.argb8888ToYuv420(
+        argb: data.bytes,
+        width: data.width,
+        height: data.height,
+        bytesPerRow: data.bytesPerRow,
+      );
+      const quarterTurns = 0;
+      final transformedFrame = I420FrameTransformer.apply(
+        y: converted.y,
+        u: converted.u,
+        v: converted.v,
+        width: data.width,
+        height: data.height,
+        quarterTurns: quarterTurns,
+      );
+      _avService!.sendVideoFrame(
+        _friendNumber,
+        transformedFrame.width,
+        transformedFrame.height,
+        transformedFrame.y,
+        transformedFrame.u,
+        transformedFrame.v,
+        yStride: transformedFrame.width,
+        uStride: transformedFrame.width ~/ 2,
+        vStride: transformedFrame.width ~/ 2,
+      );
+    } catch (e) {
+      debugPrint('[VideoHandler] _onMacOSCameraImage error: $e');
     }
   }
 
   void _onCameraImage(CameraImage image) {
-    if (!_capturing || _avService == null || image.planes.length < 2) return;
-    if (image.format.group != ImageFormatGroup.yuv420) return;
+    if (!_capturing || _avService == null) return;
 
     // Frame rate throttle
     final now = DateTime.now();
@@ -239,20 +349,44 @@ class VideoHandler extends ChangeNotifier {
     _lastFrameTime = now;
 
     try {
-      final planes = image.planes.asMap().entries.map((entry) {
-        final plane = entry.value;
-        final isBiPlanarUv = image.planes.length == 2 && entry.key == 1;
-        return VideoPlaneData(
-          bytes: plane.bytes,
+      NormalizedVideoFrame normalized;
+      final int width = image.width;
+      final int height = image.height;
+
+      if (image.format.group == ImageFormatGroup.bgra8888 &&
+          image.planes.isNotEmpty) {
+        final plane = image.planes[0];
+        final converted = RgbToYuv420.bgra8888ToYuv420(
+          bgra: plane.bytes,
+          width: width,
+          height: height,
           bytesPerRow: plane.bytesPerRow,
-          bytesPerPixel: plane.bytesPerPixel ?? (isBiPlanarUv ? 2 : 1),
         );
-      }).toList();
-      final normalized = VideoFrameNormalizer.normalizeYuv420(
-        width: image.width,
-        height: image.height,
-        planes: planes,
-      );
+        normalized = NormalizedVideoFrame(
+          y: converted.y,
+          u: converted.u,
+          v: converted.v,
+        );
+      } else if (image.format.group == ImageFormatGroup.yuv420 &&
+          image.planes.length >= 2) {
+        final planes = image.planes.asMap().entries.map((entry) {
+          final plane = entry.value;
+          final isBiPlanarUv = image.planes.length == 2 && entry.key == 1;
+          return VideoPlaneData(
+            bytes: plane.bytes,
+            bytesPerRow: plane.bytesPerRow,
+            bytesPerPixel: plane.bytesPerPixel ?? (isBiPlanarUv ? 2 : 1),
+          );
+        }).toList();
+        normalized = VideoFrameNormalizer.normalizeYuv420(
+          width: width,
+          height: height,
+          planes: planes,
+        );
+      } else {
+        return;
+      }
+
       final deviceOrientation =
           _controller?.value.deviceOrientation ?? DeviceOrientation.portraitUp;
       final outgoingTransform = OutgoingVideoTransform.compute(
@@ -264,8 +398,8 @@ class VideoHandler extends ChangeNotifier {
         y: normalized.y,
         u: normalized.u,
         v: normalized.v,
-        width: image.width,
-        height: image.height,
+        width: width,
+        height: height,
         quarterTurns: outgoingTransform.quarterTurns,
       );
       _avService!.sendVideoFrame(
@@ -320,12 +454,23 @@ class VideoHandler extends ChangeNotifier {
 
   /// Local camera preview widget.
   Widget? get localPreview {
+    if (_usingMacOSCamera && _macosTextureId != null) {
+      return Texture(textureId: _macosTextureId!);
+    }
     if (_controller == null || !_controller!.value.isInitialized) return null;
     return CameraPreview(_controller!);
   }
 
   Future<void> stop() async {
     _capturing = false;
+    if (_usingMacOSCamera) {
+      try {
+        await CameraMacOS.instance.stopImageStream();
+        await CameraMacOS.instance.destroy();
+      } catch (_) {}
+      _usingMacOSCamera = false;
+      _macosTextureId = null;
+    }
     try {
       await _controller?.stopImageStream();
       await _controller?.dispose();

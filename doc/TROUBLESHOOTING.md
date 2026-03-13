@@ -184,6 +184,29 @@ for (final msg in failedMessages) {
 }
 ```
 
+#### macOS 音视频通话（语音无采集、视频黑屏）
+
+**症状**: 在 macOS 上语音通话对方听不到本端声音，或视频通话本地/远端黑屏。
+
+**解决方案**:
+
+1. **系统权限**
+   - 打开 **系统设置 → 隐私与安全性 → 麦克风**，确保已允许 toxee 使用麦克风。
+   - 打开 **系统设置 → 隐私与安全性 → 摄像头**，确保已允许 toxee 使用摄像头。
+
+2. **关闭占用设备的应用**
+   - 若其他应用（如浏览器标签、会议软件）正在使用麦克风或摄像头，请关闭后再试。
+
+3. **音频无法采集时**
+   - 确认应用已正确签名并包含沙盒能力：在 Xcode 中检查 Runner target 的 **Signing & Capabilities**，应使用 `Runner/DebugProfile.entitlements`（Debug）或 `Runner/Release.entitlements`（Release），且其中包含 `com.apple.security.device.audio-input`。
+   - 可在终端验证：`codesign -d --entitlements - --xml /path/to/toxee.app 2>/dev/null | grep -A1 audio-input`
+   - 查看控制台或运行日志中是否有 `[AudioHandler]` 相关错误或“all-zero audio”提示。
+
+4. **视频黑屏时**
+   - 确认摄像头权限已授予（见上文）。
+   - 查看日志是否有 `[VideoHandler] startCapture: no cameras available` 或 `[VideoHandler] startCapture error`；若有，说明摄像头未就绪或权限/格式问题。
+   - 确保未在其他应用中独占使用摄像头。
+
 #### Q7: 回调不触发
 
 **症状**: 注册的监听器回调没有被调用

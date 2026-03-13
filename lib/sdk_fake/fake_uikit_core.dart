@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'package:tim2tox_dart/models/chat_message.dart';
@@ -53,7 +54,11 @@ class FakeUIKit {
     };
 
     _started = true;
-    callSystemReady.value = true;
+    // Never set callSystemReady synchronously: ValueListenableBuilder in MaterialApp.builder
+    // would be notified during build (initState -> ensureInitialized -> startWithFfi). Defer.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      callSystemReady.value = true;
+    });
   }
 
   FakeIM? get im => _im;

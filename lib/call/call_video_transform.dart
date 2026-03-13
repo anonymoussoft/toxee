@@ -1,6 +1,83 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 
+/// Converts BGRA8888 (single plane, 4 bytes per pixel) to YUV420 (I420).
+/// Used on macOS where camera_macos may expose image stream as BGRA/ARGB.
+class RgbToYuv420 {
+  RgbToYuv420._();
+
+  /// [bgra] is one plane: B, G, R, A per pixel; [bytesPerRow] defaults to width * 4.
+  static ({Uint8List y, Uint8List u, Uint8List v}) bgra8888ToYuv420({
+    required Uint8List bgra,
+    required int width,
+    required int height,
+    int? bytesPerRow,
+  }) {
+    final stride = bytesPerRow ?? width * 4;
+    final y = Uint8List(width * height);
+    final uvWidth = width ~/ 2;
+    final uvHeight = height ~/ 2;
+    final u = Uint8List(uvWidth * uvHeight);
+    final v = Uint8List(uvWidth * uvHeight);
+
+    for (var row = 0; row < height; row++) {
+      for (var col = 0; col < width; col++) {
+        final i = row * stride + col * 4;
+        if (i + 3 >= bgra.length) break;
+        final b = bgra[i].toDouble();
+        final g = bgra[i + 1].toDouble();
+        final r = bgra[i + 2].toDouble();
+        // BT.601
+        final yVal = (0.299 * r + 0.587 * g + 0.114 * b).round().clamp(0, 255);
+        final cb = (128 - 0.169 * r - 0.331 * g + 0.5 * b).round().clamp(0, 255);
+        final cr = (128 + 0.5 * r - 0.419 * g - 0.081 * b).round().clamp(0, 255);
+        y[row * width + col] = yVal;
+        if (row.isEven && col.isEven) {
+          final uvIndex = (row ~/ 2) * uvWidth + (col ~/ 2);
+          u[uvIndex] = cb;
+          v[uvIndex] = cr;
+        }
+      }
+    }
+    return (y: y, u: u, v: v);
+  }
+
+  /// [argb] is one plane: A, R, G, B per pixel (e.g. camera_macos stream).
+  static ({Uint8List y, Uint8List u, Uint8List v}) argb8888ToYuv420({
+    required Uint8List argb,
+    required int width,
+    required int height,
+    int? bytesPerRow,
+  }) {
+    final stride = bytesPerRow ?? width * 4;
+    final y = Uint8List(width * height);
+    final uvWidth = width ~/ 2;
+    final uvHeight = height ~/ 2;
+    final u = Uint8List(uvWidth * uvHeight);
+    final v = Uint8List(uvWidth * uvHeight);
+
+    for (var row = 0; row < height; row++) {
+      for (var col = 0; col < width; col++) {
+        final i = row * stride + col * 4;
+        if (i + 3 >= argb.length) break;
+        final r = argb[i + 1].toDouble();
+        final g = argb[i + 2].toDouble();
+        final b = argb[i + 3].toDouble();
+        final yVal = (0.299 * r + 0.587 * g + 0.114 * b).round().clamp(0, 255);
+        final cb = (128 - 0.169 * r - 0.331 * g + 0.5 * b).round().clamp(0, 255);
+        final cr = (128 + 0.5 * r - 0.419 * g - 0.081 * b).round().clamp(0, 255);
+        y[row * width + col] = yVal;
+        if (row.isEven && col.isEven) {
+          final uvIndex = (row ~/ 2) * uvWidth + (col ~/ 2);
+          u[uvIndex] = cb;
+          v[uvIndex] = cr;
+        }
+      }
+    }
+    return (y: y, u: u, v: v);
+  }
+}
+
 class TransformedI420Frame {
   final Uint8List y;
   final Uint8List u;

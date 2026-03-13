@@ -472,72 +472,108 @@ class _SettingsPageState extends State<SettingsPage> {
 
       // Import account data (will check encryption and prompt for password if needed)
       Map<String, dynamic> accountData;
-      try {
-        if (isZip) {
+
+      if (isZip) {
+        // ZIP: check account collision before any disk writes (importFullBackup writes profile/history/avatars/prefs).
+        final metadata = await AccountExportService.readFullBackupMetadata(filePath);
+        final metaToxId = metadata['toxId']!;
+        final existingAccount = await Prefs.getAccountByToxId(metaToxId);
+        final profileDir = await AppPaths.getProfileDirectoryForToxId(metaToxId);
+        final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
+        if (existingAccount != null || await File(profileFilePath).exists()) {
+          if (mounted) {
+            await showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(AppLocalizations.of(context)!.importAccount),
+                content: Text(AppLocalizations.of(context)!.accountAlreadyExists),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(AppLocalizations.of(context)!.ok),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
+        }
+        try {
           accountData = await AccountExportService.importFullBackup(
             filePath: filePath,
             password: password,
           );
-        } else {
-          accountData = await AccountExportService.importAccountData(
-            filePath: filePath,
-            password: password,
-          );
-        }
-      } catch (e) {
-        // If error mentions password, prompt for it
-        if (e.toString().contains('Password required') || e.toString().contains('password')) {
-          if (mounted) {
-            password = await _showConfirmPasswordDialog(
-              AppLocalizations.of(context)!.enterPasswordToImport
-            );
-            if (password == null) return;
-            
-            // Retry with password
-            if (isZip) {
+        } catch (e) {
+          if (e.toString().contains('Password required') || e.toString().contains('password')) {
+            if (mounted) {
+              password = await _showConfirmPasswordDialog(
+                AppLocalizations.of(context)!.enterPasswordToImport
+              );
+              if (password == null) return;
               accountData = await AccountExportService.importFullBackup(
                 filePath: filePath,
                 password: password,
               );
             } else {
-              accountData = await AccountExportService.importAccountData(
-                filePath: filePath,
-                password: password,
-              );
+              rethrow;
             }
           } else {
             rethrow;
           }
-        } else {
-          rethrow;
+        }
+      } else {
+        try {
+          accountData = await AccountExportService.importAccountData(
+            filePath: filePath,
+            password: password,
+          );
+        } catch (e) {
+          if (e.toString().contains('Password required') || e.toString().contains('password')) {
+            if (mounted) {
+              password = await _showConfirmPasswordDialog(
+                AppLocalizations.of(context)!.enterPasswordToImport
+              );
+              if (password == null) return;
+              accountData = await AccountExportService.importAccountData(
+                filePath: filePath,
+                password: password,
+              );
+            } else {
+              rethrow;
+            }
+          } else {
+            rethrow;
+          }
         }
       }
 
       final toxId = accountData['toxId'] as String;
       final toxProfile = accountData['toxProfile'] as Uint8List?;
       final importedNickname = (accountData['nickname'] as String?) ?? '';
-
-      final existingAccount = await Prefs.getAccountByToxId(toxId);
       final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
-      // Target path for tox_profile.tox: profiles/p_<toxIdFirst16>/tox_profile.tox
       final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
-      if (existingAccount != null || await File(profileFilePath).exists()) {
-        if (mounted) {
-          await showDialog<void>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text(AppLocalizations.of(context)!.importAccount),
-              content: Text(AppLocalizations.of(context)!.accountAlreadyExists),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(AppLocalizations.of(context)!.ok),
-                ),
-              ],
-            ),
-          );
+
+      // Collision check for .tox path only (ZIP already checked above)
+      if (!isZip) {
+        final existingAccount = await Prefs.getAccountByToxId(toxId);
+        if (existingAccount != null || await File(profileFilePath).exists()) {
+          if (mounted) {
+            await showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(AppLocalizations.of(context)!.importAccount),
+                content: Text(AppLocalizations.of(context)!.accountAlreadyExists),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(AppLocalizations.of(context)!.ok),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
         }
-        return;
       }
 
       // For .tox imports, write profile; .zip imports already wrote it in importFullBackup
