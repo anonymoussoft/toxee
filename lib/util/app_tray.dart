@@ -27,7 +27,7 @@ class AppTray with TrayListener {
     if (_initialized || !isSupported) return;
     _initialized = true;
     trayManager.addListener(this);
-    await trayManager.setToolTip('toxee');
+    await trayManager.setToolTip('Toxee');
     await update(count: 0, online: false);
   }
 
@@ -57,7 +57,7 @@ class AppTray with TrayListener {
       await _setTrayIcon(bytes);
     }
     
-    final tooltip = normalized > 0 ? 'Unread: $normalized' : 'toxee';
+    final tooltip = normalized > 0 ? 'Unread: $normalized' : 'Toxee';
     await trayManager.setToolTip(tooltip);
     _lastCount = normalized;
     _lastOnline = online;

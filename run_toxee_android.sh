@@ -361,7 +361,7 @@ launch_android_app() {
 # ============================================================
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║  toxee — Android Mobile/Tablet       ║${NC}"
+echo -e "${CYAN}║  Toxee — Android Mobile/Tablet       ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
 
 preflight_checks

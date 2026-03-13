@@ -21,9 +21,9 @@ BUILD_DIR="$SCRIPT_DIR/build"
 CLIENT_LOG="$BUILD_DIR/flutter_client.log"
 NATIVE_BUILD_LOG="$BUILD_DIR/native_build.log"
 FLUTTER_BUILD_LOG="$BUILD_DIR/flutter_build.log"
-APP_BUNDLE="$FLUTTER_APP_DIR/build/macos/Build/Products/Debug/toxee.app"
+APP_BUNDLE="$FLUTTER_APP_DIR/build/macos/Build/Products/Debug/Toxee.app"
 APP_EXE_DIR="$APP_BUNDLE/Contents/MacOS"
-APP_EXECUTABLE="$APP_EXE_DIR/toxee"
+APP_EXECUTABLE="$APP_EXE_DIR/Toxee"
 APP_SUPPORT_LOG="$HOME/Library/Containers/com.example.toxee/Data/Library/Application Support/com.example.toxee/flutter_client.log"
 
 mkdir -p "$BUILD_DIR"
@@ -272,7 +272,7 @@ launch_app() {
 
   # Bring window to front
   sleep 1
-  osascript -e 'tell application "System Events" to set frontmost of process "toxee" to true' >/dev/null 2>&1 || true
+  osascript -e 'tell application "System Events" to set frontmost of process "Toxee" to true' >/dev/null 2>&1 || true
 
   # Start tailing log
   local tail_log="$CLIENT_LOG"
@@ -314,7 +314,7 @@ if ! command -v flutter >/dev/null 2>&1; then
 fi
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║  toxee — DEBUG Build                 ║${NC}"
+echo -e "${CYAN}║  Toxee — DEBUG Build                 ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
 

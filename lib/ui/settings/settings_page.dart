@@ -445,15 +445,16 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _importAccount() async {
     try {
-      // Show file picker for .tox files
+      // Show file picker for .tox and .zip files
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['tox'],
+        allowedExtensions: ['tox', 'zip'],
       );
 
       if (result == null || result.files.single.path == null) return;
 
       final filePath = result.files.single.path!;
+      final isZip = filePath.toLowerCase().endsWith('.zip');
 
       // Check if file is encrypted by reading first bytes and checking magic number
       String? password;
@@ -462,7 +463,7 @@ class _SettingsPageState extends State<SettingsPage> {
         final fileData = await file.readAsBytes();
         if (fileData.length >= 80) {
           // Import will check encryption, but we need to prompt for password first if encrypted
-          // For now, we'll let importAccountData handle the encryption check
+          // For now, we'll let importAccountData/importFullBackup handle the encryption check
           // If it throws an error about password, we'll catch and prompt
         }
       } catch (e) {
@@ -472,10 +473,17 @@ class _SettingsPageState extends State<SettingsPage> {
       // Import account data (will check encryption and prompt for password if needed)
       Map<String, dynamic> accountData;
       try {
-        accountData = await AccountExportService.importAccountData(
-          filePath: filePath,
-          password: password,
-        );
+        if (isZip) {
+          accountData = await AccountExportService.importFullBackup(
+            filePath: filePath,
+            password: password,
+          );
+        } else {
+          accountData = await AccountExportService.importAccountData(
+            filePath: filePath,
+            password: password,
+          );
+        }
       } catch (e) {
         // If error mentions password, prompt for it
         if (e.toString().contains('Password required') || e.toString().contains('password')) {
@@ -486,10 +494,17 @@ class _SettingsPageState extends State<SettingsPage> {
             if (password == null) return;
             
             // Retry with password
-            accountData = await AccountExportService.importAccountData(
-              filePath: filePath,
-              password: password,
-            );
+            if (isZip) {
+              accountData = await AccountExportService.importFullBackup(
+                filePath: filePath,
+                password: password,
+              );
+            } else {
+              accountData = await AccountExportService.importAccountData(
+                filePath: filePath,
+                password: password,
+              );
+            }
           } else {
             rethrow;
           }
@@ -499,7 +514,8 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       final toxId = accountData['toxId'] as String;
-      final toxProfile = accountData['toxProfile'] as Uint8List;
+      final toxProfile = accountData['toxProfile'] as Uint8List?;
+      final importedNickname = (accountData['nickname'] as String?) ?? '';
 
       final existingAccount = await Prefs.getAccountByToxId(toxId);
       final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
@@ -524,17 +540,23 @@ class _SettingsPageState extends State<SettingsPage> {
         return;
       }
 
-      final parentDir = Directory(profileDir);
-      if (!await parentDir.exists()) {
-        await parentDir.create(recursive: true);
+      // For .tox imports, write profile; .zip imports already wrote it in importFullBackup
+      if (!isZip && toxProfile != null) {
+        final parentDir = Directory(profileDir);
+        if (!await parentDir.exists()) {
+          await parentDir.create(recursive: true);
+        }
+        final toxProfileFile = File(profileFilePath);
+        await toxProfileFile.writeAsBytes(toxProfile);
       }
-      final toxProfileFile = File(profileFilePath);
-      await toxProfileFile.writeAsBytes(toxProfile);
 
-      // Add/update account (use default values for .tox format which doesn't contain metadata)
+      // Add/update account (.zip may contain nickname, .tox does not)
+      final displayNickname = importedNickname.isNotEmpty
+          ? importedNickname
+          : AppLocalizations.of(context)!.importedAccount;
       await Prefs.addAccount(
         toxId: toxId,
-        nickname: 'Imported Account', // .tox files don't contain nickname
+        nickname: displayNickname,
         statusMessage: '', // .tox files don't contain status message
         autoLogin: false,
         autoAcceptFriends: false,

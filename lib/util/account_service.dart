@@ -3,12 +3,12 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
-import 'package:tim2tox_dart/sdk/tim2tox_sdk_platform.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_method_channel.dart';
+
+import '../runtime/session_runtime_coordinator.dart';
 import 'package:tencent_cloud_chat_common/external/chat_data_provider.dart';
 import 'package:tencent_cloud_chat_common/external/chat_message_provider.dart';
-import '../sdk_fake/fake_uikit_core.dart';
 import '../adapters/shared_prefs_adapter.dart';
 import '../adapters/logger_adapter.dart';
 import '../adapters/bootstrap_adapter.dart';
@@ -85,15 +85,8 @@ class AccountService {
     final sessionPassword =
         toxId.isNotEmpty ? SessionPasswordStore.get(toxId) : null;
 
-    // 1. Dispose FakeUIKit first (CallBridgeService needs the platform for removeSignalingListener)
-    FakeUIKit.instance.dispose();
-
-    // 2. Dispose SDK platform (after FakeUIKit so CallBridgeService can clean up signaling listeners)
-    final platform = TencentCloudChatSdkPlatform.instance;
-    if (platform is Tim2ToxSdkPlatform) {
-      platform.dispose();
-      TencentCloudChatSdkPlatform.instance = MethodChannelTencentCloudChatSdk();
-    }
+    // 1 & 2. Dispose session runtime (FakeUIKit + platform)
+    await SessionRuntimeCoordinator.disposeRuntime();
 
     // 3. Clear provider registries
     ChatDataProviderRegistry.provider = null;

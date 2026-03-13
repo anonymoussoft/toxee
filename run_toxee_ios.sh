@@ -408,7 +408,7 @@ run_ios_simulator_app() {
   echo ""
   echo -e "${GREEN}Tailing iOS simulator logs (Ctrl+C to stop)...${NC}"
   xcrun simctl spawn "$SELECTED_SIMULATOR_ID" log stream --style compact \
-    --predicate 'process == "Runner" OR process == "toxee"'
+    --predicate 'process == "Runner" OR process == "Toxee"'
 }
 
 # ============================================================
@@ -416,7 +416,7 @@ run_ios_simulator_app() {
 # ============================================================
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║  toxee — iOS Mobile/Tablet Simulator  ║${NC}"
+echo -e "${CYAN}║  Toxee — iOS Mobile/Tablet Simulator  ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
 
 preflight_checks
