@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PARENT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-TIM2TOX_DIR="$PARENT_DIR/tim2tox"
+TIM2TOX_DIR="$SCRIPT_DIR/third_party/tim2tox"
 TIM2TOX_BUILD_DIR="$TIM2TOX_DIR/build"
 TIM2TOX_EXAMPLE_BUILD_DIR="$TIM2TOX_DIR/example/build"
 FFI_LIB="$TIM2TOX_BUILD_DIR/ffi/libtim2tox_ffi.dylib"
@@ -27,6 +27,9 @@ APP_EXECUTABLE="$APP_EXE_DIR/Toxee"
 APP_SUPPORT_LOG="$HOME/Library/Containers/com.example.toxee/Data/Library/Application Support/com.example.toxee/flutter_client.log"
 
 mkdir -p "$BUILD_DIR"
+
+# Bootstrap dependencies so pubspec_overrides and third_party are ready
+(cd "$FLUTTER_APP_DIR" && dart run tool/bootstrap_deps.dart) >> "$BUILD_DIR/bootstrap.log" 2>&1 || true
 
 # Process IDs
 APP_PID=""

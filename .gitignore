@@ -45,3 +45,8 @@ app.*.map.json
 /android/app/release
 /android/build/
 /toxee/
+
+# Bootstrap-generated dependency layout (see doc/DEPENDENCY_LAYOUT.md)
+third_party/tencent_cloud_chat_sdk/
+pubspec_overrides.yaml
+tool/vendor_state.json

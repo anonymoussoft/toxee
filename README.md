@@ -2,6 +2,17 @@
 
 toxee 是一个集成 Tim2Tox 的示例 Flutter 聊天客户端应用。当前实现运行在“二进制替换 + Platform/FfiChatService 并存”的混合架构上，用于承接 Tencent Cloud Chat UIKit 的消息、会话、账号、Bootstrap 与通话能力。
 
+## 入门流程 / Entry flow
+
+从零克隆后，按以下顺序即可完成依赖与构建：
+
+1. `git clone <toxee-repo>`
+2. `dart run tool/bootstrap_deps.dart` — 初始化 submodule、拉取并打补丁 SDK、生成 `pubspec_overrides.yaml`
+3. `flutter pub get`
+4. 构建（例如 `./build_all.sh --platform macos --mode debug`）
+
+依赖布局与引导顺序见 [doc/DEPENDENCY_LAYOUT.md](doc/DEPENDENCY_LAYOUT.md)、[doc/DEPENDENCY_BOOTSTRAP.md](doc/DEPENDENCY_BOOTSTRAP.md)。
+
 ## 文档 / Documentation
 
 - 中文文档索引：[doc/README.md](doc/README.md)

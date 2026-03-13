@@ -17,6 +17,9 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
+      - name: Bootstrap dependencies
+        run: dart run tool/bootstrap_deps.dart
+
       - name: Install dependencies
         run: flutter pub get
 
