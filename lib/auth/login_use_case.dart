@@ -1,13 +1,11 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
-import 'package:tencent_cloud_chat_sdk/native_im/adapter/tim_manager.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
 import '../adapters/bootstrap_adapter.dart';
 import '../adapters/logger_adapter.dart';
 import '../adapters/shared_prefs_adapter.dart';
+import '../runtime/tim_sdk_initializer.dart';
 import '../util/account_service.dart';
-import '../util/logger.dart';
 import '../util/prefs.dart';
 
 /// Input parameters for [LoginUseCase.execute].
@@ -45,7 +43,7 @@ class LoginUseCase {
       throw Exception('Nickname cannot be empty');
     }
 
-    final account = await Prefs.getAccountByNickname(nickname);
+    final account = await Prefs.getUniqueAccountByNickname(nickname);
     if (account == null) {
       final savedNickname = await Prefs.getNickname();
       if (savedNickname == null || savedNickname.trim().isEmpty) {
@@ -77,7 +75,7 @@ class LoginUseCase {
         password: params.password,
       );
 
-      await _initTIMManagerSDK();
+      await TimSdkInitializer.ensureInitialized();
 
       await Prefs.setNickname(nickname);
       await Prefs.setStatusMessage(statusMessage);
@@ -102,7 +100,7 @@ class LoginUseCase {
     );
     await service.init();
     await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-    await _initTIMManagerSDK();
+    await TimSdkInitializer.ensureInitialized();
 
     final toxId = service.selfId;
     await Prefs.setNickname(nickname);
@@ -117,30 +115,5 @@ class LoginUseCase {
     await service.startPolling();
 
     return LoginSuccess(service: service);
-  }
-
-  static Future<void> _initTIMManagerSDK() async {
-    try {
-      if (TIMManager.instance.isInitSDK()) {
-        AppLogger.log('[LoginUseCase] TIMManager SDK already initialized');
-        return;
-      }
-      AppLogger.log('[LoginUseCase] Initializing TIMManager SDK...');
-      final result = await TIMManager.instance.initSDK(
-        sdkAppID: 0,
-        logLevel: LogLevelEnum.V2TIM_LOG_INFO,
-        uiPlatform: 0,
-      );
-      if (result) {
-        AppLogger.log(
-          '[LoginUseCase] TIMManager SDK initialized, _isInitSDK=${TIMManager.instance.isInitSDK()}',
-        );
-      } else {
-        throw Exception('Failed to initialize TIMManager SDK');
-      }
-    } catch (e, stackTrace) {
-      AppLogger.logError('[LoginUseCase] TIMManager SDK init error: $e', e, stackTrace);
-      rethrow;
-    }
   }
 }

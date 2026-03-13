@@ -152,83 +152,83 @@ class AccountService {
     String? password,
     bool startPolling = true,
   }) async {
-    // 1. Set current account
-    await Prefs.setCurrentAccountToxId(toxId);
-
-    // 1.5. Run per-account schema migrations
+    final previousAccount = await Prefs.getCurrentAccountToxId();
+    FfiChatService? service;
     final accountPrefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
     final migrPrefs = await SharedPreferences.getInstance();
-    await PrefsUpgrader.runAccountMigrations(migrPrefs, accountPrefix);
 
-    // 2. Migrate legacy data (file-level)
-    await AppPaths.migrateAccountDataFromLegacy(toxId);
+    try {
+      await PrefsUpgrader.runAccountMigrations(migrPrefs, accountPrefix);
 
-    // 3. Resolve per-account data paths
-    final historyDirectory = await AppPaths.getAccountChatHistoryPath(toxId);
-    final queueFilePath =
-        await AppPaths.getAccountOfflineQueueFilePath(toxId);
-    final fileRecvPath = await AppPaths.getAccountFileRecvPath(toxId);
-    final avatarsPath = await AppPaths.getAccountAvatarsPath(toxId);
-    await Directory(historyDirectory).create(recursive: true);
-    await Directory(avatarsPath).create(recursive: true);
+      await AppPaths.migrateAccountDataFromLegacy(toxId);
 
-    // 4. Resolve profile directory and ensure profile exists
-    final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
-    final profileFile = AppPaths.profileFileInDirectory(profileDir);
-    if (!await File(profileFile).exists()) {
-      // Try legacy migration
-      final legacyDir = await AppPaths.toxProfileDir;
-      final legacyPath = p.join(legacyDir.path, 'tox_profile.tox');
-      if (await File(legacyPath).exists()) {
-        await Directory(profileDir).create(recursive: true);
-        await File(legacyPath).copy(profileFile);
-        AppLogger.log(
-            '[AccountService] Migrated profile from legacy to $profileDir');
-      } else {
-        throw Exception('Profile not found for account');
+      final historyDirectory = await AppPaths.getAccountChatHistoryPath(toxId);
+      final queueFilePath =
+          await AppPaths.getAccountOfflineQueueFilePath(toxId);
+      final fileRecvPath = await AppPaths.getAccountFileRecvPath(toxId);
+      final avatarsPath = await AppPaths.getAccountAvatarsPath(toxId);
+      await Directory(historyDirectory).create(recursive: true);
+      await Directory(avatarsPath).create(recursive: true);
+
+      final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
+      final profileFile = AppPaths.profileFileInDirectory(profileDir);
+      if (!await File(profileFile).exists()) {
+        final legacyDir = await AppPaths.toxProfileDir;
+        final legacyPath = p.join(legacyDir.path, 'tox_profile.tox');
+        if (await File(legacyPath).exists()) {
+          await Directory(profileDir).create(recursive: true);
+          await File(legacyPath).copy(profileFile);
+          AppLogger.log(
+              '[AccountService] Migrated profile from legacy to $profileDir');
+        } else {
+          throw Exception('Profile not found for account');
+        }
       }
-    }
 
-    // 5. Decrypt profile if password provided
-    if (password != null && password.isNotEmpty) {
-      final isEncrypted =
-          await AccountExportService.isProfileFileEncrypted(profileFile);
-      if (isEncrypted) {
-        await AccountExportService.decryptProfileFile(profileFile, password);
+      if (password != null && password.isNotEmpty) {
+        final isEncrypted =
+            await AccountExportService.isProfileFileEncrypted(profileFile);
+        if (isEncrypted) {
+          await AccountExportService.decryptProfileFile(profileFile, password);
+        }
+        SessionPasswordStore.set(toxId, password);
       }
-      SessionPasswordStore.set(toxId, password);
-    }
 
-    // 6. Create FfiChatService
-    final prefs = await SharedPreferences.getInstance();
-    final service = FfiChatService(
-      preferencesService: SharedPreferencesAdapter(prefs, accountPrefix: accountPrefix),
-      loggerService: AppLoggerAdapter(),
-      bootstrapService: BootstrapNodesAdapter(prefs),
-      historyDirectory: historyDirectory,
-      queueFilePath: queueFilePath,
-      fileRecvPath: fileRecvPath,
-      avatarsPath: avatarsPath,
-    );
-
-    // 7. Init and login
-    await service.init(profileDirectory: profileDir);
-    await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-
-    // 8. Update profile
-    if (nickname != null) {
-      await service.updateSelfProfile(
-        nickname: nickname,
-        statusMessage: statusMessage ?? '',
+      final prefs = await SharedPreferences.getInstance();
+      service = FfiChatService(
+        preferencesService: SharedPreferencesAdapter(prefs, accountPrefix: accountPrefix),
+        loggerService: AppLoggerAdapter(),
+        bootstrapService: BootstrapNodesAdapter(prefs),
+        historyDirectory: historyDirectory,
+        queueFilePath: queueFilePath,
+        fileRecvPath: fileRecvPath,
+        avatarsPath: avatarsPath,
       );
-    }
 
-    // 9. Start polling
-    if (startPolling) {
-      await service.startPolling();
-    }
+      await service.init(profileDirectory: profileDir);
+      await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
 
-    return service;
+      if (nickname != null) {
+        await service.updateSelfProfile(
+          nickname: nickname,
+          statusMessage: statusMessage ?? '',
+        );
+      }
+
+      if (startPolling) {
+        await service.startPolling();
+      }
+
+      await Prefs.setCurrentAccountToxId(toxId);
+      return service;
+    } catch (e) {
+      await service?.dispose();
+      await Prefs.setCurrentAccountToxId(previousAccount);
+      if (password != null && password.isNotEmpty) {
+        SessionPasswordStore.clear(toxId);
+      }
+      rethrow;
+    }
   }
 
   // ---------------------------------------------------------------------------
