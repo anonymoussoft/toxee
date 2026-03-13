@@ -24,12 +24,14 @@ class SessionRuntimeCoordinator {
   static SessionRuntimeState get state => _state;
 
   /// Initializes session runtime if not already started. Idempotent.
+  /// After [disposeRuntime] (e.g. logout/account switch), calling this again
+  /// re-initializes the runtime for the new session.
   Future<void> ensureInitialized() async {
     if (_state == SessionRuntimeState.started) return;
     if (_state == SessionRuntimeState.starting) return;
+    // Allow re-initialization after dispose (post-logout / account-switch).
     if (_state == SessionRuntimeState.disposed) {
-      AppLogger.warn('[SessionRuntimeCoordinator] ensureInitialized called after dispose, skipping');
-      return;
+      AppLogger.debug('[SessionRuntimeCoordinator] Re-initializing after teardown');
     }
 
     _state = SessionRuntimeState.starting;
@@ -67,6 +69,8 @@ class SessionRuntimeCoordinator {
     }
 
     _state = SessionRuntimeState.started;
+    // callSystemReady is set by FakeUIKit.startWithFfi() via addPostFrameCallback to avoid
+    // "setState() or markNeedsBuild() called during build".
   }
 
   /// Call on session teardown (e.g. logout). Resets runtime state.

@@ -184,6 +184,29 @@ for (final msg in failedMessages) {
 }
 ```
 
+#### macOS voice/video calls (no audio capture, black video)
+
+**Symptoms**: On macOS, the other party cannot hear you on voice calls, or video calls show a black screen locally or remotely.
+
+**Solution**:
+
+1. **System permissions**
+   - Open **System Settings → Privacy & Security → Microphone** and ensure toxee is allowed.
+   - Open **System Settings → Privacy & Security → Camera** and ensure toxee is allowed.
+
+2. **Close apps using the device**
+   - If another app (e.g. a browser tab, meeting software) is using the microphone or camera, close it and try again.
+
+3. **When audio is not captured**
+   - Ensure the app is signed with the correct entitlements: In Xcode, check the Runner target's **Signing & Capabilities** uses `Runner/DebugProfile.entitlements` (Debug) or `Runner/Release.entitlements` (Release), and that `com.apple.security.device.audio-input` is present.
+   - You can verify from the terminal: `codesign -d --entitlements - --xml /path/to/toxee.app 2>/dev/null | grep -A1 audio-input`
+   - Check the console or run logs for any `[AudioHandler]` errors or "all-zero audio" messages.
+
+4. **When video is black**
+   - Confirm camera permission is granted (see above).
+   - Check logs for `[VideoHandler] startCapture: no cameras available` or `[VideoHandler] startCapture error`; if present, the camera is not ready or there is a permission/format issue.
+   - Ensure the camera is not exclusively used by another app.
+
 #### Q7: Callback does not trigger
 
 **Symptom**: The registered listener callback is not called

@@ -345,37 +345,66 @@ class _LoginPageState extends State<LoginPage> {
 
       String? password;
       Map<String, dynamic> accountData;
-      try {
-        // Use full backup import for .zip files, legacy import for .tox
-        if (isZip) {
+
+      if (isZip) {
+        // ZIP: check account collision before any disk writes (importFullBackup writes profile/history/avatars/prefs).
+        final metadata = await AccountExportService.readFullBackupMetadata(filePath);
+        final toxId = metadata['toxId']!;
+        final existingAccount = await Prefs.getAccountByToxId(toxId);
+        if (existingAccount != null) {
+          if (mounted) {
+            setState(() {
+              _error = AppLocalizations.of(context)!.accountAlreadyExists;
+            });
+          }
+          return;
+        }
+        final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
+        final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
+        if (await File(profileFilePath).exists()) {
+          if (mounted) {
+            setState(() {
+              _error = AppLocalizations.of(context)!.accountAlreadyExists;
+            });
+          }
+          return;
+        }
+        try {
           accountData = await AccountExportService.importFullBackup(
             filePath: filePath,
             password: password,
           );
-        } else {
-          accountData = await AccountExportService.importAccountData(
-            filePath: filePath,
-            password: password,
-          );
-        }
-      } catch (e) {
-        if (e.toString().contains('Password required') || e.toString().contains('password')) {
-          if (!mounted) return;
-          password = await _showConfirmPasswordDialog(AppLocalizations.of(context)!.enterPasswordToImport);
-          if (password == null) return;
-          if (isZip) {
+        } catch (e) {
+          if (e.toString().contains('Password required') || e.toString().contains('password')) {
+            if (!mounted) return;
+            password = await _showConfirmPasswordDialog(AppLocalizations.of(context)!.enterPasswordToImport);
+            if (password == null) return;
             accountData = await AccountExportService.importFullBackup(
               filePath: filePath,
               password: password,
             );
           } else {
+            rethrow;
+          }
+        }
+      } else {
+        try {
+          accountData = await AccountExportService.importAccountData(
+            filePath: filePath,
+            password: password,
+          );
+        } catch (e) {
+          if (e.toString().contains('Password required') || e.toString().contains('password')) {
+            if (!mounted) return;
+            password = await _showConfirmPasswordDialog(AppLocalizations.of(context)!.enterPasswordToImport);
+            if (password == null) return;
             accountData = await AccountExportService.importAccountData(
               filePath: filePath,
               password: password,
             );
+          } else {
+            rethrow;
           }
-        } else {
-          rethrow;
         }
       }
 
@@ -383,15 +412,17 @@ class _LoginPageState extends State<LoginPage> {
       final toxProfile = accountData['toxProfile'] as Uint8List?;
       final importedNickname = (accountData['nickname'] as String?) ?? '';
 
-      // Check for existing account
-      final existingAccount = await Prefs.getAccountByToxId(toxId);
-      if (existingAccount != null) {
-        if (mounted) {
-          setState(() {
-            _error = AppLocalizations.of(context)!.accountAlreadyExists;
-          });
+      // Check for existing account (.tox path only; ZIP already checked above)
+      if (!isZip) {
+        final existingAccount = await Prefs.getAccountByToxId(toxId);
+        if (existingAccount != null) {
+          if (mounted) {
+            setState(() {
+              _error = AppLocalizations.of(context)!.accountAlreadyExists;
+            });
+          }
+          return;
         }
-        return;
       }
 
       // For .tox imports, write the profile manually (zip imports already wrote it)

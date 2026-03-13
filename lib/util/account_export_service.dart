@@ -633,12 +633,79 @@ class AccountExportService {
     return finalFilePath;
   }
 
+  /// Reads toxId and nickname from a .zip backup without writing to disk.
+  /// Use this to check account collisions before calling [importFullBackup].
+  /// Throws if file is not a valid zip or toxId cannot be determined.
+  static Future<Map<String, String>> readFullBackupMetadata(String filePath) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw Exception('File not found: $filePath');
+    }
+    final ext = p.extension(filePath).toLowerCase();
+    if (ext != '.zip') {
+      throw Exception('Not a .zip file: $filePath');
+    }
+    final fileData = await file.readAsBytes();
+    if (fileData.isEmpty) {
+      throw Exception('File is empty');
+    }
+    final archive = ZipDecoder().decodeBytes(fileData);
+
+    String? toxId;
+    String nickname = '';
+
+    final metadataFile = archive.findFile('metadata.json');
+    if (metadataFile != null) {
+      final metadataJson = utf8.decode(metadataFile.content as List<int>);
+      final metadata = json.decode(metadataJson) as Map<String, dynamic>;
+      toxId = metadata['toxId'] as String?;
+      nickname = metadata['nickname'] as String? ?? '';
+    }
+
+    final profileFile = archive.findFile('tox_profile.tox');
+    if (profileFile != null && (toxId == null || toxId.isEmpty)) {
+      final toxProfile = Uint8List.fromList(profileFile.content as List<int>);
+      try {
+        final ffiLib = Tim2ToxFfi.open();
+        final profilePtr = pkgffi.malloc<ffi.Uint8>(toxProfile.length);
+        final toxIdBuffer = pkgffi.malloc<ffi.Int8>(128);
+        try {
+          profilePtr.asTypedList(toxProfile.length).setAll(0, toxProfile);
+          final toxIdLen = ffiLib.extractToxIdFromProfileNative(
+            profilePtr,
+            toxProfile.length,
+            ffi.Pointer<ffi.Uint8>.fromAddress(0),
+            0,
+            toxIdBuffer,
+            128,
+          );
+          if (toxIdLen > 0) {
+            toxId = toxIdBuffer
+                .cast<pkgffi.Utf8>()
+                .toDartString(length: toxIdLen);
+          }
+        } finally {
+          pkgffi.malloc.free(profilePtr);
+          pkgffi.malloc.free(toxIdBuffer);
+        }
+      } catch (e) {
+        AppLogger.logError('readFullBackupMetadata: Error extracting toxId', e, null);
+      }
+    }
+
+    if (toxId == null || toxId.isEmpty) {
+      throw Exception('Could not determine Tox ID from backup');
+    }
+    return {'toxId': toxId, 'nickname': nickname};
+  }
+
   /// Import a full backup from a .zip file.
   ///
   /// Detects format: .tox files use the legacy [importAccountData] path;
   /// .zip files are extracted and all components are restored.
   ///
   /// Returns a map with 'toxId', 'nickname', and optionally 'toxProfile'.
+  /// Call [readFullBackupMetadata] first and check for account collision before calling this.
   static Future<Map<String, dynamic>> importFullBackup({
     required String filePath,
     String? password,

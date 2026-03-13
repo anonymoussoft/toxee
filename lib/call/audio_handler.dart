@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_pcm_sound/flutter_pcm_sound.dart' as pcm_sound;
 import 'package:record/record.dart';
 import 'package:tim2tox_dart/service/toxav_service.dart';
+
+import '../util/logger.dart';
 
 /// Captures microphone PCM and feeds to ToxAV; plays received PCM from ToxAV.
 /// Uses 48000 Hz, mono, 16-bit PCM; 960 samples (20 ms) per frame.
@@ -29,6 +32,7 @@ class AudioHandler {
   ToxAVService? _avService;
   int _friendNumber = 0;
   bool _capturing = false;
+  bool _zeroDataWarningLogged = false;
 
   /// Playback: buffer of received PCM samples (int16), fed to FlutterPcmSound.
   final List<int> _playBuffer = [];
@@ -36,13 +40,28 @@ class AudioHandler {
   static const int _maxPlayBufferSamples = sampleRate * 2; // ~2 seconds
 
   /// Start capturing from microphone and sending to ToxAV.
+  /// On desktop (e.g. macOS), tries [startStream] even when [hasPermission]
+  /// is false so the system permission dialog can appear; then logs on failure.
   Future<void> startCapture(int friendNumber, ToxAVService avService) async {
     if (_capturing) return;
     _friendNumber = friendNumber;
     _avService = avService;
+    _zeroDataWarningLogged = false;
 
     final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) return;
+    final isDesktop = defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+    if (!hasPermission && !isDesktop) {
+      debugPrint(
+          '[AudioHandler] startCapture: microphone permission not granted');
+      return;
+    }
+    if (!hasPermission && isDesktop) {
+      debugPrint(
+          '[AudioHandler] startCapture: permission reported false on desktop, '
+          'attempting startStream to trigger system dialog');
+    }
 
     try {
       final stream = await _recorder.startStream(
@@ -53,17 +72,37 @@ class AudioHandler {
       _streamSub = stream.listen(
         (Uint8List data) => _onRecordData(data),
         onError: (e) {
-          // ignore: avoid_print
-          print('[AudioHandler] stream error: $e');
+          debugPrint('[AudioHandler] stream error: $e');
+          AppLogger.log('[AudioHandler] stream error: $e');
         },
       );
+      AppLogger.log('[AudioHandler] capture started (microphone stream active)');
     } catch (e) {
-      // ignore: avoid_print
-      print('[AudioHandler] startCapture error: $e');
+      _capturing = false;
+      debugPrint('[AudioHandler] startCapture error: $e');
+      AppLogger.log('[AudioHandler] startCapture error: $e');
+      if (defaultTargetPlatform == TargetPlatform.macOS) {
+        debugPrint(
+            '[AudioHandler] On macOS: ensure Microphone is allowed in '
+            'System Settings → Privacy & Security. Close other apps using '
+            'the microphone and try again.');
+        AppLogger.log(
+            '[AudioHandler] On macOS: ensure Microphone is allowed in '
+            'System Settings → Privacy & Security.');
+      }
     }
   }
 
   void _onRecordData(Uint8List data) {
+    if (data.isNotEmpty &&
+        data.every((b) => b == 0) &&
+        !_zeroDataWarningLogged) {
+      _zeroDataWarningLogged = true;
+      debugPrint(
+          '[AudioHandler] Receiving all-zero audio; if on macOS, check '
+          'entitlements (com.apple.security.device.audio-input) and that '
+          'no other app is using the microphone.');
+    }
     _buffer.addAll(data);
     // Safety: drop oldest data if buffer grows beyond ~2 seconds of audio
     const maxBufferBytes = sampleRate * 2 * 2;
@@ -117,16 +156,18 @@ class AudioHandler {
         _playBuffer.removeRange(0, _playBuffer.length - _maxPlayBufferSamples);
       }
     });
-    FlutterPcmSound.start();
+    pcm_sound.FlutterPcmSound.start();
   }
 
   static void synchronized(Object lock, void Function() action) => action();
 
   void _setupPlayback() {
     if (_playbackSetup) return;
-    FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: channels);
-    FlutterPcmSound.setFeedThreshold(sampleRate ~/ 20); // ~50 ms
-    FlutterPcmSound.setFeedCallback(_onFeedSamples);
+    pcm_sound.FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: channels);
+    pcm_sound.FlutterPcmSound.setFeedThreshold(sampleRate ~/ 20); // ~50 ms
+    pcm_sound.FlutterPcmSound.setFeedCallback(_onFeedSamples);
+    // Avoid flooding logs with per-feed [PCM] messages (use none or error only).
+    pcm_sound.FlutterPcmSound.setLogLevel(pcm_sound.LogLevel.none);
     _playbackSetup = true;
   }
 
@@ -142,7 +183,7 @@ class AudioHandler {
       }
     });
     if (toFeed.isNotEmpty) {
-      FlutterPcmSound.feed(PcmArrayInt16.fromList(toFeed));
+      pcm_sound.FlutterPcmSound.feed(pcm_sound.PcmArrayInt16.fromList(toFeed));
     }
   }
 
@@ -157,7 +198,7 @@ class AudioHandler {
     _buffer.clear();
     synchronized(_playBuffer, () => _playBuffer.clear());
     if (_playbackSetup) {
-      await FlutterPcmSound.release();
+      await pcm_sound.FlutterPcmSound.release();
       _playbackSetup = false;
     }
   }
