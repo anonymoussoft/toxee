@@ -55,6 +55,15 @@
 
 ## 快速开始
 
+首次克隆后需先执行依赖引导（bootstrap），再构建。详见 [依赖引导说明](DEPENDENCY_BOOTSTRAP.md)。
+
+```bash
+cd toxee
+dart run tool/bootstrap_deps.dart   # 首次或升级依赖后执行
+flutter pub get
+bash run_toxee.sh                    # 或 ./build_all.sh --platform macos --mode debug
+```
+
 ### macOS 一键构建和运行
 
 ```bash
@@ -62,7 +71,7 @@ cd toxee
 bash run_toxee.sh
 ```
 
-这个脚本会自动：
+该脚本会在需要时自动执行 bootstrap，然后：
 1. 构建 Tim2Tox（包括 FFI 库，使用 DEBUG 模式）
 2. 构建 IRC 客户端库（如果需要，使用 DEBUG 模式）
 3. 构建 Flutter macOS 应用（DEBUG 模式）
@@ -95,6 +104,16 @@ bash run_toxee.sh
 ```
 
 ## 详细构建步骤
+
+### 步骤 0: 依赖引导（首次克隆或升级后）
+
+从零克隆仓库后，必须先运行 bootstrap，再执行 `flutter pub get` 或任何构建脚本。Bootstrap 会初始化 `third_party/tim2tox` 与 `third_party/chat-uikit-flutter`、拉取并打补丁的 `tencent_cloud_chat_sdk`、并生成 `pubspec_overrides.yaml`。构建脚本（如 `build_all.sh`、`run_toxee.sh`）会在内部调用 bootstrap，但首次建议手动执行一次以确认环境正常。
+
+```bash
+dart run tool/bootstrap_deps.dart
+```
+
+详见 [DEPENDENCY_BOOTSTRAP.md](DEPENDENCY_BOOTSTRAP.md)。
 
 ### 步骤 1: 安装依赖
 

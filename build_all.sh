@@ -38,7 +38,7 @@ cd "$SCRIPT_DIR"
 
 # Build tim2tox native library first
 print_info "Building tim2tox native library..."
-TIM2TOX_DIR="../tim2tox"
+TIM2TOX_DIR="$SCRIPT_DIR/third_party/tim2tox"
 if [ -d "$TIM2TOX_DIR" ]; then
     cd "$TIM2TOX_DIR"
     if [ -f "build.sh" ]; then
@@ -89,6 +89,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Bootstrap dependencies (submodules, vendor SDK, overrides)
+print_info "Bootstrapping dependencies..."
+dart run tool/bootstrap_deps.dart
 
 # Clean if requested
 if [ "$CLEAN" = true ]; then

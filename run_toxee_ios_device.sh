@@ -33,6 +33,9 @@ SKIP_LAUNCH="false"
 
 mkdir -p "$BUILD_DIR"
 
+# Bootstrap dependencies so pubspec_overrides and third_party are ready
+(cd "$FLUTTER_APP_DIR" && dart run tool/bootstrap_deps.dart) >> "$BUILD_DIR/bootstrap.log" 2>&1 || true
+
 # Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -268,8 +271,8 @@ resolve_ffi_framework_path() {
     candidates+=("$FFI_FRAMEWORK_PATH")
   fi
   candidates+=(
-    "$PARENT_DIR/tim2tox/build/ios/tim2tox_ffi.framework"
-    "$PARENT_DIR/tim2tox/build/tim2tox_ffi.framework"
+    "$FLUTTER_APP_DIR/third_party/tim2tox/build/ios/tim2tox_ffi.framework"
+    "$FLUTTER_APP_DIR/third_party/tim2tox/build/tim2tox_ffi.framework"
   )
   local c
   for c in "${candidates[@]}"; do
@@ -286,7 +289,7 @@ resolve_ffi_dylib_path() {
     candidates+=("$FFI_DYLIB_PATH")
   fi
   candidates+=(
-    "$PARENT_DIR/tim2tox/build/ffi/libtim2tox_ffi.dylib"
+    "$FLUTTER_APP_DIR/third_party/tim2tox/build/ffi/libtim2tox_ffi.dylib"
   )
   local c
   for c in "${candidates[@]}"; do

@@ -1,0 +1,6 @@
+[submodule "third_party/tim2tox"]
+	path = third_party/tim2tox
+	url = git@github.com:anonymoussoft/tim2tox.git
+[submodule "third_party/chat-uikit-flutter"]
+	path = third_party/chat-uikit-flutter
+	url = git@github.com:anonymoussoft/chat-uikit-flutter.git

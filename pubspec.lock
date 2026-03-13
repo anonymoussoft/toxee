@@ -1536,8 +1536,8 @@ packages:
   tencent_cloud_chat_sdk:
     dependency: "direct main"
     description:
-      path: "/Users/bin.gao/chat-uikit/tencent_cloud_chat_sdk-8.7.7201"
-      relative: false
+      path: "third_party/tencent_cloud_chat_sdk"
+      relative: true
     source: path
     version: "8.7.7201"
   tencent_cloud_chat_sound_to_text:

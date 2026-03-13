@@ -29,6 +29,9 @@ ANDROID_ABIS=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
 
 mkdir -p "$BUILD_DIR"
 
+# Bootstrap dependencies so pubspec_overrides and third_party are ready
+(cd "$FLUTTER_APP_DIR" && dart run tool/bootstrap_deps.dart) >> "$BUILD_DIR/bootstrap.log" 2>&1 || true
+
 # Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
