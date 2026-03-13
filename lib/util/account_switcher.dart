@@ -1,11 +1,13 @@
+import 'package:flutter/material.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
-import 'prefs.dart';
-import 'tox_utils.dart';
-import 'account_service.dart';
+
+import '../models/account_summary.dart';
 import '../ui/home_page.dart';
 import '../ui/login_page.dart';
 import '../i18n/app_localizations.dart';
-import 'package:flutter/material.dart';
+import 'account_service.dart';
+import 'prefs.dart';
+import 'tox_utils.dart';
 
 /// Account switcher service for switching between multiple accounts
 class AccountSwitcher {
@@ -22,27 +24,20 @@ class AccountSwitcher {
     FfiChatService? currentService,
   }) async {
     try {
-      // Get target account info
-      final targetAccount = await Prefs.getAccountByToxId(targetToxId);
-      if (targetAccount == null) {
+      final targetAccountMap = await Prefs.getAccountByToxId(targetToxId);
+      if (targetAccountMap == null) {
         throw Exception('Target account not found');
       }
+      final targetAccount = AccountSummary.fromMap(targetAccountMap);
 
       // 1. Teardown current session (re-encrypts profile if needed)
       await AccountService.teardownCurrentSession(service: currentService);
 
-      // 2. Update target account's lastLoginTime
-      await Prefs.addAccount(
-        toxId: targetToxId,
-        nickname: targetAccount['nickname'],
-        statusMessage: targetAccount['statusMessage'],
-      );
-
-      // 3. Check if target account has a password
+      // 2. Check if target account has a password
       String? password;
       final hasPassword = await Prefs.hasAccountPassword(targetToxId);
       if (hasPassword && context.mounted) {
-        password = await _showPasswordDialog(context, targetAccount['nickname'] ?? '');
+        password = await _showPasswordDialog(context, targetAccount.nickname);
         if (password == null) {
           // User cancelled – navigate to login page
           if (context.mounted) {
@@ -59,12 +54,19 @@ class AccountSwitcher {
         }
       }
 
-      // 4. Initialize service for target account
+      // 3. Initialize service for target account
       final newService = await AccountService.initializeServiceForAccount(
         toxId: targetToxId,
-        nickname: targetAccount['nickname'],
-        statusMessage: targetAccount['statusMessage'],
+        nickname: targetAccount.nickname,
+        statusMessage: targetAccount.statusMessage,
         password: password,
+      );
+
+      // 4. Only now update lastLoginTime (after successful init)
+      await Prefs.addAccount(
+        toxId: targetToxId,
+        nickname: targetAccount.nickname,
+        statusMessage: targetAccount.statusMessage,
       );
 
       // 5. Verify toxId

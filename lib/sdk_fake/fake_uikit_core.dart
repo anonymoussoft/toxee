@@ -230,6 +230,8 @@ class FakeUIKit {
       // Notify listeners so UI stops showing stale lists (clear() does not notify)
       data.contact.buildGroupList([], 'FakeUIKit.dispose');
       data.conversation.buildConversationList([], 'FakeUIKit.dispose');
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.logError('[FakeUIKit] Failed to clear TencentCloudChat singleton data', e, st);
+    }
   }
 }

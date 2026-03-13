@@ -269,6 +269,7 @@ class _LoginPageState extends State<LoginPage> {
       _busy = true;
       _error = null;
     });
+    FfiChatService? createdService;
     try {
       final nickname = _nicknameController.text.trim();
       final statusMessage = _statusMessageController.text.trim();
@@ -277,7 +278,7 @@ class _LoginPageState extends State<LoginPage> {
         throw Exception('${l10n.nickname} cannot be empty');
       }
 
-      final account = await Prefs.getAccountByNickname(nickname);
+      final account = await Prefs.getUniqueAccountByNickname(nickname);
       String? password;
       final toxIdForLogin = account?['toxId'];
       if (toxIdForLogin != null && toxIdForLogin.isNotEmpty) {
@@ -308,14 +309,20 @@ class _LoginPageState extends State<LoginPage> {
         password: password,
       ));
 
-      _service = result.service;
+      createdService = result.service;
       await _loadAccountList();
 
-      if (!mounted) return;
+      if (!mounted) {
+        await createdService.dispose();
+        return;
+      }
+
+      _service = createdService;
       Navigator.of(context).pushReplacement(AppPageRoute(
-        page: HomePage(service: result.service),
+        page: HomePage(service: createdService),
       ));
     } catch (e, stackTrace) {
+      await createdService?.dispose();
       AppLogger.logError('[LoginPage] Login failed: $e', e, stackTrace);
       if (mounted) {
         final message = e is Exception ? e.toString().replaceFirst('Exception: ', '') : e.toString();

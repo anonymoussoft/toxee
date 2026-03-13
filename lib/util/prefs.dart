@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crypto/crypto.dart' as crypto;
 
 import 'tox_utils.dart';
+import '../models/account_summary.dart';
 
 part 'prefs/window_prefs.dart';
 part 'prefs/security_prefs.dart';
@@ -841,65 +842,60 @@ class Prefs {
   /// Clear per-account data from SharedPreferences for the given account.
   /// Does NOT remove global settings (bootstrap nodes, theme, language, IRC, etc.).
   /// Also cleans up scoped keys and password hash for the account.
+  /// Only removes data belonging to [toxId]; legacy single-account keys are
+  /// removed only when clearing the current account.
   static Future<void> clearAccountData(String toxId) async {
     final p = await _getPrefs();
+    final current = await getCurrentAccountToxId();
+    final scopedSuffix = _scopedKey('', toxId); // '_$prefix' for target account
 
-    // Fixed keys to remove (legacy single-account keys)
-    final fixedKeys = <String>[
-      _kPinned, _kMuted, _kGroups, _kQuitGroups,
-      _kNickname, _kStatusMsg, _kAvatarPath, _kLocalFriends,
-      _kCurrentAccountToxId, _kCardText, _kAutoAcceptFriends,
-      _kAutoAcceptGroupInvites, _kNotificationSoundEnabled,
-      _selfAvatarHashKey, _kAutoLogin,
-    ];
+    final keysToRemove = <String>{};
 
-    // Dynamic key prefixes to match
-    const dynamicPrefixes = <String>[
-      'black_list_',
-      'draft_',
-      'group_name_',
-      'avatar_hash_',
-      'friend_avatar_path_',
-      'friend_nickname_',
-      'friend_remark_',
-      'friend_status_message_',
-      'friend_activity_',
-      'do_not_disturb_',
-      'group_member_namecard_',
-      'group_owner_',
-      'group_avatar_',
-      'irc_channel_password_',
-      'acct_auto_accept_friends_',
-      'acct_auto_accept_group_invites_',
-      'acct_auto_login_',
-      'acct_notification_sound_',
-      'account_password_salt_',
-    ];
-
-    // Collect all keys to remove in one pass
-    final keysToRemove = <String>{...fixedKeys};
-    final allKeys = p.getKeys();
-    for (final key in allKeys) {
-      for (final prefix in dynamicPrefixes) {
-        if (key.startsWith(prefix)) {
+    // 1) Remove target account's scoped keys only
+    if (scopedSuffix.isNotEmpty) {
+      for (final key in p.getKeys()) {
+        if (key.endsWith(scopedSuffix)) {
           keysToRemove.add(key);
-          break; // matched, skip remaining prefixes
         }
       }
     }
 
-    // Remove all collected keys (Future.wait for parallelism)
+    // 2) Remove only this account's password-related keys
+    keysToRemove.add(_accountPasswordKey(toxId));
+    keysToRemove.add(_passwordSaltKey(toxId));
+
+    // 3) Legacy single-account keys: remove only when clearing current account
+    if (current == toxId) {
+      keysToRemove.addAll(<String>{
+        _kPinned,
+        _kMuted,
+        _kGroups,
+        _kQuitGroups,
+        _kNickname,
+        _kStatusMsg,
+        _kAvatarPath,
+        _kLocalFriends,
+        _kCurrentAccountToxId,
+        _kCardText,
+        _kAutoAcceptFriends,
+        _kAutoAcceptGroupInvites,
+        _kNotificationSoundEnabled,
+        _selfAvatarHashKey,
+        _kAutoLogin,
+      });
+    }
+
     await Future.wait(keysToRemove.map((key) => p.remove(key)));
 
-    // Clean up scoped keys and password hash for this account
     if (toxId.isNotEmpty) {
       await clearScopedKeysForAccount(toxId);
       await removeAccountPassword(toxId);
     }
 
-    // Invalidate cache since current account was cleared
-    _cachedCurrentAccountToxId = null;
-    _accountToxIdCached = false;
+    if (current == toxId) {
+      _cachedCurrentAccountToxId = null;
+      _accountToxIdCached = false;
+    }
   }
 
   /// Remove all SharedPreferences keys scoped to the given account.
@@ -1072,6 +1068,12 @@ class Prefs {
     return _getAccountListImpl(p);
   }
 
+  /// Typed account summaries; preferred over [getAccountList] where type safety helps.
+  static Future<List<AccountSummary>> getAccountSummaries() async {
+    final raw = await getAccountList();
+    return raw.map(AccountSummary.fromMap).toList(growable: false);
+  }
+
   static Future<void> setAccountList(List<Map<String, String>> accounts) async {
     final p = await _getPrefs();
     return _setAccountListImpl(p, accounts);
@@ -1094,6 +1096,15 @@ class Prefs {
       throw ArgumentError('toxId cannot be empty');
     }
     final accounts = await getAccountList();
+    final normalizedNickname = nickname?.trim();
+    if (normalizedNickname != null && normalizedNickname.isNotEmpty) {
+      final duplicate = accounts.any((acc) =>
+          acc['toxId'] != toxId &&
+          (acc['nickname'] ?? '').trim() == normalizedNickname);
+      if (duplicate) {
+        throw StateError('Nickname already used by another account');
+      }
+    }
     // Find existing account by Tox ID (primary key)
     final existingIndex = accounts.indexWhere((acc) => acc['toxId'] == toxId);
     Map<String, String> account;
@@ -1219,6 +1230,26 @@ class Prefs {
         return null;
       }
     }
+  }
+
+  /// All accounts whose nickname (trimmed) matches [nickname].
+  static Future<List<Map<String, String>>> getAccountsByNickname(String nickname) async {
+    final normalized = nickname.trim();
+    final accounts = await getAccountList();
+    return accounts
+        .where((acc) => (acc['nickname'] ?? '').trim() == normalized)
+        .toList();
+  }
+
+  /// Account whose nickname uniquely matches [nickname].
+  /// Returns null if no match. Throws [StateError] if more than one account has that nickname.
+  static Future<Map<String, String>?> getUniqueAccountByNickname(String nickname) async {
+    final matches = await getAccountsByNickname(nickname);
+    if (matches.isEmpty) return null;
+    if (matches.length > 1) {
+      throw StateError('Duplicate nickname: $nickname');
+    }
+    return matches.single;
   }
 
   /// Get account info by nickname (for backward compatibility and login flow)

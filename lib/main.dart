@@ -476,7 +476,14 @@ class _StartupGateState extends State<_StartupGate> {
         }
       }
 
-      final account = await Prefs.getAccountByNickname(nick);
+      Map<String, String>? account;
+      try {
+        account = await Prefs.getUniqueAccountByNickname(nick);
+      } on StateError {
+        // Duplicate nickname: cannot resolve account for auto-login; show login page
+        if (mounted) setState(() => _checking = false);
+        return;
+      }
       final toxIdForStartup = account?['toxId'];
 
       FfiChatService service;

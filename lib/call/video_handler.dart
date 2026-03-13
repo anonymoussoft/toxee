@@ -251,6 +251,13 @@ class VideoHandler extends ChangeNotifier {
         _capturing = false;
         _usingMacOSCamera = false;
         _macosTextureId = null;
+        // Tear down native camera session so later capture attempts don't fail with device in-use.
+        try {
+          await CameraMacOS.instance.stopImageStream();
+        } catch (_) {}
+        try {
+          await CameraMacOS.instance.destroy();
+        } catch (_) {}
         notifyListeners();
         debugPrint('[VideoHandler] startCapture macOS camera_macos error: $e');
         AppLogger.log('[VideoHandler] startCapture macOS camera_macos error: $e');
