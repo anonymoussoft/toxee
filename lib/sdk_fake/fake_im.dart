@@ -22,42 +22,54 @@ class FakeIM {
   static const topicGroupDeleted = 'FakeGroupDeleted';
 
   Timer? _refreshTimer;
+  Timer? _startupInitTimer;
   Timer? _startupFastPollTimer;
   Timer? _startupSlowPollTimer;
+  StreamSubscription<dynamic>? _avatarUpdatedSub;
+  StreamSubscription<dynamic>? _nicknameUpdatedSub;
+  StreamSubscription<dynamic>? _messagesSub;
   final Map<String, bool> _typingPrev = {};
   Set<String> _previousFriendIds = {};
   Set<String> _previousGroupIds = {};
   List<FakeUser>? _previousContactList; // Cache previous contact list for deduplication
   bool _emitContactsRunning = false; // Reentrant guard: prevents concurrent _emitContactsWithFriends
   bool _toxFriendListReceived = false; // True once Tox has returned a non-empty friend list
+  bool _disposed = false;
 
   void start() {
     // When a friend's avatar is received and saved, refresh conversations and contact list so the UI updates
-    ffi.avatarUpdated.listen((uid) {
+    _avatarUpdatedSub = ffi.avatarUpdated.listen((uid) {
+      if (_disposed) return;
       unawaited(_refreshConversations());
       unawaited(_emitContacts());
     });
     // When a friend's nickname changes, refresh conversations so the UI updates
-    ffi.nicknameUpdated.listen((uid) {
+    _nicknameUpdatedSub = ffi.nicknameUpdated.listen((uid) {
+      if (_disposed) return;
       unawaited(_refreshConversations());
     });
     // Reduced delay from 2000ms to 500ms for faster startup
     // Start checking friend list immediately with shorter initial delay
     // This allows faster detection of friend online status
-    Future.delayed(const Duration(milliseconds: 500), () async {
+    _startupInitTimer?.cancel();
+    _startupInitTimer = Timer(const Duration(milliseconds: 500), () async {
+      if (_disposed) return;
       // Retry mechanism: if friend list is empty, wait a bit more and retry
       // Use exponential backoff for retries: 200ms, 400ms, 800ms, 1600ms, 3200ms
       int retries = 0;
       const maxRetries = 5;
       int retryDelay = 200; // Start with 200ms
-      
+
       while (retries < maxRetries) {
+        if (_disposed) return;
         final friends = await ffi.getFriendList();
+        if (_disposed) return;
         if (friends.isNotEmpty || retries >= maxRetries - 1) {
           // Friend list is populated or we've exhausted retries, proceed with initialization
           // Seed conversations from friend list
-          _refreshConversations();
-          _emitContacts();
+          unawaited(_refreshConversations());
+          unawaited(_emitContacts());
+          if (_disposed) return;
           _seedHistory();
           break;
         }
@@ -66,7 +78,9 @@ class FakeIM {
         await Future.delayed(Duration(milliseconds: retryDelay));
         retryDelay = (retryDelay * 2).clamp(200, 3200); // Exponential backoff, max 3200ms
       }
-      
+
+      if (_disposed) return;
+
       // After initial emit, start a more frequent polling for online status updates
       // Optimized: Poll every 500ms for the first 10 seconds (20 polls) for faster detection
       // Then switch to 2 seconds for the next 20 seconds (10 polls)
@@ -74,25 +88,36 @@ class FakeIM {
       int startupPollCount = 0;
       const fastPollDuration = 20; // 20 * 500ms = 10 seconds
       const slowPollDuration = 10; // 10 * 2s = 20 seconds
-      
+
       // Fast polling phase: 500ms intervals for first 10 seconds
-      _startupFastPollTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      _startupFastPollTimer =
+          Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+        if (_disposed) {
+          timer.cancel();
+          return;
+        }
         startupPollCount++;
         if (startupPollCount >= fastPollDuration) {
           timer.cancel();
           _startupFastPollTimer = null;
           // Switch to slower polling
           int slowPollCount = 0;
-          _startupSlowPollTimer = Timer.periodic(const Duration(seconds: 2), (slowTimer) async {
+          _startupSlowPollTimer =
+              Timer.periodic(const Duration(seconds: 2), (slowTimer) async {
+            if (_disposed) {
+              slowTimer.cancel();
+              return;
+            }
             slowPollCount++;
             if (slowPollCount >= slowPollDuration) {
               slowTimer.cancel();
               _startupSlowPollTimer = null;
               return;
             }
-            
+
             // Check if any friend's online status has changed
             final friends = await ffi.getFriendList();
+            if (_disposed) return;
             bool statusChanged = false;
             for (final friend in friends) {
               if (friend.online) {
@@ -100,16 +125,17 @@ class FakeIM {
                 break;
               }
             }
-            
+
             if (statusChanged) {
               await _emitContacts();
             }
           });
           return;
         }
-        
+
         // Check if any friend's online status has changed
         final friends = await ffi.getFriendList();
+        if (_disposed) return;
         bool statusChanged = false;
         for (final friend in friends) {
           if (friend.online) {
@@ -117,7 +143,7 @@ class FakeIM {
             break;
           }
         }
-        
+
         // If status changed, immediately refresh contacts to update UI
         if (statusChanged) {
           await _emitContacts();
@@ -126,6 +152,7 @@ class FakeIM {
     });
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (_disposed) return;
       final friends = await ffi.getFriendList();
       await _refreshConversationsWithFriends(friends);
       await _emitContactsWithFriends(friends);
@@ -136,7 +163,8 @@ class FakeIM {
     // This is handled by the periodic timer, but we can also trigger it manually if needed
     // Listen messages
     // Track conversationID for self messages by checking which peer's history contains the message
-    ffi.messages.listen((m) {
+    _messagesSub = ffi.messages.listen((m) {
+      if (_disposed) return;
       // Debug: log file messages to track where they come from
       if (m.filePath != null || m.mediaKind != null) {
         AppLogger.log('[FakeIM] Received file message from ffi.messages stream: msgID=${m.msgID}, filePath=${m.filePath}, fileName=${m.fileName}, isPending=${m.isPending}');
@@ -201,15 +229,23 @@ class FakeIM {
       // This ensures the conversation list shows the latest message
       unawaited(_refreshConversations());
     });
-    
   }
 
   void dispose() {
+    _disposed = true;
+    _avatarUpdatedSub?.cancel();
+    _avatarUpdatedSub = null;
+    _nicknameUpdatedSub?.cancel();
+    _nicknameUpdatedSub = null;
+    _messagesSub?.cancel();
+    _messagesSub = null;
+    _startupInitTimer?.cancel();
+    _startupInitTimer = null;
     _refreshTimer?.cancel();
     _refreshTimer = null;
     _startupFastPollTimer?.cancel();
-    _startupSlowPollTimer?.cancel();
     _startupFastPollTimer = null;
+    _startupSlowPollTimer?.cancel();
     _startupSlowPollTimer = null;
     _typingPrev.clear();
     _previousFriendIds.clear();
@@ -468,18 +504,6 @@ class FakeIM {
     // The Tox friend list is the single source of truth once received.
     await Prefs.setLocalFriends(toxFriendIds);
     
-    // Check if any friend's online status has changed (from offline to online)
-    // This is important for startup when Tox is still establishing connections
-    bool onlineStatusChanged = false;
-    for (final friend in friends) {
-      if (friend.online) {
-        // Friend is online - check if we previously thought they were offline
-        // We'll emit contacts if any friend is online (this is a bit aggressive but ensures we catch status changes)
-        onlineStatusChanged = true;
-        break;
-      }
-    }
-    
     // Update previous friend IDs to Tox-only friends (the single source of truth)
     _previousFriendIds = toxFriendIds;
     
@@ -527,17 +551,6 @@ class FakeIM {
       AppLogger.log('[FakeIM] _emitContacts: emitting ${list.length} friends: ${list.map((u) => u.userID.substring(0, 8)).toList()}');
       bus.emit(topicContacts, list);
       _previousContactList = List.from(list); // Save a copy for next comparison
-    }
-    
-    // If online status changed and we're in the startup phase, schedule another check soon
-    // This helps catch online status changes that happen shortly after startup
-    if (onlineStatusChanged) {
-      // Schedule a quick re-check in 500ms to catch any status changes
-      Future.delayed(const Duration(milliseconds: 500), () async {
-        // Only re-emit if we're still in startup phase (within first 30 seconds)
-        // This prevents excessive polling after startup
-        await _emitContacts();
-      });
     }
   }
 

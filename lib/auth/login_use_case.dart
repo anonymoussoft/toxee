@@ -81,8 +81,10 @@ class LoginUseCase {
       await Prefs.setStatusMessage(statusMessage);
 
       final avatarForAccount = account != null ? (account['avatarPath'] ?? '') : '';
+      // Use toxIdForLogin (existing account key) so we update the list entry instead of
+      // being treated as a new account; service.selfId may differ in format (e.g. 76 vs 64 chars).
       await Prefs.addAccount(
-        toxId: service.selfId,
+        toxId: toxIdForLogin,
         nickname: nickname,
         statusMessage: statusMessage,
         avatarPath: avatarForAccount.isNotEmpty ? avatarForAccount : null,

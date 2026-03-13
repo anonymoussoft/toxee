@@ -79,6 +79,7 @@ import '../util/lan_bootstrap_service.dart';
 import '../util/platform_utils.dart';
 import 'add_friend_dialog.dart';
 import 'add_group_dialog.dart';
+import 'home/home_session_controller.dart';
 import 'home/home_widgets.dart';
 import '../util/irc_app_manager.dart';
 import 'applications/irc_channel_dialog.dart';
@@ -145,10 +146,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _persistenceHookInstalled = false;
   bool _disposed = false;
   ContactBuilderOverrideHandle? _contactBuilderOverride;
+  late final HomeSessionController _sessionController;
 
   @override
   void initState() {
     super.initState();
+    _sessionController = HomeSessionController(service: widget.service);
     WidgetsBinding.instance.addObserver(this);
     _bag.add(() => WidgetsBinding.instance.removeObserver(this));
     // HYBRID MODE: Using both binary replacement (for most operations) and Platform interface (for history queries)
@@ -314,90 +317,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _load() async {
-    final list = await widget.service.getFriendList();
+    final r = await _sessionController.loadContacts();
     if (!mounted) return;
-    // Always reload from Prefs to get the latest state (important after friend deletion)
-    // Add a small delay to ensure SharedPreferences writes have completed
-    await Future.delayed(const Duration(milliseconds: 100));
-    final localFriendsToUse = await Prefs.getLocalFriends();
-    if (mounted) {
-      setState(() {
-        _localFriends = localFriendsToUse;
-      });
-    }
-    // merge locally persisted friends (ensure existence in list)
-    // Normalize friend IDs to 64 characters (Tox public key length) for comparison
-    final existingIds = list.map((e) => normalizeToxId(e.userId)).toSet();
-    final merged = <({String userId, String nickName, bool online, String status})>[...list];
-    // Normalize all persisted friend IDs for consistent comparison
-    final normalizedLocalFriends = localFriendsToUse.map((uid) => normalizeToxId(uid)).toSet();
-    // Load cached nicknames for offline friends
-    for (final normalizedUid in normalizedLocalFriends) {
-      if (!existingIds.contains(normalizedUid)) {
-        // Load nickname and status from cache for offline friends
-        final cachedNick = await Prefs.getFriendNickname(normalizedUid);
-        final cachedStatus = await Prefs.getFriendStatusMessage(normalizedUid);
-        merged.add((
-          userId: normalizedUid, 
-          nickName: cachedNick ?? '', 
-          online: false, 
-          status: cachedStatus ?? ''
-        ));
-      }
-    }
     setState(() {
-      _friends = merged;
+      _friends = r.friends;
+      _localFriends = r.localFriends;
     });
     await _updateTray();
   }
 
-  /// Sync persisted friends to Tox: re-add friends that are in local persistence but not in Tox
-  /// This ensures that friends saved in Flutter's local persistence are also added to Tox,
-  /// so that Tox can send online status updates to them.
+  /// Sync persisted friends to Tox: re-add friends that are in local persistence but not in Tox.
   Future<void> _syncPersistedFriendsToTox() async {
-    try {
-      // Get persisted friends from local storage
-      final persistedFriends = await Prefs.getLocalFriends();
-      if (persistedFriends.isEmpty) {
-        return;
-      }
-      
-      // Get current Tox friend list
-      final toxFriends = await widget.service.getFriendList();
-      final toxFriendIds = toxFriends.map((f) {
-        final id = f.userId.trim();
-        return id.length > 64 ? id.substring(0, 64) : id;
-      }).toSet();
-      
-      
-      // Find friends that are in persistence but not in Tox
-      final friendsToReAdd = <String>[];
-      for (final persistedId in persistedFriends) {
-        final normalizedId = persistedId.trim();
-        final actualId = normalizedId.length > 64 ? normalizedId.substring(0, 64) : normalizedId;
-        if (!toxFriendIds.contains(actualId)) {
-          friendsToReAdd.add(actualId);
-        }
-      }
-      
-      if (friendsToReAdd.isEmpty) {
-        return;
-      }
-      
-      
-      // Re-add missing friends to Tox using acceptFriendRequest (which uses tox_friend_add_norequest)
-      // This will add them to Tox's friend list, allowing Tox to send online status updates
-      for (final friendId in friendsToReAdd) {
-        try {
-          await widget.service.acceptFriendRequest(friendId);
-          // Wait a bit between adds to avoid overwhelming Tox
-          await Future.delayed(const Duration(milliseconds: 100));
-        } catch (e) {
-        }
-      }
-      
-    } catch (e) {
-    }
+    await _sessionController.syncPersistedFriendsToTox();
   }
 
   void _openChat({String? peerId, String? groupId}) {
@@ -800,7 +731,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             );
                           },
                         ),
-                        ApplicationsPage(service: widget.service),
+                        ValueListenableBuilder<Locale>(
+                          valueListenable: AppLocale.locale,
+                          builder: (context, locale, _) => ApplicationsPage(
+                            key: ValueKey('applications-${locale.languageCode}'),
+                            service: widget.service,
+                          ),
+                        ),
                         SettingsPage(
                           service: widget.service,
                           connectionStatusStream: widget.service.connectionStatusStream,

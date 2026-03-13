@@ -23,6 +23,8 @@ class AccountSwitcher {
     required String targetToxId,
     FfiChatService? currentService,
   }) async {
+    bool currentSessionDisposed = false;
+    FfiChatService? newService;
     try {
       final targetAccountMap = await Prefs.getAccountByToxId(targetToxId);
       if (targetAccountMap == null) {
@@ -30,22 +32,12 @@ class AccountSwitcher {
       }
       final targetAccount = AccountSummary.fromMap(targetAccountMap);
 
-      // 1. Teardown current session (re-encrypts profile if needed)
-      await AccountService.teardownCurrentSession(service: currentService);
-
-      // 2. Check if target account has a password
+      // 1. Check if target account has a password
       String? password;
       final hasPassword = await Prefs.hasAccountPassword(targetToxId);
       if (hasPassword && context.mounted) {
         password = await _showPasswordDialog(context, targetAccount.nickname);
         if (password == null) {
-          // User cancelled – navigate to login page
-          if (context.mounted) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const LoginPage()),
-              (route) => false,
-            );
-          }
           return;
         }
         final isValid = await Prefs.verifyAccountPassword(targetToxId, password);
@@ -54,8 +46,12 @@ class AccountSwitcher {
         }
       }
 
+      // 2. Teardown current session (re-encrypts profile if needed)
+      await AccountService.teardownCurrentSession(service: currentService);
+      currentSessionDisposed = true;
+
       // 3. Initialize service for target account
-      final newService = await AccountService.initializeServiceForAccount(
+      newService = await AccountService.initializeServiceForAccount(
         toxId: targetToxId,
         nickname: targetAccount.nickname,
         statusMessage: targetAccount.statusMessage,
@@ -78,12 +74,15 @@ class AccountSwitcher {
       // 6. Navigate to HomePage
       if (context.mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => HomePage(service: newService)),
+          MaterialPageRoute(builder: (_) => HomePage(service: newService!)),
           (route) => false,
         );
       }
     } catch (e) {
-      // Show error and navigate back to login page
+      if (newService != null) {
+        await AccountService.teardownCurrentSession(service: newService);
+      }
+      // Show error and optionally navigate back to login page
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -91,10 +90,12 @@ class AccountSwitcher {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginPage()),
-          (route) => false,
-        );
+        if (currentSessionDisposed) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginPage()),
+            (route) => false,
+          );
+        }
       }
       rethrow;
     }

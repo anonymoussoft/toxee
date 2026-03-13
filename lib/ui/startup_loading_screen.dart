@@ -2,18 +2,7 @@ import 'package:flutter/material.dart';
 import '../i18n/app_localizations.dart';
 import '../util/app_theme_config.dart';
 import '../util/responsive_layout.dart';
-
-/// Represents different initialization steps
-enum StartupStep {
-  checkingUserInfo,
-  initializingService,
-  loggingIn,
-  initializingSDK,
-  updatingProfile,
-  connecting,
-  loadingFriends,
-  completed,
-}
+import '../startup/startup_step.dart';
 
 /// Step metadata: icon, progress fraction, and localized message getter.
 typedef _StepMeta = ({

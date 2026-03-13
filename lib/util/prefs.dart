@@ -15,6 +15,9 @@ part 'prefs/security_prefs.dart';
 part 'prefs/account_prefs.dart';
 part 'prefs/chat_prefs.dart';
 
+/// Static facade for app preferences. New code should prefer repository instances
+/// ([PrefsImpl] or [prefs_interfaces.dart] interfaces) for testability and bounded context.
+/// See [PrefsImpl.global] and [prefs_interfaces.dart] for migration.
 class Prefs {
   static const _kServerId = 'server_id';
   static String _draftKey(String peerId) => 'draft_$peerId';
@@ -278,6 +281,8 @@ class Prefs {
       final account = await getAccountByToxId(current);
       final path = account?['avatarPath'];
       if (path != null && path.isNotEmpty) return path;
+      // Do not fall back to global _kAvatarPath: it may be another account's avatar.
+      return null;
     }
     final p = await _getPrefs();
     return p.getString(_kAvatarPath);
@@ -435,14 +440,19 @@ class Prefs {
 
   /// Get auto-accept friends setting for a specific account.
   /// Priority: scoped key > account_list JSON fallback > global fallback.
+  /// When [toxId] is null, uses current account so callers get the right account's setting.
   static Future<bool> getAutoAcceptFriends([String? toxId]) async {
     final p = await _getPrefs();
-    if (toxId != null && toxId.isNotEmpty) {
-      final key = _scopedKey(_kAccountAutoAcceptFriends, toxId);
+    var effectiveToxId = toxId;
+    if (effectiveToxId == null || effectiveToxId.isEmpty) {
+      effectiveToxId = await getCurrentAccountToxId();
+    }
+    if (effectiveToxId != null && effectiveToxId.isNotEmpty) {
+      final key = _scopedKey(_kAccountAutoAcceptFriends, effectiveToxId);
       final val = p.getBool(key);
       if (val != null) return val;
       // Fallback: check account_list JSON (pre-migration data)
-      final account = await getAccountByToxId(toxId);
+      final account = await getAccountByToxId(effectiveToxId);
       if (account != null && account.containsKey('autoAcceptFriends')) {
         final result = account['autoAcceptFriends'] == 'true';
         // Migrate to scoped key
@@ -454,10 +464,15 @@ class Prefs {
   }
 
   /// Set auto-accept friends setting for a specific account.
+  /// When [toxId] is null, uses current account.
   static Future<void> setAutoAcceptFriends(bool value, [String? toxId]) async {
     final p = await _getPrefs();
-    if (toxId != null && toxId.isNotEmpty) {
-      final key = _scopedKey(_kAccountAutoAcceptFriends, toxId);
+    var effectiveToxId = toxId;
+    if (effectiveToxId == null || effectiveToxId.isEmpty) {
+      effectiveToxId = await getCurrentAccountToxId();
+    }
+    if (effectiveToxId != null && effectiveToxId.isNotEmpty) {
+      final key = _scopedKey(_kAccountAutoAcceptFriends, effectiveToxId);
       await p.setBool(key, value);
       return;
     }
@@ -465,13 +480,18 @@ class Prefs {
   }
 
   /// Get auto-accept group invites setting for a specific account.
+  /// When [toxId] is null, uses current account.
   static Future<bool> getAutoAcceptGroupInvites([String? toxId]) async {
     final p = await _getPrefs();
-    if (toxId != null && toxId.isNotEmpty) {
-      final key = _scopedKey(_kAccountAutoAcceptGroupInvites, toxId);
+    var effectiveToxId = toxId;
+    if (effectiveToxId == null || effectiveToxId.isEmpty) {
+      effectiveToxId = await getCurrentAccountToxId();
+    }
+    if (effectiveToxId != null && effectiveToxId.isNotEmpty) {
+      final key = _scopedKey(_kAccountAutoAcceptGroupInvites, effectiveToxId);
       final val = p.getBool(key);
       if (val != null) return val;
-      final account = await getAccountByToxId(toxId);
+      final account = await getAccountByToxId(effectiveToxId);
       if (account != null && account.containsKey('autoAcceptGroupInvites')) {
         final result = account['autoAcceptGroupInvites'] == 'true';
         await p.setBool(key, result);
@@ -482,10 +502,15 @@ class Prefs {
   }
 
   /// Set auto-accept group invites setting for a specific account.
+  /// When [toxId] is null, uses current account.
   static Future<void> setAutoAcceptGroupInvites(bool value, [String? toxId]) async {
     final p = await _getPrefs();
-    if (toxId != null && toxId.isNotEmpty) {
-      final key = _scopedKey(_kAccountAutoAcceptGroupInvites, toxId);
+    var effectiveToxId = toxId;
+    if (effectiveToxId == null || effectiveToxId.isEmpty) {
+      effectiveToxId = await getCurrentAccountToxId();
+    }
+    if (effectiveToxId != null && effectiveToxId.isNotEmpty) {
+      final key = _scopedKey(_kAccountAutoAcceptGroupInvites, effectiveToxId);
       await p.setBool(key, value);
       return;
     }
@@ -493,13 +518,18 @@ class Prefs {
   }
 
   /// Get auto-login setting for a specific account.
+  /// When [toxId] is null, uses current account (e.g. on startup after current is set).
   static Future<bool> getAutoLogin([String? toxId]) async {
     final p = await _getPrefs();
-    if (toxId != null && toxId.isNotEmpty) {
-      final key = _scopedKey(_kAccountAutoLogin, toxId);
+    var effectiveToxId = toxId;
+    if (effectiveToxId == null || effectiveToxId.isEmpty) {
+      effectiveToxId = await getCurrentAccountToxId();
+    }
+    if (effectiveToxId != null && effectiveToxId.isNotEmpty) {
+      final key = _scopedKey(_kAccountAutoLogin, effectiveToxId);
       final val = p.getBool(key);
       if (val != null) return val;
-      final account = await getAccountByToxId(toxId);
+      final account = await getAccountByToxId(effectiveToxId);
       if (account != null && account.containsKey('autoLogin')) {
         final result = account['autoLogin'] == 'true';
         await p.setBool(key, result);
@@ -511,10 +541,15 @@ class Prefs {
   }
 
   /// Set auto-login setting for a specific account.
+  /// When [toxId] is null, uses current account.
   static Future<void> setAutoLogin(bool value, [String? toxId]) async {
     final p = await _getPrefs();
-    if (toxId != null && toxId.isNotEmpty) {
-      final key = _scopedKey(_kAccountAutoLogin, toxId);
+    var effectiveToxId = toxId;
+    if (effectiveToxId == null || effectiveToxId.isEmpty) {
+      effectiveToxId = await getCurrentAccountToxId();
+    }
+    if (effectiveToxId != null && effectiveToxId.isNotEmpty) {
+      final key = _scopedKey(_kAccountAutoLogin, effectiveToxId);
       await p.setBool(key, value);
       return;
     }
@@ -522,13 +557,18 @@ class Prefs {
   }
 
   /// Get notification sound enabled setting for a specific account.
+  /// When [toxId] is null, uses current account.
   static Future<bool> getNotificationSoundEnabled([String? toxId]) async {
     final p = await _getPrefs();
-    if (toxId != null && toxId.isNotEmpty) {
-      final key = _scopedKey(_kAccountNotificationSound, toxId);
+    var effectiveToxId = toxId;
+    if (effectiveToxId == null || effectiveToxId.isEmpty) {
+      effectiveToxId = await getCurrentAccountToxId();
+    }
+    if (effectiveToxId != null && effectiveToxId.isNotEmpty) {
+      final key = _scopedKey(_kAccountNotificationSound, effectiveToxId);
       final val = p.getBool(key);
       if (val != null) return val;
-      final account = await getAccountByToxId(toxId);
+      final account = await getAccountByToxId(effectiveToxId);
       if (account != null && account.containsKey('notificationSoundEnabled')) {
         final result = account['notificationSoundEnabled'] == 'true';
         await p.setBool(key, result);
@@ -540,10 +580,15 @@ class Prefs {
   }
 
   /// Set notification sound enabled setting for a specific account.
+  /// When [toxId] is null, uses current account.
   static Future<void> setNotificationSoundEnabled(bool value, [String? toxId]) async {
     final p = await _getPrefs();
-    if (toxId != null && toxId.isNotEmpty) {
-      final key = _scopedKey(_kAccountNotificationSound, toxId);
+    var effectiveToxId = toxId;
+    if (effectiveToxId == null || effectiveToxId.isEmpty) {
+      effectiveToxId = await getCurrentAccountToxId();
+    }
+    if (effectiveToxId != null && effectiveToxId.isNotEmpty) {
+      final key = _scopedKey(_kAccountNotificationSound, effectiveToxId);
       await p.setBool(key, value);
       return;
     }
@@ -842,8 +887,9 @@ class Prefs {
   /// Clear per-account data from SharedPreferences for the given account.
   /// Does NOT remove global settings (bootstrap nodes, theme, language, IRC, etc.).
   /// Also cleans up scoped keys and password hash for the account.
-  /// Only removes data belonging to [toxId]; legacy single-account keys are
-  /// removed only when clearing the current account.
+  /// Legacy single-account keys are removed when clearing the current account, or
+  /// when logged out (current == null) so startup does not use stale identity after
+  /// an account is deleted from the login page.
   static Future<void> clearAccountData(String toxId) async {
     final p = await _getPrefs();
     final current = await getCurrentAccountToxId();
@@ -864,8 +910,10 @@ class Prefs {
     keysToRemove.add(_accountPasswordKey(toxId));
     keysToRemove.add(_passwordSaltKey(toxId));
 
-    // 3) Legacy single-account keys: remove only when clearing current account
-    if (current == toxId) {
+    // 3) Legacy single-account keys: clear when deleting current account, or when
+    //    logged out (so deleting an account from login page does not leave stale
+    //    nickname/auto-login etc. that startup would still read).
+    if (current == toxId || current == null) {
       keysToRemove.addAll(<String>{
         _kPinned,
         _kMuted,
@@ -1224,10 +1272,18 @@ class Prefs {
               return false;
             });
           } catch (e3) {
-            return null;
+            // fall through to compareToxIds fallback
           }
         }
-        return null;
+        // Fallback: compare with normalize/prefix so 16-char list entry matches 64-char lookup
+        try {
+          return accounts.firstWhere((acc) {
+            final accToxId = acc['toxId']?.trim() ?? '';
+            return compareToxIds(accToxId, normalizedToxId);
+          });
+        } catch (e4) {
+          return null;
+        }
       }
     }
   }

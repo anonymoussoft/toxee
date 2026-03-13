@@ -108,8 +108,11 @@ class PrefsUpgrader {
         if (oldQuit != null && oldQuit.isNotEmpty) {
           await p.setStringList('quit_groups_list_$accountPrefix', oldQuit);
         }
-        // Note: don't remove old unscoped keys here — other accounts might
-        // not have been migrated yet. They'll be cleaned up eventually.
+        // Clear unscoped keys after copying so only THIS account gets the data.
+        // Otherwise every other account that runs migration would copy the same
+        // global list and show groups they never joined (e.g. nick22 seeing 4 groups).
+        await p.remove('groups_list');
+        await p.remove('quit_groups_list');
       }
       return;
     }
