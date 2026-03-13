@@ -85,7 +85,7 @@ class UpgradeRequiredApp extends StatelessWidget {
       builder: (context, snapshot) {
         final themeMode = snapshot.data == 'dark' ? ThemeMode.dark : ThemeMode.light;
         return MaterialApp(
-          title: 'toxee',
+          title: 'Toxee',
           theme: _lightTheme,
           darkTheme: _darkTheme,
           themeMode: themeMode,

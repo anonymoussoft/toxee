@@ -190,6 +190,9 @@ class VideoHandler extends ChangeNotifier {
       _controller != null && _controller!.value.isInitialized;
 
   /// Start camera capture and send YUV420 frames to ToxAV.
+  /// On platforms where the camera plugin is not implemented (e.g. macOS desktop),
+  /// catches [MissingPluginException], leaves local preview empty but allows
+  /// the call UI and remote video to work.
   Future<void> startCapture(int friendNumber, ToxAVService avService) async {
     if (_capturing) return;
     _friendNumber = friendNumber;
@@ -199,6 +202,9 @@ class VideoHandler extends ChangeNotifier {
       _cameras ??= await availableCameras();
       if (_cameras == null || _cameras!.isEmpty) {
         _capturing = false;
+        notifyListeners();
+        debugPrint(
+            '[VideoHandler] startCapture: no cameras available (e.g. desktop)');
         return;
       }
       final camera = _cameras![_cameraIndex % _cameras!.length];
@@ -210,8 +216,15 @@ class VideoHandler extends ChangeNotifier {
       await _controller!.initialize();
       notifyListeners(); // Notify UI that local preview is ready
       await _controller!.startImageStream(_onCameraImage);
+    } on MissingPluginException catch (e) {
+      _capturing = false;
+      notifyListeners();
+      debugPrint(
+          '[VideoHandler] startCapture: camera plugin not implemented on this '
+          'platform (e.g. macOS), local preview disabled: $e');
     } catch (e) {
       _capturing = false;
+      notifyListeners();
       debugPrint('[VideoHandler] startCapture error: $e');
     }
   }

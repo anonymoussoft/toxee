@@ -3,24 +3,20 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
-import 'util/app_paths.dart';
 import 'ui/widgets/app_page_route.dart';
 import 'package:tencent_cloud_chat_common/widgets/material_app.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'ui/login_page.dart';
 import 'ui/home_page.dart';
 import 'ui/startup_loading_screen.dart';
 import 'ui/upgrade_required_screen.dart';
-import 'util/prefs_upgrader.dart';
 import 'sdk_fake/fake_uikit_core.dart';
 import 'util/prefs.dart';
 import 'util/theme_controller.dart';
 import 'util/locale_controller.dart';
 import 'i18n/app_localizations.dart';
-import 'util/app_tray.dart';
 import 'util/logger.dart';
 import 'util/platform_utils.dart';
 import 'adapters/logger_adapter.dart';
@@ -33,9 +29,10 @@ import 'util/app_theme_config.dart';
 import 'util/account_service.dart';
 import 'util/app_bootstrap_coordinator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tencent_cloud_chat_sdk/native_im/bindings/native_library_manager.dart';
 import 'package:tencent_cloud_chat_common/data/theme/tencent_cloud_chat_theme.dart';
-import 'package:tim2tox_dart/ffi/tim2tox_ffi.dart';
+
+import 'bootstrap/app_bootstrap.dart';
+import 'bootstrap/app_bootstrap_result.dart';
 
 /// Routes print() output to AppLogger. Parses TCCF lines (TencentCloudChatLog)
 /// so level and body are normalized instead of duplicating timestamp in body.
@@ -73,256 +70,33 @@ Future<void> main() async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
 
-      // Set log file path to build/flutter_client.log (relative to app directory)
-      // This matches the path used in run_toxee.sh
-      // The script sets TOXEE_LOG_DIR environment variable
-      // NOTE: Due to macOS sandbox restrictions, we may not be able to write to project directory
-      // In that case, we'll use application support directory and create a symlink
-      try {
-        String? logPath;
-        bool useSymlink = false;
+      final result = await AppBootstrap.initialize();
 
-        // Try 1: Use environment variable set by run_toxee.sh
-        final logDirEnv = Platform.environment['TOXEE_LOG_DIR'];
-        if (logDirEnv != null && logDirEnv.isNotEmpty) {
-          final testPath = '$logDirEnv/flutter_client.log';
-          // Try to write a test file to check if we have permission
-          try {
-            final testFile = File(testPath);
-            final testDir = testFile.parent;
-            if (!testDir.existsSync()) {
-              testDir.createSync(recursive: true);
-            }
-            // Try to write a test byte
-            testFile.writeAsStringSync('test', mode: FileMode.write);
-            testFile.deleteSync();
-            // If we get here, we have write permission
-            logPath = testPath;
-            stderr.writeln(
-                'AppLogger: Using log directory from environment: $logDirEnv');
-          } catch (e) {
-            // No write permission to project directory (expected in macOS sandbox), will use symlink approach
-            stderr.writeln(
-                'AppLogger: [INFO] Cannot write to project directory due to sandbox restrictions (expected): $logDirEnv');
-            stderr.writeln(
-                'AppLogger: [INFO] Will use application support directory and create symlink');
-            useSymlink = true;
-          }
-        }
-
-        // Try 2: Use Directory.current (works when run from script, not in app bundle)
-        if (logPath == null && !useSymlink) {
-          try {
-            final currentDir = Directory.current;
-            final testPath = '${currentDir.path}/build/flutter_client.log';
-            final testFile = File(testPath);
-            final testDir = testFile.parent;
-            // Check if build directory exists or can be created
-            if (testDir.existsSync() || testDir.parent.existsSync()) {
-              // Try to write a test file
-              try {
-                testFile.writeAsStringSync('test', mode: FileMode.write);
-                testFile.deleteSync();
-                logPath = testPath;
-                stderr.writeln(
-                    'AppLogger: Using Directory.current: ${currentDir.path}');
-              } catch (e) {
-                stderr.writeln(
-                    'AppLogger: Cannot write to Directory.current: $e');
-                useSymlink = true;
-              }
-            }
-          } catch (e) {
-            // Directory.current might not work in app bundle
-          }
-        }
-
-        // Try 3: Use application support directory (always works in sandbox)
-        if (logPath == null || useSymlink) {
-          try {
-            logPath = await AppPaths.logFilePath;
-            stderr.writeln(
-                'AppLogger: Using application support directory: ${await AppPaths.applicationSupportPath}');
-
-            // Note: We cannot create symlink from sandboxed app to project directory
-            // The script (run_toxee.sh) will create the symlink after app starts
-            // Just log the actual location for reference
-            if (useSymlink && logDirEnv != null && logDirEnv.isNotEmpty) {
-              stderr.writeln(
-                  'AppLogger: [INFO] Cannot create symlink from sandbox (expected - macOS security restriction)');
-              stderr.writeln('AppLogger: [INFO] Logs will be in: $logPath');
-              stderr.writeln(
-                  'AppLogger: [INFO] Script will create symlink: $logDirEnv/flutter_client.log -> $logPath');
-            }
-          } catch (e) {
-            // Fallback failed
-            stderr.writeln(
-                'AppLogger: Failed to get application support directory: $e');
-          }
-        }
-
-        if (logPath != null) {
-          AppLogger.setLogPath(logPath);
-          // Write debug info to stderr (will appear in console log)
-          stderr.writeln('AppLogger: Set log path to: $logPath');
-        } else {
-          stderr.writeln(
-              'AppLogger: WARNING - Could not determine log path, using default');
-        }
-      } catch (e, stackTrace) {
-        // If setting custom path fails, use default path (will be set in initialize)
-        // Cannot use AppLogger here as it's not initialized yet
-        stderr.writeln('AppLogger: Error setting custom log path: $e');
-        stderr.writeln('AppLogger: Stack trace: $stackTrace');
-      }
-
-      // Initialize logger first to capture all errors
-      await AppLogger.initialize();
-
-      // Log initialization success with file path for debugging
-      // Use a test write to verify file logging works
-      final logPath = AppLogger.getLogPath();
-      if (logPath != null) {
-        // Test file write immediately
-        try {
-          final logFile = File(logPath);
-          // Write a test message directly to verify file is writable
-          logFile.writeAsStringSync('=== Test Write ===\n',
-              mode: FileMode.append);
-          stderr.writeln('AppLogger: Test write successful to: $logPath');
-          AppLogger.log('AppLogger initialized, log file: $logPath');
-          AppLogger.log('AppLogger: Log file exists and is ready');
-        } catch (e, stackTrace) {
-          // This will be written to stderr since file logging might not work
-          stderr.writeln('AppLogger: ERROR - Failed to write to log file: $e');
-          stderr.writeln('AppLogger: Stack trace: $stackTrace');
-          stderr.writeln('AppLogger: Log file path: $logPath');
-        }
-      } else {
-        // Log to stderr since file logging might not be available
-        stderr.writeln(
-            'AppLogger: WARNING - Log file path is null after initialization');
-      }
-      AppLogger.log('Application starting...');
-
-      // Clear stale LAN bootstrap service state from previous unclean exits
-      await Prefs.setLanBootstrapServiceRunning(false);
-
-      // Pass log path to C++ so V2TIMLog writes to the same file in unified format (before initSDK)
-      if (logPath != null) {
-        try {
-          final ffiLib = Tim2ToxFfi.open();
-          ffiLib.setLogFile(logPath);
-        } catch (e) {
-          AppLogger.warn('Could not set C++ log file: $e');
-        }
-      }
-
-      // BINARY REPLACEMENT MODE: Using NativeLibraryManager instead of Platform interface
-      // This allows the app to use the binary replacement solution (Dart* functions)
-      // instead of the Platform interface solution (Tim2ToxSdkPlatform)
-      setNativeLibraryName('tim2tox_ffi');
-      AppLogger.log(
-          '[main.dart] BINARY REPLACEMENT MODE: Using NativeLibraryManager with tim2tox_ffi');
-
-      // NOTE: We do NOT set TencentCloudChatSdkPlatform.instance here
-      // This allows the app to use TIMManager.instance -> NativeLibraryManager -> Dart* functions
-      // Initialize window manager and tray only on desktop platforms
-      if (PlatformUtils.isDesktop) {
-        if (AppTray.instance.isSupported) {
-          await windowManager.ensureInitialized();
-          const minSize = Size(960, 600);
-          await windowManager.setMinimumSize(minSize);
-          const defaultSize = Size(1280, 800);
-          const windowOptions = WindowOptions(
-            size: defaultSize,
-            minimumSize: minSize,
-            title: 'toxee',
-            center: true,
-          );
-          // Restore saved window bounds and maximized state; fallback to default on invalid
-          final savedBounds = await Prefs.getWindowBounds();
-          final savedMaximized = await Prefs.getWindowMaximized();
-          final validBounds = savedBounds != null &&
-              savedBounds.width >= minSize.width &&
-              savedBounds.height >= minSize.height &&
-              savedBounds.width <= 4096 &&
-              savedBounds.height <= 4096;
-
-          windowManager.addListener(_WindowStateListener());
-          await windowManager.setPreventClose(true);
-
-          // Wait until Flutter is ready before showing the window
-          windowManager.waitUntilReadyToShow(windowOptions, () async {
-            if (validBounds) {
-              try {
-                await windowManager.setBounds(savedBounds);
-              } catch (_) {
-                // Fallback: use default size/center
-              }
-            }
-            await windowManager.show();
-            await windowManager.focus();
-            if (savedMaximized) {
-              try {
-                await windowManager.maximize();
-              } catch (_) {}
-            }
-          });
-          await AppTray.instance.init();
-        }
-      }
-
-      // Global error capture for Flutter framework errors
       FlutterError.onError = (FlutterErrorDetails details) {
-        // Log to our logger with full stack trace
         AppLogger.logError(
           'Flutter Error: ${details.exception}',
           details.exception,
           details.stack,
         );
-        // Also present error to user (shows red screen in debug mode)
         FlutterError.presentError(details);
       };
 
-      // Capture uncaught async errors on engine side
       ui.PlatformDispatcher.instance.onError =
           (Object error, StackTrace stack) {
         AppLogger.logError('Uncaught async error', error, stack);
-        return true; // Return true to prevent default error handling
+        return true;
       };
 
-      // Run Prefs schema migration before any Prefs access (e.g. theme/locale)
-      final prefs = await SharedPreferences.getInstance();
-      await Prefs.initialize(prefs);
-      try {
-        await PrefsUpgrader.run(prefs);
-      } on PrefsStorageNewerThanAppException catch (e) {
-        AppLogger.log(
-            'Prefs stored by newer app (${e.storedVersion} > ${e.currentVersion}), showing upgrade required');
-        runApp(UpgradeRequiredApp(
-          storedVersion: e.storedVersion,
-          currentVersion: e.currentVersion,
-        ));
-        return;
+      switch (result) {
+        case AppBootstrapSuccess():
+          AppLogger.log('Running app...');
+          runApp(const EchoUIKitApp());
+        case AppBootstrapUpgradeRequired(:final storedVersion, :final currentVersion):
+          runApp(UpgradeRequiredApp(
+            storedVersion: storedVersion,
+            currentVersion: currentVersion,
+          ));
       }
-
-      // Initialize theme and locale BEFORE running the app
-      // This ensures the correct background color is used from the start
-      AppLogger.log('Initializing theme and locale...');
-      await AppTheme.initFromPrefs();
-      await AppLocale.initFromPrefs();
-      // Initialize UIKit theme (WeChat light/dark color scheme)
-      TencentCloudChatTheme.init(
-        themeModel: AppThemeConfig.createYouthfulThemeModel(),
-        brightness: AppTheme.mode.value == ThemeMode.dark
-            ? Brightness.dark
-            : Brightness.light,
-      );
-      AppLogger.log('Theme and locale initialized');
-
-      AppLogger.log('Running app...');
-      runApp(const EchoUIKitApp());
     },
     (Object error, StackTrace stack) {
       try {
@@ -351,25 +125,36 @@ class EchoUIKitApp extends StatefulWidget {
 
 class _EchoUIKitAppState extends State<EchoUIKitApp> {
   @override
+  void initState() {
+    super.initState();
+    AppTheme.mode.addListener(_syncUIKitThemeBrightness);
+    _syncUIKitThemeBrightness();
+  }
+
+  void _syncUIKitThemeBrightness() {
+    final mode = AppTheme.mode.value;
+    final brightness =
+        mode == ThemeMode.dark ? Brightness.dark : Brightness.light;
+    TencentCloudChatTheme.init(brightness: brightness);
+  }
+
+  @override
+  void dispose() {
+    AppTheme.mode.removeListener(_syncUIKitThemeBrightness);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Theme and locale are already initialized in main() before runApp()
-    // So we can directly use them here without FutureBuilder
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppTheme.mode,
       builder: (context, themeMode, _) {
-        // Sync UIKit theme brightness when themeMode changes (TencentCloudChatMaterialApp
-        // uses brightnessWithoutFire which does not fire the event; UIKit components
-        // need the event to rebuild with new colors)
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final brightness =
-              themeMode == ThemeMode.dark ? Brightness.dark : Brightness.light;
-          TencentCloudChatTheme.init(brightness: brightness);
-        });
         return ValueListenableBuilder<Locale>(
           valueListenable: AppLocale.locale,
           builder: (context, locale, __) {
             return TencentCloudChatMaterialApp(
-              title: 'toxee',
+              title: 'Toxee',
               debugShowCheckedModeBanner: false,
               themeAnimationDuration: const Duration(milliseconds: 400),
               theme: ThemeData(
@@ -826,16 +611,3 @@ class _StartupGateState extends State<_StartupGate> {
   }
 }
 
-/// Saves window bounds and maximized state to Prefs on close (desktop).
-class _WindowStateListener with WindowListener {
-  @override
-  void onWindowClose() async {
-    try {
-      final bounds = await windowManager.getBounds();
-      await Prefs.setWindowBounds(bounds);
-      final maximized = await windowManager.isMaximized();
-      await Prefs.setWindowMaximized(maximized);
-    } catch (_) {}
-    await windowManager.destroy();
-  }
-}

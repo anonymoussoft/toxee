@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 enum CallMode { audio, video }
 
@@ -43,6 +44,19 @@ class CallStateNotifier extends ChangeNotifier {
   /// Call quality for in-call indicator. Defaults to [CallQuality.unknown]; wire from AV layer when available.
   CallQuality get callQuality => CallQuality.unknown;
 
+  /// Notify listeners now or after this frame to avoid setState/markNeedsBuild during build.
+  void _safeNotifyListeners() {
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!_isDisposed) notifyListeners();
+      });
+    } else {
+      notifyListeners();
+    }
+  }
+
+  bool _isDisposed = false;
+
   void startRinging({
     required CallMode mode,
     required CallDirection direction,
@@ -61,7 +75,7 @@ class CallStateNotifier extends ChangeNotifier {
     _isMuted = false;
     _isVideoEnabled = mode == CallMode.video;
     _isMinimized = false;
-    notifyListeners();
+    _safeNotifyListeners();
     debugPrint(
         '[CallStateNotifier] startRinging: notifyListeners() called, state=$_state');
   }
@@ -74,7 +88,7 @@ class CallStateNotifier extends ChangeNotifier {
       _callDuration += const Duration(seconds: 1);
       notifyListeners();
     });
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void endCall() {
@@ -82,14 +96,14 @@ class CallStateNotifier extends ChangeNotifier {
     _isMinimized = false;
     _durationTimer?.cancel();
     _endedResetTimer?.cancel();
-    notifyListeners();
+    _safeNotifyListeners();
     // Auto-reset to idle after 2 seconds (cancellable to avoid post-dispose assertion)
     _endedResetTimer = Timer(const Duration(seconds: 2), () {
       if (_state == CallUIState.ended) {
         _state = CallUIState.idle;
         _inviteID = null;
         _remoteUserID = null;
-        notifyListeners();
+        if (!_isDisposed) notifyListeners();
       }
     });
   }
@@ -126,6 +140,7 @@ class CallStateNotifier extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _durationTimer?.cancel();
     _endedResetTimer?.cancel();
     super.dispose();

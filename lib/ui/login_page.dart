@@ -5,13 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
-import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
-import 'package:tencent_cloud_chat_sdk/native_im/adapter/tim_manager.dart';
-import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
-import '../adapters/shared_prefs_adapter.dart';
-import '../adapters/logger_adapter.dart';
-import '../adapters/bootstrap_adapter.dart';
 import 'home_page.dart';
 import 'login_settings_page.dart';
 import 'register_page.dart';
@@ -20,7 +14,6 @@ import 'widgets/app_snackbar.dart';
 import 'widgets/error_banner.dart';
 import 'widgets/stagger_list_item.dart';
 import '../util/prefs.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../i18n/app_localizations.dart';
 import '../util/responsive_layout.dart';
 import '../util/app_theme_config.dart';
@@ -29,9 +22,13 @@ import '../util/app_paths.dart';
 import '../util/account_export_service.dart';
 
 import '../util/account_service.dart';
+import '../auth/login_use_case.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.loginUseCase});
+
+  final LoginUseCase? loginUseCase;
+
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
@@ -262,46 +259,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  /// Initialize TIMManager SDK (required for binary replacement mode)
-  /// This ensures _isInitSDK is set to true, allowing SDK operations to work
-  /// 
-  /// Standard pattern from chat-demo-flutter:
-  /// - chat-demo-flutter calls TencentCloudChat.controller.initUIKit() which internally
-  ///   calls TUILogin.instance.login() for non-Web platforms
-  /// - TUILogin.instance.login() automatically calls initSDK before login
-  /// - Since we're using binary replacement mode with FfiChatService, we need to manually
-  ///   call initSDK to ensure _isInitSDK is set to true
-  Future<void> _initTIMManagerSDK() async {
-    try {
-      // Check if SDK is already initialized
-      if (TIMManager.instance.isInitSDK()) {
-        AppLogger.log('[LoginPage] TIMManager SDK already initialized');
-        return;
-      }
-      
-      AppLogger.log('[LoginPage] Initializing TIMManager SDK...');
-      
-      // Initialize SDK with a dummy SDKAppID (0 is used as placeholder)
-      // The actual SDK initialization is done by FfiChatService.init() which calls tim2tox_ffi_init()
-      // This call ensures _isInitSDK is set to true by calling DartInitSDK in the C++ layer
-      final result = await TIMManager.instance.initSDK(
-        sdkAppID: 0, // Placeholder, actual initialization is done by FfiChatService
-        logLevel: LogLevelEnum.V2TIM_LOG_INFO,
-        uiPlatform: 0, // Flutter FFI platform (APIType::FlutterFFI: 0x1 << 6 = 64)
-      );
-      
-      if (result) {
-        AppLogger.log('[LoginPage] TIMManager SDK initialized successfully, _isInitSDK=${TIMManager.instance.isInitSDK()}');
-      } else {
-        AppLogger.log('[LoginPage] TIMManager SDK initialization failed, _isInitSDK=${TIMManager.instance.isInitSDK()}');
-        throw Exception(AppLocalizations.of(context)!.failedToInitializeTIMManager);
-      }
-    } catch (e, stackTrace) {
-      AppLogger.logError('[LoginPage] Error initializing TIMManager SDK: $e', e, stackTrace);
-      rethrow; // Re-throw to prevent navigation if SDK initialization fails
-    }
-  }
-
   Future<void> _login() async {
     if (_busy) return;
     if (!_formKey.currentState!.validate()) {
@@ -320,20 +277,7 @@ class _LoginPageState extends State<LoginPage> {
         throw Exception('${l10n.nickname} cannot be empty');
       }
 
-      // Check if user exists in account list
       final account = await Prefs.getAccountByNickname(nickname);
-      if (account == null) {
-        // Fallback: check old single account storage (for backward compatibility)
-        final savedNickname = await Prefs.getNickname();
-        if (savedNickname == null || savedNickname.trim().isEmpty) {
-          throw Exception(l10n.userNotFoundPleaseRegister);
-        }
-        if (savedNickname.trim() != nickname) {
-          throw Exception(l10n.nicknameDoesNotMatch);
-        }
-      }
-
-      // Resolve password: use pre-verified password from _quickLogin, or prompt
       String? password;
       final toxIdForLogin = account?['toxId'];
       if (toxIdForLogin != null && toxIdForLogin.isNotEmpty) {
@@ -344,77 +288,33 @@ class _LoginPageState extends State<LoginPage> {
           if (password == null || password.isEmpty) {
             if (!mounted) return;
             password = await _showPasswordDialog(
-              AppLocalizations.of(context)!.enterPasswordForAccount(account?['nickname'] ?? nickname),
+              l10n.enterPasswordForAccount(account?['nickname'] ?? nickname),
             );
             if (password == null || password.isEmpty) {
-              throw Exception(AppLocalizations.of(context)!.invalidPassword);
+              throw Exception(l10n.invalidPassword);
             }
             final ok = await Prefs.verifyAccountPassword(toxIdForLogin, password);
             if (!ok) {
-              throw Exception(AppLocalizations.of(context)!.invalidPassword);
+              throw Exception(l10n.invalidPassword);
             }
           }
         }
       }
 
-      // Initialize service via AccountService
-      if (toxIdForLogin != null && toxIdForLogin.isNotEmpty) {
-        final service = await AccountService.initializeServiceForAccount(
-          toxId: toxIdForLogin,
-          nickname: nickname,
-          statusMessage: statusMessage,
-          password: password,
-        );
-        _service = service;
+      final useCase = widget.loginUseCase ?? LoginUseCase();
+      final result = await useCase.execute(LoginParams(
+        nickname: nickname,
+        statusMessage: statusMessage,
+        password: password,
+      ));
 
-        await _initTIMManagerSDK();
+      _service = result.service;
+      await _loadAccountList();
 
-        // Save nickname/status for backward compatibility
-        await Prefs.setNickname(nickname);
-        await Prefs.setStatusMessage(statusMessage);
-
-        // Update account list entry (with avatar)
-        final avatarForAccount = account != null ? (account['avatarPath'] ?? '') : '';
-        await Prefs.addAccount(
-          toxId: service.selfId,
-          nickname: nickname,
-          statusMessage: statusMessage,
-          avatarPath: avatarForAccount.isNotEmpty ? avatarForAccount : null,
-        );
-
-        await _loadAccountList();
-
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(AppPageRoute(
-          page: HomePage(service: service),
-        ));
-      } else {
-        // Legacy account without toxId — fallback to raw init
-        final prefs = await SharedPreferences.getInstance();
-        _service = FfiChatService(
-          preferencesService: SharedPreferencesAdapter(prefs),
-          loggerService: AppLoggerAdapter(),
-          bootstrapService: BootstrapNodesAdapter(prefs),
-        );
-        final service = _service!;
-        await service.init();
-        await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-        await _initTIMManagerSDK();
-
-        final toxId = service.selfId;
-        await Prefs.setNickname(nickname);
-        await Prefs.setStatusMessage(statusMessage);
-        await Prefs.setCurrentAccountToxId(toxId);
-        await Prefs.addAccount(toxId: toxId, nickname: nickname, statusMessage: statusMessage);
-        await service.updateSelfProfile(nickname: nickname, statusMessage: statusMessage);
-        await service.startPolling();
-        await _loadAccountList();
-
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(AppPageRoute(
-          page: HomePage(service: service),
-        ));
-      }
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(AppPageRoute(
+        page: HomePage(service: result.service),
+      ));
     } catch (e, stackTrace) {
       AppLogger.logError('[LoginPage] Login failed: $e', e, stackTrace);
       if (mounted) {
@@ -425,6 +325,7 @@ class _LoginPageState extends State<LoginPage> {
         AppSnackBar.showError(context, message);
       }
     } finally {
+      if (!mounted) return;
       setState(() {
         _busy = false;
       });

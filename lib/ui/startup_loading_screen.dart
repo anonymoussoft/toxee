@@ -312,7 +312,7 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
 
                 // App name
                 Text(
-                  'toxee',
+                  'Toxee',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color:
                         theme.colorScheme.onSurface.withValues(alpha: 0.5),

@@ -16,10 +16,8 @@ import '../sdk_fake/fake_uikit_core.dart';
 import '../sdk_fake/fake_models.dart';
 import '../sdk_fake/fake_im.dart';
 import '../sdk_fake/fake_provider.dart';
-import 'package:tim2tox_dart/sdk/tim2tox_sdk_platform.dart';
-import '../adapters/event_bus_adapter.dart';
-import '../adapters/conversation_manager_adapter.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
+import '../runtime/session_runtime_coordinator.dart';
 import 'package:tencent_cloud_chat_common/external/chat_data_provider.dart';
 import '../sdk_fake/fake_msg_provider.dart';
 import 'package:tencent_cloud_chat_common/external/chat_message_provider.dart';
@@ -35,6 +33,7 @@ import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_widgets/te
 import 'package:tencent_cloud_chat_common/components/components_definition/tencent_cloud_chat_component_builder_definitions.dart';
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart' as contact_pkg;
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart';
+import 'contact/contact_builder_override.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile.dart';
 import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
 import '../i18n/app_localizations.dart';
@@ -113,6 +112,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _textTranslatePluginRegistered = false;
   bool _soundToTextPluginRegistered = false;
   StreamSubscription? _msgSub;
+  StreamSubscription? _progressUpdatesSub;
   StreamSubscription<bool>? _connectionStatusSub;
   StreamSubscription<TencentCloudChatConversationData<dynamic>>? _conversationDataSub;
   StreamSubscription<TencentCloudChatContactData<dynamic>>? _contactDataSub;
@@ -139,6 +139,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int? _lanBootstrapServicePort;
   Timer? _bootstrapServiceStatusTimer;
   final _bag = DisposableBag();
+  bool _disposed = false;
+  ContactBuilderOverrideHandle? _contactBuilderOverride;
 
   @override
   void initState() {
@@ -151,49 +153,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // - History queries to use Platform interface (Tim2ToxSdkPlatform -> FfiChatService -> MessageHistoryPersistence)
     // This ensures history messages are loaded from persistence service instead of returning empty list from C++ layer
     
-    // OPTIMIZATION: FakeUIKit is now started earlier in the startup flow (in _StartupGate)
-    // Only start if not already started to avoid duplicate initialization
-    if (!FakeUIKit.instance.isStarted) {
-      FakeUIKit.instance.startWithFfi(widget.service);
-    }
-    
-    // Set Platform interface for history queries and other operations that need persistence
-    if (TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform) {
-      // Only set if not already set (avoid overwriting if already configured)
-      // Create adapters for conversation manager and event bus
-      final eventBusAdapter = EventBusAdapter(FakeUIKit.instance.eventBusInstance);
-      final conversationManagerAdapter = ConversationManagerAdapter(
-        FakeUIKit.instance.conversationManager!,
-      );
-      
-      final platform = Tim2ToxSdkPlatform(
-        ffiService: widget.service,
-        eventBusProvider: eventBusAdapter,
-        conversationManagerProvider: conversationManagerAdapter,
-      );
-      TencentCloudChatSdkPlatform.instance = platform;
-      // When a group message is received via native path, update unread so sidebar and conversation list show it
-      platform.onGroupMessageReceivedForUnread = (groupId) {
-        if (groupId != null && groupId.isNotEmpty) {
-          widget.service.incrementGroupUnread(groupId);
-        }
-        FakeUIKit.instance.im?.refreshConversations(); // update conversation list unread badges
-        FakeUIKit.instance.im?.refreshUnreadTotal();
-      };
-      AppLogger.debug('[HomePage] Set TencentCloudChatSdkPlatform.instance to Tim2ToxSdkPlatform for history queries');
-    }
+    // Session runtime (FakeUIKit, platform, CallServiceManager) via coordinator
+    unawaited(_initAfterSessionReady());
+  }
 
-    // Initialize CallServiceManager now that TencentCloudChatSdkPlatform.instance
-    // is set to Tim2ToxSdkPlatform (CallBridgeService needs the real platform for signaling listeners)
-    FakeUIKit.instance.callServiceManager?.initialize().then((_) {
-      TencentCloudChat.instance.dataInstance.basic.useCallKit = true;
-    }).catchError((e) {
-      AppLogger.logError('[HomePage] CallServiceManager initialization error: $e');
-    });
-    
+  Future<void> _initAfterSessionReady() async {
+    await SessionRuntimeCoordinator(service: widget.service).ensureInitialized();
+    if (!mounted) return;
     AppLogger.debug('[HomePage] HYBRID MODE: Binary replacement + Platform interface');
-    AppLogger.debug('[HomePage] TencentCloudChatSdkPlatform.instance type: ${TencentCloudChatSdkPlatform.instance.runtimeType}');
-    
+
     // Initialize TIMManager SDK (required for binary replacement mode)
     // This ensures _isInitSDK is set to true and TIMGroupManager.instance.init() runs,
     // which initializes _groupListener. initGroupListener() must run AFTER this completes,
@@ -211,7 +179,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }).catchError((e, stackTrace) {
       AppLogger.logError('[HomePage] Failed to initialize TIMManager SDK: $e', e, stackTrace);
     });
-    
+
     // Inject provider to uikit
     ChatDataProviderRegistry.provider ??= FakeChatDataProvider(ffiService: widget.service);
     ChatMessageProviderRegistry.provider ??= FakeChatMessageProvider();
@@ -282,7 +250,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       componentEnum: searchRegisterResult.componentEnum,
       widgetBuilder: searchRegisterResult.widgetBuilder,
     ));
-    
+
+    // Notify listeners (e.g. conversation desktop mode) so _messageWidget is set and chat pane can open
+    basic.notifyListener(TencentCloudChatBasicDataKeys.addUsedComponent as dynamic);
+
     // Override UIKit profile routes to show in sidebar-style without blocking the main window
     // This must be done AFTER UIKit components register their routes
     // Note: We use UIKit's default profile page to ensure all buttons work correctly
@@ -847,7 +818,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     
     // Listen to file transfer progress updates
     // Note: Progress updates are handled in FakeChatMessageProvider
-    widget.service.progressUpdates.listen((progress) {
+    _progressUpdatesSub = widget.service.progressUpdates.listen((progress) {
       if (!mounted) return;
       // progress is: (peerId: String, path: String?, received: int, total: int, isSend: bool)
       if (!progress.isSend) {
@@ -855,6 +826,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // Progress updates are handled in FakeChatMessageProvider which listens to the same stream
       }
     });
+    _bag.add(() => _progressUpdatesSub?.cancel());
     
     // Listen to file transfer requests for large files (> 5MB) that require user confirmation
     // File requests are now handled by UIKit's download button
@@ -987,37 +959,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     
     // Configure ContactBuilder to ensure profile page shows all necessary components
-    // Get original builders to preserve default behavior
-    final originalContentBuilder = contact_pkg.TencentCloudChatContactManager.builder.getUserProfileContentBuilder;
-    final originalStateBuilder = contact_pkg.TencentCloudChatContactManager.builder.getUserProfileStateButtonBuilder;
-    final originalDeleteBuilder = contact_pkg.TencentCloudChatContactManager.builder.getUserProfileDeleteButtonBuilder;
-    
+    _contactBuilderOverride = ContactBuilderOverrideHandle.capture();
+    _bag.add(() => _contactBuilderOverride?.restore());
+
+    final originalContentBuilder = _contactBuilderOverride!.originalContentBuilder;
+    final originalStateBuilder = _contactBuilderOverride!.originalStateBuilder;
+    final originalDeleteBuilder = _contactBuilderOverride!.originalDeleteBuilder;
+
     contact_pkg.TencentCloudChatContactManager.builder.setBuilders(
       // Ensure content builder shows nickname and status (use default if not null)
       userProfileContentBuilder: ({required V2TimUserFullInfo userFullInfo}) {
-        // Use default builder which shows nickname and ID
         return originalContentBuilder(userFullInfo: userFullInfo);
       },
       // Ensure state button builder shows (use default)
       userProfileStateButtonBuilder: ({required V2TimUserFullInfo userFullInfo}) {
-        // Use default builder which shows do not disturb, pin, blacklist options
         return originalStateBuilder(userFullInfo: userFullInfo);
       },
       // Override delete button builder to show "Add Friend" for non-friends
       userProfileDeleteButtonBuilder: ({required V2TimUserFullInfo userFullInfo}) {
-        // Check if user is a friend
-        // Normalize IDs for comparison (Tox IDs can be 64 or 76 characters)
         final friendIDList = TencentCloudChat.instance.dataInstance.contact.contactList
             .map((e) => normalizeToxId(e.userID))
             .toSet();
         final normalizedUserID = normalizeToxId(userFullInfo.userID ?? '');
         final isFriend = friendIDList.contains(normalizedUserID);
-        
+
         if (isFriend) {
-          // For friends, use default delete button (shows "Clear Chat History" and "Delete Contact")
           return originalDeleteBuilder(userFullInfo: userFullInfo);
         } else {
-          // For non-friends, show "Add Friend" button
           return _buildAddFriendButton(userFullInfo);
         }
       },
@@ -1122,6 +1090,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    if (_disposed) {
+      super.dispose();
+      return;
+    }
+    _disposed = true;
+
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+
+    _bootstrapServiceStatusTimer?.cancel();
+    _bootstrapServiceStatusTimer = null;
+
+    _msgSub?.cancel();
+    _msgSub = null;
+
+    _progressUpdatesSub?.cancel();
+    _progressUpdatesSub = null;
+
+    _connectionStatusSub?.cancel();
+    _connectionStatusSub = null;
+
+    _conversationDataSub?.cancel();
+    _conversationDataSub = null;
+
+    _contactDataSub?.cancel();
+    _contactDataSub = null;
+
+    _groupProfileDataSub?.cancel();
+    _groupProfileDataSub = null;
+
+    _friendsSub?.cancel();
+    _friendsSub = null;
+
+    _appsSub?.cancel();
+    _appsSub = null;
+
     _bag.dispose();
     super.dispose();
   }
