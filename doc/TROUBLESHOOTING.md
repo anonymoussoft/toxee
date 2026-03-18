@@ -1,8 +1,7 @@
 # toxee 故障排查
 > 语言 / Language: [中文](TROUBLESHOOTING.md) | [English](TROUBLESHOOTING.en.md)
 
-
-本文档提供 toxee 的常见问题解答、日志分析指南、调试技巧和性能优化建议。
+本文档提供 toxee 的常见问题解答、日志分析指南、调试技巧和性能优化建议。**构建环境、各平台详细步骤、依赖安装**见 [operations/BUILD_AND_DEPLOY.md](operations/BUILD_AND_DEPLOY.md)；**首次克隆与依赖引导**见 [getting-started.md](getting-started.md)、[operations/DEPENDENCY_BOOTSTRAP.md](operations/DEPENDENCY_BOOTSTRAP.md)。
 
 ## 目录
 
@@ -668,6 +667,8 @@ CachedNetworkImage(
 
 ## 相关文档
 
-- [toxee 构建与部署](BUILD_AND_DEPLOY.md) - 详细构建步骤
-- [集成指南](INTEGRATION_GUIDE.md) - 集成 tim2tox 指南
+- [toxee 构建与部署](operations/BUILD_AND_DEPLOY.md) - 构建环境、各平台步骤、依赖安装（构建失败时也可先查本文「常见问题」）
+- [getting-started.md](getting-started.md) - 从克隆到跑起来
+- [依赖引导](operations/DEPENDENCY_BOOTSTRAP.md) - bootstrap 顺序与选项
+- [集成指南](integration/INTEGRATION_GUIDE.md) - 集成 [Tim2Tox](https://github.com/anonymoussoft/tim2tox) 指南
 - [主 README](../README.md) - 项目概述

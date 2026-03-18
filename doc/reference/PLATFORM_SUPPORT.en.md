@@ -460,4 +460,4 @@ When adding new platform support:
 
 - [toxee Architecture](./ARCHITECTURE.en.md)
 - [Implementation details](./IMPLEMENTATION_DETAILS.en.md)
-- [Main README](../README.md)
+- [Main README](../../README.md)

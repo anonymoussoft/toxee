@@ -13,24 +13,8 @@ void main(List<String> args) async {
     exit(_offlineCheck(repoRoot));
   }
 
-  final tim2toxDir = Directory('$repoRoot/third_party/tim2tox');
-  final lockFile = File('$repoRoot/third_party/tim2tox/tool/tencent_cloud_chat_sdk.lock.json');
-  if (!lockFile.existsSync()) {
-    stderr.writeln('bootstrap_deps: missing third_party/tim2tox/tool/tencent_cloud_chat_sdk.lock.json (init submodules first)');
-    exit(1);
-  }
-
-  final lock = jsonDecode(lockFile.readAsStringSync()) as Map<String, dynamic>;
-  final version = lock['version'] as String? ?? '';
-  final archiveUrl = lock['archive_url'] as String? ?? '';
-  final expectedSha256 = lock['sha256'] as String?;
-
-  if (version.isEmpty || archiveUrl.isEmpty) {
-    stderr.writeln('bootstrap_deps: lock file must have version and archive_url');
-    exit(1);
-  }
-
   // 1) Submodule sync and update (or clone from .gitmodules if not yet registered)
+  //    Do this first so third_party/tim2tox exists and contains the lock file.
   const submodulePaths = ['third_party/tim2tox', 'third_party/chat-uikit-flutter'];
   const submoduleUrls = {
     'third_party/tim2tox': 'git@github.com:anonymoussoft/tim2tox.git',
@@ -41,10 +25,8 @@ void main(List<String> args) async {
     stderr.writeln('bootstrap_deps: git submodule sync failed');
     exit(code);
   }
-  code = await _run(repoRoot, 'git', [
-    'submodule', 'update', '--init', '--recursive',
-    ...submodulePaths,
-  ]);
+  // Update only registered submodules (no path args to avoid "pathspec did not match" when not registered)
+  code = await _run(repoRoot, 'git', ['submodule', 'update', '--init', '--recursive']);
   if (code != 0) {
     stdout.writeln('Submodules not yet registered in repo; will clone from .gitmodules if missing.');
   }
@@ -70,6 +52,38 @@ void main(List<String> args) async {
         exit(code);
       }
     }
+  }
+
+  // Pin chat-uikit-flutter to v2 branch (see .gitmodules branch = v2)
+  final uikitDir = Directory('$repoRoot/third_party/chat-uikit-flutter');
+  if (uikitDir.existsSync()) {
+    final branch = 'v2';
+    int c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'fetch', 'origin', branch]);
+    if (c == 0) {
+      c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', branch]);
+      if (c != 0) {
+        c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', '-b', branch, 'origin/$branch']);
+      }
+      if (c == 0) {
+        stdout.writeln('third_party/chat-uikit-flutter switched to branch $branch');
+      }
+    }
+  }
+
+  final tim2toxDir = Directory('$repoRoot/third_party/tim2tox');
+  final lockFile = File('$repoRoot/third_party/tim2tox/tool/tencent_cloud_chat_sdk.lock.json');
+  if (!lockFile.existsSync()) {
+    stderr.writeln('bootstrap_deps: missing third_party/tim2tox/tool/tencent_cloud_chat_sdk.lock.json');
+    stderr.writeln('  Ensure third_party/tim2tox is present (clone or use tool/verify_bootstrap_local.sh for local workspace).');
+    exit(1);
+  }
+  final lock = jsonDecode(lockFile.readAsStringSync()) as Map<String, dynamic>;
+  final version = lock['version'] as String? ?? '';
+  final archiveUrl = lock['archive_url'] as String? ?? '';
+  final expectedSha256 = lock['sha256'] as String?;
+  if (version.isEmpty || archiveUrl.isEmpty) {
+    stderr.writeln('bootstrap_deps: lock file must have version and archive_url');
+    exit(1);
   }
 
   // 2) Vendor SDK
@@ -136,22 +150,30 @@ void main(List<String> args) async {
     }
   }
 
-  // 3) Apply SDK patch series via tim2tox tool (config and apply logic live in tim2tox repo)
+  // 3) Apply SDK patch series via tim2tox tool (patches live in tim2tox repo: patches/tencent_cloud_chat_sdk/<version>/)
   final stateMap = stateFile.existsSync() ? (jsonDecode(stateFile.readAsStringSync()) as Map<String, dynamic>) : <String, dynamic>{};
   final appliedKey = 'patches_applied';
-  if (stateMap[appliedKey] != true && tim2toxDir.existsSync()) {
-    final seriesFile = File('$repoRoot/third_party/tim2tox/patches/tencent_cloud_chat_sdk/$version/series');
-    if (seriesFile.existsSync()) {
-      final lines = seriesFile.readAsLinesSync().map((s) => s.trim()).where((s) => s.isNotEmpty && !s.startsWith('#')).toList();
-      if (lines.isNotEmpty) {
-        final patchCode = await _run(repoRoot, 'dart', ['run', 'tool/apply_sdk_patches.dart', '--sdk-dir=${sdkDir.path}'], workingDirectory: tim2toxDir.path);
-        if (patchCode != 0) {
-          stderr.writeln('bootstrap_deps: tim2tox apply_sdk_patches failed');
-          exit(patchCode);
-        }
-        stateMap[appliedKey] = true;
-        stateFile.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(stateMap));
+  final seriesFile = File('${tim2toxDir.path}/patches/tencent_cloud_chat_sdk/$version/series');
+  final bool shouldApplySdkPatches = stateMap[appliedKey] != true &&
+      tim2toxDir.existsSync() &&
+      seriesFile.existsSync();
+  if (shouldApplySdkPatches) {
+    final lines = seriesFile.readAsLinesSync().map((s) => s.trim()).where((s) => s.isNotEmpty && !s.startsWith('#')).toList();
+    if (lines.isNotEmpty) {
+      stdout.writeln('Applying tencent_cloud_chat_sdk patches from tim2tox (${lines.length} patch(es))...');
+      // Run tim2tox's apply_sdk_patches.dart directly (no "dart run") so it does not depend on package_config
+      final scriptPath = File('${tim2toxDir.path}/tool/apply_sdk_patches.dart');
+      if (!scriptPath.existsSync()) {
+        stderr.writeln('bootstrap_deps: tim2tox tool/apply_sdk_patches.dart not found');
+        exit(1);
       }
+      final patchCode = await _run(repoRoot, 'dart', [scriptPath.path, '--sdk-dir=${sdkDir.path}'], workingDirectory: tim2toxDir.path);
+      if (patchCode != 0) {
+        stderr.writeln('bootstrap_deps: tim2tox apply_sdk_patches failed (exit $patchCode)');
+        exit(patchCode);
+      }
+      stateMap[appliedKey] = true;
+      stateFile.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(stateMap));
     }
   }
 

@@ -1,4 +1,5 @@
 # Patch maintenance
+> Language: [中文](PATCH_MAINTENANCE.md) | [English](PATCH_MAINTENANCE.en.md)
 
 ## Ownership
 
@@ -17,6 +18,6 @@
 1. Update the desired fork commit in `third_party/chat-uikit-flutter` (e.g. `git -C third_party/chat-uikit-flutter fetch && git -C third_party/chat-uikit-flutter checkout <commit>` then record in superproject).
 2. Update the desired tim2tox commit in `third_party/tim2tox`.
 3. Bump SDK version and checksum in `third_party/tim2tox/tool/tencent_cloud_chat_sdk.lock.json` if upgrading the SDK (config lives in tim2tox repo).
-4. Refresh SDK patches in `third_party/tim2tox/patches/tencent_cloud_chat_sdk/<version>/` if the SDK version or patches changed (run toxee’s `tool/refresh_sdk_patch.sh` or add patch files and update `series` in tim2tox).
+4. Refresh SDK patches in `third_party/tim2tox/patches/tencent_cloud_chat_sdk/<version>/` if the SDK version or patches changed (run toxee's `tool/refresh_sdk_patch.sh` or add patch files and update `series` in tim2tox).
 5. Rerun bootstrap from scratch: `dart run tool/bootstrap_deps.dart --force`.
 6. Rerun focused build verification (e.g. `./build_all.sh --platform macos --mode debug`).

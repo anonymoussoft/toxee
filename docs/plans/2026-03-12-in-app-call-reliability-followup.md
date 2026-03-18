@@ -8,6 +8,8 @@
 
 **Tech Stack:** Flutter, Dart, `permission_handler`, `wakelock_plus`, `tim2tox_dart`, Flutter widget tests
 
+**Status:** Completed — preflight callback, wake policy, structured permission results, call_ui_notice, call_effects_listener, wakelock_plus; all focused tests pass.
+
 ---
 
 ### Task 1: Add failing tests for outgoing permission preflight and call wake policy

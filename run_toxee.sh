@@ -121,6 +121,10 @@ bundle_dylib() {
 
 build_native() {
   echo -e "${YELLOW}==> Building native libraries (DEBUG)...${NC}"
+  # Ensure tim2tox submodules (e.g. c-toxcore) are initialized
+  if [[ -f "$TIM2TOX_DIR/.gitmodules" ]] && { [[ -d "$TIM2TOX_DIR/.git" ]] || [[ -f "$TIM2TOX_DIR/.git" ]]; }; then
+    (cd "$TIM2TOX_DIR" && git submodule update --init --recursive)
+  fi
   mkdir -p "$TIM2TOX_BUILD_DIR" "$TIM2TOX_EXAMPLE_BUILD_DIR"
   : > "$NATIVE_BUILD_LOG"
 
@@ -131,17 +135,22 @@ build_native() {
   if [[ ! -f "$TIM2TOX_BUILD_DIR/CMakeCache.txt" ]] || \
      [[ "$TIM2TOX_DIR/CMakeLists.txt" -nt "$TIM2TOX_BUILD_DIR/CMakeCache.txt" ]]; then
     needs_configure=true
-  elif ! grep -q "BUILD_TOXAV:BOOL=ON" "$TIM2TOX_BUILD_DIR/CMakeCache.txt" 2>/dev/null || \
+  elif ! grep -q "BUILD_FFI:BOOL=ON" "$TIM2TOX_BUILD_DIR/CMakeCache.txt" 2>/dev/null || \
+       ! grep -q "BUILD_TOXAV:BOOL=ON" "$TIM2TOX_BUILD_DIR/CMakeCache.txt" 2>/dev/null || \
        ! grep -q "MUST_BUILD_TOXAV:BOOL=ON" "$TIM2TOX_BUILD_DIR/CMakeCache.txt" 2>/dev/null || \
        ! grep -q "DHT_BOOTSTRAP:BOOL=ON" "$TIM2TOX_BUILD_DIR/CMakeCache.txt" 2>/dev/null || \
        ! grep -q "BOOTSTRAP_DAEMON:BOOL=ON" "$TIM2TOX_BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
-    echo -e "${YELLOW}    Reconfiguring to enable required build options...${NC}"
+    echo -e "${YELLOW}    Reconfiguring to enable required build options (e.g. BUILD_FFI)...${NC}"
     needs_configure=true
   fi
   if [[ "$needs_configure" == "true" ]]; then
     cmake_configure "$TIM2TOX_BUILD_DIR" "$TIM2TOX_DIR" "${cmake_ffi_args[@]}"
   fi
-  (cd "$TIM2TOX_BUILD_DIR" && make -j"$(sysctl -n hw.ncpu)" tim2tox_ffi) >> "$NATIVE_BUILD_LOG" 2>&1
+  if ! (cd "$TIM2TOX_BUILD_DIR" && make -j"$(sysctl -n hw.ncpu)" tim2tox_ffi) >> "$NATIVE_BUILD_LOG" 2>&1; then
+    echo -e "${RED}Native build failed (tim2tox_ffi). Last 30 lines of $NATIVE_BUILD_LOG:${NC}"
+    tail -30 "$NATIVE_BUILD_LOG"
+    return 1
+  fi
 
   # Build IRC client library
   if [[ ! -f "$TIM2TOX_EXAMPLE_BUILD_DIR/CMakeCache.txt" ]] || \

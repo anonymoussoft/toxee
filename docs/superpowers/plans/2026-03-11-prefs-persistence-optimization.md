@@ -1,12 +1,14 @@
 # Persistence Layer Optimization Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Optimize toxee's local persistence layer for performance, reliability, security, and maintainability.
 
 **Architecture:** Cache SharedPreferences instance and currentAccountToxId in static fields to eliminate ~108 redundant getInstance() calls and ~31 reload() calls per session. Remove unreliable Future.delayed workarounds. Batch clearAccountData operations. Add salt to password hashing with migration. Unify migration system under PrefsUpgrader.
 
 **Tech Stack:** Dart, SharedPreferences, crypto (SHA256 + random salt)
+
+**Status:** Completed — all steps implemented and verified (Prefs cache, setLocalFriends, clearAccountData batch, per-account scoped keys, password salt/PBKDF2, SharedPreferencesAdapter getAvatarPath, PrefsUpgrader unified migrations, runAccountMigrations in AccountService).
 
 ---
 
@@ -17,7 +19,7 @@
 **Files:**
 - Modify: `lib/util/prefs.dart:1-100`
 
-- [ ] **Step 1: Add static cache fields at top of Prefs class**
+- [x] **Step 1: Add static cache fields at top of Prefs class**
 
 Add these fields after the existing constant declarations (after line 50):
 
@@ -41,7 +43,7 @@ Add these fields after the existing constant declarations (after line 50):
   }
 ```
 
-- [ ] **Step 2: Update getCurrentAccountToxId to use cache**
+- [x] **Step 2: Update getCurrentAccountToxId to use cache**
 
 Replace lines 87-94 with:
 
@@ -59,7 +61,7 @@ Replace lines 87-94 with:
   }
 ```
 
-- [ ] **Step 3: Update setCurrentAccountToxId to invalidate cache**
+- [x] **Step 3: Update setCurrentAccountToxId to invalidate cache**
 
 Replace lines 96-103 with:
 
@@ -77,7 +79,7 @@ Replace lines 96-103 with:
   }
 ```
 
-- [ ] **Step 4: Replace all `await SharedPreferences.getInstance()` with `await _getPrefs()`**
+- [x] **Step 4: Replace all `await SharedPreferences.getInstance()` with `await _getPrefs()`**
 
 In `lib/util/prefs.dart`, replace every occurrence of:
 ```dart
@@ -99,7 +101,7 @@ with:
 final prefs = await _getPrefs();
 ```
 
-- [ ] **Step 5: Wire initialize() into main.dart**
+- [x] **Step 5: Wire initialize() into main.dart**
 
 In `lib/main.dart`, after line 281 (`final prefs = await SharedPreferences.getInstance();`), add:
 
@@ -109,12 +111,12 @@ In `lib/main.dart`, after line 281 (`final prefs = await SharedPreferences.getIn
 
 This goes right before `PrefsUpgrader.run(prefs)` so the cache is warm for all subsequent Prefs calls.
 
-- [ ] **Step 6: Verify the app compiles**
+- [x] **Step 6: Verify the app compiles**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter analyze --no-fatal-infos`
 Expected: No errors related to Prefs changes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add lib/util/prefs.dart lib/main.dart
@@ -132,7 +134,7 @@ of reloading from disk on every invocation."
 **Files:**
 - Modify: `lib/util/prefs.dart:272-295`
 
-- [ ] **Step 1: Replace setLocalFriends implementation**
+- [x] **Step 1: Replace setLocalFriends implementation**
 
 Replace lines 272-295 with:
 
@@ -151,12 +153,12 @@ Replace lines 272-295 with:
 
 This removes the unreliable `Future.delayed` + reload + verify pattern. `setStringList` returns `true` on success; if the platform write fails, the thrown exception is the correct response.
 
-- [ ] **Step 2: Verify the app compiles**
+- [x] **Step 2: Verify the app compiles**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter analyze --no-fatal-infos`
 Expected: No errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add lib/util/prefs.dart
@@ -173,7 +175,7 @@ fixing them. setStringList already returns success/failure; trust it."
 **Files:**
 - Modify: `lib/util/prefs.dart:820-886`
 
-- [ ] **Step 1: Rewrite clearAccountData with single-pass key filtering**
+- [x] **Step 1: Rewrite clearAccountData with single-pass key filtering**
 
 Replace lines 820-871 with:
 
@@ -237,7 +239,7 @@ Replace lines 820-871 with:
   }
 ```
 
-- [ ] **Step 2: Rewrite clearScopedKeysForAccount with batch removal**
+- [x] **Step 2: Rewrite clearScopedKeysForAccount with batch removal**
 
 Replace lines 873-886 with:
 
@@ -254,12 +256,12 @@ Replace lines 873-886 with:
   }
 ```
 
-- [ ] **Step 3: Verify the app compiles**
+- [x] **Step 3: Verify the app compiles**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter analyze --no-fatal-infos`
 Expected: No errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add lib/util/prefs.dart
@@ -279,7 +281,7 @@ calls with a single key scan, set collection, and parallel removal."
 - Modify: `lib/util/prefs.dart:402-529` (getAutoAcceptFriends, setAutoAcceptFriends, getAutoAcceptGroupInvites, etc.)
 - Modify: `lib/util/prefs_upgrader.dart` (add migration v1→v2)
 
-- [ ] **Step 1: Add scoped key constants for per-account settings**
+- [x] **Step 1: Add scoped key constants for per-account settings**
 
 After line 50 (after `_friendActivityKey`), add:
 
@@ -291,7 +293,7 @@ After line 50 (after `_friendActivityKey`), add:
   static const _kAccountNotificationSound = 'acct_notification_sound';
 ```
 
-- [ ] **Step 2: Rewrite getAutoAcceptFriends / setAutoAcceptFriends**
+- [x] **Step 2: Rewrite getAutoAcceptFriends / setAutoAcceptFriends**
 
 Replace lines 402-431 with:
 
@@ -328,7 +330,7 @@ Replace lines 402-431 with:
   }
 ```
 
-- [ ] **Step 3: Rewrite getAutoAcceptGroupInvites / setAutoAcceptGroupInvites**
+- [x] **Step 3: Rewrite getAutoAcceptGroupInvites / setAutoAcceptGroupInvites**
 
 Replace lines 433-462 with:
 
@@ -360,7 +362,7 @@ Replace lines 433-462 with:
   }
 ```
 
-- [ ] **Step 4: Rewrite getAutoLogin / setAutoLogin**
+- [x] **Step 4: Rewrite getAutoLogin / setAutoLogin**
 
 Replace lines 464-496 with:
 
@@ -393,7 +395,7 @@ Replace lines 464-496 with:
   }
 ```
 
-- [ ] **Step 5: Rewrite getNotificationSoundEnabled / setNotificationSoundEnabled**
+- [x] **Step 5: Rewrite getNotificationSoundEnabled / setNotificationSoundEnabled**
 
 Replace lines 498-529 with:
 
@@ -426,7 +428,7 @@ Replace lines 498-529 with:
   }
 ```
 
-- [ ] **Step 6: Add new scoped keys to clearAccountData's dynamicPrefixes**
+- [x] **Step 6: Add new scoped keys to clearAccountData's dynamicPrefixes**
 
 In the `clearAccountData` method (from Task 3), add to the `dynamicPrefixes` list:
 
@@ -437,12 +439,12 @@ In the `clearAccountData` method (from Task 3), add to the `dynamicPrefixes` lis
       'acct_notification_sound_',
 ```
 
-- [ ] **Step 7: Verify the app compiles**
+- [x] **Step 7: Verify the app compiles**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter analyze --no-fatal-infos`
 Expected: No errors.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add lib/util/prefs.dart
@@ -462,7 +464,7 @@ migration from the JSON on first access."
 - Modify: `lib/util/prefs.dart:1226-1266`
 - Modify: `lib/util/prefs_upgrader.dart`
 
-- [ ] **Step 1: Add salt generation helper**
+- [x] **Step 1: Add salt generation helper**
 
 Add after the `_friendActivityKey` line (line 50 area), with the other helpers:
 
@@ -471,7 +473,7 @@ Add after the `_friendActivityKey` line (line 50 area), with the other helpers:
   static String _passwordSaltKey(String toxId) => '$_kPasswordSaltPrefix$toxId';
 ```
 
-- [ ] **Step 2: Rewrite setAccountPassword with salt**
+- [x] **Step 2: Rewrite setAccountPassword with salt**
 
 Replace lines 1227-1243 with:
 
@@ -500,7 +502,7 @@ Replace lines 1227-1243 with:
   }
 ```
 
-- [ ] **Step 3: Rewrite verifyAccountPassword with salt support**
+- [x] **Step 3: Rewrite verifyAccountPassword with salt support**
 
 Replace lines 1254-1266 with:
 
@@ -535,7 +537,7 @@ Replace lines 1254-1266 with:
   }
 ```
 
-- [ ] **Step 4: Update removeAccountPassword to also remove salt**
+- [x] **Step 4: Update removeAccountPassword to also remove salt**
 
 Replace lines 1246-1250 with:
 
@@ -551,7 +553,7 @@ Replace lines 1246-1250 with:
   }
 ```
 
-- [ ] **Step 5: Add salt key prefix to clearAccountData's dynamicPrefixes**
+- [x] **Step 5: Add salt key prefix to clearAccountData's dynamicPrefixes**
 
 In clearAccountData, add to `dynamicPrefixes`:
 
@@ -559,12 +561,12 @@ In clearAccountData, add to `dynamicPrefixes`:
       'account_password_salt_',
 ```
 
-- [ ] **Step 6: Verify the app compiles**
+- [x] **Step 6: Verify the app compiles**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter analyze --no-fatal-infos`
 Expected: No errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add lib/util/prefs.dart
@@ -586,7 +588,7 @@ Prevents rainbow table attacks on stored password hashes."
 
 The goal is to simplify the avatar path resolution in the adapter so it reads from the same source of truth as Prefs. The adapter should use the scoped key as primary, then delegate to the account_list JSON fallback, but not independently implement file-existence checks that diverge from Prefs.
 
-- [ ] **Step 1: Simplify getAvatarPath in SharedPreferencesAdapter**
+- [x] **Step 1: Simplify getAvatarPath in SharedPreferencesAdapter**
 
 Replace lines 284-325 with:
 
@@ -631,12 +633,12 @@ Replace lines 284-325 with:
 
 This removes the `File.existsSync()` check that caused divergent behavior — the avatar path is now the scoped key value as source of truth, consistent with how Prefs works. If the file was deleted externally, the UI layer should handle missing files at render time, not at the storage layer.
 
-- [ ] **Step 2: Verify the app compiles**
+- [x] **Step 2: Verify the app compiles**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter analyze --no-fatal-infos`
 Expected: No errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add lib/adapters/shared_prefs_adapter.dart
@@ -663,7 +665,7 @@ The goal is to consolidate the three separate migration locations into PrefsUpgr
 
 We'll add a per-account migration version to PrefsUpgrader. The file-level migration in AppPaths stays as-is (it's file-system level, not prefs level), but the adapter's lazy migration gets absorbed into PrefsUpgrader.
 
-- [ ] **Step 1: Add per-account migration support to PrefsUpgrader**
+- [x] **Step 1: Add per-account migration support to PrefsUpgrader**
 
 Replace the entire `lib/util/prefs_upgrader.dart` with:
 
@@ -786,7 +788,7 @@ class PrefsUpgrader {
 }
 ```
 
-- [ ] **Step 2: Simplify SharedPreferencesAdapter._migrateIfNeeded()**
+- [x] **Step 2: Simplify SharedPreferencesAdapter._migrateIfNeeded()**
 
 The migration is now handled by PrefsUpgrader.runAccountMigrations(). Replace lines 93-118 in `lib/adapters/shared_prefs_adapter.dart` with:
 
@@ -799,7 +801,7 @@ The migration is now handled by PrefsUpgrader.runAccountMigrations(). Replace li
   }
 ```
 
-- [ ] **Step 3: Wire runAccountMigrations into AccountService.initializeServiceForAccount**
+- [x] **Step 3: Wire runAccountMigrations into AccountService.initializeServiceForAccount**
 
 In `lib/util/account_service.dart`, after line 162 (`await Prefs.setCurrentAccountToxId(toxId);`), add:
 
@@ -815,16 +817,16 @@ Add the import at the top of `account_service.dart`:
 import 'prefs_upgrader.dart';
 ```
 
-- [ ] **Step 4: Bump global prefs version constant**
+- [x] **Step 4: Bump global prefs version constant**
 
 This was already done in Step 1 (`currentGlobalPrefsVersion = 2`).
 
-- [ ] **Step 5: Verify the app compiles**
+- [x] **Step 5: Verify the app compiles**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter analyze --no-fatal-infos`
 Expected: No errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/util/prefs_upgrader.dart lib/adapters/shared_prefs_adapter.dart lib/util/account_service.dart
@@ -844,22 +846,22 @@ single entry point."
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run flutter analyze**
+- [x] **Step 1: Run flutter analyze**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter analyze --no-fatal-infos`
 Expected: 0 errors.
 
-- [ ] **Step 2: Run existing tests**
+- [x] **Step 2: Run existing tests**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter test`
 Expected: All tests pass (or same pass/fail status as before changes).
 
-- [ ] **Step 3: Verify build succeeds**
+- [x] **Step 3: Verify build succeeds**
 
 Run: `cd /Users/bin.gao/chat-uikit/toxee && flutter build macos --debug 2>&1 | tail -5`
 Expected: Build succeeds.
 
-- [ ] **Step 4: Final commit if any remaining changes**
+- [x] **Step 4: Final commit if any remaining changes**
 
 ```bash
 git status

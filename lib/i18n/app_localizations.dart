@@ -1879,6 +1879,30 @@ abstract class AppLocalizations {
   /// **'Export Account'**
   String get exportAccount;
 
+  /// Export format option: profile only
+  ///
+  /// In en, this message translates to:
+  /// **'Profile (.tox)'**
+  String get exportOptionProfileTox;
+
+  /// No description provided for @exportOptionProfileToxSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'qTox compatible, profile only'**
+  String get exportOptionProfileToxSubtitle;
+
+  /// Export format option: full backup
+  ///
+  /// In en, this message translates to:
+  /// **'Full Backup (.zip)'**
+  String get exportOptionFullBackup;
+
+  /// No description provided for @exportOptionFullBackupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile + chat history + settings'**
+  String get exportOptionFullBackupSubtitle;
+
   /// Button text to import account
   ///
   /// In en, this message translates to:

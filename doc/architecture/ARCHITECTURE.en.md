@@ -1,6 +1,7 @@
 # toxee Architecture
 > Language: [Chinese](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md)
 
+This document describes the **overall client architecture and data flow** (overview). Hybrid architecture responsibilities and the **recommended initialization order** are authoritative in [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.en.md) or [MAINTAINER_ARCHITECTURE.md](MAINTAINER_ARCHITECTURE.md); maintainer view and "easy-to-break spots" are in [MAINTAINER_ARCHITECTURE.md](MAINTAINER_ARCHITECTURE.md).
 
 ## Contents
 
@@ -48,7 +49,7 @@ The current client is using a **hybrid architecture**.
 
 **Features**:
 - The dynamic library is replaced with `libtim2tox_ffi`, and the C++ callback is dispatched by NativeLibraryManager
-- **Must be set** `TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform` (set when `TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform` in **HomePage.initState()**), used for history query and C++ special callbacks such as clearHistoryMessage, groupQuitNotification, etc.
+- **Must be set** `TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform`: set by `SessionRuntimeCoordinator.ensureInitialized()` when `instance is! Tim2ToxSdkPlatform`; called from `AppBootstrapCoordinator.boot()` before entering HomePage on auto-login, or from `HomePage._initAfterSessionReady()` on manual login; must be done by or before first screen for history query and C++ special callbacks (clearHistoryMessage, groupQuitNotification, etc.).
 - Message sending, session/friend data go directly to FfiChatService via FakeUIKit
 - `CallServiceManager`, TUICallKit adaptation, sticker/translation/voice plug-in are connected at the HomePage stage
 
@@ -101,7 +102,7 @@ ToxManager (Tox core)
 c-toxcore (P2P communication)
 ```
 
-### Architecture diagram (binary replacement solution)
+### Architecture diagram (hybrid / current solution)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -202,7 +203,7 @@ tox_new() (c-toxcore)
 - Relies on the callback mechanism of Dart API DL
 
 **Key Documents**:
-- `tencent_cloud_chat_sdk-8.7.7201/lib/native_im/bindings/native_library_manager.dart` - dynamic library loading
+- tencent_cloud_chat_sdk package (after bootstrap at `third_party/tencent_cloud_chat_sdk`) — `lib/native_im/bindings/native_library_manager.dart` for dynamic library loading
 - `tim2tox/ffi/dart_compat_layer.cpp` - Dart* function implementation
 - `tim2tox/ffi/callback_bridge.cpp` - callback bridging mechanism
 
@@ -281,6 +282,8 @@ tox_friend_send_message() (c-toxcore)
 ## Core components
 
 ### 1. Tim2Tox layer (`tim2tox_dart` package)
+
+Tim2Tox upstream repo: [https://github.com/anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox). In toxee it is used as a submodule at `third_party/tim2tox`.
 
 #### 1.1 FFI binding layer (`lib/ffi/`)
 
@@ -457,7 +460,7 @@ Historical query (when isCustomPlatform):
     → FfiChatService.getHistory / MessageHistoryPersistence
 ```**IMPORTANT NOTE**:
 - Under all non-Web platforms (Windows/Linux/macOS/Android/iOS), historical queries and other calls that require Platform must be routed to `Tim2ToxSdkPlatform` after setting Tim2ToxSdkPlatform.
-- The `tencent_cloud_chat_sdk-8.7.7201` package has been modified to `isCustomPlatform` and takes the Platform path, completely removing the dependence on the native IM SDK (except for the Web platform)
+- The tencent_cloud_chat_sdk package (after bootstrap at `third_party/tencent_cloud_chat_sdk`) has been modified so that when `isCustomPlatform` it takes the Platform path, completely removing the dependence on the native IM SDK (except for the Web platform)
 - Message IDs uniformly use the `timestamp_userID` format (millisecond timestamp) to ensure uniqueness and consistency
 
 ### Message sending path
@@ -521,7 +524,7 @@ Timeout detection (using Future.timeout)
 - `BinaryReplacementHistoryHook`: wrapper `V2TimAdvancedMsgListener`, automatically save received messages
 - `BinaryMessageManagerWrapper`: Optional wrapper class that intercepts historical queries and reads from the persistence service
 
-For detailed instructions, please refer to: [IMPLEMENTATION_DETAILS.md](./IMPLEMENTATION_DETAILS.en.md)’s message processing chapter, and [HYBRID_ARCHITECTURE.md](./HYBRID_ARCHITECTURE.en.md)’s callback division of labor instructions.
+For detailed instructions, please refer to: [reference/IMPLEMENTATION_DETAILS.md](../reference/IMPLEMENTATION_DETAILS.en.md)’s message processing chapter, and [HYBRID_ARCHITECTURE.md](./HYBRID_ARCHITECTURE.en.md)’s callback division of labor instructions.
 
 ### Message receiving path
 
@@ -953,7 +956,7 @@ void initState() {
 - Offline message queue: JSON format, mapping of peerId to message list
 - Storage location: `<Application Support Directory>/chat_history/` and `offline_message_queue.json`
 
-For detailed instructions, please refer to: Persistent storage chapter in [IMPLEMENTATION_DETAILS.md](./IMPLEMENTATION_DETAILS.en.md).
+For detailed instructions, please refer to: Persistent storage chapter in [reference/IMPLEMENTATION_DETAILS.md](../reference/IMPLEMENTATION_DETAILS.en.md).
 
 ### 8. Group/Conference recovery mechanism
 
@@ -1107,7 +1110,7 @@ Manually register components (addUsedComponent), set status, etc.
 
 **Platform detection**: HomePage uses `TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform` to determine whether Platform needs to be set. The SDK internally (V2TimManager, V2TimMessageManager) uses `platform.isCustomPlatform` to decide whether to take the Platform path to avoid the vulnerability of relying on `runtimeType.toString()`.
 
-**Regression Verification**: After the tim2tox interface is updated, scenarios such as friend application list, session list update, file transfer, etc. need to be verified. For details, see [IMPLEMENTATION_DETAILS.md - Tim2tox interface compatibility and regression verification](./IMPLEMENTATION_DETAILS.en.md#tim2tox-interface-compatibility-and-regression-verification).
+**Regression Verification**: After the tim2tox interface is updated, scenarios such as friend application list, session list update, file transfer, etc. need to be verified. For details, see [reference/IMPLEMENTATION_DETAILS.md - Tim2tox interface compatibility and regression verification](../reference/IMPLEMENTATION_DETAILS.en.md#tim2tox-interface-compatibility-and-regression-verification).
 
 ## Extended Guide
 

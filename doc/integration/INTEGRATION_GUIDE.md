@@ -2,7 +2,7 @@
 > 语言 / Language: [中文](INTEGRATION_GUIDE.md) | [English](INTEGRATION_GUIDE.en.md)
 
 
-本文档说明如何把 Tim2Tox 集成到 Flutter 应用，包括接口适配器实现、初始化流程和最佳实践。
+本文档说明如何把 [Tim2Tox](https://github.com/anonymoussoft/tim2tox) 集成到 Flutter 应用，包括接口适配器实现、初始化流程和最佳实践。
 
 ## 目录
 
@@ -15,7 +15,7 @@
 
 ## 概述
 
-toxee 展示了如何将 Tim2Tox 集成到 Flutter 应用中。集成过程包括：
+toxee 展示了如何将 [Tim2Tox](https://github.com/anonymoussoft/tim2tox) 集成到 Flutter 应用中。集成过程包括：
 
 1. **实现接口适配器**: 将 Tim2Tox 的抽象接口映射到客户端的具体实现
 2. **初始化服务**: 创建和初始化 FfiChatService
@@ -205,7 +205,7 @@ class BootstrapNodesAdapter implements BootstrapService {
 ```dart
 import 'package:tim2tox_dart/interfaces/event_bus_provider.dart';
 import 'package:tim2tox_dart/interfaces/event_bus.dart';
-import 'package:toxee/lib/sdk_fake/fake_event_bus.dart';
+import 'package:toxee/sdk_fake/fake_event_bus.dart';
 
 class EventBusAdapter implements EventBusProvider {
   final FakeEventBus _eventBus;
@@ -225,8 +225,7 @@ class EventBusAdapter implements EventBusProvider {
 
 ```dart
 import 'package:tim2tox_dart/interfaces/conversation_manager_provider.dart';
-import 'package:tim2tox_dart/interfaces/conversation_manager_provider.dart';
-import 'package:toxee/lib/sdk_fake/fake_managers.dart';
+import 'package:toxee/sdk_fake/fake_managers.dart';
 
 class ConversationManagerAdapter implements ConversationManagerProvider {
   final FakeConversationManager _conversationManager;
@@ -240,9 +239,11 @@ class ConversationManagerAdapter implements ConversationManagerProvider {
 
 ## 初始化流程
 
-### 完整初始化示例
+### 完整初始化示例（简化版，与 toxee 实际启动链不同）
 
-在 `lib/ui/home_page.dart` 的 `initState()` 中：
+以下为**独立应用最小示例**，与 toxee 实际流程不同：toxee 中 FfiChatService 由 AccountService.initializeServiceForAccount 或 LoginUseCase 创建并 init/login，通过 `widget.service` 传入 HomePage；Platform 由 SessionRuntimeCoordinator.ensureInitialized() 设置；登录成功后由调用方执行 AppBootstrapCoordinator.boot(service) 再进入 HomePage。实际入口与顺序见 [混合架构](architecture/HYBRID_ARCHITECTURE.md)、[维护者视角](architecture/MAINTAINER_ARCHITECTURE.md)。
+
+在 `lib/ui/home_page.dart` 的 `initState()` 中（仅作参考）：
 
 ```dart
 @override
@@ -361,6 +362,8 @@ TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform(
 这会将所有 UIKit SDK 调用路由到 tim2tox。
 
 ## 使用示例
+
+在 toxee 中，登录与发消息实际经 **FfiChatService** 与 **Fake\*** Provider（AccountService、LoginUseCase、FakeChatMessageProvider、FakeMessageManager）完成；以下为 SDK 原生 API 用法示例，仅供理解接口时参考。
 
 ### 登录
 
@@ -555,7 +558,7 @@ TencentImSDKPlugin.v2TIMManager.initSDK(
 
 ## 相关文档
 
-- [toxee 构建与部署](BUILD_AND_DEPLOY.md) - 详细构建步骤
-- [故障排除](TROUBLESHOOTING.md) - 常见问题解答
-- [主 README](../README.md) - 项目概述
-- [Tim2Tox 文档](../../tim2tox/doc/README.md) - Tim2Tox 文档索引
+- [toxee 构建与部署](../operations/BUILD_AND_DEPLOY.md) - 详细构建步骤
+- [故障排除](../TROUBLESHOOTING.md) - 常见问题解答
+- [主 README](../../README.md) - 项目概述
+- [Tim2Tox](https://github.com/anonymoussoft/tim2tox) 文档（[本地索引](../third_party/tim2tox/doc/README.md)）

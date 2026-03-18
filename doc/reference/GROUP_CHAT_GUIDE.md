@@ -574,5 +574,5 @@ HandleGroupSelfJoin: Rebuilt mapping from stored chat_id
 
 ## 相关文档
 
-- [toxee 架构](./ARCHITECTURE.md) - 整体架构和恢复机制
-- [实现细节](./IMPLEMENTATION_DETAILS.md) - 详细实现说明
+- [toxee 架构](../architecture/ARCHITECTURE.md) - 整体架构和恢复机制
+- [实现细节](IMPLEMENTATION_DETAILS.md) - 详细实现说明

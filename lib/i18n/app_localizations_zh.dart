@@ -951,6 +951,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get exportAccount => '导出账号';
 
   @override
+  String get exportOptionProfileTox => 'Profile (.tox)';
+
+  @override
+  String get exportOptionProfileToxSubtitle => 'qTox compatible, profile only';
+
+  @override
+  String get exportOptionFullBackup => 'Full Backup (.zip)';
+
+  @override
+  String get exportOptionFullBackupSubtitle => 'Profile + chat history + settings';
+
+  @override
   String get importAccount => '导入账号';
 
   @override

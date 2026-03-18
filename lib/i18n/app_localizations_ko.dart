@@ -951,6 +951,18 @@ class AppLocalizationsKo extends AppLocalizations {
   String get exportAccount => '계정 내보내기';
 
   @override
+  String get exportOptionProfileTox => 'Profile (.tox)';
+
+  @override
+  String get exportOptionProfileToxSubtitle => 'qTox compatible, profile only';
+
+  @override
+  String get exportOptionFullBackup => 'Full Backup (.zip)';
+
+  @override
+  String get exportOptionFullBackupSubtitle => 'Profile + chat history + settings';
+
+  @override
   String get importAccount => '계정 가져오기';
 
   @override

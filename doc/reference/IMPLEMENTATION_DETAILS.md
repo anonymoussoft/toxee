@@ -1,6 +1,7 @@
 # toxee 实现细节
 > 语言 / Language: [中文](IMPLEMENTATION_DETAILS.md) | [English](IMPLEMENTATION_DETAILS.en.md)
 
+本文为实现细节总览，按模块跳转见下方目录（可视为总索引）。
 
 ## 目录
 
@@ -17,48 +18,45 @@
 11. [通话与扩展能力](#通话与扩展能力)
 12. [Tim2tox 接口兼容性与回归验证](#tim2tox-接口兼容性与回归验证)
 
-另见 [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.md) 了解混合架构的完整流程与回调分工，另可参考 [ACCOUNT_AND_SESSION.md](ACCOUNT_AND_SESSION.md) 查看账号与会话生命周期。
+另见 [architecture/HYBRID_ARCHITECTURE.md](../architecture/HYBRID_ARCHITECTURE.md) 了解混合架构的完整流程与回调分工，另可参考 [ACCOUNT_AND_SESSION.md](ACCOUNT_AND_SESSION.md) 查看账号与会话生命周期。
 
 ## 集成方案
 
-toxee 当前使用**二进制替换 + 混合 Platform** 方案来集成 Tim2Tox。另见 [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.md)。
+toxee 当前使用**二进制替换 + 混合 Platform** 方案来集成 Tim2Tox（上游仓库 [https://github.com/anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)）。另见 [architecture/HYBRID_ARCHITECTURE.md](../architecture/HYBRID_ARCHITECTURE.md)。
 
 **多实例支持说明**：
 - toxee 使用默认 Tox 实例（通过 `V2TIMManagerImpl::GetInstance()`）
 - 无需创建测试实例，直接使用 `TIMManager.instance` 即可
 - 多实例功能主要用于自动化测试场景（如 `tim2tox/auto_tests`）
-- 参见 [Tim2Tox 多实例支持文档](../../tim2tox/doc/MULTI_INSTANCE_SUPPORT.md) 了解详细信息
+- 参见 [Tim2Tox](https://github.com/anonymoussoft/tim2tox) [多实例支持文档](../third_party/tim2tox/doc/development/MULTI_INSTANCE_SUPPORT.md) 了解详细信息
 
 ### 当前方案：混合架构
 
 **实现位置**: 
-- `tencent_cloud_chat_sdk-8.7.7201/lib/native_im/bindings/native_library_manager.dart` - 动态库加载
-- `toxee/lib/main.dart` - 不设置 Platform，仅 `setNativeLibraryName('tim2tox_ffi')`；实际入口为 EchoUIKitApp → _StartupGate
-- `toxee/lib/ui/home_page.dart` - 在 **initState** 中设置 **TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform(...)**（当 `instance is! Tim2ToxSdkPlatform`），并调用 _initTIMManagerSDK、_initBinaryReplacementPersistenceHook；使用 TIMManager.instance 与 FakeUIKit
+- tencent_cloud_chat_sdk 包（bootstrap 后位于 `third_party/tencent_cloud_chat_sdk`）内的 `lib/native_im/bindings/native_library_manager.dart` — 动态库加载
+- `toxee/lib/main.dart` — 通过 `AppBootstrap.initialize()` → `LoggingBootstrap.initialize()` 调用 `setNativeLibraryName('tim2tox_ffi')`（实际调用在 `lib/bootstrap/logging_bootstrap.dart`），不设置 Platform；实际入口为 EchoUIKitApp → _StartupGate
+- Platform 由 `SessionRuntimeCoordinator.ensureInitialized()` 设置（`lib/runtime/session_runtime_coordinator.dart`）；自动登录在 `AppBootstrapCoordinator.boot()` 中（进入 HomePage 前）调用，手动登录在登录页调用 `boot(service)` 或 HomePage._initAfterSessionReady() 时调用。HomePage 内再执行 _initTIMManagerSDK、_initBinaryReplacementPersistenceHook 等
 
 **关键代码**:
 ```dart
-// main.dart
-// BINARY REPLACEMENT MODE: Using NativeLibraryManager instead of Platform interface
-// NOTE: We do NOT set TencentCloudChatSdkPlatform.instance here
+// lib/bootstrap/logging_bootstrap.dart（在 main() 启动链最早阶段由 AppBootstrap.initialize() 调用）
+// BINARY REPLACEMENT MODE: 确保后续任何 SDK/FFI 调用都加载 tim2tox 动态库
 setNativeLibraryName('tim2tox_ffi');
 
-// native_library_manager.dart（通过 setNativeLibraryName 使用）
-const String _libName = 'tim2tox_ffi'; // 替换原生库名
-final DynamicLibrary _dylib = DynamicLibrary.open('lib$_libName.dylib');
+// tencent_cloud_chat_sdk 包内 native_library_manager.dart（通过 setNativeLibraryName 使用）
+// const String _libName = 'tim2tox_ffi'; final DynamicLibrary _dylib = DynamicLibrary.open(...);
 
-// home_page.dart initState（混合架构必需）
+// SessionRuntimeCoordinator.ensureInitialized()（混合架构必需：设置 Platform）
 if (TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform) {
   TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform(
-    ffiService: widget.service,
+    ffiService: service,
     eventBusProvider: eventBusAdapter,
     conversationManagerProvider: conversationManagerAdapter,
   );
 }
-_initTIMManagerSDK().then((_) {
-  _initBinaryReplacementPersistenceHook();  // 依赖 MessageHistoryPersistence、selfId
-  // initGroupListener、initFriendListener
-});
+// HomePage 内：TimSdkInitializer.ensureInitialized().then((_) {
+//   _initBinaryReplacementPersistenceHook(); initGroupListener(); initFriendListener();
+// });
 ```
 
 **调用路径**:
@@ -78,10 +76,7 @@ V2TIMManager::GetInstance()->InitSDK(...)
 ToxManager::getInstance().init(...)
 ```
 
-**优势**:
-- ✅ 零 Dart 代码修改
-- ✅ 完全兼容原生 SDK
-- ✅ 部署简单（只需替换动态库）
+**特点与代价**：大部分调用仍走 NativeLibraryManager → Dart*，与现有 SDK 调用习惯兼容；历史、特殊回调、轮询、消息发送主路径等由 Dart 侧（FfiChatService、Platform、BinaryReplacementHistoryHook）承担，需在正确时机设置 Platform 与 Hook（自动登录在 boot 中、手动登录在登录页调用 boot(service) 或 HomePage 内 ensureInitialized），并保证 startPolling 在 SessionRuntimeCoordinator.ensureInitialized 之后调用。
 
 ### 备选方案：Platform 接口方案
 
@@ -123,7 +118,7 @@ V2TIMMessageManagerImpl::SendMessage(...)
 - ✅ 灵活性强（可以自定义实现）
 - ✅ 易于扩展
 
-**详细说明**: 参见 [Tim2Tox 架构](../../tim2tox/doc/ARCHITECTURE.md) 和 [Tim2Tox 二进制替换](../../tim2tox/doc/BINARY_REPLACEMENT.md)
+**详细说明**: 参见 [Tim2Tox](https://github.com/anonymoussoft/tim2tox) [架构](../third_party/tim2tox/doc/architecture/ARCHITECTURE.md) 和 [二进制替换](../third_party/tim2tox/doc/architecture/BINARY_REPLACEMENT.md)
 
 ## 接口适配器实现
 
@@ -497,7 +492,7 @@ class FakeChatMessageProvider implements ChatMessageProvider {
 2. **_StartupGate._decide()**（自动登录）：优先通过 `AccountService.initializeServiceForAccount(..., startPolling: false)` 完成 `init()`、`login()`、`updateSelfProfile()`；随后执行 `FakeUIKit.startWithFfi(service)` → `_initTIMManagerSDK()` → `service.startPolling()` → 等待连接/超时 → 预加载好友信息 → 导航到 `HomePage(service)`。
 3. **HomePage.initState()**：若 FakeUIKit 未启动则 startWithFfi；若 `instance is! Tim2ToxSdkPlatform` 则设置 Tim2ToxSdkPlatform；接着初始化 `CallServiceManager`；然后执行 `_initTIMManagerSDK().then(_initBinaryReplacementPersistenceHook)`，在 then 内再执行 `initGroupListener`、`initFriendListener`。
 
-BinaryReplacementHistoryHook 在 _initTIMManagerSDK 完成后的 then 中初始化（依赖 MessageHistoryPersistence、selfId；selfId 为空时监听 connectionStatusStream 后再 _setupPersistenceHook）。详见 [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.md)。
+BinaryReplacementHistoryHook 在 _initTIMManagerSDK 完成后的 then 中初始化（依赖 MessageHistoryPersistence、selfId；selfId 为空时监听 connectionStatusStream 后再 _setupPersistenceHook）。详见 [architecture/HYBRID_ARCHITECTURE.md](../architecture/HYBRID_ARCHITECTURE.md)。
 
 ### 1. main() 函数
 

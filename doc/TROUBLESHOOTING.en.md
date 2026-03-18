@@ -1,8 +1,7 @@
 # toxee Troubleshooting
 > Language: [Chinese](TROUBLESHOOTING.md) | [English](TROUBLESHOOTING.en.md)
 
-
-This document provides FAQs, log analysis guides, debugging tips, and performance optimization suggestions for toxee.
+This document provides FAQs, log analysis guides, debugging tips, and performance optimization suggestions for toxee. **Build environment, per-platform steps, dependency installation**: see [BUILD_AND_DEPLOY.md](operations/BUILD_AND_DEPLOY.en.md). **First-time clone and dependency bootstrap**: see [getting-started.en.md](getting-started.en.md), [DEPENDENCY_BOOTSTRAP.en.md](operations/DEPENDENCY_BOOTSTRAP.en.md).
 
 ## Contents
 
@@ -666,6 +665,8 @@ CachedNetworkImage(
 
 ## Related documents
 
-- [toxee Build and Deployment](BUILD_AND_DEPLOY.en.md) - Detailed build steps
-- [Integration Guide](INTEGRATION_GUIDE.en.md) - Guide to integrating tim2tox
+- [toxee Build and Deployment](operations/BUILD_AND_DEPLOY.en.md) - Build environment, per-platform steps (also check this doc’s FAQ for build failures)
+- [getting-started.en.md](getting-started.en.md) - Clone to run
+- [Dependency bootstrap](operations/DEPENDENCY_BOOTSTRAP.en.md) - Bootstrap order and options
+- [Integration Guide](integration/INTEGRATION_GUIDE.en.md) - Guide to integrating [Tim2Tox](https://github.com/anonymoussoft/tim2tox)
 - [Main README](../README.md) - Project Overview

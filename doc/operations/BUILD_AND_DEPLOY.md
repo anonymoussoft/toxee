@@ -1,8 +1,7 @@
 # toxee 构建与部署
 > 语言 / Language: [中文](BUILD_AND_DEPLOY.md) | [English](BUILD_AND_DEPLOY.en.md)
 
-
-本文档提供 toxee 的详细构建步骤、各平台构建说明、依赖安装指南和常见错误解决方案。
+本文档提供 toxee 的详细构建步骤、各平台构建说明、依赖安装指南和常见错误解决方案。**构建或运行中报错、无法启动、依赖解析失败等**，请先查 [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md) 的「常见问题」与「调试技巧」。
 
 ## 目录
 
@@ -433,6 +432,8 @@ sudo dnf install cmake
 
 ## 常见错误解决
 
+更多构建/运行时问题、日志分析与调试技巧见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。
+
 ### 构建错误
 
 #### 错误: 找不到 libsodium
@@ -670,7 +671,9 @@ tail -f build/flutter_client.log
 
 ## 相关文档
 
-- [集成指南](INTEGRATION_GUIDE.md) - 如何集成 Tim2Tox
-- [故障排除](TROUBLESHOOTING.md) - 更多故障排除技巧
+- [故障排除](../TROUBLESHOOTING.md) - 构建失败、运行时问题、日志分析、调试技巧（建议先查）
+- [getting-started.md](../getting-started.md) - 从克隆到跑起来的单页
+- [依赖引导](DEPENDENCY_BOOTSTRAP.md) - bootstrap 顺序与选项
+- [集成指南](../integration/INTEGRATION_GUIDE.md) - 如何集成 Tim2Tox
 - [主 README](../README.md) - 项目概述
 
