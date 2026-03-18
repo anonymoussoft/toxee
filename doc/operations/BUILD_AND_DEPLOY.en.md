@@ -1,8 +1,7 @@
 # toxee Build and Deploy
 > Language: [Chinese](BUILD_AND_DEPLOY.md) | [English](BUILD_AND_DEPLOY.en.md)
 
-
-This document provides detailed building steps for toxee, building instructions for each platform, dependency installation guide, and common error solutions.
+This document provides detailed building steps for toxee, building instructions for each platform, dependency installation guide, and common error solutions. **For build/run failures, startup crashes, or dependency resolution errors**, see [TROUBLESHOOTING.md](../TROUBLESHOOTING.en.md) (FAQ and debugging tips) first.
 
 ## Contents
 
@@ -387,6 +386,8 @@ Download the installer from [CMake official website](https://cmake.org/download/
 
 ## Common error resolution
 
+For more build/runtime issues, log analysis, and debugging tips, see [TROUBLESHOOTING.md](TROUBLESHOOTING.en.md).
+
 ### Build errors
 
 #### Error: libsodium not found
@@ -626,6 +627,8 @@ tail -f build/flutter_client.log
 
 ## Related documents
 
-- [Integration Guide](INTEGRATION_GUIDE.en.md) - How to integrate Tim2Tox
-- [Troubleshooting](TROUBLESHOOTING.en.md) - More troubleshooting tips
-- [Main README](../README.md) - Project Overview
+- [Troubleshooting](../TROUBLESHOOTING.en.md) - Build/run failures, runtime issues, log analysis (check here first)
+- [getting-started.en.md](../getting-started.en.md) - Clone to run in one page
+- [Dependency bootstrap](DEPENDENCY_BOOTSTRAP.en.md) - Bootstrap order and options
+- [Integration Guide](../integration/INTEGRATION_GUIDE.en.md) - How to integrate Tim2Tox
+- [Main README](../../README.md) - Project Overview

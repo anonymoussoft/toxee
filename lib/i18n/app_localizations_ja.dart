@@ -951,6 +951,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get exportAccount => 'アカウントエクスポート';
 
   @override
+  String get exportOptionProfileTox => 'Profile (.tox)';
+
+  @override
+  String get exportOptionProfileToxSubtitle => 'qTox compatible, profile only';
+
+  @override
+  String get exportOptionFullBackup => 'Full Backup (.zip)';
+
+  @override
+  String get exportOptionFullBackupSubtitle => 'Profile + chat history + settings';
+
+  @override
   String get importAccount => 'アカウントインポート';
 
   @override

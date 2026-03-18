@@ -936,6 +936,16 @@
   "@exportAccount": {
     "description": "Button text to export account"
   },
+  "exportOptionProfileTox": "Profile (.tox)",
+  "@exportOptionProfileTox": {
+    "description": "Export format option: profile only"
+  },
+  "exportOptionProfileToxSubtitle": "qTox compatible, profile only",
+  "exportOptionFullBackup": "Full Backup (.zip)",
+  "@exportOptionFullBackup": {
+    "description": "Export format option: full backup"
+  },
+  "exportOptionFullBackupSubtitle": "Profile + chat history + settings",
   "importAccount": "Import Account",
   "@importAccount": {
     "description": "Button text to import account"

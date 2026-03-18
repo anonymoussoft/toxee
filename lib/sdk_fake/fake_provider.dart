@@ -24,10 +24,26 @@ import 'fake_models.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
 
+V2TimConversation mergeExternalConversationUpdate({
+  V2TimConversation? existing,
+  required V2TimConversation refreshed,
+}) {
+  if (existing == null) return refreshed;
+
+  refreshed.faceUrl ??= existing.faceUrl;
+  refreshed.showName ??= existing.showName;
+  refreshed.lastMessage ??= existing.lastMessage;
+  refreshed.orderkey ??= existing.orderkey;
+  refreshed.unreadCount ??= existing.unreadCount;
+  refreshed.isPinned ??= existing.isPinned;
+  return refreshed;
+}
+
 class FakeChatDataProvider implements ChatDataProvider {
   final _convCtrl = StreamController<List<V2TimConversation>>.broadcast();
   final _unreadCtrl = StreamController<int>.broadcast();
   final Map<String, V2TimConversation> _convMap = {};
+
   /// Conversation IDs that were explicitly deleted via the SDK (deleteConversationList).
   /// FakeIM's periodic refresh re-emits ALL friends as FakeConversation events every 5 s;
   /// without this set, deleted conversations would reappear in _convMap shortly after deletion.
@@ -41,11 +57,13 @@ class FakeChatDataProvider implements ChatDataProvider {
 
   StreamSubscription? _convSub;
   StreamSubscription? _unreadSub;
-  FfiChatService? _ffiService; // Reference to FfiChatService for getting last message timestamps
+  FfiChatService?
+      _ffiService; // Reference to FfiChatService for getting last message timestamps
   Timer? _convFlushTimer;
   static const _convFlushDelay = Duration(milliseconds: 50);
 
-  FakeChatDataProvider({FfiChatService? ffiService}) : _ffiService = ffiService {
+  FakeChatDataProvider({FfiChatService? ffiService})
+      : _ffiService = ffiService {
     // Seed initial from current conversation manager if available
     () async {
       try {
@@ -66,19 +84,19 @@ class FakeChatDataProvider implements ChatDataProvider {
           }
           if (_convMap.isNotEmpty) {
             final initialList = _convMap.values.toList();
-          // Sort conversations: pinned first, then by last message timestamp (newest first)
-          initialList.sort((a, b) {
-            // First, sort by pinned status (pinned conversations first)
-            final aPinned = a.isPinned ?? false;
-            final bPinned = b.isPinned ?? false;
-            if (aPinned != bPinned) {
-              return aPinned ? -1 : 1;
-            }
-            // Then, sort by last message timestamp (newest first)
-            final aTime = a.lastMessage?.timestamp ?? 0;
-            final bTime = b.lastMessage?.timestamp ?? 0;
-            return bTime.compareTo(aTime);
-          });
+            // Sort conversations: pinned first, then by last message timestamp (newest first)
+            initialList.sort((a, b) {
+              // First, sort by pinned status (pinned conversations first)
+              final aPinned = a.isPinned ?? false;
+              final bPinned = b.isPinned ?? false;
+              if (aPinned != bPinned) {
+                return aPinned ? -1 : 1;
+              }
+              // Then, sort by last message timestamp (newest first)
+              final aTime = a.lastMessage?.timestamp ?? 0;
+              final bTime = b.lastMessage?.timestamp ?? 0;
+              return bTime.compareTo(aTime);
+            });
             _convCtrl.add(initialList);
             _updateTotalUnreadCount(initialList);
           }
@@ -87,7 +105,9 @@ class FakeChatDataProvider implements ChatDataProvider {
         // Error seeding conversations - silently fail
       }
     }();
-    _convSub = FakeUIKit.instance.eventBusInstance.on<FakeConversation>(FakeIM.topicConversation).listen((c) async {
+    _convSub = FakeUIKit.instance.eventBusInstance
+        .on<FakeConversation>(FakeIM.topicConversation)
+        .listen((c) async {
       // Skip conversations that were explicitly deleted via the SDK.
       // FakeIM's periodic refresh re-emits ALL friends every 5s; without this check,
       // deleted conversations would reappear in the conversation list.
@@ -107,13 +127,17 @@ class FakeChatDataProvider implements ChatDataProvider {
           }
           // Also remove from UIKit's conversation list to ensure UI updates
           // This is important because buildConversationList only adds/updates, it doesn't remove
-          TencentCloudChat.instance.dataInstance.conversation.removeConversation([c.conversationID]);
-          print('[FakeChatDataProvider] Removed quit group conversation ${c.conversationID} from UIKit conversation list via FakeConversation event');
+          TencentCloudChat.instance.dataInstance.conversation
+              .removeConversation([c.conversationID]);
+          print(
+              '[FakeChatDataProvider] Removed quit group conversation ${c.conversationID} from UIKit conversation list via FakeConversation event');
           return; // Skip adding this conversation
         }
         // Always get the latest group name from Prefs to ensure we have the latest
         final latestName = await Prefs.getGroupName(gid);
-        if (latestName != null && latestName.isNotEmpty && latestName != c.title) {
+        if (latestName != null &&
+            latestName.isNotEmpty &&
+            latestName != c.title) {
           // Update the title with the latest name from Prefs
           c = FakeConversation(
             conversationID: c.conversationID,
@@ -126,21 +150,23 @@ class FakeChatDataProvider implements ChatDataProvider {
         }
       }
       final newConv = await _mapConv(c);
-      if (_convMap.containsKey(c.conversationID)) {
-        final existing = _convMap[c.conversationID]!;
-        if (existing.unreadCount == 0) newConv.unreadCount = 0;
-        newConv.orderkey = existing.orderkey ?? newConv.orderkey;
-      }
-      _convMap[c.conversationID] = newConv;
+      _convMap[c.conversationID] = mergeExternalConversationUpdate(
+        existing: _convMap[c.conversationID],
+        refreshed: newConv,
+      );
       _scheduleConvListEmit();
     });
     // Use total from FakeIM (from ffi.getUnreadOf) so sidebar updates when new message arrives
-    _unreadSub = FakeUIKit.instance.eventBusInstance.on<FakeUnreadTotal>(FakeIM.topicUnread).listen((u) {
+    _unreadSub = FakeUIKit.instance.eventBusInstance
+        .on<FakeUnreadTotal>(FakeIM.topicUnread)
+        .listen((u) {
       _unreadCtrl.add(u.total);
     });
-    
+
     // Listen for new messages to update conversation lastMessage
-    FakeUIKit.instance.eventBusInstance.on<FakeMessage>(FakeIM.topicMessage).listen((msg) async {
+    FakeUIKit.instance.eventBusInstance
+        .on<FakeMessage>(FakeIM.topicMessage)
+        .listen((msg) async {
       // When a new message arrives for a previously-deleted conversation, allow it to
       // be recreated (e.g. friend was re-added, or a new message from re-joined group).
       // Remove from _sdkDeletedConvIds so the conversation can reappear.
@@ -148,9 +174,11 @@ class FakeChatDataProvider implements ChatDataProvider {
       // When a new message arrives, update the corresponding conversation's lastMessage
       // CRITICAL: Even if conversation doesn't exist in _convMap, we should still process it
       // This is especially important for failed messages that need to appear in the conversation list
-      final peerId = msg.conversationID.startsWith('c2c_') 
-          ? msg.conversationID.substring(4) 
-          : (msg.conversationID.startsWith('group_') ? msg.conversationID.substring(6) : msg.conversationID);
+      final peerId = msg.conversationID.startsWith('c2c_')
+          ? msg.conversationID.substring(4)
+          : (msg.conversationID.startsWith('group_')
+              ? msg.conversationID.substring(6)
+              : msg.conversationID);
       // Use a microtask to ensure _lastByPeer has been updated in FfiChatService
       // This ensures that when we access lastMessages, the message has already been added
       await Future.microtask(() async {
@@ -159,19 +187,21 @@ class FakeChatDataProvider implements ChatDataProvider {
         bool isFailedMessage = false;
         try {
           final userID = msg.conversationID.startsWith('c2c_') ? peerId : null;
-          final groupID = msg.conversationID.startsWith('group_') ? peerId : null;
+          final groupID =
+              msg.conversationID.startsWith('group_') ? peerId : null;
           final currentToxId = await Prefs.getCurrentAccountToxId();
-          final failedMessagesData = await Tim2ToxFailedMessagePersistence.loadFailedMessages(
+          final failedMessagesData =
+              await Tim2ToxFailedMessagePersistence.loadFailedMessages(
             userID: userID,
             groupID: groupID,
             accountToxId: currentToxId,
           );
-          
+
           // Check if this message is in the failed list
           for (final failedMsgData in failedMessagesData) {
             final failedMsgID = failedMsgData['msgID'] as String?;
             final failedID = failedMsgData['id'] as String?;
-            
+
             if ((failedMsgID != null && failedMsgID == msg.msgID) ||
                 (failedID != null && failedID == msg.msgID)) {
               // Message is in failed list
@@ -182,10 +212,10 @@ class FakeChatDataProvider implements ChatDataProvider {
         } catch (e) {
           // If check fails, continue with normal processing
         }
-        
+
         // Try to get the message from lastMessages first
         final lastMsg = _ffiService?.lastMessages[peerId];
-        
+
         V2TimMessage lastMessage;
         // CRITICAL: If message is failed, always build from FakeMessage directly
         // This ensures we have the correct text and status, even if lastMessages doesn't contain it
@@ -204,27 +234,30 @@ class FakeChatDataProvider implements ChatDataProvider {
             filePath: msg.filePath,
             mediaKind: msg.mediaKind,
           );
-          lastMessage = _chatMessageToV2TimMessage(tempChatMsg, peerId, msg.conversationID.startsWith('group_'));
+          lastMessage = _chatMessageToV2TimMessage(
+              tempChatMsg, peerId, msg.conversationID.startsWith('group_'));
           // Set failed status if message is in failed list
           if (isFailedMessage) {
             lastMessage.status = MessageStatus.V2TIM_MSG_STATUS_SEND_FAIL;
           }
         } else {
           // Use the message from lastMessages (preferred, as it has all fields including isSelf)
-          lastMessage = _chatMessageToV2TimMessage(lastMsg, peerId, msg.conversationID.startsWith('group_'));
+          lastMessage = _chatMessageToV2TimMessage(
+              lastMsg, peerId, msg.conversationID.startsWith('group_'));
           // Still check if it's in failed list (in case lastMessages has it but it's actually failed)
           if (isFailedMessage) {
             lastMessage.status = MessageStatus.V2TIM_MSG_STATUS_SEND_FAIL;
           }
         }
-        
+
         // If conversation doesn't exist, create it (especially important for failed messages)
         if (!_convMap.containsKey(msg.conversationID)) {
           // Load conversation title and avatar
           String? title;
           String? faceUrl;
           if (msg.conversationID.startsWith('c2c_')) {
-            title = peerId; // Use peerId as title (friend name can be loaded later if needed)
+            title =
+                peerId; // Use peerId as title (friend name can be loaded later if needed)
             faceUrl = await Prefs.getFriendAvatarPath(peerId);
           } else if (msg.conversationID.startsWith('group_')) {
             title = await Prefs.getGroupName(peerId) ?? peerId;
@@ -232,7 +265,7 @@ class FakeChatDataProvider implements ChatDataProvider {
           } else {
             title = peerId;
           }
-          
+
           // New conv for incoming message: unread at least 1 from FfiChatService
           final newConvUnread = _ffiService?.getUnreadOf(peerId) ?? 1;
           final newConv = FakeConversation(
@@ -245,7 +278,7 @@ class FakeChatDataProvider implements ChatDataProvider {
           );
           _convMap[msg.conversationID] = await _mapConv(newConv);
         }
-        
+
         // Load avatar path for conversation
         String? faceUrl = _convMap[msg.conversationID]?.faceUrl;
         if (faceUrl == null) {
@@ -257,7 +290,9 @@ class FakeChatDataProvider implements ChatDataProvider {
           }
         }
         // Use FfiChatService unread so sidebar and conversation list show correct count when new message arrives
-        final unread = _ffiService?.getUnreadOf(peerId) ?? _convMap[msg.conversationID]?.unreadCount ?? 0;
+        final unread = _ffiService?.getUnreadOf(peerId) ??
+            _convMap[msg.conversationID]?.unreadCount ??
+            0;
         final conv = FakeConversation(
           conversationID: msg.conversationID,
           title: _convMap[msg.conversationID]?.showName ?? peerId,
@@ -268,14 +303,17 @@ class FakeChatDataProvider implements ChatDataProvider {
         );
         // CRITICAL: Pass lastMessage to _mapConv to ensure it's preserved
         // This ensures that failed messages are not overridden by _mapConv's logic
-        final updatedConv = await _mapConv(conv, overrideLastMessage: lastMessage);
+        final updatedConv =
+            await _mapConv(conv, overrideLastMessage: lastMessage);
         _convMap[msg.conversationID] = updatedConv;
         _scheduleConvListEmit();
       });
     });
-    
+
     // Listen for friend deletion events
-    FakeUIKit.instance.eventBusInstance.on<FakeFriendDeleted>(FakeIM.topicFriendDeleted).listen((event) {
+    FakeUIKit.instance.eventBusInstance
+        .on<FakeFriendDeleted>(FakeIM.topicFriendDeleted)
+        .listen((event) {
       // Remove conversation from map and mark as SDK-deleted to prevent re-add by FakeIM refresh
       final convId = 'c2c_${event.userID}';
       _convMap.remove(convId);
@@ -284,12 +322,16 @@ class FakeChatDataProvider implements ChatDataProvider {
 
       // Also remove from UIKit's conversation list to ensure UI updates.
       // buildConversationList only adds/updates; it doesn't remove, so we need explicit removal.
-      TencentCloudChat.instance.dataInstance.conversation.removeConversation([convId]);
-      print('[FakeChatDataProvider] Removed conversation $convId from UIKit conversation list via FakeFriendDeleted event');
+      TencentCloudChat.instance.dataInstance.conversation
+          .removeConversation([convId]);
+      print(
+          '[FakeChatDataProvider] Removed conversation $convId from UIKit conversation list via FakeFriendDeleted event');
     });
-    
+
     // Listen for group deletion events
-    FakeUIKit.instance.eventBusInstance.on<FakeGroupDeleted>(FakeIM.topicGroupDeleted).listen((event) {
+    FakeUIKit.instance.eventBusInstance
+        .on<FakeGroupDeleted>(FakeIM.topicGroupDeleted)
+        .listen((event) {
       // Remove conversation from map and mark as SDK-deleted to prevent re-add by FakeIM refresh
       final convId = 'group_${event.groupID}';
       _convMap.remove(convId);
@@ -298,8 +340,10 @@ class FakeChatDataProvider implements ChatDataProvider {
 
       // Also remove from UIKit's conversation list to ensure UI updates
       // buildConversationList only adds/updates, it doesn't remove, so we need to explicitly remove
-      TencentCloudChat.instance.dataInstance.conversation.removeConversation([convId]);
-      print('[FakeChatDataProvider] Removed conversation $convId from UIKit conversation list via FakeGroupDeleted event');
+      TencentCloudChat.instance.dataInstance.conversation
+          .removeConversation([convId]);
+      print(
+          '[FakeChatDataProvider] Removed conversation $convId from UIKit conversation list via FakeGroupDeleted event');
     });
 
     // Listen for SDK conversation deletion events (fired by C++ OnConversationDeleted)
@@ -307,29 +351,35 @@ class FakeChatDataProvider implements ChatDataProvider {
     // Deferred slightly to ensure SDK is fully initialized.
     Future.delayed(const Duration(milliseconds: 500), () {
       try {
-        TencentCloudChat.instance.chatSDKInstance.manager.getConversationManager().addConversationListener(
-          listener: V2TimConversationListener(
-            onConversationChanged: (List<V2TimConversation> conversationList) {
-              for (final conv in conversationList) {
-                if (_convMap.containsKey(conv.conversationID)) {
-                  _convMap[conv.conversationID] = conv;
-                }
-              }
-              _scheduleConvListEmit();
-            },
-            onConversationDeleted: (List<String> conversationIDList) {
-              for (final convId in conversationIDList) {
-                _convMap.remove(convId);
-                _sdkDeletedConvIds.add(convId);
-                print('[FakeChatDataProvider] Removed conversation $convId from _convMap via onConversationDeleted');
-              }
-              _scheduleConvListEmit();
-            },
-          ),
-        );
-        print('[FakeChatDataProvider] Registered onConversationDeleted listener');
+        TencentCloudChat.instance.chatSDKInstance.manager
+            .getConversationManager()
+            .addConversationListener(
+              listener: V2TimConversationListener(
+                onConversationChanged:
+                    (List<V2TimConversation> conversationList) {
+                  for (final conv in conversationList) {
+                    if (_convMap.containsKey(conv.conversationID)) {
+                      _convMap[conv.conversationID] = conv;
+                    }
+                  }
+                  _scheduleConvListEmit();
+                },
+                onConversationDeleted: (List<String> conversationIDList) {
+                  for (final convId in conversationIDList) {
+                    _convMap.remove(convId);
+                    _sdkDeletedConvIds.add(convId);
+                    print(
+                        '[FakeChatDataProvider] Removed conversation $convId from _convMap via onConversationDeleted');
+                  }
+                  _scheduleConvListEmit();
+                },
+              ),
+            );
+        print(
+            '[FakeChatDataProvider] Registered onConversationDeleted listener');
       } catch (e) {
-        print('[FakeChatDataProvider] Failed to register conversation listener: $e');
+        print(
+            '[FakeChatDataProvider] Failed to register conversation listener: $e');
       }
     });
   }
@@ -370,14 +420,17 @@ class FakeChatDataProvider implements ChatDataProvider {
     });
   }
 
-  Future<V2TimConversation> _mapConv(FakeConversation c, {V2TimMessage? overrideLastMessage}) async {
+  Future<V2TimConversation> _mapConv(FakeConversation c,
+      {V2TimMessage? overrideLastMessage}) async {
     final conv = V2TimConversation(conversationID: c.conversationID);
-    conv.type = c.isGroup ? ConversationType.V2TIM_GROUP : ConversationType.V2TIM_C2C;
+    conv.type =
+        c.isGroup ? ConversationType.V2TIM_GROUP : ConversationType.V2TIM_C2C;
     if (c.isGroup) {
       conv.groupID = c.conversationID.replaceFirst('group_', '');
       // Map Tox group type to UIKit GroupType for call button visibility:
       // "conference" → AVChatRoom (calls not supported), "group" → Work (calls supported)
-      conv.groupType = (c.groupType == 'conference') ? GroupType.AVChatRoom : GroupType.Work;
+      conv.groupType =
+          (c.groupType == 'conference') ? GroupType.AVChatRoom : GroupType.Work;
     } else {
       conv.userID = c.conversationID.replaceFirst('c2c_', '');
     }
@@ -395,51 +448,60 @@ class FakeChatDataProvider implements ChatDataProvider {
     // Get last message timestamp from FfiChatService
     int baseTimestamp = DateTime.now().millisecondsSinceEpoch;
     V2TimMessage? lastMessage;
-    
+
     // CRITICAL: If overrideLastMessage is provided, use it (this preserves failed messages)
     if (overrideLastMessage != null) {
       lastMessage = overrideLastMessage;
-      baseTimestamp = (lastMessage.timestamp ?? 0) * 1000; // Convert to milliseconds
+      baseTimestamp =
+          (lastMessage.timestamp ?? 0) * 1000; // Convert to milliseconds
     } else {
       // Check failed messages persistence first, as failed messages might be newer than lastMessages
       final conversationId = c.conversationID;
-      final peerId = conversationId.startsWith('c2c_') 
-          ? conversationId.substring(4) 
-          : (conversationId.startsWith('group_') ? conversationId.substring(6) : conversationId);
+      final peerId = conversationId.startsWith('c2c_')
+          ? conversationId.substring(4)
+          : (conversationId.startsWith('group_')
+              ? conversationId.substring(6)
+              : conversationId);
       final userID = conversationId.startsWith('c2c_') ? peerId : null;
       final groupID = conversationId.startsWith('group_') ? peerId : null;
-      
+
       V2TimMessage? failedLastMessage;
       int failedTimestampMs = 0; // Store in milliseconds for comparison
       try {
         final currentToxId = await Prefs.getCurrentAccountToxId();
-        final failedMessagesData = await Tim2ToxFailedMessagePersistence.loadFailedMessages(
+        final failedMessagesData =
+            await Tim2ToxFailedMessagePersistence.loadFailedMessages(
           userID: userID,
           groupID: groupID,
           accountToxId: currentToxId,
         );
-        
+
         // Find the latest failed message (by timestamp)
         for (final failedMsgData in failedMessagesData) {
           // CRITICAL: timestamp in persistence is in SECONDS (from V2TimMessage.timestamp)
           // We need to convert to milliseconds for comparison with lastMsgTimestamp
-          final failedMsgTimestampSeconds = failedMsgData['timestamp'] as int? ?? 0;
-          final failedMsgTimestampMs = failedMsgTimestampSeconds * 1000; // Convert to milliseconds
-          
+          final failedMsgTimestampSeconds =
+              failedMsgData['timestamp'] as int? ?? 0;
+          final failedMsgTimestampMs =
+              failedMsgTimestampSeconds * 1000; // Convert to milliseconds
+
           if (failedMsgTimestampMs > failedTimestampMs) {
             failedTimestampMs = failedMsgTimestampMs;
             final failedMsgID = failedMsgData['msgID'] as String?;
             final failedID = failedMsgData['id'] as String?;
             final failedText = failedMsgData['text'] as String? ?? '';
-            final failedElemType = failedMsgData['elemType'] as int? ?? MessageElemType.V2TIM_ELEM_TYPE_TEXT;
-            
+            final failedElemType = failedMsgData['elemType'] as int? ??
+                MessageElemType.V2TIM_ELEM_TYPE_TEXT;
+
             // Create a V2TimMessage from failed message data
             failedLastMessage = V2TimMessage(elemType: failedElemType);
             failedLastMessage.msgID = failedMsgID;
             failedLastMessage.id = failedID ?? failedMsgID;
-            failedLastMessage.timestamp = failedMsgTimestampSeconds; // Keep in seconds for V2TimMessage
+            failedLastMessage.timestamp =
+                failedMsgTimestampSeconds; // Keep in seconds for V2TimMessage
             failedLastMessage.status = MessageStatus.V2TIM_MSG_STATUS_SEND_FAIL;
-            failedLastMessage.isSelf = true; // Failed messages are always self-sent
+            failedLastMessage.isSelf =
+                true; // Failed messages are always self-sent
             if (failedText.isNotEmpty) {
               failedLastMessage.textElem = V2TimTextElem(text: failedText);
             }
@@ -454,7 +516,7 @@ class FakeChatDataProvider implements ChatDataProvider {
       } catch (e) {
         // Ignore errors during failed message loading
       }
-      
+
       // Get message from lastMessages (keyed by normalized peer id)
       V2TimMessage? lastMsgFromService;
       int lastMsgTimestampMs = 0;
@@ -472,12 +534,14 @@ class FakeChatDataProvider implements ChatDataProvider {
         }
         if (lastMsg != null) {
           lastMsgTimestampMs = lastMsg.timestamp.millisecondsSinceEpoch;
-          lastMsgFromService = _chatMessageToV2TimMessage(lastMsg, peerId, c.isGroup);
+          lastMsgFromService =
+              _chatMessageToV2TimMessage(lastMsg, peerId, c.isGroup);
         }
       }
-      
+
       // Use the message with the latest timestamp (failed message or lastMessages message)
-      if (failedLastMessage != null && failedTimestampMs >= lastMsgTimestampMs) {
+      if (failedLastMessage != null &&
+          failedTimestampMs >= lastMsgTimestampMs) {
         lastMessage = failedLastMessage;
         baseTimestamp = failedTimestampMs;
       } else if (lastMsgFromService != null) {
@@ -490,18 +554,20 @@ class FakeChatDataProvider implements ChatDataProvider {
     if (c.isPinned) {
       // Pinned conversations: use very large number (Int64.max - timestamp)
       // This ensures they appear first, and among pinned ones, newer messages appear first
-      conv.orderkey = 9223372036854775807 - baseTimestamp; // Int64.max - timestamp
+      conv.orderkey =
+          9223372036854775807 - baseTimestamp; // Int64.max - timestamp
     } else {
       // Non-pinned conversations: use timestamp directly (newer = higher = first)
       conv.orderkey = baseTimestamp;
     }
     return conv;
   }
-  
+
   /// Convert ChatMessage to V2TimMessage for use in conversation.lastMessage
   /// Note: This method does NOT check failed persistence - that should be done by the caller
   /// if the message might be failed (e.g., in FakeMessage listener)
-  V2TimMessage _chatMessageToV2TimMessage(ChatMessage chatMsg, String peerId, bool isGroup) {
+  V2TimMessage _chatMessageToV2TimMessage(
+      ChatMessage chatMsg, String peerId, bool isGroup) {
     // Determine element type based on mediaKind
     int elemType = MessageElemType.V2TIM_ELEM_TYPE_TEXT;
     if (chatMsg.mediaKind != null) {
@@ -525,20 +591,23 @@ class FakeChatDataProvider implements ChatDataProvider {
           elemType = MessageElemType.V2TIM_ELEM_TYPE_TEXT;
       }
     }
-    
+
     final msg = V2TimMessage(elemType: elemType);
     msg.msgID = chatMsg.msgID;
     msg.userID = chatMsg.fromUserId;
-    msg.sender = chatMsg.fromUserId; // Set sender to avoid null check error in getShowName
+    msg.sender = chatMsg
+        .fromUserId; // Set sender to avoid null check error in getShowName
     msg.groupID = isGroup ? peerId : null;
     msg.timestamp = chatMsg.timestamp.millisecondsSinceEpoch ~/ 1000;
     msg.isSelf = chatMsg.isSelf;
-    
+
     // Call record: custom elem with JSON data; session list summary via getMessageSummary/handleCustomMessage
     if (chatMsg.mediaKind == 'call_record') {
-      msg.customElem = V2TimCustomElem(data: chatMsg.text, desc: '', extension: '');
+      msg.customElem =
+          V2TimCustomElem(data: chatMsg.text, desc: '', extension: '');
       final callLabel = TencentCloudChatIntl().localization?.call ?? 'Call';
-      msg.textElem = V2TimTextElem(text: '[$callLabel]'); // Fallback if summary reads textElem
+      msg.textElem = V2TimTextElem(
+          text: '[$callLabel]'); // Fallback if summary reads textElem
       return msg;
     }
 
@@ -546,11 +615,12 @@ class FakeChatDataProvider implements ChatDataProvider {
     if (chatMsg.filePath != null && chatMsg.mediaKind != null) {
       final file = File(chatMsg.filePath!);
       final fileName = chatMsg.filePath!.split('/').last;
-      
+
       switch (chatMsg.mediaKind) {
         case 'image':
           // Generate UUID from msgID for download identification
-          final imageUuid = (chatMsg.msgID ?? msg.msgID ?? '').replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+          final imageUuid = (chatMsg.msgID ?? msg.msgID ?? '')
+              .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
           final imagePath = chatMsg.filePath;
           final imageUrl = imagePath; // Use local path as URL for Tox protocol
           int? fileSize;
@@ -561,7 +631,7 @@ class FakeChatDataProvider implements ChatDataProvider {
           } catch (e) {
             // Ignore file size errors
           }
-          
+
           // Create imageList with both thumb and origin images
           // UIKit may request either THUMB (1) or ORIGIN (0), so we need both
           // This is required for downloadMessage to work properly
@@ -581,7 +651,7 @@ class FakeChatDataProvider implements ChatDataProvider {
               localUrl: imagePath,
             ),
           ];
-          
+
           msg.imageElem = V2TimImageElem(
             path: chatMsg.filePath,
             imageList: imageList,
@@ -594,9 +664,11 @@ class FakeChatDataProvider implements ChatDataProvider {
           break;
         case 'file':
           // Generate UUID from msgID for download identification
-          final fileUuid = (chatMsg.msgID ?? msg.msgID ?? '').replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-          final fileUrl = chatMsg.filePath; // Use local path as URL for Tox protocol
-          
+          final fileUuid = (chatMsg.msgID ?? msg.msgID ?? '')
+              .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+          final fileUrl =
+              chatMsg.filePath; // Use local path as URL for Tox protocol
+
           msg.fileElem = V2TimFileElem(
             path: chatMsg.filePath,
             fileName: fileName,
@@ -637,7 +709,7 @@ class FakeChatDataProvider implements ChatDataProvider {
         msg.textElem = V2TimTextElem(text: chatMsg.text);
       }
     }
-    
+
     return msg;
   }
 
@@ -662,7 +734,7 @@ class FakeChatDataProvider implements ChatDataProvider {
       });
       return list;
     }
-    
+
     // If _convMap is empty, actively fetch from conversation manager
     // This handles the case where getInitialConversations is called before
     // FakeIM has finished initializing and emitting conversations
@@ -672,7 +744,7 @@ class FakeChatDataProvider implements ChatDataProvider {
         final list = await mgr.getConversationList();
         // Get quit groups to filter them out
         final quitGroups = await Prefs.getQuitGroups();
-        
+
         // First, remove any conversations from _convMap that are for quit groups
         final convIdsToRemove = <String>[];
         for (final convId in _convMap.keys) {
@@ -686,7 +758,7 @@ class FakeChatDataProvider implements ChatDataProvider {
         for (final convId in convIdsToRemove) {
           _convMap.remove(convId);
         }
-        
+
         final convList = <V2TimConversation>[];
         for (final c in list) {
           // Skip group conversations that have been quit
@@ -720,7 +792,7 @@ class FakeChatDataProvider implements ChatDataProvider {
       // Error fetching conversations - return empty list
       // The stream will update once FakeIM finishes initializing
     }
-    
+
     // Fallback: return empty list if all else fails
     // The stream will update once conversations are available
     return [];
@@ -738,5 +810,3 @@ class FakeChatDataProvider implements ChatDataProvider {
     _unreadCtrl.close();
   }
 }
-
-

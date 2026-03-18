@@ -40,6 +40,11 @@ cd "$SCRIPT_DIR"
 print_info "Building tim2tox native library..."
 TIM2TOX_DIR="$SCRIPT_DIR/third_party/tim2tox"
 if [ -d "$TIM2TOX_DIR" ]; then
+    # Ensure tim2tox submodules (e.g. c-toxcore) are initialized
+    if [ -f "$TIM2TOX_DIR/.gitmodules" ] && { [ -d "$TIM2TOX_DIR/.git" ] || [ -f "$TIM2TOX_DIR/.git" ]; }; then
+        print_info "Initializing tim2tox submodules (c-toxcore)..."
+        (cd "$TIM2TOX_DIR" && git submodule update --init --recursive)
+    fi
     cd "$TIM2TOX_DIR"
     if [ -f "build.sh" ]; then
         ./build.sh

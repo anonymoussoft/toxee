@@ -563,5 +563,5 @@ These problems are mainly related to the implementation of UIKit. As a sample ap
 
 ## Related documents
 
-- [toxee Architecture](./ARCHITECTURE.en.md) - Overall architecture and recovery mechanism
-- [Implementation details](./IMPLEMENTATION_DETAILS.en.md) - Detailed implementation instructions
+- [toxee Architecture](../architecture/ARCHITECTURE.en.md) - Overall architecture and recovery mechanism
+- [Implementation details](IMPLEMENTATION_DETAILS.en.md) - Detailed implementation instructions

@@ -92,11 +92,8 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _nickController = TextEditingController(text: widget.nickName ?? '');
     _statusController = TextEditingController(text: widget.statusMessage ?? '');
-    // Initialize card text controller with default value
-    // We'll update it in didChangeDependencies when context is available
-    _cardTextController = TextEditingController(
-      text: 'Scan QR code to add me as contact',
-    );
+    // Initialize card text controller empty; default text set in didChangeDependencies
+    _cardTextController = TextEditingController(text: '');
     // Listen to changes to track unsaved modifications
     _nickController.addListener(_handleEditableFieldChanged);
     _statusController.addListener(_handleEditableFieldChanged);
@@ -146,14 +143,11 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Only update card text controller with localized default value if:
-    // 1. It's still the hardcoded default (not loaded from Prefs yet)
-    // 2. And we have a localization available
+    // Set localized default for card text when empty (Prefs.getCardText() may override later)
     final appL10n = AppLocalizations.of(context);
     if (appL10n != null &&
         widget.isEditable &&
-        _cardTextController.text == 'Scan QR code to add me as contact') {
-      // This will be overridden by Prefs.getCardText() if a saved value exists
+        _cardTextController.text.isEmpty) {
       _cardTextController.text = appL10n.scanQrCodeToAddContact;
     }
   }
@@ -236,7 +230,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _hasUnsavedChanges = false;
       });
       final tL10n = TencentCloudChatLocalizations.of(context);
-      _showSnack(tL10n?.saveContact ?? 'Saved');
+      _showSnack(tL10n?.saveContact ?? AppLocalizations.of(context)!.saved);
     } catch (e) {
       if (!mounted) return;
       final appL10n = AppLocalizations.of(context)!;
@@ -302,8 +296,7 @@ class _ProfilePageState extends State<ProfilePage> {
     // Use current card text from controller
     final cardText = _cardTextController.text.trim().isNotEmpty
         ? _cardTextController.text.trim()
-        : (AppLocalizations.of(context)?.scanQrCodeToAddContact ??
-            'Scan QR code to add me as contact');
+        : (AppLocalizations.of(context)?.scanQrCodeToAddContact ?? '');
     final key =
         '$displayName|${locale.languageCode}|${_colorKey(primaryColor)}|${_colorKey(textColor)}|$avatarKey|$_avatarVersion|$cardText|$_qrCardVersion';
     // Always regenerate if key changed or if future is null
@@ -633,8 +626,7 @@ class _ProfilePageState extends State<ProfilePage> {
         : (widget.nickName?.isNotEmpty == true
             ? widget.nickName!.trim()
             : widget.userId);
-    final appStatusLabel =
-        AppLocalizations.of(context)?.statusMessage ?? 'Status';
+    final appStatusLabel = AppLocalizations.of(context)!.statusMessage;
     final statusText = widget.isEditable
         ? (_statusController.text.trim().isNotEmpty
             ? _statusController.text.trim()
@@ -724,8 +716,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                         _editMode ? Icons.close : Icons.edit,
                                         size: 20),
                                     tooltip: _editMode
-                                        ? tL10n?.cancel ?? 'Cancel'
-                                        : tL10n?.edit ?? 'Edit',
+                                        ? (tL10n?.cancel ?? appL10n.cancel)
+                                        : (tL10n?.edit ?? 'Edit'),
                                     onPressed: () =>
                                         setState(() => _editMode = !_editMode),
                                   ),
@@ -737,7 +729,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 controller: _nickController,
                                 textAlignVertical: TextAlignVertical.center,
                                 decoration: InputDecoration(
-                                  labelText: tL10n?.setNickname ?? 'Nickname',
+                                  labelText: tL10n?.setNickname ?? appL10n.nickname,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(
                                         AppThemeConfig.inputBorderRadius),
@@ -762,7 +754,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 textAlignVertical: TextAlignVertical.center,
                                 decoration: InputDecoration(
                                   labelText:
-                                      tL10n?.setSignature ?? 'Status Message',
+                                      tL10n?.setSignature ?? appL10n.statusMessage,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(
                                         AppThemeConfig.inputBorderRadius),
@@ -808,7 +800,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                           height: 16,
                                           child: CircularProgressIndicator(
                                               strokeWidth: 2))
-                                      : Text(tL10n?.saveContact ?? 'Save'),
+                                      : Text(tL10n?.saveContact ?? appL10n.save),
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -828,8 +820,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                 const SizedBox(width: 6),
                                 Text(
                                   isConnected
-                                      ? (tL10n?.online ?? 'Online')
-                                      : (tL10n?.offline ?? 'Offline'),
+                                      ? (tL10n?.online ?? appL10n.online)
+                                      : (tL10n?.offline ?? appL10n.offline),
                                   style: TextStyle(
                                     color: isConnected
                                         ? colorTheme.secondButtonColor
@@ -859,7 +851,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                         icon: const Icon(Icons.message_rounded),
-                        label: Text(tL10n?.sendMsg ?? 'Chat'),
+                        label: Text(tL10n?.sendMsg ?? appL10n.startChat),
                         onPressed: widget.onChat,
                       ),
                     ),

@@ -18,6 +18,7 @@ import '../util/app_theme_config.dart';
 import '../util/account_export_service.dart';
 
 import '../util/account_service.dart';
+import '../util/app_bootstrap_coordinator.dart';
 import '../auth/login_use_case.dart';
 import 'login/login_page_controller.dart';
 
@@ -341,6 +342,8 @@ class _LoginPageState extends State<LoginPage> {
         await _loadAccountList();
         if (!mounted) return;
         _service = service;
+        await AppBootstrapCoordinator.boot(service);
+        if (!mounted) return;
         Navigator.of(context).pushReplacement(
           AppPageRoute(page: HomePage(service: service)),
         );

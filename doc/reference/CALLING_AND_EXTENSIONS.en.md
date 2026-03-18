@@ -87,4 +87,4 @@ The client UI is only responsible for installation status, channel entry and int
 
 - [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.en.md)
 - [IMPLEMENTATION_DETAILS.md](IMPLEMENTATION_DETAILS.en.md)
-- [../../tim2tox/doc/TOXAV_AND_SIGNALING.md](../../tim2tox/doc/TOXAV_AND_SIGNALING.en.md)
+- [../third_party/tim2tox/doc/integration/TOXAV_AND_SIGNALING.en.md](../third_party/tim2tox/doc/integration/TOXAV_AND_SIGNALING.en.md)

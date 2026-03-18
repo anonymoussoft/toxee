@@ -8,6 +8,8 @@
 
 **Tech Stack:** Flutter, Dart CLI scripts, `git submodule`, HTTP archive download, unified-diff patch series, shell build wrappers, GitHub Actions
 
+**Status:** Completed — submodules in `.gitmodules`, `tool/bootstrap_deps.dart` in place, build scripts and CI call bootstrap, `pubspec_overrides.yaml` generated, docs in `doc/operations/` (DEPENDENCY_BOOTSTRAP.md, DEPENDENCY_LAYOUT.md, PATCH_MAINTENANCE.md, BUILD_AND_DEPLOY.md).
+
 ---
 
 ### Task 1: Introduce a stable `third_party/` layout and submodule declarations

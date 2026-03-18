@@ -1,6 +1,7 @@
 # toxee Hybrid Architecture
 > Language: [Chinese](HYBRID_ARCHITECTURE.md) | [English](HYBRID_ARCHITECTURE.en.md)
 
+This document is the **authoritative** description of the hybrid architecture: responsibility split, recommended init order, and message/history/session/file/call paths. Overall architecture overview: [ARCHITECTURE.md](ARCHITECTURE.en.md); maintainer view and design constraints: [MAINTAINER_ARCHITECTURE.md](MAINTAINER_ARCHITECTURE.md).
 
 This document describes the hybrid architecture currently used by toxee: the underlying calls are still based on the binary replacement path, and historical messages, calls, some custom callbacks and expansion capabilities are supplemented by `Tim2ToxSdkPlatform`.
 
@@ -9,7 +10,7 @@ This document describes the hybrid architecture currently used by toxee: the und
 toxee is not a pure binary replacement, but a **mixed mode**:
 
 - **Binary replacement**: The dynamic library is replaced from `dart_native_imsdk` to `libtim2tox_ffi`, and most C++ callbacks are dispatched through NativeLibraryManager
-- **Hybrid Platform**: In **HomePage.initState()**, set `TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform` when `TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform`, used for historical queries, some SDK calls and C++ special callbacks
+- **Hybrid Platform**: `Tim2ToxSdkPlatform` is set by `SessionRuntimeCoordinator.ensureInitialized()` when `instance is! Tim2ToxSdkPlatform`; on auto-login this is called from `AppBootstrapCoordinator.boot()` before entering HomePage, on manual login from the login page calling `boot(service)` or from `HomePage._initAfterSessionReady()`; must be done by or before first screen for historical queries, some SDK calls and C++ special callbacks
 
 **Important**: Tim2ToxSdkPlatform must be set, otherwise C++ callbacks such as clearHistoryMessage, groupQuitNotification, groupChatIdStored, etc. cannot be executed correctly.
 
@@ -30,12 +31,12 @@ toxee is not a pure binary replacement, but a **mixed mode**:
 
 **Actual execution sequence** (consistent with the code):
 
-1. **main()**: `setNativeLibraryName('tim2tox_ffi')`, without setting Platform.
-2. **_StartupGate._decide()** (automatic login path): First complete `init()`, `login()`, `updateSelfProfile()` through `AccountService.initializeServiceForAccount(..., startPolling: false)`; then execute `FakeUIKit.startWithFfi(service)` → `_initTIMManagerSDK()` → `service.startPolling()` → Wait for connection/timeout → Load friend information → Navigate to `HomePage(service)`.
-3. **LoginPage._login()** (manual login path): When you have an account, go to `AccountService.initializeServiceForAccount(...)`; the old account compatibility path is still manual `init()` → `login()` → `_initTIMManagerSDK()` → `updateSelfProfile()` → `startPolling()`; then navigate to `HomePage(service)`.
-4. **HomePage.initState()**: If FakeUIKit is not started, `FakeUIKit.startWithFfi(widget.service)`; if `TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform`, set `Tim2ToxSdkPlatform` and mount `onGroupMessageReceivedForUnread`; then initialize `CallServiceManager`, `BinaryReplacementHistoryHook`, UIKit's group/friend listener, and sticker / textTranslate / soundToText plug-in.
+1. **main()**: Call `setNativeLibraryName('tim2tox_ffi')` via `AppBootstrap.initialize()` → `LoggingBootstrap.initialize()` (see `lib/bootstrap/logging_bootstrap.dart`); do not set Platform.
+2. **_StartupGate._decide()** (auto-login path): Complete `init()`, `login()`, `updateSelfProfile()` via `AccountService.initializeServiceForAccount(..., startPolling: false)`; then `AppBootstrapCoordinator.boot(service)` runs `SessionRuntimeCoordinator.ensureInitialized()` (FakeUIKit + Platform) → `TimSdkInitializer.ensureInitialized()` → `service.startPolling()` → wait for connection/timeout → load friends → navigate to `HomePage(service)`.
+3. **After login success on LoginPage** (manual login path): With an existing account, use `AccountService.initializeServiceForAccount(..., startPolling: false)`; legacy path (no toxId) is manual `init()` → `login()` → `updateSelfProfile()` (no startPolling here). Then the caller runs `AppBootstrapCoordinator.boot(service)` (SessionRuntime + TIM init + startPolling) and navigates to `HomePage(service)`.
+4. **HomePage.initState()**: Via `_initAfterSessionReady()`, call `SessionRuntimeCoordinator.ensureInitialized()` (idempotent; no-op if already run in boot); if FakeUIKit not started then `startWithFfi(widget.service)`, if Platform is not `Tim2ToxSdkPlatform` set it and mount `onGroupMessageReceivedForUnread`; then after `TimSdkInitializer.ensureInitialized()` completes, initialize `BinaryReplacementHistoryHook`, UIKit group/friend listeners, and sticker / textTranslate / soundToText plug-ins.
 
-**Description**: **Platform is set** in HomePage. `BinaryReplacementHistoryHook` is initialized after `HomePage._initTIMManagerSDK()` is completed; `CallServiceManager` relies on the already set `Tim2ToxSdkPlatform` to register the signaling listener.
+**Note**: **Platform is set** inside `SessionRuntimeCoordinator.ensureInitialized()`; on auto-login this runs before HomePage (in boot); on manual login it runs when the login page calls `boot(service)` or, if not, on first `HomePage._initAfterSessionReady()`. `BinaryReplacementHistoryHook` is initialized in HomePage after `TimSdkInitializer.ensureInitialized()` completes; `CallServiceManager` depends on `Tim2ToxSdkPlatform` already being set to register the signaling listener.
 
 **Division of Responsibilities**:
 
@@ -153,4 +154,4 @@ These callbacks are handled by **NativeLibraryManager._handleGlobalCallback** di
 - [ARCHITECTURE.md](ARCHITECTURE.en.md): Overall architecture
 - [IMPLEMENTATION_DETAILS.md](IMPLEMENTATION_DETAILS.en.md): Implementation details
 - [CALLING_AND_EXTENSIONS.md](CALLING_AND_EXTENSIONS.en.md): Calling, plugins, LAN Bootstrap and IRC extensions
-- [../../tim2tox/doc/BINARY_REPLACEMENT.md](../../tim2tox/doc/BINARY_REPLACEMENT.en.md): Binary replacement mechanism
+- [../third_party/tim2tox/doc/architecture/BINARY_REPLACEMENT.en.md](../third_party/tim2tox/doc/architecture/BINARY_REPLACEMENT.en.md): Binary replacement mechanism

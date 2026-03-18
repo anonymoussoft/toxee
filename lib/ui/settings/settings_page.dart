@@ -205,7 +205,7 @@ class _SettingsPageState extends State<SettingsPage> {
         return AppLocalizations.of(context)!.justNow;
       }
     } catch (e) {
-      return 'Unknown';
+      return AppLocalizations.of(context)!.unknown;
     }
   }
 
@@ -283,14 +283,14 @@ class _SettingsPageState extends State<SettingsPage> {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.description),
-              title: const Text('Profile (.tox)'),
-              subtitle: const Text('qTox compatible, profile only'),
+              title: Text(AppLocalizations.of(ctx)!.exportOptionProfileTox),
+              subtitle: Text(AppLocalizations.of(ctx)!.exportOptionProfileToxSubtitle),
               onTap: () => Navigator.of(ctx).pop('tox'),
             ),
             ListTile(
               leading: const Icon(Icons.archive),
-              title: const Text('Full Backup (.zip)'),
-              subtitle: const Text('Profile + chat history + settings'),
+              title: Text(AppLocalizations.of(ctx)!.exportOptionFullBackup),
+              subtitle: Text(AppLocalizations.of(ctx)!.exportOptionFullBackupSubtitle),
               onTap: () => Navigator.of(ctx).pop('zip'),
             ),
             const SizedBox(height: 8),
@@ -935,7 +935,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     obscureText: true,
                     textAlignVertical: TextAlignVertical.center,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: AppLocalizations.of(ctx)!.password,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                       ),

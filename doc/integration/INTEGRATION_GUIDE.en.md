@@ -2,7 +2,7 @@
 > Language: [Chinese](INTEGRATION_GUIDE.md) | [English](INTEGRATION_GUIDE.en.md)
 
 
-This document explains how to integrate Tim2Tox into a Flutter application, including interface adapter implementation, initialization process, and best practices.
+This document explains how to integrate [Tim2Tox](https://github.com/anonymoussoft/tim2tox) into a Flutter application, including interface adapter implementation, initialization process, and best practices.
 
 ## Contents
 
@@ -15,7 +15,7 @@ This document explains how to integrate Tim2Tox into a Flutter application, incl
 
 ## Overview
 
-toxee shows how to integrate Tim2Tox into a Flutter app. The integration process includes:
+toxee shows how to integrate [Tim2Tox](https://github.com/anonymoussoft/tim2tox) into a Flutter app. The integration process includes:
 
 1. **Implement interface adapter**: Map the abstract interface of Tim2Tox to the specific implementation of the client
 2. **Initialization Service**: Create and initialize FfiChatService
@@ -205,7 +205,7 @@ Event bus provider for inter-component communication.
 ```dart
 import 'package:tim2tox_dart/interfaces/event_bus_provider.dart';
 import 'package:tim2tox_dart/interfaces/event_bus.dart';
-import 'package:toxee/lib/sdk_fake/fake_event_bus.dart';
+import 'package:toxee/sdk_fake/fake_event_bus.dart';
 
 class EventBusAdapter implements EventBusProvider {
   final FakeEventBus _eventBus;
@@ -225,8 +225,7 @@ Session manager provider for session management.
 
 ```dart
 import 'package:tim2tox_dart/interfaces/conversation_manager_provider.dart';
-import 'package:tim2tox_dart/interfaces/conversation_manager_provider.dart';
-import 'package:toxee/lib/sdk_fake/fake_managers.dart';
+import 'package:toxee/sdk_fake/fake_managers.dart';
 
 class ConversationManagerAdapter implements ConversationManagerProvider {
   final FakeConversationManager _conversationManager;
@@ -240,9 +239,11 @@ class ConversationManagerAdapter implements ConversationManagerProvider {
 
 ## Initialization process
 
-### Complete initialization example
+### Complete initialization example (simplified; differs from toxee’s actual flow)
 
-In `lib/ui/home_page.dart`'s `initState()`:
+The following is a **minimal standalone example**. It does not match toxee’s real flow: in toxee, FfiChatService is created and init/login are done in AccountService.initializeServiceForAccount or LoginUseCase, then passed into HomePage as `widget.service`; Platform is set by SessionRuntimeCoordinator.ensureInitialized(); after login success the caller runs AppBootstrapCoordinator.boot(service) before navigating to HomePage. For the actual entry points and order, see [Hybrid architecture](architecture/HYBRID_ARCHITECTURE.en.md) and [Maintainer view](architecture/MAINTAINER_ARCHITECTURE.en.md).
+
+In `lib/ui/home_page.dart`'s `initState()` (for reference only):
 
 ```dart
 @override
@@ -361,6 +362,8 @@ TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform(
 This will route all UIKit SDK calls to tim2tox.
 
 ## Usage example
+
+In toxee, login and sending messages are done via **FfiChatService** and **Fake\*** providers (AccountService, LoginUseCase, FakeChatMessageProvider, FakeMessageManager). The examples below show the SDK’s native API and are for reference only.
 
 ### Login
 
@@ -554,7 +557,7 @@ TencentImSDKPlugin.v2TIMManager.initSDK(
 
 ## Related documents
 
-- [toxee Build and Deployment](BUILD_AND_DEPLOY.en.md) - Detailed build steps
-- [Troubleshooting](TROUBLESHOOTING.en.md) - FAQ
-- [Main README](../README.md) - Project Overview
-- [Tim2Tox Documentation](../../tim2tox/doc/README.en.md) - Tim2Tox Documentation Index
+- [toxee Build and Deployment](../operations/BUILD_AND_DEPLOY.en.md) - Detailed build steps
+- [Troubleshooting](../TROUBLESHOOTING.en.md) - FAQ
+- [Main README](../../README.md) - Project Overview
+- [Tim2Tox](https://github.com/anonymoussoft/tim2tox) documentation ([local index](../third_party/tim2tox/doc/README.en.md))

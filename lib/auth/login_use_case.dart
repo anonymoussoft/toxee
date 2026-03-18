@@ -4,7 +4,6 @@ import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import '../adapters/bootstrap_adapter.dart';
 import '../adapters/logger_adapter.dart';
 import '../adapters/shared_prefs_adapter.dart';
-import '../runtime/tim_sdk_initializer.dart';
 import '../util/account_service.dart';
 import '../util/prefs.dart';
 
@@ -73,9 +72,8 @@ class LoginUseCase {
         nickname: nickname,
         statusMessage: statusMessage,
         password: params.password,
+        startPolling: false, // caller (e.g. login page) will call AppBootstrapCoordinator.boot(service) before navigating to HomePage
       );
-
-      await TimSdkInitializer.ensureInitialized();
 
       await Prefs.setNickname(nickname);
       await Prefs.setStatusMessage(statusMessage);
@@ -102,8 +100,6 @@ class LoginUseCase {
     );
     await service.init();
     await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-    await TimSdkInitializer.ensureInitialized();
-
     final toxId = service.selfId;
     await Prefs.setNickname(nickname);
     await Prefs.setStatusMessage(statusMessage);
@@ -114,8 +110,7 @@ class LoginUseCase {
       statusMessage: statusMessage,
     );
     await service.updateSelfProfile(nickname: nickname, statusMessage: statusMessage);
-    await service.startPolling();
-
+    // Caller (e.g. login page) must call AppBootstrapCoordinator.boot(service) before navigating to HomePage
     return LoginSuccess(service: service);
   }
 }

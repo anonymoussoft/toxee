@@ -1,6 +1,7 @@
 # toxee 架构
 > 语言 / Language: [中文](ARCHITECTURE.md) | [English](ARCHITECTURE.en.md)
 
+本文描述客户端**整体架构与数据流**，为概览。混合架构的职责与**推荐初始化顺序**以 [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.md) 或 [MAINTAINER_ARCHITECTURE.md](MAINTAINER_ARCHITECTURE.md) 为权威；维护者视角与「最容易改坏的地方」见 [MAINTAINER_ARCHITECTURE.md](MAINTAINER_ARCHITECTURE.md)。
 
 ## 目录
 
@@ -48,7 +49,7 @@ toxee 实际维护的是三种概念上的集成形态：
 
 **特点**：
 - 动态库替换为 `libtim2tox_ffi`，C++ 回调经 NativeLibraryManager 派发
-- **必须设置** `TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform`（在 **HomePage.initState()** 中，当 `TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform` 时设置），用于历史查询及 clearHistoryMessage、groupQuitNotification 等 C++ 特殊回调
+- **必须设置** `TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform`：由 `SessionRuntimeCoordinator.ensureInitialized()` 在满足 `instance is! Tim2ToxSdkPlatform` 时设置；自动登录路径在 `AppBootstrapCoordinator.boot()` 中（进入 HomePage 之前）调用，手动登录路径在 `HomePage._initAfterSessionReady()` 中调用；必须在首屏或更早完成，供历史查询及 clearHistoryMessage、groupQuitNotification 等 C++ 特殊回调使用
 - 消息发送、会话/好友数据经 FakeUIKit 直接走 FfiChatService
 - `CallServiceManager`、TUICallKit 适配、贴纸/翻译/语音插件在 HomePage 阶段接入
 
@@ -101,7 +102,7 @@ ToxManager (Tox 核心)
 c-toxcore (P2P 通信)
 ```
 
-### 架构图（二进制替换方案）
+### 架构图（混合架构 / 当前方案）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -202,7 +203,7 @@ tox_new() (c-toxcore)
 - 依赖 Dart API DL 的回调机制
 
 **关键文件**：
-- `tencent_cloud_chat_sdk-8.7.7201/lib/native_im/bindings/native_library_manager.dart` - 动态库加载
+- tencent_cloud_chat_sdk 包（bootstrap 后位于 `third_party/tencent_cloud_chat_sdk`）内的 `lib/native_im/bindings/native_library_manager.dart` — 动态库加载
 - `tim2tox/ffi/dart_compat_layer.cpp` - Dart* 函数实现
 - `tim2tox/ffi/callback_bridge.cpp` - 回调桥接机制
 
@@ -281,6 +282,8 @@ tox_friend_send_message() (c-toxcore)
 ## 核心组件
 
 ### 1. Tim2Tox 层 (`tim2tox_dart` 包)
+
+Tim2Tox 上游仓库：[https://github.com/anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)。toxee 中通过 submodule 使用于 `third_party/tim2tox`。
 
 #### 1.1 FFI 绑定层 (`lib/ffi/`)
 
@@ -461,7 +464,7 @@ tox_friend_send_message() (c-toxcore)
 
 **重要说明**：
 - 所有非Web平台（Windows/Linux/macOS/Android/iOS）下，历史查询等需 Platform 的调用在设置 Tim2ToxSdkPlatform 后路由到 `Tim2ToxSdkPlatform`
-- `tencent_cloud_chat_sdk-8.7.7201` 包已修改为 `isCustomPlatform` 时走 Platform 路径，完全移除了对原生 IM SDK 的依赖（除了 Web 平台）
+- tencent_cloud_chat_sdk 包（bootstrap 后位于 `third_party/tencent_cloud_chat_sdk`）已修改为 `isCustomPlatform` 时走 Platform 路径，完全移除了对原生 IM SDK 的依赖（除了 Web 平台）
 - 消息ID统一使用 `timestamp_userID` 格式（毫秒级时间戳），确保唯一性和一致性
 
 ### 消息发送路径
@@ -525,7 +528,7 @@ toxcore
 - `BinaryReplacementHistoryHook`：包装 `V2TimAdvancedMsgListener`，自动保存接收的消息
 - `BinaryMessageManagerWrapper`：可选包装类，拦截历史查询并从持久化服务读取
 
-详细说明请参考：[IMPLEMENTATION_DETAILS.md](./IMPLEMENTATION_DETAILS.md) 的消息处理章节，以及 [HYBRID_ARCHITECTURE.md](./HYBRID_ARCHITECTURE.md) 的回调分工说明。
+详细说明请参考：[reference/IMPLEMENTATION_DETAILS.md](../reference/IMPLEMENTATION_DETAILS.md) 的消息处理章节，以及 [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.md) 的回调分工说明。
 
 ### 消息接收路径
 
@@ -957,7 +960,7 @@ void initState() {
 - 离线消息队列：JSON格式，peerId到消息列表的映射
 - 存储位置：`<Application Support Directory>/chat_history/` 和 `offline_message_queue.json`
 
-详细说明请参考：[IMPLEMENTATION_DETAILS.md](./IMPLEMENTATION_DETAILS.md) 中的持久化存储章节。
+详细说明请参考：[reference/IMPLEMENTATION_DETAILS.md](../reference/IMPLEMENTATION_DETAILS.md) 中的持久化存储章节。
 
 ### 8. Group/Conference 恢复机制
 
@@ -1113,7 +1116,7 @@ _initTIMManagerSDK().then(...)
 
 **Platform 检测**：HomePage 使用 `TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform` 判断是否需要设置 Platform。SDK 内部（V2TimManager、V2TimMessageManager）使用 `platform.isCustomPlatform` 决定是否走 Platform 路径，避免依赖 `runtimeType.toString()` 的脆弱性。
 
-**回归验证**：tim2tox 接口更新后，需验证好友申请列表、会话列表更新、文件传输等场景。详见 [IMPLEMENTATION_DETAILS.md - Tim2tox 接口兼容性与回归验证](./IMPLEMENTATION_DETAILS.md#tim2tox-接口兼容性与回归验证)。
+**回归验证**：tim2tox 接口更新后，需验证好友申请列表、会话列表更新、文件传输等场景。详见 [reference/IMPLEMENTATION_DETAILS.md - Tim2tox 接口兼容性与回归验证](../reference/IMPLEMENTATION_DETAILS.md#tim2tox-接口兼容性与回归验证)。
 
 ## 扩展指南
 

@@ -4,3 +4,4 @@
 [submodule "third_party/chat-uikit-flutter"]
 	path = third_party/chat-uikit-flutter
 	url = git@github.com:anonymoussoft/chat-uikit-flutter.git
+	branch = v2

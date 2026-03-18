@@ -21,44 +21,38 @@ Also see [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.en.md) to learn about the 
 
 ## Integration solution
 
-toxee currently uses the **Binary Replacement + Hybrid Platform** scheme to integrate Tim2Tox. See also [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.en.md).
+toxee currently uses the **Binary Replacement + Hybrid Platform** scheme to integrate Tim2Tox (upstream repo [https://github.com/anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)). See also [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.en.md).
 
 **Multiple instance support instructions**:
 - toxee uses default Tox instance (via `V2TIMManagerImpl::GetInstance()`)
 - No need to create a test instance, just use `TIMManager.instance` directly
 - The multi-instance function is mainly used in automated testing scenarios (such as `tim2tox/auto_tests`)
-- See [Tim2Tox multi-instance support documentation](../../tim2tox/doc/MULTI_INSTANCE_SUPPORT.en.md) for details
+- See [Tim2Tox](https://github.com/anonymoussoft/tim2tox) [multi-instance support documentation](../third_party/tim2tox/doc/development/MULTI_INSTANCE_SUPPORT.en.md) for details
 
 ### Current solution: hybrid architecture
 
 **Implementation location**:
-- `tencent_cloud_chat_sdk-8.7.7201/lib/native_im/bindings/native_library_manager.dart` - dynamic library loading
-- `toxee/lib/main.dart` - Do not set Platform, only `setNativeLibraryName('tim2tox_ffi')`; the actual entrance is EchoUIKitApp → _StartupGate
-- `toxee/lib/ui/home_page.dart` - Set **TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform(...)** in **initState** (when `instance is! Tim2ToxSdkPlatform`), and call _initTIMManagerSDK, _initBinaryReplacementPersistenceHook; use TIMManager.instance with FakeUIKit
+- tencent_cloud_chat_sdk package (after bootstrap at `third_party/tencent_cloud_chat_sdk`) — `lib/native_im/bindings/native_library_manager.dart` for dynamic library loading
+- `toxee/lib/main.dart` — calls `setNativeLibraryName('tim2tox_ffi')` via `AppBootstrap.initialize()` → `LoggingBootstrap.initialize()` (actual call in `lib/bootstrap/logging_bootstrap.dart`); does not set Platform; actual entrance is EchoUIKitApp → _StartupGate
+- Platform is set by `SessionRuntimeCoordinator.ensureInitialized()` (`lib/runtime/session_runtime_coordinator.dart`); on auto-login from `AppBootstrapCoordinator.boot()` before HomePage, on manual login when the login page calls `boot(service)` or from HomePage._initAfterSessionReady(). HomePage then runs _initTIMManagerSDK, _initBinaryReplacementPersistenceHook, etc.
 
 **Key code**:
 ```dart
-// main.dart
-// BINARY REPLACEMENT MODE: Using NativeLibraryManager instead of Platform interface
-// NOTE: We do NOT set TencentCloudChatSdkPlatform.instance here
+// lib/bootstrap/logging_bootstrap.dart (called earliest in main() via AppBootstrap.initialize())
+// BINARY REPLACEMENT MODE: ensure all later SDK/FFI calls load tim2tox dynamic library
 setNativeLibraryName('tim2tox_ffi');
 
-// native_library_manager.dart (used via setNativeLibraryName)
-const String _libName = 'tim2tox_ffi'; // Replace native library name
-final DynamicLibrary _dylib = DynamicLibrary.open('lib$_libName.dylib');
-
-// home_page.dart initState (required for hybrid architecture)
+// SessionRuntimeCoordinator.ensureInitialized() (required for hybrid: sets Platform)
 if (TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform) {
   TencentCloudChatSdkPlatform.instance = Tim2ToxSdkPlatform(
-    ffiService: widget.service,
+    ffiService: service,
     eventBusProvider: eventBusAdapter,
     conversationManagerProvider: conversationManagerAdapter,
   );
 }
-_initTIMManagerSDK().then((_) {
-  _initBinaryReplacementPersistenceHook();  // Depends on MessageHistoryPersistence, selfId
-  // initGroupListener、initFriendListener
-});
+// In HomePage: TimSdkInitializer.ensureInitialized().then((_) {
+//   _initBinaryReplacementPersistenceHook(); initGroupListener(); initFriendListener();
+// });
 ```
 
 **Call path**:
@@ -78,10 +72,7 @@ V2TIMManager::GetInstance()->InitSDK(...)
 ToxManager::getInstance().init(...)
 ```
 
-**Advantages**:
-- ✅ Zero Dart code modifications
-- ✅ Fully compatible with native SDK
-- ✅ Simple deployment (just replace the dynamic library)
+**Characteristics and trade-offs**: Most calls still go through NativeLibraryManager → Dart*, compatible with existing SDK usage; history, special callbacks, polling, and the main message-send path are handled on the Dart side (FfiChatService, Platform, BinaryReplacementHistoryHook). Platform and Hook must be set at the right time (auto-login in boot; manual login: login page calls `boot(service)` or HomePage runs ensureInitialized), and startPolling must be called after SessionRuntimeCoordinator.ensureInitialized.
 
 ### Alternative: Platform interface solution
 
@@ -123,7 +114,7 @@ V2TIMMessageManagerImpl::SendMessage(...)
 - ✅ Strong flexibility (can be customized)
 - ✅ Easy to expand
 
-**Details**: See [Tim2Tox Architecture](../../tim2tox/doc/ARCHITECTURE.en.md) and [Tim2Tox Binary Replacement](../../tim2tox/doc/BINARY_REPLACEMENT.en.md)
+**Details**: See [Tim2Tox](https://github.com/anonymoussoft/tim2tox) [Architecture](../third_party/tim2tox/doc/architecture/ARCHITECTURE.en.md) and [Binary Replacement](../third_party/tim2tox/doc/architecture/BINARY_REPLACEMENT.en.md)
 
 ## Interface adapter implementation
 

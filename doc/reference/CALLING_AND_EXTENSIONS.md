@@ -85,6 +85,6 @@
 
 ## 7. 相关文档
 
-- [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.md)
+- [architecture/HYBRID_ARCHITECTURE.md](../architecture/HYBRID_ARCHITECTURE.md)
 - [IMPLEMENTATION_DETAILS.md](IMPLEMENTATION_DETAILS.md)
-- [../../tim2tox/doc/TOXAV_AND_SIGNALING.md](../../tim2tox/doc/TOXAV_AND_SIGNALING.md)
+- [Tim2Tox ToxAV 与 signaling](../third_party/tim2tox/doc/integration/TOXAV_AND_SIGNALING.md)
