@@ -152,6 +152,6 @@ These callbacks are handled by **NativeLibraryManager._handleGlobalCallback** di
 ## 7. Related documents
 
 - [ARCHITECTURE.md](ARCHITECTURE.en.md): Overall architecture
-- [IMPLEMENTATION_DETAILS.md](IMPLEMENTATION_DETAILS.en.md): Implementation details
-- [CALLING_AND_EXTENSIONS.md](CALLING_AND_EXTENSIONS.en.md): Calling, plugins, LAN Bootstrap and IRC extensions
-- [../third_party/tim2tox/doc/architecture/BINARY_REPLACEMENT.en.md](../third_party/tim2tox/doc/architecture/BINARY_REPLACEMENT.en.md): Binary replacement mechanism
+- [IMPLEMENTATION_DETAILS.md](../reference/IMPLEMENTATION_DETAILS.en.md): Implementation details
+- [CALLING_AND_EXTENSIONS.md](../reference/CALLING_AND_EXTENSIONS.en.md): Calling, plugins, LAN Bootstrap and IRC extensions
+- [../../third_party/tim2tox/doc/architecture/BINARY_REPLACEMENT.en.md](../../third_party/tim2tox/doc/architecture/BINARY_REPLACEMENT.en.md): Binary replacement mechanism

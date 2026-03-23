@@ -460,6 +460,6 @@ flutter build ios --release
 
 ## 相关文档
 
-- [toxee 架构](./ARCHITECTURE.md)
+- [toxee 架构](../architecture/ARCHITECTURE.md)
 - [实现细节](./IMPLEMENTATION_DETAILS.md)
-- [主 README](../../README.md)
+- [主 README](../../README.zh-CN.md)

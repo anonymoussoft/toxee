@@ -2,7 +2,7 @@
 
 > 语言 / Language: [中文](MAINTAINER_ARCHITECTURE.md) | [English](MAINTAINER_ARCHITECTURE.en.md)
 
-> 本文档面向**维护者**，说明混合架构的成因、职责划分、调用链与修改边界。用户使用与快速上手见 [主 README](../../README.md)；文档索引见 [doc/README](../README.md)。与 [ARCHITECTURE.md](ARCHITECTURE.md)（整体概览）、[HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.md)（混合架构权威描述）并列；**初始化顺序与混合架构职责以本文或 HYBRID_ARCHITECTURE 为权威**。
+> 本文档面向**维护者**，说明混合架构的成因、职责划分、调用链与修改边界。用户使用与快速上手见 [主 README](../../README.zh-CN.md)；文档索引见 [doc/README](../README.md)。与 [ARCHITECTURE.md](ARCHITECTURE.md)（整体概览）、[HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.md)（混合架构权威描述）并列；**初始化顺序与混合架构职责以本文或 HYBRID_ARCHITECTURE 为权威**。
 
 ## 目录
 
@@ -401,4 +401,4 @@ C++ (groupQuitNotification / clearHistoryMessage / ...)
 - [ARCHITECTURE.md](ARCHITECTURE.md) — 客户端整体架构与数据流
 - [reference/ACCOUNT_AND_SESSION.md](../reference/ACCOUNT_AND_SESSION.md) — 账号与会话生命周期
 - [reference/IMPLEMENTATION_DETAILS.md](../reference/IMPLEMENTATION_DETAILS.md) — 实现细节与消息/事件处理
-- [Tim2Tox](https://github.com/anonymoussoft/tim2tox) [架构](../third_party/tim2tox/doc/architecture/ARCHITECTURE.md) — 兼容层分层与双路径
+- [Tim2Tox](https://github.com/anonymoussoft/tim2tox) [架构](../../third_party/tim2tox/doc/architecture/ARCHITECTURE.md) — 兼容层分层与双路径
