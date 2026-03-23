@@ -1,191 +1,202 @@
 # toxee
 
-> 基于 Tim2Tox 的 Flutter 聊天客户端 / 示例应用
+> Language: **English** | [简体中文](README.zh-CN.md)
+>
+> Flutter chat client / example app built on Tim2Tox
 
 ---
 
-## 5 分钟内理解本项目
+## Understand this project in 5 minutes
 
-- **toxee 是什么**：一个可运行的 Flutter 聊天 App，用 Tencent Cloud Chat UIKit 做界面，用 **tox** 做后端，走 Tox P2P 网络。
-- **Tim2Tox 是什么**：连接 UIKit 与 tox 的兼容层/框架（在 `third_party/tim2tox`，上游仓库：[https://github.com/anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)）；不是聊天应用本身。
-- **架构一句话总结**：toxee 通过「二进制替换 + Platform」混合架构接入 Tim2Tox，大部分 SDK 调用走 NativeLibraryManager → Dart*，历史/轮询/通话等由 Tim2ToxSdkPlatform → FfiChatService 补足。
-- **最短跑起来**：克隆 → `dart run tool/bootstrap_deps.dart` → `flutter pub get` → `./build_all.sh --platform macos --mode debug` 或 `./run_toxee.sh`。
+- **What toxee is**: a runnable Flutter chat app that uses Tencent Cloud Chat UIKit for UI and **tox** as the backend over the Tox P2P network.
+- **What Tim2Tox is**: the compatibility layer / framework that bridges UIKit-style APIs to tox (located in `third_party/tim2tox`, upstream repo: [anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)); it is not the chat application itself.
+- **One-line architecture summary**: toxee integrates Tim2Tox with a hybrid approach of "binary replacement + Platform", where most SDK calls still go through `NativeLibraryManager -> Dart*`, while history, polling, calling, and some stateful flows are implemented through `Tim2ToxSdkPlatform -> FfiChatService`.
+- **Shortest path to run it**: clone -> `dart run tool/bootstrap_deps.dart` -> `flutter pub get` -> `./build_all.sh --platform macos --mode debug` or `./run_toxee.sh`.
 
-深层实现与阅读路径见 [doc/README](doc/README.md)。
-
----
-
-## 项目简介
-
-**toxee** 是**基于 tox 的 Flutter 聊天客户端 / 示例应用**。它展示如何将 tox 与 Tencent Cloud Chat UIKit 集成，实现去中心化 P2P 聊天：账号、会话、消息、好友、群组、Bootstrap、可选通话与扩展能力均在当前仓库内实现或对接。
-
-**明确定义**：
-
-- **它是**：一个可运行的 Flutter 应用，面向“想跑起来”的开发者和“想理解客户端与 Tim2Tox 关系”的维护者；同时作为集成 Tim2Tox 的参考实现。
-- **它不是**：底层协议库（协议与 V2TIM 映射在 Tim2Tox 中实现）。
-- **它不是**：通用 SDK（UI、账号体系、Bootstrap 配置、通话桥等是 toxee 自身实现，其他客户端需自行适配）。
+For deeper implementation details and role-based reading paths, see [doc/README.en.md](doc/README.en.md).
 
 ---
 
-## 这个项目解决什么问题
+## Project overview
 
-- **对使用者**：提供一个“开箱可跑”的 Tox 聊天客户端，使用现成 UIKit 界面与交互，无需从零写 UI。
-- **对集成者**：展示如何做依赖引导（submodule、SDK 拉取与打补丁、pubspec_overrides）、如何实现 Tim2Tox 的接口注入（Preferences、Logger、Bootstrap 等）、如何安排 init → login → startPolling → Platform 的启动顺序。
-- **对维护者**：说明为何采用混合架构、二进制替换与 Platform 各自承担哪些能力、调用链与日志从哪里看，便于排错与扩展。
+**toxee** is a **Flutter chat client / example app built on tox**. It shows how to integrate tox with Tencent Cloud Chat UIKit to build a decentralized P2P chat experience: account flows, conversations, messages, contacts, groups, Bootstrap, optional calling, and extension points are all implemented or wired up in this repository.
+
+**Clearly defined**:
+
+- **It is**: a runnable Flutter application for developers who want to get something working quickly, and for maintainers who want to understand the relationship between a client app and Tim2Tox. It also serves as a reference implementation for integrating Tim2Tox.
+- **It is not**: the low-level protocol library (protocol behavior and V2TIM mapping live in Tim2Tox).
+- **It is not**: a general-purpose SDK (UI, account flows, Bootstrap configuration, calling bridge, and app-level wiring are toxee-specific and must be adapted for other clients).
 
 ---
 
-## 它与 Tim2Tox 的关系
+## What problem this project solves
 
+- **For users of the codebase**: it provides a ready-to-run Tox chat client with UIKit-based screens and interactions, so you do not need to build the UI from scratch.
+- **For integrators**: it demonstrates dependency bootstrap (submodules, SDK fetch + patching, `pubspec_overrides`), Tim2Tox interface injection (preferences, logger, Bootstrap, and related adapters), and the startup sequence of `init -> login -> startPolling -> Platform`.
+- **For maintainers**: it explains why the current hybrid architecture exists, what binary replacement and Platform each own, and where to inspect call chains and logs when debugging or extending the app.
 
-| 维度       | Tim2Tox                                                            | toxee                                                                    |
-| -------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| **角色**   | 兼容层/框架：提供 C++ 核心、C FFI、Dart 封装与 SDK Platform 实现，供任意 Flutter 客户端接入。 | 客户端/示例应用：消费 Tim2Tox，实现账号、UI、Bootstrap、历史、通话桥等。                           |
-| **位置**   | `third_party/tim2tox`（submodule，上游 [anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)）。                            | 本仓库根目录。                                                                  |
-| **依赖方向** | Tim2Tox 不依赖 toxee；通过接口注入依赖“偏好/日志/Bootstrap”等能力。                    | toxee 依赖 `tim2tox_dart`，并实现 Tim2Tox 所需的接口、构造 FfiChatService、设置 Platform。 |
+---
 
+## Relationship with Tim2Tox
 
-**调用关系（简化）**：
+| Dimension | Tim2Tox | toxee |
+| --- | --- | --- |
+| **Role** | Compatibility layer / framework: provides the C++ core, C FFI, Dart wrappers, and SDK Platform implementation that any Flutter client can integrate with. | Client app / example app: consumes Tim2Tox and implements account flows, UI, Bootstrap, history, calling bridge, and app-specific wiring. |
+| **Location** | `third_party/tim2tox` (git submodule, upstream: [anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)). | Repository root. |
+| **Dependency direction** | Tim2Tox does not depend on toxee; it receives capabilities such as preferences, logging, and Bootstrap through interfaces. | toxee depends on `tim2tox_dart`, implements the interfaces Tim2Tox expects, constructs `FfiChatService`, and configures the Platform path. |
 
-```
-toxee (UI / 账号 / Bootstrap / 适配层)
-    │
-    ├── setNativeLibraryName('tim2tox_ffi')   →  SDK 加载 libtim2tox_ffi
-    ├── FfiChatService( prefs, logger, bootstrap, ... )  →  Tim2Tox 服务层
-    ├── Tim2ToxSdkPlatform( ffiService )     →  Platform 路径入口
-    └── FakeUIKit / FakeMessageManager 等     →  将 Tim2Tox 数据适配为 UIKit 格式
-                    │
-                    ▼
+**Call relationship (simplified)**:
+
+```text
+toxee (UI / account / Bootstrap / adapters)
+    |
+    |-- setNativeLibraryName('tim2tox_ffi') -> SDK loads libtim2tox_ffi
+    |-- FfiChatService(prefs, logger, bootstrap, ...) -> Tim2Tox service layer
+    |-- Tim2ToxSdkPlatform(ffiService) -> Platform path entry
+    '-- FakeUIKit / FakeMessageManager / ... -> adapt Tim2Tox data into UIKit models
+                    |
+                    v
             Tim2Tox (dart / ffi / C++)
-                    │
-                    ▼
+                    |
+                    v
             c-toxcore (Tox P2P)
 ```
 
 ---
 
-## 当前架构概览
+## Current architecture at a glance
 
-当前采用**混合架构**：既做**二进制替换**（SDK 仍通过 NativeLibraryManager → Dart* 调用 Tim2Tox），又设置 **Tim2ToxSdkPlatform**（历史、部分回调、通话等走 FfiChatService）。
+The app currently uses a **hybrid architecture**: it keeps **binary replacement** (the SDK still reaches Tim2Tox through `NativeLibraryManager -> Dart*`) and also enables **`Tim2ToxSdkPlatform`** (history, some callbacks, calling, and stateful flows go through `FfiChatService`).
 
-**为什么是混合架构而不是纯二进制替换或纯 Platform？**
+**Why hybrid instead of pure binary replacement or pure Platform?**
 
-- **纯二进制替换**：最少改业务代码，但历史消息、clearHistoryMessage、groupQuitNotification、Bootstrap 配置、轮询与通话等需要 Dart 侧状态与持久化，仅靠 C++ 回调无法完整实现；UIKit 的 getHistoryMessageList 等会失败或行为不完整。
-- **纯 Platform**：所有 SDK 调用都走 Platform，需要实现的方法多、与 SDK 版本强绑定，迁移与维护成本高；且当前 SDK 的 isCustomPlatform 路由下，部分能力仍依赖原生库加载，纯 Platform 难以完全替代。
-- **混合架构**：大部分调用沿用“换库不换接口”的二进制替换，保持与现有 SDK 调用习惯一致；仅把“必须由 Dart 实现”的能力（历史、轮询、Bootstrap、通话桥、部分回调）交给 Platform + FfiChatService，兼顾兼容性与功能完整性。详见 [doc/architecture/HYBRID_ARCHITECTURE.md](doc/architecture/HYBRID_ARCHITECTURE.md)。
+- **Pure binary replacement** keeps business code changes minimal, but history messages, `clearHistoryMessage`, `groupQuitNotification`, Bootstrap configuration, polling, and calling all need Dart-side state and persistence. Those flows are incomplete if implemented only with C++ callbacks; UIKit APIs such as `getHistoryMessageList` would fail or behave inconsistently.
+- **Pure Platform** would route all SDK calls through Platform APIs, which means implementing many more methods and tracking SDK version changes closely. It is costly to migrate and maintain, and some SDK behavior still assumes the native library is loaded even when `isCustomPlatform` is enabled.
+- **Hybrid** keeps the "swap the library, keep the call surface" benefits for most SDK usage, while moving the parts that must remain in Dart (history, polling, Bootstrap, calling bridge, and selected callbacks) into `Platform + FfiChatService`. That gives a better balance between compatibility and completeness. See [doc/architecture/HYBRID_ARCHITECTURE.en.md](doc/architecture/HYBRID_ARCHITECTURE.en.md).
 
-**调用链（ASCII）**：
+**Call chain (ASCII)**:
 
-```
-                    UIKit / 业务
-                          │
-        ┌─────────────────┴─────────────────┐
-        │                                    │
-   TIMManager.instance              getHistoryMessageList 等
-        │                                    │
+```text
+                    UIKit / app logic
+                           |
+         +-----------------+-----------------+
+         |                                   |
+   TIMManager.instance            getHistoryMessageList / ...
+         |                                   |
    NativeLibraryManager              Tim2ToxSdkPlatform
-   bindings.DartXXX()                     │
-        │                                    │
-        └──────────────┬─────────────────────┘
-                       │
+   bindings.DartXXX()                       |
+         |                                   |
+         +-----------------+-----------------+
+                           |
               libtim2tox_ffi (dart_compat_* / tim2tox_ffi_*)
-                       │
-              FfiChatService（轮询、历史、登录状态）
-                       │
-              V2TIM*Manager / ToxManager → c-toxcore
+                           |
+              FfiChatService (polling, history, login state)
+                           |
+              V2TIM*Manager / ToxManager -> c-toxcore
 ```
 
 ---
 
-## 仓库结构
+## Repository structure
 
-
-| 路径               | 职责与边界                                                                                            |
-| ---------------- | ------------------------------------------------------------------------------------------------ |
-| `lib/`           | 应用 Dart 代码：UI、启动、适配层、工具。                                                                         |
-| `lib/bootstrap/` | 启动阶段：日志与路径（`LoggingBootstrap`）、`setNativeLibraryName('tim2tox_ffi')`、C++ 日志文件设置；在 `main()` 最早执行。 |
-| `lib/adapters/`  | Tim2Tox 接口实现：Preferences、Logger、Bootstrap、EventBus、ConversationManager 等，注入给 FfiChatService。     |
-| `lib/sdk_fake/`  | 适配层：将 FfiChatService / Tim2Tox 数据转换为 UIKit 所需的 Fake 模型与 Provider，桥接消息、会话、好友、群组。                  |
-| `lib/ui/`        | 页面与组件：登录、首页、会话、设置、Bootstrap 等；主要使用 UIKit 组件，少量自定义页。                                              |
-| `lib/util/`      | 工具：`AppLogger`、偏好、Bootstrap 节点列表、主题/语言等。                                                         |
-| `lib/startup/`   | 启动流程：账号恢复、Bootstrap 决策、init → login → startPolling、超时与错误处理。                                      |
-| `lib/call/`      | 通话 UI 与效果（TUICallKit 适配、来电 overlay 等）。                                                           |
-| `tool/`          | 依赖引导：`bootstrap_deps.dart`（submodule、SDK 拉取与打补丁、pubspec_overrides）。                              |
-| `third_party/`   | 依赖：tim2tox、tencent_cloud_chat_sdk、chat-uikit-flutter（submodule 或脚本拉取）。                           |
-| `doc/`           | 架构、混合架构、账号会话、构建、排错、扩展等文档。                                                                        |
-
+| Path | Responsibility |
+| --- | --- |
+| `lib/` | App Dart code: UI, startup flow, adapters, utilities. |
+| `lib/bootstrap/` | Earliest startup work: logging, paths, `setNativeLibraryName('tim2tox_ffi')`, native log file setup. |
+| `lib/adapters/` | Tim2Tox interface implementations: preferences, logger, Bootstrap, event bus, conversation manager, and related adapters injected into `FfiChatService`. |
+| `lib/sdk_fake/` | Data adaptation layer that converts Tim2Tox / `FfiChatService` data into the fake UIKit models/providers expected by Tencent Cloud Chat UIKit. |
+| `lib/ui/` | Pages and widgets: login, home, conversations, settings, Bootstrap, and related UI. Mostly UIKit-based with a small number of custom pages. |
+| `lib/util/` | Shared helpers such as `AppLogger`, preferences, Bootstrap node lists, theme, and language utilities. |
+| `lib/startup/` | Startup orchestration: account restore, Bootstrap decisions, `init -> login -> startPolling`, plus timeout and error handling. |
+| `lib/call/` | Calling UI and effects, including TUICallKit integration and incoming-call overlay behavior. |
+| `tool/` | Dependency bootstrap tooling, especially `bootstrap_deps.dart` for submodules, SDK fetch, patching, and `pubspec_overrides`. |
+| `third_party/` | Vendored dependencies: Tim2Tox, Tencent Cloud Chat SDK, chat-uikit-flutter, and related assets fetched by scripts or submodules. |
+| `doc/` | Architecture, build, troubleshooting, integration, and maintainer documentation. |
 
 ---
 
-## 快速开始
+## Quick start
 
-**从零开始的最短启动路径**（在仓库根目录执行）：
+**Shortest path from a fresh clone** (run in the repository root):
 
 ```bash
-# 1. 克隆（若尚未克隆）
+# 1. Clone the repo (if you have not already)
 git clone <repo-url> toxee && cd toxee
 
-# 2. 依赖引导：submodule、SDK 拉取与打补丁、生成 pubspec_overrides
+# 2. Bootstrap dependencies: submodules, SDK fetch + patching,
+#    and pubspec_overrides generation
 dart run tool/bootstrap_deps.dart
 
-# 3. 拉取 Dart/Flutter 依赖
+# 3. Fetch Dart / Flutter dependencies
 flutter pub get
 
-# 4. 构建并运行（会先构建 tim2tox FFI 库）
+# 4. Build and run (this also builds the tim2tox FFI library)
 ./build_all.sh --platform macos --mode debug
-# 或使用 run 脚本（构建 + 启动 + 可选日志 tail）
+
+# Or use the convenience runner (build + launch + optional log tail)
 ./run_toxee.sh
 ```
 
-若出现 `package_config.json` 解析错误，可先执行 `dart tool/bootstrap_deps.dart`（不用 `run`）再执行 `flutter pub get`。完整步骤与常见问题见 [doc/getting-started.md](doc/getting-started.md)、[doc/operations/DEPENDENCY_BOOTSTRAP.md](doc/operations/DEPENDENCY_BOOTSTRAP.md)。
+If you hit a `package_config.json` parse error, run `dart tool/bootstrap_deps.dart` first (without `run`), then run `flutter pub get`. Full setup steps and common issues are documented in [doc/getting-started.en.md](doc/getting-started.en.md) and [doc/operations/DEPENDENCY_BOOTSTRAP.en.md](doc/operations/DEPENDENCY_BOOTSTRAP.en.md).
 
 ---
 
-## 构建与运行
+## Build and run
 
-- **统一构建**：`./build_all.sh --platform <macos|ios|android|...> --mode <debug|release>`；**仅运行**：`./run_toxee.sh`（其他平台见 `run_toxee_ios.sh`、`run_toxee_android.sh` 等）。
-- 详细步骤、各平台说明、依赖布局见 [doc/operations/BUILD_AND_DEPLOY.md](doc/operations/BUILD_AND_DEPLOY.md)、[doc/operations/DEPENDENCY_BOOTSTRAP.md](doc/operations/DEPENDENCY_BOOTSTRAP.md)、[doc/operations/DEPENDENCY_LAYOUT.md](doc/operations/DEPENDENCY_LAYOUT.md)。遇到问题见 [doc/TROUBLESHOOTING.md](doc/TROUBLESHOOTING.md)。
-
----
-
-## 文档入口
-
-完整文档索引与按角色阅读路径（新用户 / 接入方 / 维护者）见 **[doc/README](doc/README.md)**。常用入口：[依赖引导](doc/operations/DEPENDENCY_BOOTSTRAP.md)、[排障](doc/TROUBLESHOOTING.md)、[混合架构](doc/architecture/HYBRID_ARCHITECTURE.md)、[接入指南](doc/integration/INTEGRATION_GUIDE.md)、[维护者视角](doc/architecture/MAINTAINER_ARCHITECTURE.md)。
+- **Unified build**: `./build_all.sh --platform <macos|ios|android|...> --mode <debug|release>`
+- **Run only**: `./run_toxee.sh` (other platform helpers include `run_toxee_ios.sh`, `run_toxee_android.sh`, and related scripts)
+- For detailed platform steps, dependency layout, and deployment notes, see [doc/operations/BUILD_AND_DEPLOY.en.md](doc/operations/BUILD_AND_DEPLOY.en.md), [doc/operations/DEPENDENCY_BOOTSTRAP.en.md](doc/operations/DEPENDENCY_BOOTSTRAP.en.md), and [doc/operations/DEPENDENCY_LAYOUT.en.md](doc/operations/DEPENDENCY_LAYOUT.en.md). For debugging issues, see [doc/TROUBLESHOOTING.en.md](doc/TROUBLESHOOTING.en.md).
 
 ---
 
-## 适用场景与非适用场景
+## Documentation hub
 
-**适用**：
+For the full documentation index and role-based reading paths (new users / integrators / maintainers), start with [doc/README.en.md](doc/README.en.md).
 
-- 想快速跑通一个基于 Tox 的 Flutter 聊天应用。
-- 需要参考“如何把 Tim2Tox 集成进客户端”（依赖、接口、启动顺序、混合架构）。
-- 在现有 toxee 基础上做功能扩展或二次开发（UI、Bootstrap、通话、插件等）。
+Common entry points:
 
-**非适用**：
-
-- 仅需“Tox 协议库”或“通用 IM SDK”：应使用 Tim2Tox 或 c-toxcore，而非 toxee。
-- 需要与腾讯云 IM 服务端互通：toxee 后端为 Tox P2P，不连接腾讯云。
-
----
-
-## 已知限制
-
-- **平台**：构建与日常开发以 macOS 为主；iOS/Android 需按各平台配置与脚本验证。
-- **历史与回调**：历史消息在 Dart 侧（FfiChatService / MessageHistoryPersistence）；混合架构下需避免二进制替换路径与 Platform 路径重复写历史或重复回调（由 BinaryReplacementHistoryHook 与 Platform 分工约定）。
-- **多实例**：toxee 使用 Tim2Tox 默认单例；多实例主要用于 tim2tox 的 auto_tests，不在本客户端默认流程。
-- **依赖**：依赖 submodule 与脚本拉取的 SDK/UIKit；首次或变更依赖后必须执行 `dart run tool/bootstrap_deps.dart` 再 `flutter pub get`。
+- [Dependency bootstrap](doc/operations/DEPENDENCY_BOOTSTRAP.en.md)
+- [Troubleshooting](doc/TROUBLESHOOTING.en.md)
+- [Hybrid architecture](doc/architecture/HYBRID_ARCHITECTURE.en.md)
+- [Integration guide](doc/integration/INTEGRATION_GUIDE.en.md)
+- [Maintainer view](doc/architecture/MAINTAINER_ARCHITECTURE.en.md)
 
 ---
 
-## 新贡献者 onboarding
+## Good fits and non-goals
 
-- 先按「快速开始」在本地跑通一次，确认能登录、发消息、看会话列表。
-- 阅读本 README「5 分钟内理解」「它与 Tim2Tox 的关系」「当前架构概览」；再按 [doc/README](doc/README.md) 中与你目标一致的**推荐阅读路径（按角色）**走一遍。
-- 改启动/日志/依赖：`lib/main.dart`、`lib/bootstrap/logging_bootstrap.dart`、`tool/bootstrap_deps.dart`；改消息/会话/历史：`lib/sdk_fake/`、[doc/architecture/HYBRID_ARCHITECTURE.md](doc/architecture/HYBRID_ARCHITECTURE.md)。修改 Tim2Tox 本身在 `third_party/tim2tox`（上游 [anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)），见 [third_party/tim2tox/doc/README.md](third_party/tim2tox/doc/README.md)。
+**Good fits**:
+
+- You want to quickly run a Flutter chat app on top of Tox.
+- You want a reference for integrating Tim2Tox into a client, including dependency bootstrap, interface injection, startup order, and the hybrid architecture split.
+- You plan to extend or customize toxee itself (UI, Bootstrap, calling, plugins, or related features).
+
+**Non-goals**:
+
+- You only need the Tox protocol library or a general-purpose IM SDK. In that case, use Tim2Tox or c-toxcore instead of toxee.
+- You need interoperability with Tencent Cloud IM server-side services. toxee uses Tox P2P as its backend and does not connect to Tencent Cloud IM.
 
 ---
 
-## 许可证
+## Known limitations
 
-见 [LICENSE](LICENSE) 文件。
+- **Platform focus**: day-to-day build and development are primarily centered on macOS. iOS and Android require platform-specific setup and script validation.
+- **History and callback ownership**: message history lives on the Dart side (`FfiChatService` / `MessageHistoryPersistence`). In the hybrid architecture, binary replacement and Platform paths must not both write history or emit duplicate callbacks; that split is enforced by conventions such as `BinaryReplacementHistoryHook`.
+- **Multiple instances**: toxee uses Tim2Tox's default singleton-style flow. Multi-instance support mainly exists for Tim2Tox auto tests and is not part of the default client workflow.
+- **Dependencies**: the project depends on submodules plus SDK/UIKit content fetched by scripts. After a fresh clone or dependency changes, you must run `dart run tool/bootstrap_deps.dart` before `flutter pub get`.
+
+---
+
+## New contributor onboarding
+
+- Follow the quick start once on your own machine and verify you can log in, send a message, and see the conversation list.
+- Read this README's "Understand this project in 5 minutes", "Relationship with Tim2Tox", and "Current architecture at a glance" sections, then follow the role-based reading path in [doc/README.en.md](doc/README.en.md).
+- If you are touching startup, logging, or dependency bootstrap, start with `lib/main.dart`, `lib/bootstrap/logging_bootstrap.dart`, and `tool/bootstrap_deps.dart`.
+- If you are touching messages, conversations, or history, start with `lib/sdk_fake/` and [doc/architecture/HYBRID_ARCHITECTURE.en.md](doc/architecture/HYBRID_ARCHITECTURE.en.md).
+- If you need to change Tim2Tox itself, work in `third_party/tim2tox` (upstream: [anonymoussoft/tim2tox](https://github.com/anonymoussoft/tim2tox)) and use [third_party/tim2tox/doc/README.en.md](third_party/tim2tox/doc/README.en.md) as the local documentation entry point.
+
+---
+
+## License
+
+See [LICENSE](LICENSE).

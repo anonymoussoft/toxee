@@ -37,5 +37,5 @@ flutter pub get
 
 ## 下一步
 
-- 项目与架构概览：[主 README](../README.md)、[architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md)
+- 项目与架构概览：[主 README](../README.zh-CN.md)、[architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md)
 - 按角色继续阅读：[doc/README 推荐阅读路径](README.md#推荐阅读路径按角色)

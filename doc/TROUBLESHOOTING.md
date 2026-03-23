@@ -671,4 +671,4 @@ CachedNetworkImage(
 - [getting-started.md](getting-started.md) - 从克隆到跑起来
 - [依赖引导](operations/DEPENDENCY_BOOTSTRAP.md) - bootstrap 顺序与选项
 - [集成指南](integration/INTEGRATION_GUIDE.md) - 集成 [Tim2Tox](https://github.com/anonymoussoft/tim2tox) 指南
-- [主 README](../README.md) - 项目概述
+- [主 README](../README.zh-CN.md) - 项目概述

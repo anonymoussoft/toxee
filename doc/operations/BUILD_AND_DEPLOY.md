@@ -432,7 +432,7 @@ sudo dnf install cmake
 
 ## 常见错误解决
 
-更多构建/运行时问题、日志分析与调试技巧见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。
+更多构建/运行时问题、日志分析与调试技巧见 [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)。
 
 ### 构建错误
 
@@ -675,5 +675,4 @@ tail -f build/flutter_client.log
 - [getting-started.md](../getting-started.md) - 从克隆到跑起来的单页
 - [依赖引导](DEPENDENCY_BOOTSTRAP.md) - bootstrap 顺序与选项
 - [集成指南](../integration/INTEGRATION_GUIDE.md) - 如何集成 Tim2Tox
-- [主 README](../README.md) - 项目概述
-
+- [主 README](../../README.zh-CN.md) - 项目概述

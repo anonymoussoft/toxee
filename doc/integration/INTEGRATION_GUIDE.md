@@ -241,7 +241,7 @@ class ConversationManagerAdapter implements ConversationManagerProvider {
 
 ### 完整初始化示例（简化版，与 toxee 实际启动链不同）
 
-以下为**独立应用最小示例**，与 toxee 实际流程不同：toxee 中 FfiChatService 由 AccountService.initializeServiceForAccount 或 LoginUseCase 创建并 init/login，通过 `widget.service` 传入 HomePage；Platform 由 SessionRuntimeCoordinator.ensureInitialized() 设置；登录成功后由调用方执行 AppBootstrapCoordinator.boot(service) 再进入 HomePage。实际入口与顺序见 [混合架构](architecture/HYBRID_ARCHITECTURE.md)、[维护者视角](architecture/MAINTAINER_ARCHITECTURE.md)。
+以下为**独立应用最小示例**，与 toxee 实际流程不同：toxee 中 FfiChatService 由 AccountService.initializeServiceForAccount 或 LoginUseCase 创建并 init/login，通过 `widget.service` 传入 HomePage；Platform 由 SessionRuntimeCoordinator.ensureInitialized() 设置；登录成功后由调用方执行 AppBootstrapCoordinator.boot(service) 再进入 HomePage。实际入口与顺序见 [混合架构](../architecture/HYBRID_ARCHITECTURE.md)、[维护者视角](../architecture/MAINTAINER_ARCHITECTURE.md)。
 
 在 `lib/ui/home_page.dart` 的 `initState()` 中（仅作参考）：
 
@@ -560,5 +560,5 @@ TencentImSDKPlugin.v2TIMManager.initSDK(
 
 - [toxee 构建与部署](../operations/BUILD_AND_DEPLOY.md) - 详细构建步骤
 - [故障排除](../TROUBLESHOOTING.md) - 常见问题解答
-- [主 README](../../README.md) - 项目概述
-- [Tim2Tox](https://github.com/anonymoussoft/tim2tox) 文档（[本地索引](../third_party/tim2tox/doc/README.md)）
+- [主 README](../../README.zh-CN.md) - 项目概述
+- [Tim2Tox](https://github.com/anonymoussoft/tim2tox) 文档（[本地索引](../../third_party/tim2tox/doc/README.md)）
