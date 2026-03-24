@@ -17,8 +17,8 @@ void main(List<String> args) async {
   //    Do this first so third_party/tim2tox exists and contains the lock file.
   const submodulePaths = ['third_party/tim2tox', 'third_party/chat-uikit-flutter'];
   const submoduleUrls = {
-    'third_party/tim2tox': 'git@github.com:anonymoussoft/tim2tox.git',
-    'third_party/chat-uikit-flutter': 'git@github.com:anonymoussoft/chat-uikit-flutter.git',
+    'third_party/tim2tox': 'https://github.com/anonymoussoft/tim2tox.git',
+    'third_party/chat-uikit-flutter': 'https://github.com/anonymoussoft/chat-uikit-flutter.git',
   };
   int code = await _run(repoRoot, 'git', ['submodule', 'sync', '--recursive']);
   if (code != 0) {
@@ -57,7 +57,7 @@ void main(List<String> args) async {
   // Pin chat-uikit-flutter to v2 branch (see .gitmodules branch = v2)
   final uikitDir = Directory('$repoRoot/third_party/chat-uikit-flutter');
   if (uikitDir.existsSync()) {
-    final branch = 'v2';
+    const branch = 'v2';
     int c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'fetch', 'origin', branch]);
     if (c == 0) {
       c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', branch]);
@@ -152,7 +152,7 @@ void main(List<String> args) async {
 
   // 3) Apply SDK patch series via tim2tox tool (patches live in tim2tox repo: patches/tencent_cloud_chat_sdk/<version>/)
   final stateMap = stateFile.existsSync() ? (jsonDecode(stateFile.readAsStringSync()) as Map<String, dynamic>) : <String, dynamic>{};
-  final appliedKey = 'patches_applied';
+  const appliedKey = 'patches_applied';
   final seriesFile = File('${tim2toxDir.path}/patches/tencent_cloud_chat_sdk/$version/series');
   final bool shouldApplySdkPatches = stateMap[appliedKey] != true &&
       tim2toxDir.existsSync() &&

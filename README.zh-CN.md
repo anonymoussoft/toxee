@@ -147,6 +147,32 @@ flutter pub get
 - **仅运行**：`./run_toxee.sh`（其他平台辅助脚本包括 `run_toxee_ios.sh`、`run_toxee_android.sh` 等）
 - 详细平台步骤、依赖布局和部署说明见 [doc/operations/BUILD_AND_DEPLOY.md](doc/operations/BUILD_AND_DEPLOY.md)、[doc/operations/DEPENDENCY_BOOTSTRAP.md](doc/operations/DEPENDENCY_BOOTSTRAP.md)、[doc/operations/DEPENDENCY_LAYOUT.md](doc/operations/DEPENDENCY_LAYOUT.md)。调试问题见 [doc/TROUBLESHOOTING.md](doc/TROUBLESHOOTING.md)。
 
+## GitHub Actions 打包
+
+仓库现已包含 [`.github/workflows/build-packages.yml`](.github/workflows/build-packages.yml)。它会在 `push`、`pull_request`、tag push 和手动触发时执行，并为以下平台生成构建产物：
+
+- **Windows**
+- **Linux**
+- **macOS**
+- **Android**
+- **iOS**
+
+每个平台 job 都会把 `dist/<platform>/` 目录作为 GitHub Actions artifact 上传。桌面端 job 会先构建宿主平台的 Tim2Tox FFI 动态库，再把它一起打进应用产物。Android 会同时产出 `app-release.apk` 和 `app-release.aab`；如果配置了 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD` 这 4 个 secrets，workflow 会自动使用 release keystore 签名，否则继续沿用项目当前的 debug-key release 签名。
+
+iOS 现在分两种模式：
+
+- 如果配置了 `IOS_CERTIFICATE_P12_BASE64`、`IOS_CERTIFICATE_PASSWORD`、`IOS_PROVISIONING_PROFILE_BASE64`，workflow 会执行带签名的 `flutter build ios --release`，并产出真实可安装的 `.ipa`。
+- 如果没有这些 secrets，iOS job 仍会执行未签名校验构建，但**不会**把它当作可安装包发布；此时只会在 `dist/ios/NOTES.txt` 中说明未配置签名。
+
+对于 Android/iOS，如果工作区里还没有可注入的 Tim2Tox 移动端原生库，CI 也会继续把这个限制写进 `dist/<platform>/NOTES.txt`，避免把“能编译”误认为“已经完成原生注入”。
+
+同一个 workflow 也支持发布到 **GitHub Releases**：
+
+- 推送 `v1.2.3` 这样的 tag，会自动构建所有平台并发布 GitHub Release。
+- 或者手动执行 `workflow_dispatch`，把 `publish_release` 设为 `true`，并填写 `release_tag`；如果是预发布版本，还可以把 `prerelease` 设为 `true`。
+- 发布 job 会下载当前 run 的构建产物，把真正可安装的打包文件上传到 Release，并额外生成 `SHA256SUMS.txt`。
+- Release 文案使用 GitHub 的 `--generate-notes` 自动生成；各平台额外的打包说明会作为附带构建说明文件一起上传。
+
 ---
 
 ## 文档入口
