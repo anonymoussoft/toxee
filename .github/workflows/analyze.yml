@@ -24,7 +24,7 @@ jobs:
         run: flutter pub get
 
       - name: Flutter analyze
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+        run: flutter analyze lib test tool --no-fatal-warnings --no-fatal-infos
 
       - name: Complexity guard
         run: dart run tool/check_complexity.dart

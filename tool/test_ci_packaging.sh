@@ -80,7 +80,9 @@ test_ios_signed_build_is_packaged_as_ipa() {
   bash "$ROOT/tool/ci/package_artifacts.sh" --target ios --mode release
 
   assert_file_exists "$ROOT/dist/ios/toxee-ios-release.ipa"
-  unzip -l "$ROOT/dist/ios/toxee-ios-release.ipa" | grep -q 'Payload/Runner.app/Frameworks/tim2tox_ffi.framework/tim2tox_ffi' || \
+  local zip_listing
+  zip_listing="$(unzip -l "$ROOT/dist/ios/toxee-ios-release.ipa")"
+  grep -q 'Payload/Runner.app/Frameworks/tim2tox_ffi.framework/tim2tox_ffi' <<<"$zip_listing" || \
     fail "Expected signed IPA to contain injected tim2tox_ffi framework"
 }
 
@@ -93,7 +95,7 @@ test_workflow_does_not_use_secrets_in_if_conditions() {
 
 test_analyze_workflow_tolerates_existing_warnings() {
   echo "[test] analyze workflow is non-fatal for existing warnings"
-  rg -n 'flutter analyze --no-fatal-warnings --no-fatal-infos' "$ROOT/.github/workflows/analyze.yml" >/dev/null || \
+  rg -n 'flutter analyze lib test tool --no-fatal-warnings --no-fatal-infos' "$ROOT/.github/workflows/analyze.yml" >/dev/null || \
     fail "Analyze workflow still treats warnings as fatal"
 }
 

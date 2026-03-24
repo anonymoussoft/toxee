@@ -286,12 +286,16 @@ Future<String> _sha256File(String path) async {
     return lines.first.replaceAll(' ', '').toLowerCase();
   }
 
-  var r = await Process.run('sha256sum', [path], runInShell: false);
-  if (r.exitCode == 0) {
-    return (r.stdout as String).split(' ').first.trim();
+  try {
+    final r = await Process.run('sha256sum', [path], runInShell: false);
+    if (r.exitCode == 0) {
+      return (r.stdout as String).split(' ').first.trim();
+    }
+  } on ProcessException {
+    // Fall through to shasum on platforms like macOS where sha256sum is absent.
   }
 
-  r = await Process.run('shasum', ['-a', '256', path], runInShell: false);
+  final r = await Process.run('shasum', ['-a', '256', path], runInShell: false);
   if (r.exitCode != 0) {
     throw Exception('sha256 tool failed: ${r.stderr}');
   }
