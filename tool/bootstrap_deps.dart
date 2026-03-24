@@ -60,10 +60,7 @@ void main(List<String> args) async {
     const branch = 'v2';
     int c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'fetch', 'origin', branch]);
     if (c == 0) {
-      c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', branch]);
-      if (c != 0) {
-        c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', '-b', branch, 'origin/$branch']);
-      }
+      c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', '-B', branch, 'FETCH_HEAD']);
       if (c == 0) {
         stdout.writeln('third_party/chat-uikit-flutter switched to branch $branch');
       }
@@ -269,9 +266,34 @@ Future<void> _download(String url, String destPath) async {
 }
 
 Future<String> _sha256File(String path) async {
-  final r = await Process.run('shasum', ['-a', '256', path], runInShell: false);
+  if (Platform.isWindows) {
+    final r = await Process.run(
+      'certutil',
+      ['-hashfile', path, 'SHA256'],
+      runInShell: false,
+    );
+    if (r.exitCode != 0) {
+      throw Exception('certutil failed: ${r.stderr}');
+    }
+    final lines = (r.stdout as String)
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => RegExp(r'^[A-Fa-f0-9 ]+$').hasMatch(line) && line.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) {
+      throw Exception('certutil output did not contain a SHA-256 hash');
+    }
+    return lines.first.replaceAll(' ', '').toLowerCase();
+  }
+
+  var r = await Process.run('sha256sum', [path], runInShell: false);
+  if (r.exitCode == 0) {
+    return (r.stdout as String).split(' ').first.trim();
+  }
+
+  r = await Process.run('shasum', ['-a', '256', path], runInShell: false);
   if (r.exitCode != 0) {
-    throw Exception('shasum failed: ${r.stderr}');
+    throw Exception('sha256 tool failed: ${r.stderr}');
   }
   return (r.stdout as String).split(' ').first.trim();
 }

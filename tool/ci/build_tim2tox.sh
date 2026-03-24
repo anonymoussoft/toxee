@@ -81,6 +81,7 @@ configure_args=(
   -DINFO=ON
   -DTRACE=OFF
   -DDEBUG=OFF
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 
 build_desktop_target() {
@@ -96,12 +97,20 @@ build_desktop_target() {
     linux)
       lib_pattern="libtim2tox_ffi.so"
       ci_log "Configuring tim2tox for Linux"
-      cmake -S "$TIM2TOX_DIR" -B "$build_dir" -DCMAKE_BUILD_TYPE=Release "${configure_args[@]}"
+      cmake -S "$TIM2TOX_DIR" -B "$build_dir" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format" \
+        -DCMAKE_C_FLAGS="-Wno-error=format" \
+        "${configure_args[@]}"
       ;;
     macos)
       lib_pattern="libtim2tox_ffi.dylib"
       ci_log "Configuring tim2tox for macOS"
-      cmake -S "$TIM2TOX_DIR" -B "$build_dir" -DCMAKE_BUILD_TYPE=Release "${configure_args[@]}"
+      cmake -S "$TIM2TOX_DIR" -B "$build_dir" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format" \
+        -DCMAKE_C_FLAGS="-Wno-error=format" \
+        "${configure_args[@]}"
       ;;
     windows)
       lib_pattern="tim2tox_ffi.dll"

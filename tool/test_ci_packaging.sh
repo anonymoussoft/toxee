@@ -91,10 +91,17 @@ test_workflow_does_not_use_secrets_in_if_conditions() {
   fi
 }
 
+test_analyze_workflow_tolerates_existing_warnings() {
+  echo "[test] analyze workflow is non-fatal for existing warnings"
+  rg -n 'flutter analyze --no-fatal-warnings --no-fatal-infos' "$ROOT/.github/workflows/analyze.yml" >/dev/null || \
+    fail "Analyze workflow still treats warnings as fatal"
+}
+
 test_android_syncs_jni_libs_into_app_tree
 test_linux_package_includes_libsodium
 test_ios_unsigned_build_is_not_packaged_as_installable_zip
 test_ios_signed_build_is_packaged_as_ipa
 test_workflow_does_not_use_secrets_in_if_conditions
+test_analyze_workflow_tolerates_existing_warnings
 
 echo "[PASS] all packaging regression tests passed"
