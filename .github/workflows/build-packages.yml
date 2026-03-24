@@ -218,15 +218,21 @@ jobs:
         run: flutter pub get
 
       - name: Prepare Android signing
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/toxee-release.keystore"
-          cat > android/key.properties <<EOF
-          storeFile=$RUNNER_TEMP/toxee-release.keystore
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
+          if [[ -n "$ANDROID_KEYSTORE_BASE64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/toxee-release.keystore"
+            cat > android/key.properties <<EOF
+            storeFile=$RUNNER_TEMP/toxee-release.keystore
+            storePassword=$ANDROID_KEYSTORE_PASSWORD
+            keyAlias=$ANDROID_KEY_ALIAS
+            keyPassword=$ANDROID_KEY_PASSWORD
+            EOF
+          fi
 
       - name: Stage optional Android Tim2Tox JNI libs
         run: bash tool/ci/build_tim2tox.sh --target android --mode "$BUILD_MODE"
@@ -281,25 +287,27 @@ jobs:
           pod install
 
       - name: Prepare iOS signing
-        if: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 != '' && secrets.IOS_CERTIFICATE_PASSWORD != '' && secrets.IOS_PROVISIONING_PROFILE_BASE64 != '' }}
         env:
           IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
           IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
           IOS_SIGNING_IDENTITY: ${{ secrets.IOS_SIGNING_IDENTITY }}
-        run: bash tool/ci/prepare_ios_signing.sh
+        run: |
+          if [[ -n "$IOS_CERTIFICATE_P12_BASE64" && -n "$IOS_CERTIFICATE_PASSWORD" && -n "$IOS_PROVISIONING_PROFILE_BASE64" ]]; then
+            bash tool/ci/prepare_ios_signing.sh
+          fi
 
       - name: Stage optional iOS Tim2Tox artifacts
         run: bash tool/ci/build_tim2tox.sh --target ios --mode "$BUILD_MODE"
 
-      - name: Build signed iOS app
-        if: ${{ env.IOS_SIGNING_READY == 'true' }}
-        run: flutter build ios --release --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
-
-      - name: Build unsigned iOS app
-        if: ${{ env.IOS_SIGNING_READY != 'true' }}
-        run: flutter build ios --release --no-codesign --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
+      - name: Build iOS app
+        run: |
+          if [[ "${IOS_SIGNING_READY:-false}" == "true" ]]; then
+            flutter build ios --release --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
+          else
+            flutter build ios --release --no-codesign --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
+          fi
 
       - name: Package iOS artifacts
         run: bash tool/ci/package_artifacts.sh --target ios --mode "$BUILD_MODE"

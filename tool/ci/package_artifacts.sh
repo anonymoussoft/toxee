@@ -185,8 +185,19 @@ package_ios() {
   local dylib_src="$NATIVE_DIR/libtim2tox_ffi.dylib"
   local payload_dir="$DIST_DIR/Payload"
   local signed_marker="$app_bundle/embedded.mobileprovision"
+  local injected="false"
 
   [[ -d "$app_bundle" ]] || ci_die "iOS app bundle not found: $app_bundle"
+
+  mkdir -p "$frameworks_dir"
+  if [[ -d "$framework_src" ]]; then
+    rm -rf "$frameworks_dir/tim2tox_ffi.framework"
+    cp -R "$framework_src" "$frameworks_dir/"
+    injected="true"
+  elif [[ -f "$dylib_src" ]]; then
+    cp "$dylib_src" "$frameworks_dir/"
+    injected="true"
+  fi
 
   if [[ -f "$signed_marker" ]]; then
     mkdir -p "$payload_dir"
@@ -195,8 +206,10 @@ package_ios() {
     rm -rf "$payload_dir"
     ci_log "Created iOS IPA: $archive_path"
     write_note "Packaged signed iOS app as IPA."
-    if [[ -d "$framework_src" || -f "$dylib_src" ]]; then
-      write_note "Signed iOS build is expected to have FFI artifacts injected before packaging."
+    if [[ "$injected" == "true" ]]; then
+      write_note "Injected Tim2Tox FFI artifact into signed iOS app before IPA packaging."
+    else
+      write_note "Signed iOS IPA was packaged without an injected Tim2Tox FFI artifact."
     fi
     return
   fi
@@ -205,8 +218,7 @@ package_ios() {
     ci_die "iOS signing was configured, but the built app bundle is not signed (missing embedded.mobileprovision)."
   fi
 
-  mkdir -p "$frameworks_dir"
-  if [[ -d "$framework_src" || -f "$dylib_src" ]]; then
+  if [[ "$injected" == "true" ]]; then
     write_note "Unsigned iOS build detected; FFI artifacts were not packaged as an installable IPA."
   else
     write_note "Unsigned iOS build detected; skipping installable package creation."

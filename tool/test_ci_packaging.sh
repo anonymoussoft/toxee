@@ -74,15 +74,27 @@ test_ios_signed_build_is_packaged_as_ipa() {
   rm -rf "$ROOT/dist/ios" "$ROOT/build/ios/iphoneos"
   mkdir -p "$ROOT/build/ios/iphoneos/Runner.app/Frameworks"
   printf 'signed' > "$ROOT/build/ios/iphoneos/Runner.app/embedded.mobileprovision"
+  mkdir -p "$ROOT/build/native-artifacts/ios/tim2tox_ffi.framework"
+  printf 'ffi-framework' > "$ROOT/build/native-artifacts/ios/tim2tox_ffi.framework/tim2tox_ffi"
 
   bash "$ROOT/tool/ci/package_artifacts.sh" --target ios --mode release
 
   assert_file_exists "$ROOT/dist/ios/toxee-ios-release.ipa"
+  unzip -l "$ROOT/dist/ios/toxee-ios-release.ipa" | grep -q 'Payload/Runner.app/Frameworks/tim2tox_ffi.framework/tim2tox_ffi' || \
+    fail "Expected signed IPA to contain injected tim2tox_ffi framework"
+}
+
+test_workflow_does_not_use_secrets_in_if_conditions() {
+  echo "[test] workflow avoids secrets in if conditions"
+  if rg -n '^[[:space:]]*if:.*secrets\\.' "$ROOT/.github/workflows/build-packages.yml" >/dev/null; then
+    fail "Workflow still uses secrets directly in if conditions"
+  fi
 }
 
 test_android_syncs_jni_libs_into_app_tree
 test_linux_package_includes_libsodium
 test_ios_unsigned_build_is_not_packaged_as_installable_zip
 test_ios_signed_build_is_packaged_as_ipa
+test_workflow_does_not_use_secrets_in_if_conditions
 
 echo "[PASS] all packaging regression tests passed"
