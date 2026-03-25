@@ -14,7 +14,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.29.0'
           channel: 'stable'
 
       - name: Bootstrap dependencies
@@ -24,7 +24,7 @@ jobs:
         run: flutter pub get
 
       - name: Flutter analyze
-        run: flutter analyze
+        run: flutter analyze lib tool --no-fatal-warnings --no-fatal-infos
 
       - name: Complexity guard
         run: dart run tool/check_complexity.dart

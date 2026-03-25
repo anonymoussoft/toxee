@@ -147,6 +147,32 @@ If you hit a `package_config.json` parse error, run `dart tool/bootstrap_deps.da
 - **Run only**: `./run_toxee.sh` (other platform helpers include `run_toxee_ios.sh`, `run_toxee_android.sh`, and related scripts)
 - For detailed platform steps, dependency layout, and deployment notes, see [doc/operations/BUILD_AND_DEPLOY.en.md](doc/operations/BUILD_AND_DEPLOY.en.md), [doc/operations/DEPENDENCY_BOOTSTRAP.en.md](doc/operations/DEPENDENCY_BOOTSTRAP.en.md), and [doc/operations/DEPENDENCY_LAYOUT.en.md](doc/operations/DEPENDENCY_LAYOUT.en.md). For debugging issues, see [doc/TROUBLESHOOTING.en.md](doc/TROUBLESHOOTING.en.md).
 
+## GitHub Actions packages
+
+The repository now includes [`.github/workflows/build-packages.yml`](.github/workflows/build-packages.yml), which runs on push, pull request, tag push, and manual dispatch. It builds and uploads artifacts for:
+
+- **Windows**
+- **Linux**
+- **macOS**
+- **Android**
+- **iOS**
+
+Each job uploads the contents of `dist/<platform>/` as a GitHub Actions artifact. Desktop jobs build the host Tim2Tox FFI library and bundle it into the packaged app output. Android builds both `app-release.apk` and `app-release.aab`; if the secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` are present, the workflow uses them for release signing, otherwise it falls back to the project's existing debug-key release signing.
+
+iOS now has two modes:
+
+- With `IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`, and `IOS_PROVISIONING_PROFILE_BASE64` configured, the workflow performs a signed `flutter build ios --release` and packages a real `.ipa`.
+- Without those secrets, the iOS job still runs as an unsigned validation build, but it does **not** publish an installable package. Instead, `dist/ios/NOTES.txt` explains that signing was not configured.
+
+Mobile jobs also write `dist/<platform>/NOTES.txt` when Tim2Tox mobile native artifacts were not available in the workspace, so CI keeps that remaining native-injection gap explicit instead of silently pretending the package is complete.
+
+Publishing to **GitHub Releases** is built into the same workflow:
+
+- Push a tag like `v1.2.3` to build all platforms and publish a GitHub Release automatically.
+- Or run `workflow_dispatch`, set `publish_release=true`, and provide `release_tag` (optionally `prerelease=true`).
+- The publish job downloads the artifacts from the current run, uploads the packaged installables to the Release, and adds a generated `SHA256SUMS.txt`.
+- Release notes use GitHub's `--generate-notes` flow, while platform-specific packaging caveats are merged into the uploaded build-note assets.
+
 ---
 
 ## Documentation hub

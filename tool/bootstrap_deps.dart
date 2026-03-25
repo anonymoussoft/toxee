@@ -17,8 +17,8 @@ void main(List<String> args) async {
   //    Do this first so third_party/tim2tox exists and contains the lock file.
   const submodulePaths = ['third_party/tim2tox', 'third_party/chat-uikit-flutter'];
   const submoduleUrls = {
-    'third_party/tim2tox': 'git@github.com:anonymoussoft/tim2tox.git',
-    'third_party/chat-uikit-flutter': 'git@github.com:anonymoussoft/chat-uikit-flutter.git',
+    'third_party/tim2tox': 'https://github.com/anonymoussoft/tim2tox.git',
+    'third_party/chat-uikit-flutter': 'https://github.com/anonymoussoft/chat-uikit-flutter.git',
   };
   int code = await _run(repoRoot, 'git', ['submodule', 'sync', '--recursive']);
   if (code != 0) {
@@ -57,13 +57,10 @@ void main(List<String> args) async {
   // Pin chat-uikit-flutter to v2 branch (see .gitmodules branch = v2)
   final uikitDir = Directory('$repoRoot/third_party/chat-uikit-flutter');
   if (uikitDir.existsSync()) {
-    final branch = 'v2';
+    const branch = 'v2';
     int c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'fetch', 'origin', branch]);
     if (c == 0) {
-      c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', branch]);
-      if (c != 0) {
-        c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', '-b', branch, 'origin/$branch']);
-      }
+      c = await _run(repoRoot, 'git', ['-C', 'third_party/chat-uikit-flutter', 'checkout', '-B', branch, 'FETCH_HEAD']);
       if (c == 0) {
         stdout.writeln('third_party/chat-uikit-flutter switched to branch $branch');
       }
@@ -141,6 +138,9 @@ void main(List<String> args) async {
           }
         }
       }
+      if (Platform.isWindows) {
+        _normalizeSdkLineEndings(sdkDir);
+      }
       stateFile.writeAsStringSync(jsonEncode({
         'version': version,
         'sha256': actualSha256,
@@ -152,7 +152,7 @@ void main(List<String> args) async {
 
   // 3) Apply SDK patch series via tim2tox tool (patches live in tim2tox repo: patches/tencent_cloud_chat_sdk/<version>/)
   final stateMap = stateFile.existsSync() ? (jsonDecode(stateFile.readAsStringSync()) as Map<String, dynamic>) : <String, dynamic>{};
-  final appliedKey = 'patches_applied';
+  const appliedKey = 'patches_applied';
   final seriesFile = File('${tim2toxDir.path}/patches/tencent_cloud_chat_sdk/$version/series');
   final bool shouldApplySdkPatches = stateMap[appliedKey] != true &&
       tim2toxDir.existsSync() &&
@@ -269,9 +269,38 @@ Future<void> _download(String url, String destPath) async {
 }
 
 Future<String> _sha256File(String path) async {
+  if (Platform.isWindows) {
+    final r = await Process.run(
+      'certutil',
+      ['-hashfile', path, 'SHA256'],
+      runInShell: false,
+    );
+    if (r.exitCode != 0) {
+      throw Exception('certutil failed: ${r.stderr}');
+    }
+    final lines = (r.stdout as String)
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => RegExp(r'^[A-Fa-f0-9 ]+$').hasMatch(line) && line.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) {
+      throw Exception('certutil output did not contain a SHA-256 hash');
+    }
+    return lines.first.replaceAll(' ', '').toLowerCase();
+  }
+
+  try {
+    final r = await Process.run('sha256sum', [path], runInShell: false);
+    if (r.exitCode == 0) {
+      return (r.stdout as String).split(' ').first.trim();
+    }
+  } on ProcessException {
+    // Fall through to shasum on platforms like macOS where sha256sum is absent.
+  }
+
   final r = await Process.run('shasum', ['-a', '256', path], runInShell: false);
   if (r.exitCode != 0) {
-    throw Exception('shasum failed: ${r.stderr}');
+    throw Exception('sha256 tool failed: ${r.stderr}');
   }
   return (r.stdout as String).split(' ').first.trim();
 }
@@ -291,6 +320,42 @@ void _copyDir(Directory src, Directory dest) {
     } else if (e is Directory) {
       Directory(destPath).createSync(recursive: true);
       _copyDir(e, Directory(destPath));
+    }
+  }
+}
+
+void _normalizeSdkLineEndings(Directory sdkDir) {
+  const textExtensions = {
+    '.dart',
+    '.yaml',
+    '.yml',
+    '.json',
+    '.xml',
+    '.gradle',
+    '.kts',
+    '.java',
+    '.kt',
+    '.m',
+    '.mm',
+    '.swift',
+    '.h',
+    '.hpp',
+    '.c',
+    '.cc',
+    '.cpp',
+    '.txt',
+    '.md',
+  };
+
+  for (final entity in sdkDir.listSync(recursive: true)) {
+    if (entity is! File) continue;
+    final lowerPath = entity.path.toLowerCase();
+    if (!textExtensions.any(lowerPath.endsWith)) continue;
+
+    final contents = entity.readAsStringSync();
+    final normalized = contents.replaceAll('\r\n', '\n');
+    if (contents != normalized) {
+      entity.writeAsStringSync(normalized);
     }
   }
 }
