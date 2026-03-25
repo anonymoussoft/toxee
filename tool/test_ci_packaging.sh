@@ -95,7 +95,7 @@ test_workflow_does_not_use_secrets_in_if_conditions() {
 
 test_analyze_workflow_tolerates_existing_warnings() {
   echo "[test] analyze workflow is non-fatal for existing warnings"
-  rg -n 'flutter analyze lib test tool --no-fatal-warnings --no-fatal-infos' "$ROOT/.github/workflows/analyze.yml" >/dev/null || \
+  rg -n 'flutter analyze lib tool --no-fatal-warnings --no-fatal-infos' "$ROOT/.github/workflows/analyze.yml" >/dev/null || \
     fail "Analyze workflow still treats warnings as fatal"
 }
 

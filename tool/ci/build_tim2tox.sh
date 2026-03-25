@@ -99,7 +99,7 @@ build_desktop_target() {
       ci_log "Configuring tim2tox for Linux"
       cmake -S "$TIM2TOX_DIR" -B "$build_dir" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format" \
+        -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format -include arpa/inet.h" \
         -DCMAKE_C_FLAGS="-Wno-error=format" \
         "${configure_args[@]}"
       ;;

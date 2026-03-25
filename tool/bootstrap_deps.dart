@@ -138,6 +138,9 @@ void main(List<String> args) async {
           }
         }
       }
+      if (Platform.isWindows) {
+        _normalizeSdkLineEndings(sdkDir);
+      }
       stateFile.writeAsStringSync(jsonEncode({
         'version': version,
         'sha256': actualSha256,
@@ -317,6 +320,42 @@ void _copyDir(Directory src, Directory dest) {
     } else if (e is Directory) {
       Directory(destPath).createSync(recursive: true);
       _copyDir(e, Directory(destPath));
+    }
+  }
+}
+
+void _normalizeSdkLineEndings(Directory sdkDir) {
+  const textExtensions = {
+    '.dart',
+    '.yaml',
+    '.yml',
+    '.json',
+    '.xml',
+    '.gradle',
+    '.kts',
+    '.java',
+    '.kt',
+    '.m',
+    '.mm',
+    '.swift',
+    '.h',
+    '.hpp',
+    '.c',
+    '.cc',
+    '.cpp',
+    '.txt',
+    '.md',
+  };
+
+  for (final entity in sdkDir.listSync(recursive: true)) {
+    if (entity is! File) continue;
+    final lowerPath = entity.path.toLowerCase();
+    if (!textExtensions.any(lowerPath.endsWith)) continue;
+
+    final contents = entity.readAsStringSync();
+    final normalized = contents.replaceAll('\r\n', '\n');
+    if (contents != normalized) {
+      entity.writeAsStringSync(normalized);
     }
   }
 }
