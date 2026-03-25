@@ -119,9 +119,13 @@ build_desktop_target() {
       source_dir_win="$(ci_windows_path "$TIM2TOX_DIR")"
       build_dir_win="$(ci_windows_path "$build_dir")"
       if [[ -n "${VCPKG_ROOT:-}" ]]; then
-        local vcpkg_root_win
+        local vcpkg_root_win toolchain_file
         vcpkg_root_win="$(ci_windows_path "$VCPKG_ROOT")"
-        VCPKG_ROOT="$vcpkg_root_win" cmake -S "$source_dir_win" -B "$build_dir_win" -G "Visual Studio 17 2022" -A x64 "${configure_args[@]}"
+        toolchain_file="${vcpkg_root_win}/scripts/buildsystems/vcpkg.cmake"
+        VCPKG_ROOT="$vcpkg_root_win" cmake -S "$source_dir_win" -B "$build_dir_win" \
+          -G "Visual Studio 17 2022" -A x64 \
+          -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
+          "${configure_args[@]}"
       else
         cmake -S "$source_dir_win" -B "$build_dir_win" -G "Visual Studio 17 2022" -A x64 "${configure_args[@]}"
       fi
