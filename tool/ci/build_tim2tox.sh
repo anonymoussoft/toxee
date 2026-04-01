@@ -8,6 +8,7 @@ source "$SCRIPT_DIR/common.sh"
 
 TARGET=""
 MODE="release"
+WINDOWS_ARCH="${TIM2TOX_WINDOWS_ARCH:-x64}" # x64|arm64
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -118,16 +119,36 @@ build_desktop_target() {
       local source_dir_win build_dir_win
       source_dir_win="$(ci_windows_path "$TIM2TOX_DIR")"
       build_dir_win="$(ci_windows_path "$build_dir")"
+      local vs_arch vcpkg_triplet
+      # bash 3.x on macOS doesn't support ${var,,} lowercase expansion.
+      local windows_arch_lc
+      windows_arch_lc="$(printf "%s" "${WINDOWS_ARCH}" | tr '[:upper:]' '[:lower:]')"
+      case "${windows_arch_lc}" in
+        arm64)
+          vs_arch="arm64"
+          vcpkg_triplet="arm64-windows"
+          ;;
+        x64|*)
+          vs_arch="x64"
+          vcpkg_triplet="x64-windows"
+          ;;
+      esac
       if [[ -n "${VCPKG_ROOT:-}" ]]; then
         local vcpkg_root_win toolchain_file
         vcpkg_root_win="$(ci_windows_path "$VCPKG_ROOT")"
         toolchain_file="${vcpkg_root_win}/scripts/buildsystems/vcpkg.cmake"
+        # Ensure tools invoked by CMake/MSBuild are discoverable.
+        # 1) pkg-config: used by FindPkgConfig during configure.
+        export PATH="$VCPKG_ROOT/installed/$vcpkg_triplet/tools/pkgconf:$PATH"
+        # 2) powershell.exe: used by vcpkg's applocal.ps1 post-build step.
+        # Git Bash (MSYS) typically exposes it under /c/WINDOWS/...
+        export PATH="/c/WINDOWS/System32/WindowsPowerShell/v1.0:$PATH"
         VCPKG_ROOT="$vcpkg_root_win" cmake -S "$source_dir_win" -B "$build_dir_win" \
-          -G "Visual Studio 17 2022" -A x64 \
+          -G "Visual Studio 17 2022" -A "$vs_arch" \
           -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
           "${configure_args[@]}"
       else
-        cmake -S "$source_dir_win" -B "$build_dir_win" -G "Visual Studio 17 2022" -A x64 "${configure_args[@]}"
+        cmake -S "$source_dir_win" -B "$build_dir_win" -G "Visual Studio 17 2022" -A "$vs_arch" "${configure_args[@]}"
       fi
       ;;
     *)
@@ -144,8 +165,8 @@ build_desktop_target() {
   ci_log "Captured native library: $built_lib"
 
   if [[ "$target" == "windows" && -n "${VCPKG_ROOT:-}" ]]; then
-    ci_copy_matching_file "$VCPKG_ROOT/installed/x64-windows" "libsodium.dll" "$OUTPUT_DIR" >/dev/null || \
-      ci_warn "libsodium.dll not found under $VCPKG_ROOT/installed/x64-windows"
+    ci_copy_matching_file "$VCPKG_ROOT/installed/$vcpkg_triplet" "libsodium.dll" "$OUTPUT_DIR" >/dev/null || \
+      ci_warn "libsodium.dll not found under $VCPKG_ROOT/installed/$vcpkg_triplet"
   fi
 
   if [[ "$target" == "linux" ]]; then

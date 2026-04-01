@@ -115,7 +115,6 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-2022
-    continue-on-error: true  # tim2tox C++ source requires POSIX porting for Windows
 
     steps:
       - name: Configure Git line endings
