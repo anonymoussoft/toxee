@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Toxee
+Comment=Private messaging using the Tox protocol
+Exec=toxee
+Icon=toxee
+Categories=Network;InstantMessaging;Chat;
+Terminal=false
+StartupWMClass=toxee
