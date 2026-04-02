@@ -214,6 +214,12 @@ package_macos() {
     if [[ -f "$app_bundle/Contents/Resources/AppIcon.icns" ]]; then
       volicon="--volicon $app_bundle/Contents/Resources/AppIcon.icns"
     fi
+    # create-dmg copies the *contents* of its source folder into the DMG,
+    # so we stage the .app inside a temporary directory.
+    local dmg_stage="$DIST_DIR/_dmg_stage"
+    rm -rf "$dmg_stage"
+    mkdir -p "$dmg_stage"
+    cp -R "$app_bundle" "$dmg_stage/"
     # shellcheck disable=SC2086
     create-dmg \
       --volname "Toxee" \
@@ -224,8 +230,9 @@ package_macos() {
       --app-drop-link 450 190 \
       $volicon \
       "$dmg_path" \
-      "$app_bundle" \
+      "$dmg_stage" \
       || ci_warn "create-dmg failed; skipping DMG creation"
+    rm -rf "$dmg_stage"
     if [[ -f "$dmg_path" ]]; then
       ci_log "Created macOS DMG: $dmg_path"
     fi
