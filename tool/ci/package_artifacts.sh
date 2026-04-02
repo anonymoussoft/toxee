@@ -86,6 +86,44 @@ package_linux() {
   tar -czf "$archive_path" -C "$DIST_DIR" "$(basename "$staged_dir")"
   rm -rf "$staged_dir"
   ci_log "Created Linux archive: $archive_path"
+
+  # --- AppImage ---
+  local appimage_path="$DIST_DIR/toxee-linux-x64-$MODE.AppImage"
+  if command -v appimagetool >/dev/null 2>&1; then
+    local appdir="$DIST_DIR/Toxee.AppDir"
+    rm -rf "$appdir"
+    mkdir -p "$appdir/usr/bin" "$appdir/usr/lib"
+
+    cp -R "$bundle_dir"/. "$appdir/usr/bin/"
+    # Move bundled libs into usr/lib so AppRun can set LD_LIBRARY_PATH
+    if [[ -d "$appdir/usr/bin/lib" ]]; then
+      cp -a "$appdir/usr/bin/lib"/. "$appdir/usr/lib/"
+      rm -rf "$appdir/usr/bin/lib"
+    fi
+
+    cp "$REPO_ROOT/linux/toxee.desktop" "$appdir/toxee.desktop"
+    if [[ -f "$REPO_ROOT/assets/app_icon.png" ]]; then
+      cp "$REPO_ROOT/assets/app_icon.png" "$appdir/toxee.png"
+    fi
+
+    cat > "$appdir/AppRun" <<'APPRUN'
+#!/bin/bash
+SELF="$(readlink -f "$0")"
+HERE="${SELF%/*}"
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$HERE/usr/bin/toxee" "$@"
+APPRUN
+    chmod +x "$appdir/AppRun"
+
+    ARCH=x86_64 appimagetool --no-appstream "$appdir" "$appimage_path" \
+      || ci_warn "appimagetool failed; skipping AppImage"
+    rm -rf "$appdir"
+    if [[ -f "$appimage_path" ]]; then
+      ci_log "Created Linux AppImage: $appimage_path"
+    fi
+  else
+    ci_warn "appimagetool not found; skipping AppImage creation"
+  fi
 }
 
 package_windows() {
@@ -116,6 +154,21 @@ package_windows() {
     >/dev/null
   rm -rf "$staged_dir"
   ci_log "Created Windows archive: $archive_path"
+
+  # --- MSIX installer ---
+  local msix_path="$DIST_DIR/toxee-windows-x64-$MODE.msix"
+  if (cd "$REPO_ROOT" && dart run msix:create --build-windows false 2>&1); then
+    local msix_output
+    msix_output="$(find "$REPO_ROOT/build" -type f -name '*.msix' | head -n 1 || true)"
+    if [[ -n "$msix_output" && -f "$msix_output" ]]; then
+      cp "$msix_output" "$msix_path"
+      ci_log "Created Windows MSIX: $msix_path"
+    else
+      ci_warn "MSIX build ran but output not found"
+    fi
+  else
+    ci_warn "MSIX creation failed; skipping MSIX installer"
+  fi
 }
 
 package_macos() {
@@ -153,6 +206,39 @@ package_macos() {
 
   ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$archive_path"
   ci_log "Created macOS archive: $archive_path"
+
+  # --- DMG disk image ---
+  local dmg_path="$DIST_DIR/toxee-macos-$MODE.dmg"
+  if command -v create-dmg >/dev/null 2>&1; then
+    local volicon=""
+    if [[ -f "$app_bundle/Contents/Resources/AppIcon.icns" ]]; then
+      volicon="--volicon $app_bundle/Contents/Resources/AppIcon.icns"
+    fi
+    # create-dmg copies the *contents* of its source folder into the DMG,
+    # so we stage the .app inside a temporary directory.
+    local dmg_stage="$DIST_DIR/_dmg_stage"
+    rm -rf "$dmg_stage"
+    mkdir -p "$dmg_stage"
+    cp -R "$app_bundle" "$dmg_stage/"
+    # shellcheck disable=SC2086
+    create-dmg \
+      --volname "Toxee" \
+      --window-pos 200 120 \
+      --window-size 600 400 \
+      --icon-size 100 \
+      --icon "$(basename "$app_bundle")" 150 190 \
+      --app-drop-link 450 190 \
+      $volicon \
+      "$dmg_path" \
+      "$dmg_stage" \
+      || ci_warn "create-dmg failed; skipping DMG creation"
+    rm -rf "$dmg_stage"
+    if [[ -f "$dmg_path" ]]; then
+      ci_log "Created macOS DMG: $dmg_path"
+    fi
+  else
+    ci_warn "create-dmg not found; skipping DMG creation"
+  fi
 }
 
 package_android() {
@@ -218,10 +304,17 @@ package_ios() {
     ci_die "iOS signing was configured, but the built app bundle is not signed (missing embedded.mobileprovision)."
   fi
 
+  # Create unsigned IPA (Payload/Runner.app zip)
+  mkdir -p "$payload_dir"
+  cp -R "$app_bundle" "$payload_dir/"
+  (cd "$DIST_DIR" && zip -qry "$(basename "$archive_path")" Payload)
+  rm -rf "$payload_dir"
+  ci_log "Created unsigned iOS IPA: $archive_path"
+  write_note "Packaged unsigned iOS app as IPA."
   if [[ "$injected" == "true" ]]; then
-    write_note "Unsigned iOS build detected; FFI artifacts were not packaged as an installable IPA."
+    write_note "Injected Tim2Tox FFI artifact into unsigned iOS app before IPA packaging."
   else
-    write_note "Unsigned iOS build detected; skipping installable package creation."
+    write_note "Unsigned iOS IPA was packaged without an injected Tim2Tox FFI artifact."
   fi
 }
 

@@ -82,7 +82,7 @@ collect_assets() {
     fi
 
     case "$file" in
-      *.zip|*.tar.gz|*.apk|*.aab|*.dmg|*.pkg|*.msi|*.msix|*.exe|*.ipa) ;;
+      *.zip|*.tar.gz|*.apk|*.aab|*.dmg|*.pkg|*.msi|*.msix|*.exe|*.ipa|*.AppImage) ;;
       *) continue ;;
     esac
 

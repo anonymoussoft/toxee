@@ -70,7 +70,14 @@ jobs:
             gstreamer1.0-plugins-good \
             ninja-build \
             patchelf \
-            pkg-config
+            pkg-config \
+            libfuse2
+
+      - name: Install appimagetool
+        run: |
+          sudo wget -q -O /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
 
       - name: Enable Linux desktop
         run: flutter config --enable-linux-desktop
@@ -184,7 +191,7 @@ jobs:
           cache: true
 
       - name: Install macOS dependencies
-        run: brew install libsodium
+        run: brew install libsodium create-dmg
 
       - name: Enable macOS desktop
         run: flutter config --enable-macos-desktop
