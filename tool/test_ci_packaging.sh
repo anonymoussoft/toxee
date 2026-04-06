@@ -132,7 +132,8 @@ Bundled tim2tox_ffi.dll into Windows package.
 Bundled libsodium.dll into Windows package.
 EOF
 
-  RELEASE_DRY_RUN=1 RELEASE_TAG=vtest RELEASE_ARTIFACTS_DIR="$artifacts_dir" \
+  PATH="/usr/bin:/bin" \
+    RELEASE_DRY_RUN=1 RELEASE_TAG=vtest RELEASE_ARTIFACTS_DIR="$artifacts_dir" \
     bash "$ROOT/tool/ci/publish_release.sh"
 
   assert_file_exists "$ROOT/dist/github-release/toxee-windows-x64-release.msi"

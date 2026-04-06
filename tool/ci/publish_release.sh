@@ -20,6 +20,18 @@ is_truthy() {
   esac
 }
 
+file_matches_regex() {
+  local pattern="$1"
+  local file="$2"
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -q "$pattern" "$file"
+    return
+  fi
+
+  grep -Eq "$pattern" "$file"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tag)
@@ -118,14 +130,14 @@ should_publish_asset() {
   basename="$(basename "$file")"
 
   if [[ "$group" == "toxee-ios-release" && "$basename" == *.ipa && -f "$notes_file" ]]; then
-    if rg -q 'Packaged unsigned iOS app as IPA\.|Unsigned iOS IPA' "$notes_file"; then
+    if file_matches_regex 'Packaged unsigned iOS app as IPA\.|Unsigned iOS IPA' "$notes_file"; then
       ci_log "Skipping unsigned iOS IPA from GitHub Release: $basename"
       return 1
     fi
   fi
 
   if [[ "$group" == "toxee-android-release" && ( "$basename" == *.apk || "$basename" == *.aab ) && -f "$notes_file" ]]; then
-    if rg -q 'No Android Tim2Tox JNI libraries were staged\.' "$notes_file"; then
+    if file_matches_regex 'No Android Tim2Tox JNI libraries were staged\.' "$notes_file"; then
       ci_log "Skipping Android asset without staged JNI libs from GitHub Release: $basename"
       return 1
     fi
