@@ -57,15 +57,15 @@ test_linux_package_includes_libsodium() {
     fail "Expected Linux archive to contain libsodium.so.23"
 }
 
-test_ios_unsigned_build_is_not_packaged_as_installable_zip() {
-  echo "[test] unsigned iOS build is not packaged as installable zip"
+test_ios_unsigned_build_is_packaged_as_validation_ipa() {
+  echo "[test] unsigned iOS build is packaged as validation ipa"
   rm -rf "$ROOT/dist/ios" "$ROOT/build/ios/iphoneos"
   mkdir -p "$ROOT/build/ios/iphoneos/Runner.app/Frameworks"
 
   bash "$ROOT/tool/ci/package_artifacts.sh" --target ios --mode release
 
   assert_file_missing "$ROOT/dist/ios/toxee-ios-release.zip"
-  assert_file_missing "$ROOT/dist/ios/toxee-ios-release.ipa"
+  assert_file_exists "$ROOT/dist/ios/toxee-ios-release.ipa"
   assert_file_exists "$ROOT/dist/ios/NOTES.txt"
 }
 
@@ -99,11 +99,19 @@ test_analyze_workflow_tolerates_existing_warnings() {
     fail "Analyze workflow still treats warnings as fatal"
 }
 
+test_windows_release_workflow_uses_wix_for_msi() {
+  echo "[test] windows workflow installs WiX and expects MSI packaging"
+  rg -n 'Add WiX to PATH \(Windows\)|choco install wixtoolset|cpack -C Release -G "WIX"|\\.msi' \
+    "$ROOT/.github/workflows/build-packages.yml" "$ROOT/tool/ci/package_artifacts.sh" >/dev/null || \
+    fail "Windows release flow does not appear to produce MSI installers"
+}
+
 test_android_syncs_jni_libs_into_app_tree
 test_linux_package_includes_libsodium
-test_ios_unsigned_build_is_not_packaged_as_installable_zip
+test_ios_unsigned_build_is_packaged_as_validation_ipa
 test_ios_signed_build_is_packaged_as_ipa
 test_workflow_does_not_use_secrets_in_if_conditions
 test_analyze_workflow_tolerates_existing_warnings
+test_windows_release_workflow_uses_wix_for_msi
 
 echo "[PASS] all packaging regression tests passed"

@@ -155,19 +155,39 @@ package_windows() {
   rm -rf "$staged_dir"
   ci_log "Created Windows archive: $archive_path"
 
-  # --- MSIX installer ---
-  local msix_path="$DIST_DIR/toxee-windows-x64-$MODE.msix"
-  if (cd "$REPO_ROOT" && dart run msix:create --build-windows false 2>&1); then
-    local msix_output
-    msix_output="$(find "$REPO_ROOT/build" -type f -name '*.msix' | head -n 1 || true)"
-    if [[ -n "$msix_output" && -f "$msix_output" ]]; then
-      cp "$msix_output" "$msix_path"
-      ci_log "Created Windows MSIX: $msix_path"
+  # --- MSI installer via CPack/WiX ---
+  local msi_path="$DIST_DIR/toxee-windows-x64-$MODE.msi"
+  local cpack_dir="$REPO_ROOT/build/windows/x64"
+  local release_version="${RELEASE_VERSION:-}"
+  if [[ -z "$release_version" && "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+    release_version="${GITHUB_REF_NAME#v}"
+  fi
+  if [[ -z "$release_version" ]]; then
+    release_version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$REPO_ROOT/pubspec.yaml" | head -n 1)"
+  fi
+
+  if [[ -f "$cpack_dir/CPackConfig.cmake" ]] && command -v cpack >/dev/null 2>&1; then
+    rm -f "$cpack_dir"/*.msi
+    if (
+      cd "$cpack_dir" && \
+      cpack -C Release -G WIX \
+        -D CPACK_PACKAGE_VERSION="$release_version" \
+        -D CPACK_PACKAGE_FILE_NAME="toxee-windows-x64-$MODE" \
+        --verbose
+    ); then
+      local msi_output
+      msi_output="$(find "$cpack_dir" -maxdepth 1 -type f -name '*.msi' | head -n 1 || true)"
+      if [[ -n "$msi_output" && -f "$msi_output" ]]; then
+        cp "$msi_output" "$msi_path"
+        ci_log "Created Windows MSI: $msi_path"
+      else
+        ci_warn "CPack WIX completed but MSI output not found"
+      fi
     else
-      ci_warn "MSIX build ran but output not found"
+      ci_warn "CPack WIX failed; skipping MSI installer"
     fi
   else
-    ci_warn "MSIX creation failed; skipping MSIX installer"
+    ci_warn "CPack config or cpack executable missing; skipping MSI installer"
   fi
 }
 
