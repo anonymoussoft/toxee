@@ -162,15 +162,15 @@ flutter pub get
 iOS 现在分两种模式：
 
 - 如果配置了 `IOS_CERTIFICATE_P12_BASE64`、`IOS_CERTIFICATE_PASSWORD`、`IOS_PROVISIONING_PROFILE_BASE64`，workflow 会执行带签名的 `flutter build ios --release`，并产出真实可安装的 `.ipa`。
-- 如果没有这些 secrets，iOS job 仍会执行未签名校验构建，但**不会**把它当作可安装包发布；此时只会在 `dist/ios/NOTES.txt` 中说明未配置签名。
+- 如果没有这些 secrets，iOS job 仍会执行未签名校验构建，但**不会**把这个 IPA 发布到 GitHub Releases；此时只会在 `dist/ios/NOTES.txt` 中说明未配置签名。
 
-对于 Android/iOS，如果工作区里还没有可注入的 Tim2Tox 移动端原生库，CI 也会继续把这个限制写进 `dist/<platform>/NOTES.txt`，避免把“能编译”误认为“已经完成原生注入”。
+对于 Android/iOS，如果工作区里还没有可注入的 Tim2Tox 移动端原生库，CI 也会继续把这个限制写进 `dist/<platform>/NOTES.txt`。在正式发布模式下，如果 Android 的 JNI `libtim2tox_ffi.so` 没有被 staged，APK/AAB 也不会再进入 GitHub Release，避免把“能编译”误认为“已经完成原生注入”。
 
 同一个 workflow 也支持发布到 **GitHub Releases**：
 
 - 推送 `v1.2.3` 这样的 tag，会自动构建所有平台并发布 GitHub Release。
 - 或者手动执行 `workflow_dispatch`，把 `publish_release` 设为 `true`，并填写 `release_tag`；如果是预发布版本，还可以把 `prerelease` 设为 `true`。
-- 发布 job 会下载当前 run 的构建产物，把真正可安装的打包文件上传到 Release，并额外生成 `SHA256SUMS.txt`。
+- 发布 job 会下载当前 run 的构建产物，只把通过发布门禁的真正可安装包上传到 Release，并额外生成 `SHA256SUMS.txt`。
 - Release 文案使用 GitHub 的 `--generate-notes` 自动生成；各平台额外的打包说明会作为附带构建说明文件一起上传。
 
 ---

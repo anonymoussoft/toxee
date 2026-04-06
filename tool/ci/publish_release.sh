@@ -9,6 +9,16 @@ source "$SCRIPT_DIR/common.sh"
 RELEASE_TAG="${RELEASE_TAG:-}"
 PRERELEASE="${PRERELEASE:-false}"
 ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR:-}"
+RELEASE_DRY_RUN="${RELEASE_DRY_RUN:-false}"
+
+is_truthy() {
+  local value
+  value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,7 +50,9 @@ done
 [[ -n "$ARTIFACTS_DIR" ]] || ci_die "Artifacts directory is required"
 [[ -d "$ARTIFACTS_DIR" ]] || ci_die "Artifacts directory does not exist: $ARTIFACTS_DIR"
 
-ci_require_cmd gh
+if ! is_truthy "$RELEASE_DRY_RUN"; then
+  ci_require_cmd gh
+fi
 
 REPO_ROOT="$(ci_repo_root)"
 STAGE_DIR="$REPO_ROOT/dist/github-release"
@@ -86,8 +98,40 @@ collect_assets() {
       *) continue ;;
     esac
 
+    if ! should_publish_asset "$relative_path" "$file"; then
+      continue
+    fi
+
     copy_release_asset "$file" "$relative_path"
   done < <(find "$ARTIFACTS_DIR" -type f -print0 | sort -z)
+}
+
+should_publish_asset() {
+  local relative_path="$1"
+  local file="$2"
+  local group
+  local notes_file
+  local basename
+
+  group="$(dirname "$relative_path")"
+  notes_file="$ARTIFACTS_DIR/$group/NOTES.txt"
+  basename="$(basename "$file")"
+
+  if [[ "$group" == "toxee-ios-release" && "$basename" == *.ipa && -f "$notes_file" ]]; then
+    if rg -q 'Packaged unsigned iOS app as IPA\.|Unsigned iOS IPA' "$notes_file"; then
+      ci_log "Skipping unsigned iOS IPA from GitHub Release: $basename"
+      return 1
+    fi
+  fi
+
+  if [[ "$group" == "toxee-android-release" && ( "$basename" == *.apk || "$basename" == *.aab ) && -f "$notes_file" ]]; then
+    if rg -q 'No Android Tim2Tox JNI libraries were staged\.' "$notes_file"; then
+      ci_log "Skipping Android asset without staged JNI libs from GitHub Release: $basename"
+      return 1
+    fi
+  fi
+
+  return 0
 }
 
 create_or_update_release() {
@@ -105,20 +149,20 @@ create_or_update_release() {
 
   if [[ "${GITHUB_REF_TYPE:-}" == "tag" && "${GITHUB_REF_NAME:-}" == "$RELEASE_TAG" ]]; then
     ci_log "Creating release from existing tag $RELEASE_TAG"
-    gh release create "$RELEASE_TAG" "$STAGE_DIR"/* \
-      --title "$RELEASE_TAG" \
-      --generate-notes \
-      --verify-tag \
-      "${extra_create_flags[@]}"
+    local create_cmd=(gh release create "$RELEASE_TAG" "$STAGE_DIR"/* --title "$RELEASE_TAG" --generate-notes --verify-tag)
+    if [[ "$PRERELEASE" == "true" ]]; then
+      create_cmd+=(--prerelease)
+    fi
+    "${create_cmd[@]}"
     return
   fi
 
   ci_log "Creating release $RELEASE_TAG targeting ${GITHUB_SHA:-current HEAD}"
-  gh release create "$RELEASE_TAG" "$STAGE_DIR"/* \
-    --title "$RELEASE_TAG" \
-    --generate-notes \
-    --target "${GITHUB_SHA:-HEAD}" \
-    "${extra_create_flags[@]}"
+  local create_cmd=(gh release create "$RELEASE_TAG" "$STAGE_DIR"/* --title "$RELEASE_TAG" --generate-notes --target "${GITHUB_SHA:-HEAD}")
+  if [[ "$PRERELEASE" == "true" ]]; then
+    create_cmd+=(--prerelease)
+  fi
+  "${create_cmd[@]}"
 }
 
 collect_assets
@@ -129,6 +173,11 @@ fi
 
 if [[ ! -s "$BUILD_NOTES_FILE" ]]; then
   rm -f "$BUILD_NOTES_FILE"
+fi
+
+if is_truthy "$RELEASE_DRY_RUN"; then
+  ci_log "Dry run enabled; skipping gh release publish"
+  exit 0
 fi
 
 create_or_update_release

@@ -109,6 +109,38 @@ test_windows_release_workflow_uses_wix_for_msi() {
     fail "Dedicated Windows MSI packaging config is missing"
 }
 
+test_release_publish_filters_non_installable_mobile_assets() {
+  echo "[test] release publish filters non-installable mobile assets"
+  local artifacts_dir="$TMP_ROOT/release-artifacts"
+  mkdir -p "$artifacts_dir/toxee-android-release" "$artifacts_dir/toxee-ios-release" "$artifacts_dir/toxee-windows-release"
+
+  printf 'apk' > "$artifacts_dir/toxee-android-release/app-release.apk"
+  printf 'aab' > "$artifacts_dir/toxee-android-release/app-release.aab"
+  cat > "$artifacts_dir/toxee-android-release/NOTES.txt" <<'EOF'
+No Android Tim2Tox JNI libraries were staged. APK/AAB were built, but runtime native loading still needs libtim2tox_ffi.so packaging.
+EOF
+
+  printf 'ipa' > "$artifacts_dir/toxee-ios-release/toxee-ios-release.ipa"
+  cat > "$artifacts_dir/toxee-ios-release/NOTES.txt" <<'EOF'
+Packaged unsigned iOS app as IPA.
+Unsigned iOS IPA was packaged without an injected Tim2Tox FFI artifact.
+EOF
+
+  printf 'msi' > "$artifacts_dir/toxee-windows-release/toxee-windows-x64-release.msi"
+  cat > "$artifacts_dir/toxee-windows-release/NOTES.txt" <<'EOF'
+Bundled tim2tox_ffi.dll into Windows package.
+Bundled libsodium.dll into Windows package.
+EOF
+
+  RELEASE_DRY_RUN=1 RELEASE_TAG=vtest RELEASE_ARTIFACTS_DIR="$artifacts_dir" \
+    bash "$ROOT/tool/ci/publish_release.sh"
+
+  assert_file_exists "$ROOT/dist/github-release/toxee-windows-x64-release.msi"
+  assert_file_missing "$ROOT/dist/github-release/app-release.apk"
+  assert_file_missing "$ROOT/dist/github-release/app-release.aab"
+  assert_file_missing "$ROOT/dist/github-release/toxee-ios-release.ipa"
+}
+
 test_android_syncs_jni_libs_into_app_tree
 test_linux_package_includes_libsodium
 test_ios_unsigned_build_is_packaged_as_validation_ipa
@@ -116,5 +148,6 @@ test_ios_signed_build_is_packaged_as_ipa
 test_workflow_does_not_use_secrets_in_if_conditions
 test_analyze_workflow_tolerates_existing_warnings
 test_windows_release_workflow_uses_wix_for_msi
+test_release_publish_filters_non_installable_mobile_assets
 
 echo "[PASS] all packaging regression tests passed"

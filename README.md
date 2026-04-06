@@ -162,15 +162,15 @@ Each job uploads the contents of `dist/<platform>/` as a GitHub Actions artifact
 iOS now has two modes:
 
 - With `IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`, and `IOS_PROVISIONING_PROFILE_BASE64` configured, the workflow performs a signed `flutter build ios --release` and packages a real `.ipa`.
-- Without those secrets, the iOS job still runs as an unsigned validation build, but it does **not** publish an installable package. Instead, `dist/ios/NOTES.txt` explains that signing was not configured.
+- Without those secrets, the iOS job still runs as an unsigned validation build, but it does **not** publish that IPA to GitHub Releases. Instead, `dist/ios/NOTES.txt` explains that signing was not configured.
 
-Mobile jobs also write `dist/<platform>/NOTES.txt` when Tim2Tox mobile native artifacts were not available in the workspace, so CI keeps that remaining native-injection gap explicit instead of silently pretending the package is complete.
+Mobile jobs also write `dist/<platform>/NOTES.txt` when Tim2Tox mobile native artifacts were not available in the workspace. In release publishing mode, Android APK/AAB assets are skipped when the JNI `libtim2tox_ffi.so` set was not staged, so GitHub Releases only receives Android assets that passed that native-library check.
 
 Publishing to **GitHub Releases** is built into the same workflow:
 
 - Push a tag like `v1.2.3` to build all platforms and publish a GitHub Release automatically.
 - Or run `workflow_dispatch`, set `publish_release=true`, and provide `release_tag` (optionally `prerelease=true`).
-- The publish job downloads the artifacts from the current run, uploads the packaged installables to the Release, and adds a generated `SHA256SUMS.txt`.
+- The publish job downloads the artifacts from the current run, uploads only the packaged installables that passed release gating to the Release, and adds a generated `SHA256SUMS.txt`.
 - Release notes use GitHub's `--generate-notes` flow, while platform-specific packaging caveats are merged into the uploaded build-note assets.
 
 ---
