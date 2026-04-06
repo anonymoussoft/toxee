@@ -130,6 +130,8 @@ package_windows() {
   local runner_dir="$REPO_ROOT/build/windows/x64/runner/$MODE_DIR"
   local staged_dir="$DIST_DIR/toxee-windows-x64"
   local archive_path="$DIST_DIR/toxee-windows-x64-$MODE.zip"
+  local installer_build_dir="$REPO_ROOT/build/windows/installer"
+  local installer_source_dir="$staged_dir"
 
   [[ -d "$runner_dir" ]] || ci_die "Windows runner output not found: $runner_dir"
 
@@ -152,12 +154,10 @@ package_windows() {
   powershell.exe -NoLogo -NoProfile -Command \
     "Compress-Archive -Path '$(ci_windows_path "$staged_dir")' -DestinationPath '$(ci_windows_path "$archive_path")' -Force" \
     >/dev/null
-  rm -rf "$staged_dir"
   ci_log "Created Windows archive: $archive_path"
 
   # --- MSI installer via CPack/WiX ---
   local msi_path="$DIST_DIR/toxee-windows-x64-$MODE.msi"
-  local cpack_dir="$REPO_ROOT/build/windows/x64"
   local release_version="${RELEASE_VERSION:-}"
   if [[ -z "$release_version" && "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
     release_version="${GITHUB_REF_NAME#v}"
@@ -166,17 +166,18 @@ package_windows() {
     release_version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$REPO_ROOT/pubspec.yaml" | head -n 1)"
   fi
 
-  if [[ -f "$cpack_dir/CPackConfig.cmake" ]] && command -v cpack >/dev/null 2>&1; then
-    rm -f "$cpack_dir"/*.msi
+  if command -v cpack >/dev/null 2>&1; then
+    rm -rf "$installer_build_dir"
     if (
-      cd "$cpack_dir" && \
+      cmake -S "$REPO_ROOT/tool/ci/windows-installer" -B "$installer_build_dir" \
+        -DTOXEE_INSTALLER_SOURCE_DIR="$(ci_windows_path "$installer_source_dir")" \
+        -DTOXEE_RELEASE_VERSION="$release_version" >/dev/null && \
+      cd "$installer_build_dir" && \
       cpack -C Release -G WIX \
-        -D CPACK_PACKAGE_VERSION="$release_version" \
-        -D CPACK_PACKAGE_FILE_NAME="toxee-windows-x64-$MODE" \
         --verbose
     ); then
       local msi_output
-      msi_output="$(find "$cpack_dir" -maxdepth 1 -type f -name '*.msi' | head -n 1 || true)"
+      msi_output="$(find "$installer_build_dir" -maxdepth 1 -type f -name '*.msi' | head -n 1 || true)"
       if [[ -n "$msi_output" && -f "$msi_output" ]]; then
         cp "$msi_output" "$msi_path"
         ci_log "Created Windows MSI: $msi_path"
@@ -189,6 +190,8 @@ package_windows() {
   else
     ci_warn "CPack config or cpack executable missing; skipping MSI installer"
   fi
+
+  rm -rf "$staged_dir"
 }
 
 package_macos() {

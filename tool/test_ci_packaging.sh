@@ -104,6 +104,9 @@ test_windows_release_workflow_uses_wix_for_msi() {
   rg -n 'Add WiX to PATH \(Windows\)|choco install wixtoolset|cpack -C Release -G "WIX"|\\.msi' \
     "$ROOT/.github/workflows/build-packages.yml" "$ROOT/tool/ci/package_artifacts.sh" >/dev/null || \
     fail "Windows release flow does not appear to produce MSI installers"
+  rg -n 'CPACK_GENERATOR "WIX"|CPACK_WIX_UPGRADE_GUID|install\(' \
+    "$ROOT/tool/ci/windows-installer/CMakeLists.txt" >/dev/null || \
+    fail "Dedicated Windows MSI packaging config is missing"
 }
 
 test_android_syncs_jni_libs_into_app_tree
