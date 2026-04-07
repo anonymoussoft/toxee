@@ -1,634 +1,217 @@
 # toxee Build and Deploy
 > Language: [Chinese](BUILD_AND_DEPLOY.md) | [English](BUILD_AND_DEPLOY.en.md)
 
-This document provides detailed building steps for toxee, building instructions for each platform, dependency installation guide, and common error solutions. **For build/run failures, startup crashes, or dependency resolution errors**, see [TROUBLESHOOTING.md](../TROUBLESHOOTING.en.md) (FAQ and debugging tips) first.
+This document covers the current build and packaging flow for toxee: local development builds, local packaging, and the GitHub Actions workflow that publishes GitHub Releases. For build failures, startup crashes, bootstrap issues, or runtime debugging, start with [TROUBLESHOOTING.en.md](../TROUBLESHOOTING.en.md).
 
 ## Contents
 
-- [Environmental requirements](#environmental-requirements)
-- [Quick Start](#quick-start)
-- [Detailed build steps](#detailed-build-steps)
-- [Building instructions for each platform](#build-instructions-for-each-platform)
-- [Dependent installation](#dependency-installation)
-- [Common error resolution](#common-error-resolution)
+- [Environment requirements](#environment-requirements)
+- [Quick paths](#quick-paths)
+- [Local build flow](#local-build-flow)
+- [Package outputs](#package-outputs)
+- [GitHub Actions packages and releases](#github-actions-packages-and-releases)
+- [Signing and native-library gating](#signing-and-native-library-gating)
+- [Useful commands](#useful-commands)
+- [Related docs](#related-docs)
 
-## Environmental requirements
+## Environment requirements
 
-### Required tools
+### Core tools
 
-- **Flutter SDK**: >= 3.22
-- **Dart SDK**: >= 3.5
-- **CMake**: >= 3.4.1
-- **Git**: used to clone dependencies
+- **Flutter**: use Flutter `3.29.x` or newer compatible with the checked-in lockfile. The current CI workflows use `3.29.0`, and `pubspec.lock` currently requires Flutter `>=3.29.0`.
+- **Dart**: use the Dart SDK bundled with the selected Flutter version.
+- **Git**: required for submodules and dependency bootstrap.
+- **CMake**: `3.16+` is the safest baseline. Parts of the tree build with lower minimums, but Tim2Tox and the Windows installer path both use `3.16`.
 
-### Platform specific requirements
+### Platform-specific requirements
 
-#### macOS
+- **macOS**: Xcode, Command Line Tools, Homebrew, `libsodium`, and `create-dmg` if you want `.dmg` packaging.
+- **Linux**: `build-essential`, `cmake`, `libgtk-3-dev`, `libsodium-dev`, `pkg-config`, `patchelf`, and `libfuse2`; `appimagetool` is needed for `.AppImage` packaging.
+- **Windows**: Visual Studio 2019/2022, PowerShell, CMake, and WiX Toolset v3 if you want `.msi` packaging. `vcpkg` is used in CI to install `libsodium`.
+- **Android**: Android SDK, Android NDK, and Java 17.
+- **iOS**: Xcode and CocoaPods. For a distributable IPA you also need signing materials (certificate + provisioning profile).
 
-- **Xcode**: latest version (for building macOS/iOS)
-- **Command Line Tools**: `xcode-select --install`
-- **Homebrew**: used to install dependent libraries
+## Quick paths
 
-#### Linux
+### Fastest local run
 
-- **GCC**: >= 10 or **Clang**: >= 12
-- **GTK3 development library**: `libgtk-3-dev`
-- **pkg-config**: used for dependency management
-
-#### Windows
-
-- **Visual Studio 2019** or higher
-- **CMake**: Install via Visual Studio or standalone
-- **vcpkg**: used for dependency management (optional)
-
-#### Android
-
-- **Android SDK**: Install via Android Studio
-- **Android NDK**: for native code compilation
-- **Java JDK**: >= 11
-
-#### iOS
-
-- **Xcode**: latest version (macOS only)
-- **CocoaPods**: `sudo gem install cocoapods`
-
-## Quick Start
-
-### macOS One-click build and run
+From the repository root:
 
 ```bash
-cd toxee
-bash run_toxee.sh
-```
-This script automatically:
-1. Build Tim2Tox (including FFI library, use DEBUG mode)
-2. Build the IRC client library (use DEBUG mode if necessary)
-3. Build Flutter macOS application (DEBUG mode)
-4. Package the dynamic libraries (`libtim2tox_ffi.dylib` and `libirc_client.dylib`) into the application bundle
-5. Copy and fix the libsodium dependency path (using `@loader_path`)
-6. Start the application and display the log in real time
-
-**Build Mode**: Build using DEBUG mode, including complete debugging symbols to facilitate debugging crash issues.
-
-**Log file**:
-- `build/native_build.log` - C++ build log
-- `build/flutter_build.log` - Flutter build log
-- `build/flutter_client.log` - application runtime log (symlink to actual log file in sandbox directory)
-
-**Actual log location**:
-- `~/Library/Containers/com.example.toxee/Data/Library/Application Support/com.example.toxee/flutter_client.log`
-
-### Cross-platform build
-```bash
-# Build for all supported platforms
-./build_all.sh
-
-# Build a specific platform
-./build_all.sh --platform macos
-./build_all.sh --platform linux
-./build_all.sh --platform windows
-./build_all.sh --platform android
-./build_all.sh --platform ios
-```
-## Detailed build steps
-
-### Step 1: Install dependencies
-
-#### macOS
-```bash
-# Install Homebrew if not already installed
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install libsodium
-brew install libsodium
-
-# Install Flutter (if not installed)
-brew install --cask flutter
-```
-
-#### Linux
-
-```bash
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install -y \
-    build-essential \
-    cmake \
-    libsodium-dev \
-    libgtk-3-dev \
-    pkg-config
-
-# Fedora/RHEL
-sudo dnf install -y \
-    gcc-c++ \
-    cmake \
-    libsodium-devel \
-    gtk3-devel \
-    pkg-config
-```
-
-#### Windows
-
-```bash
-# Use vcpkg to install dependencies
-vcpkg install libsodium:x64-windows
-```
-### Step 2: Build Tim2Tox
-```bash
-cd ../tim2tox
-
-# Use build script
-./build.sh
-
-# or build manually
-mkdir -p build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_FFI=ON
-make -j$(nproc)  # Linux
-make -j$(sysctl -n hw.ncpu)  # macOS
-```
-Build product:
-- `build/ffi/libtim2tox_ffi.dylib` (macOS)
-- `build/ffi/libtim2tox_ffi.so` (Linux)
-- `build/ffi/tim2tox_ffi.dll` (Windows)
-
-### Step 3: Build the Flutter app
-```bash
-cd ../toxee
-
-# Get dependencies
+dart run tool/bootstrap_deps.dart
 flutter pub get
+./run_toxee.sh
+```
 
-# Build macOS
+`run_toxee.sh` is the shortest path for local macOS development. It bootstraps dependencies when needed, builds the native pieces, launches the app, and writes logs such as:
+
+- `build/native_build.log`
+- `build/flutter_build.log`
+- `build/flutter_client.log`
+
+### Fastest cross-platform local build
+
+```bash
+./build_all.sh --platform macos --mode debug
+./build_all.sh --platform linux --mode release
+./build_all.sh --platform windows --mode release
+./build_all.sh --platform android --mode release
+./build_all.sh --platform ios --mode release
+```
+
+`build_all.sh` builds the Tim2Tox native library first, runs dependency bootstrap, and then executes the platform Flutter build.
+
+### Fastest CI-backed release
+
+- Push a tag such as `v1.2.3` to trigger [`.github/workflows/build-packages.yml`](../../.github/workflows/build-packages.yml).
+- Or trigger `workflow_dispatch`, set `publish_release=true`, and provide `release_tag`.
+
+## Local build flow
+
+### 1. Bootstrap dependencies
+
+Fresh clones and dependency updates must start here:
+
+```bash
+dart run tool/bootstrap_deps.dart
+```
+
+This initializes the required submodules, fetches and patches vendored SDK content, and refreshes `pubspec_overrides.yaml`.
+
+### 2. Install Flutter packages
+
+```bash
+flutter pub get
+```
+
+### 3. Build for a platform
+
+Examples:
+
+```bash
+# macOS
 flutter build macos --debug
 
-# Building Linux
-flutter build linux --debug
+# Linux
+flutter build linux --release
 
-# Building Windows
-flutter build windows --debug
+# Windows
+flutter build windows --release
 
-# Build Android
-flutter build apk --debug
+# Android
+flutter build apk --release
+flutter build appbundle --release
 
-# Build for iOS
-flutter build ios --debug
-```
-### Step 4: Copy the dynamic library (macOS/Linux/Windows)
-
-#### macOS
-```bash
-# Copy the FFI library to the application bundle
-cp ../tim2tox/build/ffi/libtim2tox_ffi.dylib \
-   build/macos/Build/Products/Debug/toxee.app/Contents/MacOS/
-
-# Copy the IRC repository (if needed)
-cp ../tim2tox/example/build/libirc_client.dylib \
-   build/macos/Build/Products/Debug/toxee.app/Contents/MacOS/
-
-# Fix dynamic library path
-install_name_tool -change \
-    /opt/homebrew/lib/libsodium.23.dylib \
-    @loader_path/libsodium.23.dylib \
-    build/macos/Build/Products/Debug/toxee.app/Contents/MacOS/libtim2tox_ffi.dylib
+# iOS validation build
+flutter build ios --release --no-codesign
 ```
 
-#### Linux
+If you already rely on the project scripts, `./build_all.sh` and `./run_toxee.sh` are the preferred entry points over manually repeating every step.
+
+### 4. Package installables locally
+
+After a successful platform build, you can package installables with:
 
 ```bash
-# Copy FFI library
-cp ../tim2tox/build/ffi/libtim2tox_ffi.so \
-   build/linux/x64/debug/bundle/lib/
-
-# Set library search path
-export LD_LIBRARY_PATH=$PWD/build/linux/x64/debug/bundle/lib:$LD_LIBRARY_PATH
+bash tool/ci/package_artifacts.sh --target linux --mode release
+bash tool/ci/package_artifacts.sh --target windows --mode release
+bash tool/ci/package_artifacts.sh --target macos --mode release
+bash tool/ci/package_artifacts.sh --target android --mode release
+bash tool/ci/package_artifacts.sh --target ios --mode release
 ```
 
-#### Windows
+Those commands write outputs into `dist/<platform>/`.
 
-```bash
-# Copy FFI library
-copy ..\tim2tox\build\ffi\tim2tox_ffi.dll \
-     build\windows\x64\runner\Debug\
-```
-## Build instructions for each platform
+## Package outputs
 
-### macOS
+Current packaging outputs are:
 
-#### Build configuration
+| Platform | Main outputs | Notes |
+| --- | --- | --- |
+| **Windows** | `dist/windows/toxee-windows-x64-release.msi`, `dist/windows/toxee-windows-x64-release.zip` | The `.msi` path depends on CPack + WiX being available. |
+| **macOS** | `dist/macos/toxee-macos-release.dmg`, `dist/macos/toxee-macos-release.zip` | The `.dmg` path depends on `create-dmg`. |
+| **Linux** | `dist/linux/toxee-linux-x64-release.AppImage`, `dist/linux/toxee-linux-x64-release.tar.gz` | The `.AppImage` path depends on `appimagetool`. |
+| **Android** | `dist/android/app-release.apk`, `dist/android/app-release.aab` | `NOTES.txt` records whether Tim2Tox JNI libs were staged. |
+| **iOS** | `dist/ios/toxee-ios-release.ipa` | Can be a signed IPA or an unsigned validation IPA, depending on signing state. |
 
-- **Architecture**: x86_64 and arm64 (universal binary)
-- **Minimum version**: macOS 10.14
-- **Dynamic library**: `.dylib` format
+Desktop packaging also tries to bundle the Tim2Tox native library and `libsodium` into the packaged app output, and records the result in `dist/<platform>/NOTES.txt`.
 
-#### Special handling
+## GitHub Actions packages and releases
 
-- Use `install_name_tool` to fix dynamic library path
-- Package the dynamic library into the `Contents/MacOS/` directory of the application bundle
-- Handle libsodium dependency path
+The repository ships with [`.github/workflows/build-packages.yml`](../../.github/workflows/build-packages.yml). It runs on:
 
-#### Run
-```bash
-# Run directly
-open build/macos/Build/Products/Debug/toxee.app
+- `push` to `main` / `master`
+- tag push for `v*`
+- `pull_request`
+- `workflow_dispatch`
 
-# or use command line
-./build/macos/Build/Products/Debug/toxee.app/Contents/MacOS/toxee
-```
-### Linux
+It builds packages for:
 
-#### Build configuration
+- Windows
+- Linux
+- macOS
+- Android
+- iOS
 
-- **Architecture**: x86_64
-- **Dynamic Library**: `.so` format
-- **GTK**: requires GTK3 development library
+Each platform job uploads `dist/<platform>/` as a workflow artifact. When the run is a version tag push, or when manual dispatch sets `publish_release=true`, the same workflow also:
 
-#### Special handling
+- downloads the artifacts from the current run
+- collects installables that passed release gating
+- publishes them to GitHub Releases
+- uploads `SHA256SUMS.txt`
+- uploads merged platform notes as `BUILD-NOTES.txt`
 
-- Set the `LD_LIBRARY_PATH` environment variable
-- Make sure all dependent libraries are in accessible paths
+The current desktop release assets are:
 
-#### Run
-```bash
-# Set library path
-export LD_LIBRARY_PATH=$PWD/build/linux/x64/debug/bundle/lib:$LD_LIBRARY_PATH
+- **Windows**: `.msi` plus `.zip`
+- **macOS**: `.dmg` plus `.zip`
+- **Linux**: `.AppImage` plus `.tar.gz`
 
-# run
-./build/linux/x64/debug/bundle/toxee
-```
-### Windows
+## Signing and native-library gating
 
-#### Build configuration
-
-- **Architecture**: x64
-- **Dynamic library**: `.dll` format
-- **Compiler**: MSVC 2019 or higher
-
-#### Special handling
-
-- Copy the DLL to the executable directory
-- Make sure all dependent DLLs are in the same directory
-
-#### Run
-```bash
-# In PowerShell
-.\build\windows\x64\runner\Debug\toxee.exe
-```
 ### Android
 
-#### Build configuration
+- Release signing is optional. If `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` are present, CI uses them.
+- If the Tim2Tox JNI set (`libtim2tox_ffi.so`) was **not** staged, CI still records the APK/AAB in the workflow artifact, but the GitHub Release publish step skips them. The reason is written into `dist/android/NOTES.txt` and merged into `BUILD-NOTES.txt`.
 
-- **Minimum SDK**: API 21 (Android 5.0)
-- **Target SDK**: latest version
-- **Architecture**: arm64-v8a, armeabi-v7a, x86_64
-
-#### Special handling
-
-- Compile native code using Android NDK
-- Package the `.so` library into the `lib/` directory of the APK
-- Configure `AndroidManifest.xml` permissions
-
-#### Build
-```bash
-flutter build apk --debug
-# or
-flutter build apk --release
-```
 ### iOS
 
-#### Build configuration
+- A distributable IPA requires `IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`, and `IOS_PROVISIONING_PROFILE_BASE64`.
+- Without those secrets, CI still performs an unsigned validation build and packages an unsigned IPA in the workflow artifact.
+- Unsigned validation IPAs are **not** uploaded to GitHub Releases. The publish step skips them and keeps the explanation in `BUILD-NOTES.txt`.
 
-- **Minimum version**: iOS 12.0
-- **Architecture**: arm64 (real machine) or x86_64 (simulator)
-- **Dynamic Library**: Framework format
+### Desktop
 
-#### Special handling
+- Desktop packages are the only assets currently guaranteed to land on GitHub Releases without extra mobile signing/native-library prerequisites.
+- Release packaging attempts to bundle Tim2Tox FFI and `libsodium` into the app/package output, then records the exact result in `NOTES.txt`.
 
-- Use CocoaPods to manage dependencies
-- Configure `Info.plist` permissions
-- Handle code signing
-
-#### Build
-```bash
-# Install CocoaPods dependencies
-cd ios
-pod install
-cd ..
-
-# build
-flutter build ios --debug
-```
-## Dependency installation
-
-### libsodium
-
-#### macOS
-```bash
-brew install libsodium
-```
-
-#### Linux
+## Useful commands
 
 ```bash
-# Ubuntu/Debian
-sudo apt-get install libsodium-dev
+# Dependency bootstrap
+dart run tool/bootstrap_deps.dart
 
-# Fedora/RHEL
-sudo dnf install libsodium-devel
+# Unified build
+./build_all.sh --platform macos --mode debug
+
+# Package local installables after a release build
+bash tool/ci/package_artifacts.sh --target windows --mode release
+
+# Prepare iOS signing in CI-like environments
+bash tool/ci/prepare_ios_signing.sh
+
+# Publish a prepared release artifact directory
+RELEASE_TAG=v1.2.3 RELEASE_ARTIFACTS_DIR=$PWD/release-artifacts \
+  bash tool/ci/publish_release.sh
+
+# Packaging regression checks
+bash tool/test_ci_packaging.sh
 ```
 
-#### Windows
-
-```bash
-# Use vcpkg
-vcpkg install libsodium:x64-windows
-```
-### Flutter SDK
-
-#### Installation
-```bash
-# macOS/Linux
-git clone https://github.com/flutter/flutter.git -b stable
-export PATH="$PATH:`pwd`/flutter/bin"
-
-# Or use a package manager
-# macOS
-brew install --cask flutter
-
-# Linux (Snap)
-sudo snap install flutter --classic
-```
-#### verify
-```bash
-flutter doctor
-```
-
-### CMake
-
-#### macOS
-
-```bash
-brew install cmake
-```
-
-#### Linux
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install cmake
-
-# Fedora/RHEL
-sudo dnf install cmake
-```
-#### Windows
-
-Download the installer from [CMake official website](https://cmake.org/download/).
-
-## Common error resolution
-
-For more build/runtime issues, log analysis, and debugging tips, see [TROUBLESHOOTING.md](TROUBLESHOOTING.en.md).
-
-### Build errors
-
-#### Error: libsodium not found
-
-**Symptoms**:
-```
-fatal error: 'sodium.h' file not found
-```
-**solve**:
-```bash
-# macOS
-brew install libsodium
-
-# Linux
-sudo apt-get install libsodium-dev
-
-# Check installation location
-# macOS: /opt/homebrew/lib or /usr/local/lib
-# Linux: /usr/lib or /usr/local/lib
-```
-#### Error: CMake configuration failed
-
-**Symptoms**:
-```
-CMake Error: Could not find a package configuration file
-```**Solution**:
-- Check CMake version: `cmake --version` (requires >= 3.4.1)
-- Check whether dependent libraries are installed
-- Clean the build directory: `rm -rf build` and rebuild
-
-#### Error: Link error
-
-**Symptoms**:
-```
-**Solution**:
-- Check CMake version: `cmake --version` (requires >= 3.4.1)
-- Check whether dependent libraries are installed
-- Clean the build directory: `rm -rf build` and rebuild
-
-#### Error: Link error
-
-**Symptoms**:
-```
-
-**Solution**:
-- Check link configuration in `CMakeLists.txt`
-- Make sure all dependent libraries are linked correctly
-- Check search paths for libraries
-
-### Flutter build errors
-
-#### Error: Dependency resolution failed
-
-**Symptoms**:
-```
-**Solution**:
-- Check link configuration in `CMakeLists.txt`
-- Make sure all dependent libraries are linked correctly
-- Check search paths for libraries
-
-### Flutter build errors
-
-#### Error: Dependency resolution failed
-
-**Symptoms**:
-```
-
-**Solution**:
-```bash
-# Clean and re-obtain dependencies
-flutter clean
-flutter pub get
-```
-**solve**:
-```
-Error: No valid Android SDK found
-```
-#### Error: Platform configuration error
-
-**Symptoms**:
-```bash
-# Run Flutter doctor
-flutter doctor
-
-# Install missing components
-flutter doctor --android-licenses
-```
-**solve**:
-```
-Error: The getter 'xxx' isn't defined
-```
-#### Error: Code generation error
-
-**Symptoms**:
-```bash
-# Regenerate code
-flutter pub run build_runner build --delete-conflicting-outputs
-```
-**solve**:
-```
-dlopen failed: library not found
-```
-### Runtime errors
-
-#### Error: Dynamic library loading failed
-
-**Symptoms**:
-```bash
-# Check dynamic library path
-otool -L libtim2tox_ffi.dylib
-
-# repair path
-install_name_tool -change \
-    /old/path/libsodium.dylib \
-    @loader_path/libsodium.dylib \
-    libtim2tox_ffi.dylib
-```
-**Solution**:
-
-**macOS**:
-```bash
-# Check dependencies
-ldd libtim2tox_ffi.so
-
-# Set library path
-export LD_LIBRARY_PATH=/path/to/libs:$LD_LIBRARY_PATH
-```
-
-**Linux**:
-```
-Symbol not found: DartInitDartApiDL
-```
-**Windows**:
-- Make sure all DLLs are in the executable directory
-- Check the PATH environment variable
-
-#### Error: symbol not found
-
-**Symptoms**:
-```bash
-otool -L libtim2tox_ffi.dylib
-```
-**Solution**:
-- Check if the function is declared with `extern "C"`
-- Check export configuration in CMakeLists.txt
-- Check symbol exports using `nm` or `objdump`
-
-#### Error: callback not triggered
-
-**Symptom**: The registered callback is not called
-
-**Solution**:
-- Make sure `DartInitDartApiDL` and `DartRegisterSendPort` are called
-- Check `IsDartPortRegistered()` return value
-- Check the log output to confirm whether the callback was called
-
-### Network problem
-
-#### Error: Tox cannot connect
-
-**Symptom**: The app cannot connect to the Tox network after launching
-
-**Solution**:
-- Check network connection
-- Check firewall settings
-- Verify Bootstrap node configuration
-- Check the log: `build/flutter_client.log`
-
-#### Error: Bootstrap node connection failed
-
-**Symptom**: The log shows "bootstrap nodes queued" but cannot connect
-
-**Solution**:
-- Check if Bootstrap node list is valid
-- Verify network permission configuration
-- Check if libsodium is packaged correctly
-
-### Performance issues
-
-#### Problem: Application starts slowly
-
-**Solution**:
-- Check dynamic library loading time
-- Optimize the initialization process
-- Use lazy loading
-
-#### Problem: Message sending is slow
-
-**Solution**:
-- Check network connection status
-- Optimize message serialization
-- Use bulk sending
-
-## Debugging Tips
-
-### Enable detailed logging
-
-In `run_toxee.sh`, the log files are located at:
-- `build/native_build.log` - C++ build log
-- `build/flutter_build.log` - Flutter build log
-- `build/flutter_client.log` - application runtime log
-
-### Check dynamic library dependencies
-
-**macOS**:
-```bash
-ldd libtim2tox_ffi.so
-```
-
-**Linux**:
-```bash
-dumpbin /DEPENDENTS tim2tox_ffi.dll
-```
-
-**Windows**:
-```bash
-nm -D libtim2tox_ffi.dylib | grep Dart
-```
-### Verify function symbols
-
-**macOS/Linux**:
-```bash
-dumpbin /EXPORTS tim2tox_ffi.dll
-```
-
-**Windows**:
-```bash
-# macOS
-tail -f build/flutter_client.log
-
-# Linux
-tail -f build/flutter_client.log
-
-# Or run the application directly in the terminal to view the output
-```
-```
-
-## Related documents
-
-- [Troubleshooting](../TROUBLESHOOTING.en.md) - Build/run failures, runtime issues, log analysis (check here first)
-- [getting-started.en.md](../getting-started.en.md) - Clone to run in one page
-- [Dependency bootstrap](DEPENDENCY_BOOTSTRAP.en.md) - Bootstrap order and options
-- [Integration Guide](../integration/INTEGRATION_GUIDE.en.md) - How to integrate Tim2Tox
-- [Main README](../../README.md) - Project Overview
+## Related docs
+
+- [Main README](../../README.md) - project overview and high-level CI/release summary
+- [TROUBLESHOOTING.en.md](../TROUBLESHOOTING.en.md) - failures, logs, and runtime debugging
+- [DEPENDENCY_BOOTSTRAP.en.md](DEPENDENCY_BOOTSTRAP.en.md) - bootstrap order and options
+- [DEPENDENCY_LAYOUT.en.md](DEPENDENCY_LAYOUT.en.md) - `third_party/` layout and assumptions
+- [getting-started.en.md](../getting-started.en.md) - shortest clone-to-run path

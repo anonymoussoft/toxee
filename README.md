@@ -159,6 +159,12 @@ The repository now includes [`.github/workflows/build-packages.yml`](.github/wor
 
 Each job uploads the contents of `dist/<platform>/` as a GitHub Actions artifact. Desktop jobs build the host Tim2Tox FFI library and bundle it into the packaged app output. Android builds both `app-release.apk` and `app-release.aab`; if the secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` are present, the workflow uses them for release signing, otherwise it falls back to the project's existing debug-key release signing.
 
+For the desktop platforms, the packaged installables are:
+
+- **Windows**: `toxee-windows-x64-release.msi` (plus a `.zip` bundle)
+- **macOS**: `toxee-macos-release.dmg` (plus a `.zip` bundle)
+- **Linux**: `toxee-linux-x64-release.AppImage` (plus a `.tar.gz` bundle)
+
 iOS now has two modes:
 
 - With `IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`, and `IOS_PROVISIONING_PROFILE_BASE64` configured, the workflow performs a signed `flutter build ios --release` and packages a real `.ipa`.

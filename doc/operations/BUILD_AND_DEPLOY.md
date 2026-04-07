@@ -1,678 +1,215 @@
 # toxee 构建与部署
 > 语言 / Language: [中文](BUILD_AND_DEPLOY.md) | [English](BUILD_AND_DEPLOY.en.md)
 
-本文档提供 toxee 的详细构建步骤、各平台构建说明、依赖安装指南和常见错误解决方案。**构建或运行中报错、无法启动、依赖解析失败等**，请先查 [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md) 的「常见问题」与「调试技巧」。
+本文档说明 toxee 当前真实可用的构建与打包流程：本地开发构建、本地安装包打包，以及通过 GitHub Actions 发布 GitHub Releases。遇到构建失败、启动崩溃、bootstrap 异常或运行时排障时，请先看 [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)。
 
 ## 目录
 
 - [环境要求](#环境要求)
-- [快速开始](#快速开始)
-- [详细构建步骤](#详细构建步骤)
-- [各平台构建说明](#各平台构建说明)
-- [依赖安装](#依赖安装)
-- [常见错误解决](#常见错误解决)
+- [最快路径](#最快路径)
+- [本地构建流程](#本地构建流程)
+- [安装包产物](#安装包产物)
+- [GitHub Actions 打包与发布](#github-actions-打包与发布)
+- [签名与原生库门禁](#签名与原生库门禁)
+- [常用命令](#常用命令)
+- [相关文档](#相关文档)
 
 ## 环境要求
 
-### 必需工具
+### 核心工具
 
-- **Flutter SDK**: >= 3.22
-- **Dart SDK**: >= 3.5
-- **CMake**: >= 3.4.1
-- **Git**: 用于克隆依赖
+- **Flutter**：建议使用 `3.29.x` 或与当前 lockfile 兼容的更高版本。当前 CI workflow 固定使用 `3.29.0`，`pubspec.lock` 当前也要求 Flutter `>=3.29.0`。
+- **Dart**：使用所选 Flutter 自带的 Dart SDK。
+- **Git**：bootstrap、submodule 与依赖拉取都需要。
+- **CMake**：建议 `3.16+`。仓库中有些路径最低要求更低，但 Tim2Tox 和 Windows 安装包链路都使用到 `3.16`。
 
-### 平台特定要求
+### 平台要求
 
-#### macOS
+- **macOS**：Xcode、Command Line Tools、Homebrew；如果要打 `.dmg`，还需要 `create-dmg`；本地桌面构建需要 `libsodium`。
+- **Linux**：`build-essential`、`cmake`、`libgtk-3-dev`、`libsodium-dev`、`pkg-config`、`patchelf`、`libfuse2`；如果要打 `.AppImage`，还需要 `appimagetool`。
+- **Windows**：Visual Studio 2019/2022、PowerShell、CMake；如果要打 `.msi`，还需要 WiX Toolset v3。CI 使用 `vcpkg` 安装 `libsodium`。
+- **Android**：Android SDK、Android NDK、Java 17。
+- **iOS**：Xcode、CocoaPods；如果要产出正式可分发 IPA，还需要证书和 provisioning profile。
 
-- **Xcode**: 最新版本（用于构建 macOS/iOS）
-- **Command Line Tools**: `xcode-select --install`
-- **Homebrew**: 用于安装依赖库
+## 最快路径
 
-#### Linux
+### 最快本地运行
 
-- **GCC**: >= 10 或 **Clang**: >= 12
-- **GTK3 开发库**: `libgtk-3-dev`
-- **pkg-config**: 用于依赖管理
-
-#### Windows
-
-- **Visual Studio 2019** 或更高版本
-- **CMake**: 通过 Visual Studio 安装或独立安装
-- **vcpkg**: 用于依赖管理（可选）
-
-#### Android
-
-- **Android SDK**: 通过 Android Studio 安装
-- **Android NDK**: 用于原生代码编译
-- **Java JDK**: >= 11
-
-#### iOS
-
-- **Xcode**: 最新版本（仅限 macOS）
-- **CocoaPods**: `sudo gem install cocoapods`
-
-## 快速开始
-
-首次克隆后需先执行依赖引导（bootstrap），再构建。详见 [依赖引导说明](DEPENDENCY_BOOTSTRAP.md)。
+在仓库根目录执行：
 
 ```bash
-cd toxee
-dart run tool/bootstrap_deps.dart   # 首次或升级依赖后执行
+dart run tool/bootstrap_deps.dart
 flutter pub get
-bash run_toxee.sh                    # 或 ./build_all.sh --platform macos --mode debug
+./run_toxee.sh
 ```
 
-### macOS 一键构建和运行
+`run_toxee.sh` 是当前 macOS 本地开发最短路径。它会在需要时做 bootstrap、构建原生依赖并启动应用，同时生成：
+
+- `build/native_build.log`
+- `build/flutter_build.log`
+- `build/flutter_client.log`
+
+### 最快跨平台本地构建
 
 ```bash
-cd toxee
-bash run_toxee.sh
+./build_all.sh --platform macos --mode debug
+./build_all.sh --platform linux --mode release
+./build_all.sh --platform windows --mode release
+./build_all.sh --platform android --mode release
+./build_all.sh --platform ios --mode release
 ```
 
-该脚本会在需要时自动执行 bootstrap，然后：
-1. 构建 Tim2Tox（包括 FFI 库，使用 DEBUG 模式）
-2. 构建 IRC 客户端库（如果需要，使用 DEBUG 模式）
-3. 构建 Flutter macOS 应用（DEBUG 模式）
-4. 将动态库（`libtim2tox_ffi.dylib` 和 `libirc_client.dylib`）打包到应用 bundle
-5. 复制并修复 libsodium 依赖路径（使用 `@loader_path`）
-6. 启动应用并实时显示日志
+`build_all.sh` 会先构建 Tim2Tox 原生库，再执行 bootstrap 和对应平台的 Flutter 构建。
 
-**构建模式**: 使用 DEBUG 模式构建，包含完整的调试符号，便于调试崩溃问题。
+### 最快 CI 发版路径
 
-**日志文件**:
-- `build/native_build.log` - C++ 构建日志
-- `build/flutter_build.log` - Flutter 构建日志
-- `build/flutter_client.log` - 应用运行时日志（符号链接到沙盒目录的实际日志文件）
+- 推送 `v1.2.3` 这样的 tag，会触发 [`.github/workflows/build-packages.yml`](../../.github/workflows/build-packages.yml) 自动构建并发布。
+- 或手动执行 `workflow_dispatch`，把 `publish_release` 设为 `true`，并填写 `release_tag`。
 
-**实际日志位置**: 
-- `~/Library/Containers/com.example.toxee/Data/Library/Application Support/com.example.toxee/flutter_client.log`
+## 本地构建流程
 
-### 跨平台构建
+### 1. 依赖引导
 
-```bash
-# 构建所有支持的平台
-./build_all.sh
-
-# 构建特定平台
-./build_all.sh --platform macos
-./build_all.sh --platform linux
-./build_all.sh --platform windows
-./build_all.sh --platform android
-./build_all.sh --platform ios
-```
-
-## 详细构建步骤
-
-### 步骤 0: 依赖引导（首次克隆或升级后）
-
-从零克隆仓库后，必须先运行 bootstrap，再执行 `flutter pub get` 或任何构建脚本。Bootstrap 会初始化 `third_party/tim2tox` 与 `third_party/chat-uikit-flutter`、拉取并打补丁的 `tencent_cloud_chat_sdk`、并生成 `pubspec_overrides.yaml`。构建脚本（如 `build_all.sh`、`run_toxee.sh`）会在内部调用 bootstrap，但首次建议手动执行一次以确认环境正常。
+首次克隆或依赖变化后，先执行：
 
 ```bash
 dart run tool/bootstrap_deps.dart
 ```
 
-详见 [DEPENDENCY_BOOTSTRAP.md](DEPENDENCY_BOOTSTRAP.md)。
+它会初始化所需 submodule、拉取并打补丁 vendored SDK 内容，并刷新 `pubspec_overrides.yaml`。
 
-### 步骤 1: 安装依赖
-
-#### macOS
+### 2. 安装 Flutter 依赖
 
 ```bash
-# 安装 Homebrew（如果未安装）
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# 安装 libsodium
-brew install libsodium
-
-# 安装 Flutter（如果未安装）
-brew install --cask flutter
-```
-
-#### Linux
-
-```bash
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install -y \
-    build-essential \
-    cmake \
-    libsodium-dev \
-    libgtk-3-dev \
-    pkg-config
-
-# Fedora/RHEL
-sudo dnf install -y \
-    gcc-c++ \
-    cmake \
-    libsodium-devel \
-    gtk3-devel \
-    pkg-config
-```
-
-#### Windows
-
-```bash
-# 使用 vcpkg 安装依赖
-vcpkg install libsodium:x64-windows
-```
-
-### 步骤 2: 构建 Tim2Tox
-
-```bash
-cd ../tim2tox
-
-# 使用构建脚本
-./build.sh
-
-# 或手动构建
-mkdir -p build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_FFI=ON
-make -j$(nproc)  # Linux
-make -j$(sysctl -n hw.ncpu)  # macOS
-```
-
-构建产物：
-- `build/ffi/libtim2tox_ffi.dylib` (macOS)
-- `build/ffi/libtim2tox_ffi.so` (Linux)
-- `build/ffi/tim2tox_ffi.dll` (Windows)
-
-### 步骤 3: 构建 Flutter 应用
-
-```bash
-cd ../toxee
-
-# 获取依赖
 flutter pub get
+```
 
-# 构建 macOS
+### 3. 执行平台构建
+
+示例：
+
+```bash
+# macOS
 flutter build macos --debug
 
-# 构建 Linux
-flutter build linux --debug
+# Linux
+flutter build linux --release
 
-# 构建 Windows
-flutter build windows --debug
+# Windows
+flutter build windows --release
 
-# 构建 Android
-flutter build apk --debug
+# Android
+flutter build apk --release
+flutter build appbundle --release
 
-# 构建 iOS
-flutter build ios --debug
+# iOS 未签名校验构建
+flutter build ios --release --no-codesign
 ```
 
-### 步骤 4: 复制动态库（macOS/Linux/Windows）
+如果你已经在使用仓库脚本，优先推荐 `./build_all.sh` 和 `./run_toxee.sh`，不要手工重复拼所有步骤。
 
-#### macOS
+### 4. 本地打安装包
+
+平台构建完成后，可用下面的脚本把产物整理到 `dist/<platform>/`：
 
 ```bash
-# 复制 FFI 库到应用 bundle
-cp ../tim2tox/build/ffi/libtim2tox_ffi.dylib \
-   build/macos/Build/Products/Debug/toxee.app/Contents/MacOS/
-
-# 复制 IRC 库（如果需要）
-cp ../tim2tox/example/build/libirc_client.dylib \
-   build/macos/Build/Products/Debug/toxee.app/Contents/MacOS/
-
-# 修复动态库路径
-install_name_tool -change \
-    /opt/homebrew/lib/libsodium.23.dylib \
-    @loader_path/libsodium.23.dylib \
-    build/macos/Build/Products/Debug/toxee.app/Contents/MacOS/libtim2tox_ffi.dylib
+bash tool/ci/package_artifacts.sh --target linux --mode release
+bash tool/ci/package_artifacts.sh --target windows --mode release
+bash tool/ci/package_artifacts.sh --target macos --mode release
+bash tool/ci/package_artifacts.sh --target android --mode release
+bash tool/ci/package_artifacts.sh --target ios --mode release
 ```
 
-#### Linux
+## 安装包产物
 
-```bash
-# 复制 FFI 库
-cp ../tim2tox/build/ffi/libtim2tox_ffi.so \
-   build/linux/x64/debug/bundle/lib/
+当前打包脚本会生成这些产物：
 
-# 设置库搜索路径
-export LD_LIBRARY_PATH=$PWD/build/linux/x64/debug/bundle/lib:$LD_LIBRARY_PATH
-```
+| 平台 | 主要产物 | 说明 |
+| --- | --- | --- |
+| **Windows** | `dist/windows/toxee-windows-x64-release.msi`、`dist/windows/toxee-windows-x64-release.zip` | `.msi` 依赖 CPack + WiX。 |
+| **macOS** | `dist/macos/toxee-macos-release.dmg`、`dist/macos/toxee-macos-release.zip` | `.dmg` 依赖 `create-dmg`。 |
+| **Linux** | `dist/linux/toxee-linux-x64-release.AppImage`、`dist/linux/toxee-linux-x64-release.tar.gz` | `.AppImage` 依赖 `appimagetool`。 |
+| **Android** | `dist/android/app-release.apk`、`dist/android/app-release.aab` | `NOTES.txt` 会记录 JNI 原生库是否已注入。 |
+| **iOS** | `dist/ios/toxee-ios-release.ipa` | 可能是 signed IPA，也可能只是 unsigned validation IPA。 |
 
-#### Windows
+桌面端打包还会尽量把 Tim2Tox FFI 和 `libsodium` 一起带进安装包，并把结果写进 `dist/<platform>/NOTES.txt`。
 
-```bash
-# 复制 FFI 库
-copy ..\tim2tox\build\ffi\tim2tox_ffi.dll \
-     build\windows\x64\runner\Debug\
-```
+## GitHub Actions 打包与发布
 
-## 各平台构建说明
+仓库内置了 [`.github/workflows/build-packages.yml`](../../.github/workflows/build-packages.yml)。它会在以下场景执行：
 
-### macOS
+- `push` 到 `main` / `master`
+- 推送 `v*` tag
+- `pull_request`
+- `workflow_dispatch`
 
-#### 构建配置
+它会为这些平台构建并上传 artifact：
 
-- **架构**: x86_64 和 arm64（通用二进制）
-- **最低版本**: macOS 10.14
-- **动态库**: `.dylib` 格式
+- Windows
+- Linux
+- macOS
+- Android
+- iOS
 
-#### 特殊处理
+每个平台 job 都会上传 `dist/<platform>/`。当本次 run 是版本 tag，或者手动触发时设置了 `publish_release=true`，同一个 workflow 还会：
 
-- 使用 `install_name_tool` 修复动态库路径
-- 将动态库打包到应用 bundle 的 `Contents/MacOS/` 目录
-- 处理 libsodium 依赖路径
+- 下载当前 run 的各平台 artifact
+- 只收集通过发布门禁的安装包
+- 发布到 GitHub Releases
+- 额外上传 `SHA256SUMS.txt`
+- 额外上传合并后的平台说明 `BUILD-NOTES.txt`
 
-#### 运行
+当前桌面端 Release 资产类型为：
 
-```bash
-# 直接运行
-open build/macos/Build/Products/Debug/toxee.app
+- **Windows**：`.msi` + `.zip`
+- **macOS**：`.dmg` + `.zip`
+- **Linux**：`.AppImage` + `.tar.gz`
 
-# 或使用命令行
-./build/macos/Build/Products/Debug/toxee.app/Contents/MacOS/toxee
-```
-
-### Linux
-
-#### 构建配置
-
-- **架构**: x86_64
-- **动态库**: `.so` 格式
-- **GTK**: 需要 GTK3 开发库
-
-#### 特殊处理
-
-- 设置 `LD_LIBRARY_PATH` 环境变量
-- 确保所有依赖库在可访问路径
-
-#### 运行
-
-```bash
-# 设置库路径
-export LD_LIBRARY_PATH=$PWD/build/linux/x64/debug/bundle/lib:$LD_LIBRARY_PATH
-
-# 运行
-./build/linux/x64/debug/bundle/toxee
-```
-
-### Windows
-
-#### 构建配置
-
-- **架构**: x64
-- **动态库**: `.dll` 格式
-- **编译器**: MSVC 2019 或更高版本
-
-#### 特殊处理
-
-- 将 DLL 复制到可执行文件目录
-- 确保所有依赖 DLL 在同一目录
-
-#### 运行
-
-```bash
-# 在 PowerShell 中
-.\build\windows\x64\runner\Debug\toxee.exe
-```
+## 签名与原生库门禁
 
 ### Android
 
-#### 构建配置
-
-- **最低 SDK**: API 21 (Android 5.0)
-- **目标 SDK**: 最新版本
-- **架构**: arm64-v8a, armeabi-v7a, x86_64
-
-#### 特殊处理
-
-- 使用 Android NDK 编译原生代码
-- 将 `.so` 库打包到 APK 的 `lib/` 目录
-- 配置 `AndroidManifest.xml` 权限
-
-#### 构建
-
-```bash
-flutter build apk --debug
-# 或
-flutter build apk --release
-```
+- Android release 签名是可选的。如果提供了 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`，CI 会自动使用这些 secrets。
+- 如果 Tim2Tox 的 JNI 集合（`libtim2tox_ffi.so`）**没有**被 staged，CI 仍会在 workflow artifact 中保留 APK/AAB，但 GitHub Release 发布步骤会跳过这些资产。原因会写入 `dist/android/NOTES.txt`，并最终汇总到 `BUILD-NOTES.txt`。
 
 ### iOS
 
-#### 构建配置
+- 正式可分发 IPA 需要 `IOS_CERTIFICATE_P12_BASE64`、`IOS_CERTIFICATE_PASSWORD`、`IOS_PROVISIONING_PROFILE_BASE64`。
+- 如果没有这些 secrets，CI 仍会执行 unsigned validation build，并在 workflow artifact 中保留一个 unsigned IPA。
+- unsigned validation IPA **不会**进入 GitHub Releases；发布步骤会跳过它，同时把原因写入 `BUILD-NOTES.txt`。
 
-- **最低版本**: iOS 12.0
-- **架构**: arm64（真机）或 x86_64（模拟器）
-- **动态库**: Framework 格式
+### 桌面端
 
-#### 特殊处理
+- 目前最稳定、默认可发布到 GitHub Releases 的资产仍然是桌面端安装包。
+- 打包脚本会尝试把 Tim2Tox FFI 和 `libsodium` 一起带进桌面端产物，并把准确结果写进各平台 `NOTES.txt`。
 
-- 使用 CocoaPods 管理依赖
-- 配置 `Info.plist` 权限
-- 处理代码签名
-
-#### 构建
+## 常用命令
 
 ```bash
-# 安装 CocoaPods 依赖
-cd ios
-pod install
-cd ..
+# 依赖引导
+dart run tool/bootstrap_deps.dart
 
-# 构建
-flutter build ios --debug
-```
+# 统一构建
+./build_all.sh --platform macos --mode debug
 
-## 依赖安装
+# 本地安装包打包
+bash tool/ci/package_artifacts.sh --target windows --mode release
 
-### libsodium
+# 在类 CI 环境里准备 iOS 签名
+bash tool/ci/prepare_ios_signing.sh
 
-#### macOS
+# 发布已准备好的 release-artifacts 目录
+RELEASE_TAG=v1.2.3 RELEASE_ARTIFACTS_DIR=$PWD/release-artifacts \
+  bash tool/ci/publish_release.sh
 
-```bash
-brew install libsodium
-```
-
-#### Linux
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install libsodium-dev
-
-# Fedora/RHEL
-sudo dnf install libsodium-devel
-```
-
-#### Windows
-
-```bash
-# 使用 vcpkg
-vcpkg install libsodium:x64-windows
-```
-
-### Flutter SDK
-
-#### 安装
-
-```bash
-# macOS/Linux
-git clone https://github.com/flutter/flutter.git -b stable
-export PATH="$PATH:`pwd`/flutter/bin"
-
-# 或使用包管理器
-# macOS
-brew install --cask flutter
-
-# Linux (Snap)
-sudo snap install flutter --classic
-```
-
-#### 验证
-
-```bash
-flutter doctor
-```
-
-### CMake
-
-#### macOS
-
-```bash
-brew install cmake
-```
-
-#### Linux
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install cmake
-
-# Fedora/RHEL
-sudo dnf install cmake
-```
-
-#### Windows
-
-从 [CMake 官网](https://cmake.org/download/) 下载安装程序。
-
-## 常见错误解决
-
-更多构建/运行时问题、日志分析与调试技巧见 [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)。
-
-### 构建错误
-
-#### 错误: 找不到 libsodium
-
-**症状**:
-```
-fatal error: 'sodium.h' file not found
-```
-
-**解决**:
-```bash
-# macOS
-brew install libsodium
-
-# Linux
-sudo apt-get install libsodium-dev
-
-# 检查安装位置
-# macOS: /opt/homebrew/lib 或 /usr/local/lib
-# Linux: /usr/lib 或 /usr/local/lib
-```
-
-#### 错误: CMake 配置失败
-
-**症状**:
-```
-CMake Error: Could not find a package configuration file
-```
-
-**解决**:
-- 检查 CMake 版本: `cmake --version` (需要 >= 3.4.1)
-- 检查依赖库是否已安装
-- 清理构建目录: `rm -rf build` 然后重新构建
-
-#### 错误: 链接错误
-
-**症状**:
-```
-undefined reference to `tox_*'
-```
-
-**解决**:
-- 检查 `CMakeLists.txt` 中的链接配置
-- 确保所有依赖库都已正确链接
-- 检查库的搜索路径
-
-### Flutter 构建错误
-
-#### 错误: 依赖解析失败
-
-**症状**:
-```
-Error: Could not resolve the package 'tim2tox_dart'
-```
-
-**解决**:
-```bash
-# 清理并重新获取依赖
-flutter clean
-flutter pub get
-```
-
-#### 错误: 平台配置错误
-
-**症状**:
-```
-Error: No valid Android SDK found
-```
-
-**解决**:
-```bash
-# 运行 Flutter doctor
-flutter doctor
-
-# 安装缺失的组件
-flutter doctor --android-licenses
-```
-
-#### 错误: 代码生成错误
-
-**症状**:
-```
-Error: The getter 'xxx' isn't defined
-```
-
-**解决**:
-```bash
-# 重新生成代码
-flutter pub run build_runner build --delete-conflicting-outputs
-```
-
-### 运行时错误
-
-#### 错误: 动态库加载失败
-
-**症状**:
-```
-dlopen failed: library not found
-```
-
-**解决**:
-
-**macOS**:
-```bash
-# 检查动态库路径
-otool -L libtim2tox_ffi.dylib
-
-# 修复路径
-install_name_tool -change \
-    /old/path/libsodium.dylib \
-    @loader_path/libsodium.dylib \
-    libtim2tox_ffi.dylib
-```
-
-**Linux**:
-```bash
-# 检查依赖
-ldd libtim2tox_ffi.so
-
-# 设置库路径
-export LD_LIBRARY_PATH=/path/to/libs:$LD_LIBRARY_PATH
-```
-
-**Windows**:
-- 确保所有 DLL 在可执行文件目录
-- 检查 PATH 环境变量
-
-#### 错误: 符号未找到
-
-**症状**:
-```
-Symbol not found: DartInitDartApiDL
-```
-
-**解决**:
-- 检查函数是否使用 `extern "C"` 声明
-- 检查 CMakeLists.txt 中的导出配置
-- 使用 `nm` 或 `objdump` 检查符号导出
-
-#### 错误: 回调不触发
-
-**症状**: 注册的回调没有被调用
-
-**解决**:
-- 确保 `DartInitDartApiDL` 和 `DartRegisterSendPort` 已调用
-- 检查 `IsDartPortRegistered()` 返回值
-- 查看日志输出确认回调是否被调用
-
-### 网络问题
-
-#### 错误: Tox 无法连接
-
-**症状**: 应用启动后无法连接到 Tox 网络
-
-**解决**:
-- 检查网络连接
-- 检查防火墙设置
-- 验证 Bootstrap 节点配置
-- 查看日志: `build/flutter_client.log`
-
-#### 错误: Bootstrap 节点连接失败
-
-**症状**: 日志显示 "bootstrap nodes queued" 但无法连接
-
-**解决**:
-- 检查 Bootstrap 节点列表是否有效
-- 验证网络权限配置
-- 检查 libsodium 是否正确打包
-
-### 性能问题
-
-#### 问题: 应用启动慢
-
-**解决**:
-- 检查动态库加载时间
-- 优化初始化流程
-- 使用延迟加载
-
-#### 问题: 消息发送慢
-
-**解决**:
-- 检查网络连接状态
-- 优化消息序列化
-- 使用批量发送
-
-## 调试技巧
-
-### 启用详细日志
-
-在 `run_toxee.sh` 中，日志文件位于：
-- `build/native_build.log` - C++ 构建日志
-- `build/flutter_build.log` - Flutter 构建日志
-- `build/flutter_client.log` - 应用运行时日志
-
-### 检查动态库依赖
-
-**macOS**:
-```bash
-otool -L libtim2tox_ffi.dylib
-```
-
-**Linux**:
-```bash
-ldd libtim2tox_ffi.so
-```
-
-**Windows**:
-```bash
-dumpbin /DEPENDENTS tim2tox_ffi.dll
-```
-
-### 验证函数符号
-
-**macOS/Linux**:
-```bash
-nm -D libtim2tox_ffi.dylib | grep Dart
-```
-
-**Windows**:
-```bash
-dumpbin /EXPORTS tim2tox_ffi.dll
-```
-
-### 查看应用日志
-
-```bash
-# macOS
-tail -f build/flutter_client.log
-
-# Linux
-tail -f build/flutter_client.log
-
-# 或直接在终端运行应用查看输出
+# 打包链路回归测试
+bash tool/test_ci_packaging.sh
 ```
 
 ## 相关文档
 
-- [故障排除](../TROUBLESHOOTING.md) - 构建失败、运行时问题、日志分析、调试技巧（建议先查）
-- [getting-started.md](../getting-started.md) - 从克隆到跑起来的单页
-- [依赖引导](DEPENDENCY_BOOTSTRAP.md) - bootstrap 顺序与选项
-- [集成指南](../integration/INTEGRATION_GUIDE.md) - 如何集成 Tim2Tox
-- [主 README](../../README.zh-CN.md) - 项目概述
+- [主 README](../../README.zh-CN.md) - 项目总览与高层 CI/Release 说明
+- [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - 失败排查、日志与运行时调试
+- [DEPENDENCY_BOOTSTRAP.md](DEPENDENCY_BOOTSTRAP.md) - bootstrap 顺序与选项
+- [DEPENDENCY_LAYOUT.md](DEPENDENCY_LAYOUT.md) - `third_party/` 布局与约束
+- [getting-started.md](../getting-started.md) - 从克隆到跑起来的最短路径

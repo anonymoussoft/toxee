@@ -25,7 +25,7 @@
 ## Operations and build
 
 - [getting-started.md](getting-started.en.md) - Clone to run (recommended for first run)
-- [operations/BUILD_AND_DEPLOY.md](operations/BUILD_AND_DEPLOY.en.md) - Build environment, platform build and deployment
+- [operations/BUILD_AND_DEPLOY.md](operations/BUILD_AND_DEPLOY.en.md) - Local build flow, package outputs, GitHub Actions packaging and Release publishing
 - [operations/DEPENDENCY_BOOTSTRAP.en.md](operations/DEPENDENCY_BOOTSTRAP.en.md) - Bootstrap order and options (required for fresh clone)
 - [operations/DEPENDENCY_LAYOUT.en.md](operations/DEPENDENCY_LAYOUT.en.md) - third_party target layout, legacy assumptions
 - [operations/PATCH_MAINTENANCE.en.md](operations/PATCH_MAINTENANCE.en.md) - Patch and dependency maintenance, SDK upgrade checklist

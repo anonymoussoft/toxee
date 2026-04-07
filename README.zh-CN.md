@@ -159,6 +159,12 @@ flutter pub get
 
 每个平台 job 都会把 `dist/<platform>/` 目录作为 GitHub Actions artifact 上传。桌面端 job 会先构建宿主平台的 Tim2Tox FFI 动态库，再把它一起打进应用产物。Android 会同时产出 `app-release.apk` 和 `app-release.aab`；如果配置了 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD` 这 4 个 secrets，workflow 会自动使用 release keystore 签名，否则继续沿用项目当前的 debug-key release 签名。
 
+桌面端当前的安装型产物分别是：
+
+- **Windows**：`toxee-windows-x64-release.msi`（另附 `.zip` 便携包）
+- **macOS**：`toxee-macos-release.dmg`（另附 `.zip` 包）
+- **Linux**：`toxee-linux-x64-release.AppImage`（另附 `.tar.gz` 包）
+
 iOS 现在分两种模式：
 
 - 如果配置了 `IOS_CERTIFICATE_P12_BASE64`、`IOS_CERTIFICATE_PASSWORD`、`IOS_PROVISIONING_PROFILE_BASE64`，workflow 会执行带签名的 `flutter build ios --release`，并产出真实可安装的 `.ipa`。
