@@ -47,8 +47,10 @@ jobs:
         target:
           - runner: ubuntu-24.04
             package_arch: x86_64
+            flutter_setup: action
           - runner: ubuntu-24.04-arm
             package_arch: aarch64
+            flutter_setup: manual
 
     steps:
       - name: Checkout
@@ -57,10 +59,20 @@ jobs:
           submodules: recursive
 
       - name: Set up Flutter
+        if: matrix.target.flutter_setup == 'action'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+
+      - name: Set up Flutter (manual ARM)
+        if: matrix.target.flutter_setup == 'manual'
+        run: |
+          git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" config --no-analytics
+          "$RUNNER_TEMP/flutter/bin/flutter" precache --linux
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
 
       - name: Install Linux dependencies
         run: |
@@ -135,11 +147,13 @@ jobs:
             vcpkg_triplet: x64-windows
             cmake_arch: x64
             tim2tox_windows_arch: x64
+            flutter_setup: action
           - runner: windows-11-arm
             package_arch: ARM64
             vcpkg_triplet: arm64-windows
             cmake_arch: ARM64
             tim2tox_windows_arch: arm64
+            flutter_setup: manual
 
     steps:
       - name: Configure Git line endings
@@ -153,10 +167,21 @@ jobs:
           submodules: recursive
 
       - name: Set up Flutter
+        if: matrix.target.flutter_setup == 'action'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+
+      - name: Set up Flutter (manual ARM)
+        if: matrix.target.flutter_setup == 'manual'
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          "$env:RUNNER_TEMP\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" config --no-analytics
+          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" precache --windows
+          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" --version
 
       - name: Install vcpkg and native dependencies
         shell: pwsh
