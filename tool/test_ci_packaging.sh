@@ -123,8 +123,8 @@ test_release_publish_filters_non_installable_mobile_assets() {
   local artifacts_dir="$TMP_ROOT/release-artifacts"
   mkdir -p "$artifacts_dir/toxee-android-release" "$artifacts_dir/toxee-ios-release" "$artifacts_dir/toxee-windows-release"
 
-  printf 'apk' > "$artifacts_dir/toxee-android-release/app-release.apk"
-  printf 'aab' > "$artifacts_dir/toxee-android-release/app-release.aab"
+  printf 'apk' > "$artifacts_dir/toxee-android-release/toxee-0.1.7-Android-arm64.apk"
+  printf 'aab' > "$artifacts_dir/toxee-android-release/toxee-0.1.7-Android-arm64.aab"
   cat > "$artifacts_dir/toxee-android-release/NOTES.txt" <<'EOF'
 No Android Tim2Tox JNI libraries were staged. APK/AAB were built, but runtime native loading still needs libtim2tox_ffi.so packaging.
 EOF
@@ -146,8 +146,8 @@ EOF
     bash "$ROOT/tool/ci/publish_release.sh"
 
   assert_file_exists "$ROOT/dist/github-release/toxee-windows-x64-release.msi"
-  assert_file_missing "$ROOT/dist/github-release/app-release.apk"
-  assert_file_missing "$ROOT/dist/github-release/app-release.aab"
+  assert_file_missing "$ROOT/dist/github-release/toxee-0.1.7-Android-arm64.apk"
+  assert_file_missing "$ROOT/dist/github-release/toxee-0.1.7-Android-arm64.aab"
   assert_file_missing "$ROOT/dist/github-release/toxee-ios-release.ipa"
 }
 
@@ -200,8 +200,8 @@ EOF
 Bundled tim2tox_ffi.dll into Windows package.
 EOF
 
-  printf 'apk' > "$artifacts_dir/toxee-android-release/app-release.apk"
-  printf 'aab' > "$artifacts_dir/toxee-android-release/app-release.aab"
+  printf 'apk' > "$artifacts_dir/toxee-android-release/toxee-0.1.7-Android-arm64.apk"
+  printf 'aab' > "$artifacts_dir/toxee-android-release/toxee-0.1.7-Android-arm64.aab"
   cat > "$artifacts_dir/toxee-android-release/NOTES.txt" <<'EOF'
 Android build used repository-provided Tim2Tox JNI libraries.
 EOF
@@ -224,7 +224,7 @@ EOF
   assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Darwin-arm64.pkg"
   assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Windows-AMD64.msi"
   assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Windows-ARM64.msi"
-  assert_file_exists "$ROOT/dist/github-release/app-release.apk"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Android-arm64.apk"
   assert_file_exists "$ROOT/dist/github-release/toxee-ios-release.ipa"
   assert_file_exists "$ROOT/dist/github-release/SHA256SUMS.txt"
 
@@ -232,7 +232,7 @@ EOF
   assert_file_missing "$ROOT/dist/github-release/toxee-macos-release.dmg"
   assert_file_missing "$ROOT/dist/github-release/toxee-macos-release.zip"
   assert_file_missing "$ROOT/dist/github-release/toxee-windows-x64-release.zip"
-  assert_file_missing "$ROOT/dist/github-release/app-release.aab"
+  assert_file_missing "$ROOT/dist/github-release/toxee-0.1.7-Android-arm64.aab"
   assert_file_missing "$ROOT/dist/github-release/BUILD-NOTES.txt"
 }
 

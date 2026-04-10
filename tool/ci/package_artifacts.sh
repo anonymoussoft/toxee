@@ -292,14 +292,20 @@ package_macos() {
 package_android() {
   local apk_path="$REPO_ROOT/build/app/outputs/flutter-apk/app-$MODE.apk"
   local aab_path="$REPO_ROOT/build/app/outputs/bundle/$MODE/app-$MODE.aab"
+  local release_version package_arch output_apk_name output_aab_name
+
+  release_version="$(resolve_release_version)"
+  package_arch="${TOXEE_PACKAGE_ARCH:-arm64}"
+  output_apk_name="toxee-${release_version}-Android-${package_arch}.apk"
+  output_aab_name="toxee-${release_version}-Android-${package_arch}.aab"
 
   [[ -f "$apk_path" ]] || ci_die "Android APK not found: $apk_path"
-  cp "$apk_path" "$DIST_DIR/"
-  ci_log "Captured Android APK: $apk_path"
+  cp "$apk_path" "$DIST_DIR/$output_apk_name"
+  ci_log "Captured Android APK: $DIST_DIR/$output_apk_name"
 
   if [[ -f "$aab_path" ]]; then
-    cp "$aab_path" "$DIST_DIR/"
-    ci_log "Captured Android App Bundle: $aab_path"
+    cp "$aab_path" "$DIST_DIR/$output_aab_name"
+    ci_log "Captured Android App Bundle: $DIST_DIR/$output_aab_name"
   else
     write_note "Android App Bundle was not produced."
   fi
