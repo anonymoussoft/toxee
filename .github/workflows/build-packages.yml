@@ -39,8 +39,16 @@ env:
 
 jobs:
   linux:
-    name: Linux
-    runs-on: ubuntu-24.04
+    name: Linux ${{ matrix.target.package_arch }}
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - runner: ubuntu-24.04
+            package_arch: x86_64
+          - runner: ubuntu-24.04-arm
+            package_arch: aarch64
 
     steps:
       - name: Checkout
@@ -71,13 +79,7 @@ jobs:
             ninja-build \
             patchelf \
             pkg-config \
-            libfuse2
-
-      - name: Install appimagetool
-        run: |
-          sudo wget -q -O /usr/local/bin/appimagetool \
-            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          sudo chmod +x /usr/local/bin/appimagetool
+            rpm
 
       - name: Enable Linux desktop
         run: flutter config --enable-linux-desktop
@@ -110,18 +112,34 @@ jobs:
         run: flutter build linux --release --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
 
       - name: Package Linux artifacts
+        env:
+          TOXEE_PACKAGE_ARCH: ${{ matrix.target.package_arch }}
         run: bash tool/ci/package_artifacts.sh --target linux --mode "$BUILD_MODE"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: toxee-linux-release
+          name: toxee-linux-${{ matrix.target.package_arch }}-release
           path: dist/linux
           if-no-files-found: error
 
   windows:
-    name: Windows
-    runs-on: windows-2022
+    name: Windows ${{ matrix.target.package_arch }}
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - runner: windows-2025
+            package_arch: AMD64
+            vcpkg_triplet: x64-windows
+            cmake_arch: x64
+            tim2tox_windows_arch: x64
+          - runner: windows-11-arm
+            package_arch: ARM64
+            vcpkg_triplet: arm64-windows
+            cmake_arch: ARM64
+            tim2tox_windows_arch: arm64
 
     steps:
       - name: Configure Git line endings
@@ -146,7 +164,7 @@ jobs:
           $vcpkgRoot = Join-Path $env:RUNNER_TEMP "vcpkg"
           git clone --depth 1 https://github.com/microsoft/vcpkg $vcpkgRoot
           & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
-          & "$vcpkgRoot\vcpkg.exe" install libsodium:x64-windows pthreads:x64-windows
+          & "$vcpkgRoot\vcpkg.exe" install libsodium:${{ matrix.target.vcpkg_triplet }} pthreads:${{ matrix.target.vcpkg_triplet }}
           "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Add WiX to PATH
@@ -180,24 +198,36 @@ jobs:
         run: flutter pub get
 
       - name: Build Tim2Tox native library
+        env:
+          TIM2TOX_WINDOWS_ARCH: ${{ matrix.target.tim2tox_windows_arch }}
         run: bash tool/ci/build_tim2tox.sh --target windows --mode "$BUILD_MODE"
 
       - name: Build Windows runner
         run: flutter build windows --release --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
 
       - name: Package Windows artifacts
+        env:
+          TOXEE_PACKAGE_ARCH: ${{ matrix.target.package_arch }}
         run: bash tool/ci/package_artifacts.sh --target windows --mode "$BUILD_MODE"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: toxee-windows-release
+          name: toxee-windows-${{ matrix.target.package_arch }}-release
           path: dist/windows
           if-no-files-found: error
 
   macos:
-    name: macOS
-    runs-on: macos-14
+    name: macOS ${{ matrix.target.package_arch }}
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - runner: macos-15-intel
+            package_arch: x86_64
+          - runner: macos-15
+            package_arch: arm64
 
     steps:
       - name: Checkout
@@ -212,7 +242,7 @@ jobs:
           cache: true
 
       - name: Install macOS dependencies
-        run: brew install libsodium create-dmg
+        run: brew install libsodium
 
       - name: Enable macOS desktop
         run: flutter config --enable-macos-desktop
@@ -230,12 +260,14 @@ jobs:
         run: flutter build macos --release --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
 
       - name: Package macOS artifacts
+        env:
+          TOXEE_PACKAGE_ARCH: ${{ matrix.target.package_arch }}
         run: bash tool/ci/package_artifacts.sh --target macos --mode "$BUILD_MODE"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: toxee-macos-release
+          name: toxee-macos-${{ matrix.target.package_arch }}-release
           path: dist/macos
           if-no-files-found: error
 

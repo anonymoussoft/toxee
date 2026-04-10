@@ -42,19 +42,14 @@ test_android_syncs_jni_libs_into_app_tree() {
   assert_file_exists "$ANDROID_JNI_DIR/arm64-v8a/libtim2tox_ffi.so"
 }
 
-test_linux_package_includes_libsodium() {
-  echo "[test] linux package includes libsodium payload"
-  mkdir -p "$ROOT/build/linux/x64/release/bundle/lib"
-  printf 'fake-exe' > "$ROOT/build/linux/x64/release/bundle/toxee"
-  printf 'fake-ffi' > "$ROOT/build/linux/x64/release/bundle/lib/libtim2tox_ffi.so"
-  mkdir -p "$ROOT/build/native-artifacts/linux"
-  printf 'fake-ffi' > "$ROOT/build/native-artifacts/linux/libtim2tox_ffi.so"
-  printf 'fake-sodium' > "$ROOT/build/native-artifacts/linux/libsodium.so.23"
-
-  bash "$ROOT/tool/ci/package_artifacts.sh" --target linux --mode release
-
-  tar -tzf "$ROOT/dist/linux/toxee-linux-x64-release.tar.gz" | grep -q 'libsodium.so.23' || \
-    fail "Expected Linux archive to contain libsodium.so.23"
+test_linux_packaging_supports_deb_and_rpm_installers() {
+  echo "[test] linux packaging supports deb and rpm installers"
+  rg -n 'toxee-\\$release_version-Linux-\\$PACKAGE_ARCH\\.deb|toxee-\\$release_version-Linux-\\$PACKAGE_ARCH\\.rpm|Bundled Linux libsodium runtime dependency\\.|Normalized Linux FFI rpath' \
+    "$ROOT/tool/ci/package_artifacts.sh" >/dev/null || \
+    fail "Linux packaging script does not appear to produce DEB/RPM installers with bundled runtime notes"
+  rg -n 'CPACK_GENERATOR \"DEB;RPM\"|TOXEE_DEB_ARCH|TOXEE_RPM_ARCH|usr/share/applications|usr/share/icons' \
+    "$ROOT/tool/ci/linux-installer/CMakeLists.txt" >/dev/null || \
+    fail "Linux installer CPack config is missing"
 }
 
 test_ios_unsigned_build_is_packaged_as_validation_ipa() {
@@ -99,14 +94,20 @@ test_analyze_workflow_tolerates_existing_warnings() {
     fail "Analyze workflow still treats warnings as fatal"
 }
 
-test_windows_release_workflow_uses_wix_for_msi() {
-  echo "[test] windows workflow installs WiX and expects MSI packaging"
-  rg -n 'Add WiX to PATH \(Windows\)|choco install wixtoolset|cpack -C Release -G "WIX"|\\.msi' \
+test_desktop_release_workflow_uses_multi_arch_installers() {
+  echo "[test] desktop workflow uses multi-arch installer packaging"
+  rg -n 'ubuntu-24\\.04-arm|macos-15-intel|macos-15|windows-11-arm|windows-2025|package_arch: aarch64|package_arch: arm64|package_arch: AMD64|package_arch: ARM64' \
+    "$ROOT/.github/workflows/build-packages.yml" >/dev/null || \
+    fail "Desktop release workflow does not appear to define the expected multi-arch matrix"
+  rg -n 'cpack -C Release -G WIX|\\.msi|\\.deb|\\.rpm|pkgbuild' \
     "$ROOT/.github/workflows/build-packages.yml" "$ROOT/tool/ci/package_artifacts.sh" >/dev/null || \
-    fail "Windows release flow does not appear to produce MSI installers"
+    fail "Desktop release flow does not appear to produce MSI/DEB/RPM/PKG installers"
   rg -n 'CPACK_GENERATOR "WIX"|CPACK_WIX_UPGRADE_GUID|install\(' \
     "$ROOT/tool/ci/windows-installer/CMakeLists.txt" >/dev/null || \
     fail "Dedicated Windows MSI packaging config is missing"
+  rg -n 'CPACK_GENERATOR "DEB;RPM"|TOXEE_DEB_ARCH|TOXEE_RPM_ARCH|usr/share/applications|usr/share/icons' \
+    "$ROOT/tool/ci/linux-installer/CMakeLists.txt" >/dev/null || \
+    fail "Dedicated Linux installer packaging config is missing"
 }
 
 test_release_publish_filters_non_installable_mobile_assets() {
@@ -142,31 +143,52 @@ EOF
   assert_file_missing "$ROOT/dist/github-release/toxee-ios-release.ipa"
 }
 
-test_release_publish_keeps_one_installer_per_platform() {
-  echo "[test] release publish keeps one installer per platform"
+test_release_publish_keeps_expected_installer_types() {
+  echo "[test] release publish keeps expected installer types"
   local artifacts_dir="$TMP_ROOT/release-installers"
   mkdir -p \
-    "$artifacts_dir/toxee-linux-release" \
-    "$artifacts_dir/toxee-macos-release" \
-    "$artifacts_dir/toxee-windows-release" \
+    "$artifacts_dir/toxee-linux-x86_64-release" \
+    "$artifacts_dir/toxee-linux-aarch64-release" \
+    "$artifacts_dir/toxee-macos-x86_64-release" \
+    "$artifacts_dir/toxee-macos-arm64-release" \
+    "$artifacts_dir/toxee-windows-AMD64-release" \
+    "$artifacts_dir/toxee-windows-ARM64-release" \
     "$artifacts_dir/toxee-android-release" \
     "$artifacts_dir/toxee-ios-release"
 
-  printf 'appimage' > "$artifacts_dir/toxee-linux-release/toxee-linux-x64-release.AppImage"
-  printf 'linux-tar' > "$artifacts_dir/toxee-linux-release/toxee-linux-x64-release.tar.gz"
-  cat > "$artifacts_dir/toxee-linux-release/NOTES.txt" <<'EOF'
+  printf 'linux-deb' > "$artifacts_dir/toxee-linux-x86_64-release/toxee-0.1.7-Linux-x86_64.deb"
+  printf 'linux-rpm' > "$artifacts_dir/toxee-linux-x86_64-release/toxee-0.1.7-Linux-x86_64.rpm"
+  printf 'appimage' > "$artifacts_dir/toxee-linux-x86_64-release/toxee-linux-x64-release.AppImage"
+  cat > "$artifacts_dir/toxee-linux-x86_64-release/NOTES.txt" <<'EOF'
 Bundled libtim2tox_ffi.so into Linux bundle.
 EOF
 
-  printf 'dmg' > "$artifacts_dir/toxee-macos-release/toxee-macos-release.dmg"
-  printf 'mac-zip' > "$artifacts_dir/toxee-macos-release/toxee-macos-release.zip"
-  cat > "$artifacts_dir/toxee-macos-release/NOTES.txt" <<'EOF'
+  printf 'linux-deb-arm' > "$artifacts_dir/toxee-linux-aarch64-release/toxee-0.1.7-Linux-aarch64.deb"
+  printf 'linux-rpm-arm' > "$artifacts_dir/toxee-linux-aarch64-release/toxee-0.1.7-Linux-aarch64.rpm"
+  cat > "$artifacts_dir/toxee-linux-aarch64-release/NOTES.txt" <<'EOF'
+Bundled libtim2tox_ffi.so into Linux bundle.
+EOF
+
+  printf 'mac-pkg' > "$artifacts_dir/toxee-macos-x86_64-release/toxee-0.1.7-Darwin-x86_64.pkg"
+  printf 'dmg' > "$artifacts_dir/toxee-macos-x86_64-release/toxee-macos-release.dmg"
+  cat > "$artifacts_dir/toxee-macos-x86_64-release/NOTES.txt" <<'EOF'
 Bundled libtim2tox_ffi.dylib into macOS app.
 EOF
 
-  printf 'msi' > "$artifacts_dir/toxee-windows-release/toxee-windows-x64-release.msi"
-  printf 'win-zip' > "$artifacts_dir/toxee-windows-release/toxee-windows-x64-release.zip"
-  cat > "$artifacts_dir/toxee-windows-release/NOTES.txt" <<'EOF'
+  printf 'mac-pkg-arm' > "$artifacts_dir/toxee-macos-arm64-release/toxee-0.1.7-Darwin-arm64.pkg"
+  printf 'mac-zip' > "$artifacts_dir/toxee-macos-arm64-release/toxee-macos-release.zip"
+  cat > "$artifacts_dir/toxee-macos-arm64-release/NOTES.txt" <<'EOF'
+Bundled libtim2tox_ffi.dylib into macOS app.
+EOF
+
+  printf 'msi' > "$artifacts_dir/toxee-windows-AMD64-release/toxee-0.1.7-Windows-AMD64.msi"
+  printf 'win-zip' > "$artifacts_dir/toxee-windows-AMD64-release/toxee-windows-x64-release.zip"
+  cat > "$artifacts_dir/toxee-windows-AMD64-release/NOTES.txt" <<'EOF'
+Bundled tim2tox_ffi.dll into Windows package.
+EOF
+
+  printf 'msi-arm' > "$artifacts_dir/toxee-windows-ARM64-release/toxee-0.1.7-Windows-ARM64.msi"
+  cat > "$artifacts_dir/toxee-windows-ARM64-release/NOTES.txt" <<'EOF'
 Bundled tim2tox_ffi.dll into Windows package.
 EOF
 
@@ -186,14 +208,20 @@ EOF
     RELEASE_DRY_RUN=1 RELEASE_TAG=vtest RELEASE_ARTIFACTS_DIR="$artifacts_dir" \
     bash "$ROOT/tool/ci/publish_release.sh"
 
-  assert_file_exists "$ROOT/dist/github-release/toxee-linux-x64-release.AppImage"
-  assert_file_exists "$ROOT/dist/github-release/toxee-macos-release.dmg"
-  assert_file_exists "$ROOT/dist/github-release/toxee-windows-x64-release.msi"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Linux-x86_64.deb"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Linux-x86_64.rpm"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Linux-aarch64.deb"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Linux-aarch64.rpm"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Darwin-x86_64.pkg"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Darwin-arm64.pkg"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Windows-AMD64.msi"
+  assert_file_exists "$ROOT/dist/github-release/toxee-0.1.7-Windows-ARM64.msi"
   assert_file_exists "$ROOT/dist/github-release/app-release.apk"
   assert_file_exists "$ROOT/dist/github-release/toxee-ios-release.ipa"
   assert_file_exists "$ROOT/dist/github-release/SHA256SUMS.txt"
 
-  assert_file_missing "$ROOT/dist/github-release/toxee-linux-x64-release.tar.gz"
+  assert_file_missing "$ROOT/dist/github-release/toxee-linux-x64-release.AppImage"
+  assert_file_missing "$ROOT/dist/github-release/toxee-macos-release.dmg"
   assert_file_missing "$ROOT/dist/github-release/toxee-macos-release.zip"
   assert_file_missing "$ROOT/dist/github-release/toxee-windows-x64-release.zip"
   assert_file_missing "$ROOT/dist/github-release/app-release.aab"
@@ -201,13 +229,13 @@ EOF
 }
 
 test_android_syncs_jni_libs_into_app_tree
-test_linux_package_includes_libsodium
+test_linux_packaging_supports_deb_and_rpm_installers
 test_ios_unsigned_build_is_packaged_as_validation_ipa
 test_ios_signed_build_is_packaged_as_ipa
 test_workflow_does_not_use_secrets_in_if_conditions
 test_analyze_workflow_tolerates_existing_warnings
-test_windows_release_workflow_uses_wix_for_msi
+test_desktop_release_workflow_uses_multi_arch_installers
 test_release_publish_filters_non_installable_mobile_assets
-test_release_publish_keeps_one_installer_per_platform
+test_release_publish_keeps_expected_installer_types
 
 echo "[PASS] all packaging regression tests passed"

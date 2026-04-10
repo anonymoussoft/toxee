@@ -8,6 +8,7 @@ source "$SCRIPT_DIR/common.sh"
 
 TARGET=""
 MODE="release"
+PACKAGE_ARCH="${TOXEE_PACKAGE_ARCH:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,22 +41,68 @@ MODE_DIR="$(ci_mode_dirname "$MODE")"
 
 ci_reset_dir "$DIST_DIR"
 
+resolve_release_version() {
+  local release_version="${RELEASE_VERSION:-}"
+
+  if [[ -z "$release_version" && "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+    release_version="${GITHUB_REF_NAME#v}"
+  fi
+
+  if [[ -z "$release_version" ]]; then
+    release_version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$REPO_ROOT/pubspec.yaml" | head -n 1)"
+  fi
+
+  [[ -n "$release_version" ]] || ci_die "Could not determine release version"
+  printf '%s\n' "$release_version"
+}
+
+detect_linux_bundle_dir() {
+  find "$REPO_ROOT/build/linux" -type d -path "*/$MODE/bundle" | head -n 1
+}
+
+detect_windows_runner_dir() {
+  find "$REPO_ROOT/build/windows" -type d -path "*/runner/$MODE_DIR" | head -n 1
+}
+
 write_note() {
   local note_file="$DIST_DIR/NOTES.txt"
   printf '%s\n' "$1" >> "$note_file"
 }
 
 package_linux() {
-  local bundle_dir="$REPO_ROOT/build/linux/x64/$MODE/bundle"
-  local staged_dir="$DIST_DIR/toxee-linux-x64"
-  local archive_path="$DIST_DIR/toxee-linux-x64-$MODE.tar.gz"
+  local bundle_dir staged_dir installer_build_dir release_version deb_arch rpm_arch
   local bundled_sodium="false"
+
+  [[ -n "$PACKAGE_ARCH" ]] || ci_die "TOXEE_PACKAGE_ARCH is required for Linux packaging"
+  bundle_dir="$(detect_linux_bundle_dir)"
+  staged_dir="$DIST_DIR/toxee-linux-$PACKAGE_ARCH"
+  installer_build_dir="$REPO_ROOT/build/linux/installer-$PACKAGE_ARCH"
+  release_version="$(resolve_release_version)"
+
+  case "$PACKAGE_ARCH" in
+    x86_64)
+      deb_arch="amd64"
+      rpm_arch="x86_64"
+      ;;
+    aarch64|arm64)
+      PACKAGE_ARCH="aarch64"
+      deb_arch="arm64"
+      rpm_arch="aarch64"
+      ;;
+    *)
+      ci_die "Unsupported Linux package architecture: $PACKAGE_ARCH"
+      ;;
+  esac
 
   [[ -d "$bundle_dir" ]] || ci_die "Linux bundle not found: $bundle_dir"
 
-  mkdir -p "$bundle_dir/lib"
+  rm -rf "$staged_dir"
+  mkdir -p "$staged_dir"
+  cp -R "$bundle_dir"/. "$staged_dir/"
+  mkdir -p "$staged_dir/lib"
+
   if [[ -f "$NATIVE_DIR/libtim2tox_ffi.so" ]]; then
-    cp "$NATIVE_DIR/libtim2tox_ffi.so" "$bundle_dir/lib/"
+    cp "$NATIVE_DIR/libtim2tox_ffi.so" "$staged_dir/lib/"
     write_note "Bundled libtim2tox_ffi.so into Linux bundle."
   else
     write_note "libtim2tox_ffi.so was not found. The Linux bundle was packaged without the Tim2Tox native library."
@@ -63,7 +110,7 @@ package_linux() {
 
   while IFS= read -r sodium_file; do
     [[ -n "$sodium_file" ]] || continue
-    cp -a "$sodium_file" "$bundle_dir/lib/"
+    cp -a "$sodium_file" "$staged_dir/lib/"
     bundled_sodium="true"
   done < <(find "$NATIVE_DIR" -maxdepth 1 \( -type f -o -type l \) -name 'libsodium*.so*' | sort)
 
@@ -74,65 +121,55 @@ package_linux() {
   fi
 
   if command -v patchelf >/dev/null 2>&1 && command -v file >/dev/null 2>&1; then
-    if file "$bundle_dir/lib/libtim2tox_ffi.so" | grep -qi 'ELF'; then
-      patchelf --set-rpath '$ORIGIN' "$bundle_dir/lib/libtim2tox_ffi.so"
+    if [[ -f "$staged_dir/lib/libtim2tox_ffi.so" ]] && file "$staged_dir/lib/libtim2tox_ffi.so" | grep -qi 'ELF'; then
+      patchelf --set-rpath '$ORIGIN' "$staged_dir/lib/libtim2tox_ffi.so"
       write_note "Normalized Linux FFI rpath to \$ORIGIN."
     fi
   fi
 
-  rm -rf "$staged_dir"
-  mkdir -p "$staged_dir"
-  cp -R "$bundle_dir"/. "$staged_dir/"
-  tar -czf "$archive_path" -C "$DIST_DIR" "$(basename "$staged_dir")"
-  rm -rf "$staged_dir"
-  ci_log "Created Linux archive: $archive_path"
+  rm -rf "$installer_build_dir"
+  if command -v cpack >/dev/null 2>&1; then
+    cmake -S "$REPO_ROOT/tool/ci/linux-installer" -B "$installer_build_dir" \
+      -DTOXEE_INSTALLER_SOURCE_DIR="$staged_dir" \
+      -DTOXEE_RELEASE_VERSION="$release_version" \
+      -DTOXEE_PACKAGE_ARCH="$PACKAGE_ARCH" \
+      -DTOXEE_DEB_ARCH="$deb_arch" \
+      -DTOXEE_RPM_ARCH="$rpm_arch" >/dev/null
+    (
+      cd "$installer_build_dir"
+      cpack -G "DEB;RPM"
+    )
 
-  # --- AppImage ---
-  local appimage_path="$DIST_DIR/toxee-linux-x64-$MODE.AppImage"
-  if command -v appimagetool >/dev/null 2>&1; then
-    local appdir="$DIST_DIR/Toxee.AppDir"
-    rm -rf "$appdir"
-    mkdir -p "$appdir/usr/bin" "$appdir/usr/lib"
+    local deb_output rpm_output deb_path rpm_path
+    deb_output="$(find "$installer_build_dir" -maxdepth 1 -type f -name '*.deb' | head -n 1 || true)"
+    rpm_output="$(find "$installer_build_dir" -maxdepth 1 -type f -name '*.rpm' | head -n 1 || true)"
+    deb_path="$DIST_DIR/toxee-$release_version-Linux-$PACKAGE_ARCH.deb"
+    rpm_path="$DIST_DIR/toxee-$release_version-Linux-$PACKAGE_ARCH.rpm"
 
-    cp -R "$bundle_dir"/. "$appdir/usr/bin/"
-    # Move bundled libs into usr/lib so AppRun can set LD_LIBRARY_PATH
-    if [[ -d "$appdir/usr/bin/lib" ]]; then
-      cp -a "$appdir/usr/bin/lib"/. "$appdir/usr/lib/"
-      rm -rf "$appdir/usr/bin/lib"
-    fi
+    [[ -n "$deb_output" && -f "$deb_output" ]] || ci_die "Linux DEB package was not produced"
+    [[ -n "$rpm_output" && -f "$rpm_output" ]] || ci_die "Linux RPM package was not produced"
 
-    cp "$REPO_ROOT/linux/toxee.desktop" "$appdir/toxee.desktop"
-    if [[ -f "$REPO_ROOT/assets/app_icon.png" ]]; then
-      cp "$REPO_ROOT/assets/app_icon.png" "$appdir/toxee.png"
-    fi
-
-    cat > "$appdir/AppRun" <<'APPRUN'
-#!/bin/bash
-SELF="$(readlink -f "$0")"
-HERE="${SELF%/*}"
-export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-exec "$HERE/usr/bin/toxee" "$@"
-APPRUN
-    chmod +x "$appdir/AppRun"
-
-    ARCH=x86_64 appimagetool --no-appstream "$appdir" "$appimage_path" \
-      || ci_warn "appimagetool failed; skipping AppImage"
-    rm -rf "$appdir"
-    if [[ -f "$appimage_path" ]]; then
-      ci_log "Created Linux AppImage: $appimage_path"
-    fi
+    cp "$deb_output" "$deb_path"
+    cp "$rpm_output" "$rpm_path"
+    ci_log "Created Linux DEB: $deb_path"
+    ci_log "Created Linux RPM: $rpm_path"
   else
-    ci_warn "appimagetool not found; skipping AppImage creation"
+    ci_die "cpack is required for Linux installer packaging"
   fi
+
+  rm -rf "$staged_dir"
 }
 
 package_windows() {
-  local runner_dir="$REPO_ROOT/build/windows/x64/runner/$MODE_DIR"
-  local staged_dir="$DIST_DIR/toxee-windows-x64"
-  local archive_path="$DIST_DIR/toxee-windows-x64-$MODE.zip"
+  local runner_dir staged_dir
   local installer_build_dir="$REPO_ROOT/build/windows/installer"
-  local installer_source_dir="$staged_dir"
+  local installer_source_dir
+  local package_arch="$PACKAGE_ARCH"
 
+  [[ -n "$package_arch" ]] || ci_die "TOXEE_PACKAGE_ARCH is required for Windows packaging"
+  runner_dir="$(detect_windows_runner_dir)"
+  staged_dir="$DIST_DIR/toxee-windows-$package_arch"
+  installer_source_dir="$staged_dir"
   [[ -d "$runner_dir" ]] || ci_die "Windows runner output not found: $runner_dir"
 
   rm -rf "$staged_dir"
@@ -151,26 +188,17 @@ package_windows() {
     write_note "Bundled libsodium.dll into Windows package."
   fi
 
-  powershell.exe -NoLogo -NoProfile -Command \
-    "Compress-Archive -Path '$(ci_windows_path "$staged_dir")' -DestinationPath '$(ci_windows_path "$archive_path")' -Force" \
-    >/dev/null
-  ci_log "Created Windows archive: $archive_path"
-
   # --- MSI installer via CPack/WiX ---
-  local msi_path="$DIST_DIR/toxee-windows-x64-$MODE.msi"
-  local release_version="${RELEASE_VERSION:-}"
-  if [[ -z "$release_version" && "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
-    release_version="${GITHUB_REF_NAME#v}"
-  fi
-  if [[ -z "$release_version" ]]; then
-    release_version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$REPO_ROOT/pubspec.yaml" | head -n 1)"
-  fi
+  local msi_path release_version
+  release_version="$(resolve_release_version)"
+  msi_path="$DIST_DIR/toxee-$release_version-Windows-$package_arch.msi"
 
   if command -v cpack >/dev/null 2>&1; then
     rm -rf "$installer_build_dir"
     if (
       cmake -S "$REPO_ROOT/tool/ci/windows-installer" -B "$installer_build_dir" \
         -DTOXEE_INSTALLER_SOURCE_DIR="$(ci_windows_path "$installer_source_dir")" \
+        -DTOXEE_PACKAGE_ARCH="$package_arch" \
         -DTOXEE_RELEASE_VERSION="$release_version" >/dev/null && \
       cd "$installer_build_dir" && \
       cpack -C Release -G WIX \
@@ -196,11 +224,11 @@ package_windows() {
 
 package_macos() {
   local app_bundle="$REPO_ROOT/build/macos/Build/Products/$MODE_DIR/Toxee.app"
-  local archive_path="$DIST_DIR/toxee-macos-$MODE.zip"
   local macos_dir="$app_bundle/Contents/MacOS"
   local ffi_lib="$NATIVE_DIR/libtim2tox_ffi.dylib"
-  local sodium_lib
+  local sodium_lib release_version pkg_path
 
+  [[ -n "$PACKAGE_ARCH" ]] || ci_die "TOXEE_PACKAGE_ARCH is required for macOS packaging"
   if [[ ! -d "$app_bundle" ]]; then
     app_bundle="$(find "$REPO_ROOT/build/macos/Build/Products/$MODE_DIR" -maxdepth 1 -type d -name '*.app' | head -n 1 || true)"
   fi
@@ -227,41 +255,15 @@ package_macos() {
     write_note "libtim2tox_ffi.dylib was not found. The macOS app was packaged without the Tim2Tox native library."
   fi
 
-  ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$archive_path"
-  ci_log "Created macOS archive: $archive_path"
-
-  # --- DMG disk image ---
-  local dmg_path="$DIST_DIR/toxee-macos-$MODE.dmg"
-  if command -v create-dmg >/dev/null 2>&1; then
-    local volicon=""
-    if [[ -f "$app_bundle/Contents/Resources/AppIcon.icns" ]]; then
-      volicon="--volicon $app_bundle/Contents/Resources/AppIcon.icns"
-    fi
-    # create-dmg copies the *contents* of its source folder into the DMG,
-    # so we stage the .app inside a temporary directory.
-    local dmg_stage="$DIST_DIR/_dmg_stage"
-    rm -rf "$dmg_stage"
-    mkdir -p "$dmg_stage"
-    cp -R "$app_bundle" "$dmg_stage/"
-    # shellcheck disable=SC2086
-    create-dmg \
-      --volname "Toxee" \
-      --window-pos 200 120 \
-      --window-size 600 400 \
-      --icon-size 100 \
-      --icon "$(basename "$app_bundle")" 150 190 \
-      --app-drop-link 450 190 \
-      $volicon \
-      "$dmg_path" \
-      "$dmg_stage" \
-      || ci_warn "create-dmg failed; skipping DMG creation"
-    rm -rf "$dmg_stage"
-    if [[ -f "$dmg_path" ]]; then
-      ci_log "Created macOS DMG: $dmg_path"
-    fi
-  else
-    ci_warn "create-dmg not found; skipping DMG creation"
-  fi
+  release_version="$(resolve_release_version)"
+  pkg_path="$DIST_DIR/toxee-$release_version-Darwin-$PACKAGE_ARCH.pkg"
+  pkgbuild \
+    --identifier "com.example.toxee" \
+    --version "$release_version" \
+    --install-location "/Applications" \
+    --component "$app_bundle" \
+    "$pkg_path"
+  ci_log "Created macOS PKG: $pkg_path"
 }
 
 package_android() {

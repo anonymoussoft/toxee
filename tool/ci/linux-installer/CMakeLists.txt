@@ -1,0 +1,77 @@
+cmake_minimum_required(VERSION 3.16)
+project(toxee_linux_installer LANGUAGES NONE)
+
+if(NOT DEFINED TOXEE_INSTALLER_SOURCE_DIR OR TOXEE_INSTALLER_SOURCE_DIR STREQUAL "")
+  message(FATAL_ERROR "TOXEE_INSTALLER_SOURCE_DIR is required")
+endif()
+
+if(NOT EXISTS "${TOXEE_INSTALLER_SOURCE_DIR}")
+  message(FATAL_ERROR "Installer source dir does not exist: ${TOXEE_INSTALLER_SOURCE_DIR}")
+endif()
+
+if(NOT DEFINED TOXEE_RELEASE_VERSION OR TOXEE_RELEASE_VERSION STREQUAL "")
+  message(FATAL_ERROR "TOXEE_RELEASE_VERSION is required")
+endif()
+
+if(NOT DEFINED TOXEE_PACKAGE_ARCH OR TOXEE_PACKAGE_ARCH STREQUAL "")
+  message(FATAL_ERROR "TOXEE_PACKAGE_ARCH is required")
+endif()
+
+if(NOT DEFINED TOXEE_DEB_ARCH OR TOXEE_DEB_ARCH STREQUAL "")
+  message(FATAL_ERROR "TOXEE_DEB_ARCH is required")
+endif()
+
+if(NOT DEFINED TOXEE_RPM_ARCH OR TOXEE_RPM_ARCH STREQUAL "")
+  message(FATAL_ERROR "TOXEE_RPM_ARCH is required")
+endif()
+
+set(CPACK_PACKAGE_NAME "toxee")
+set(CPACK_PACKAGE_VENDOR "Toxee Contributors")
+set(CPACK_PACKAGE_CONTACT "maintainers@toxee.local")
+set(CPACK_PACKAGE_VERSION "${TOXEE_RELEASE_VERSION}")
+set(CPACK_PACKAGE_FILE_NAME "toxee-${TOXEE_RELEASE_VERSION}-Linux-${TOXEE_PACKAGE_ARCH}")
+set(CPACK_GENERATOR "DEB;RPM")
+set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "${TOXEE_DEB_ARCH}")
+set(CPACK_RPM_PACKAGE_ARCHITECTURE "${TOXEE_RPM_ARCH}")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Toxee Contributors")
+set(CPACK_DEBIAN_PACKAGE_SECTION "net")
+set(CPACK_DEBIAN_COMPRESSION_TYPE "xz")
+set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0")
+set(CPACK_RPM_PACKAGE_GROUP "Applications/Internet")
+set(CPACK_RPM_COMPRESSION_TYPE "xz")
+set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+
+configure_file(
+  "${CMAKE_CURRENT_LIST_DIR}/toxee-wrapper.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/toxee-wrapper"
+  @ONLY
+)
+
+install(
+  DIRECTORY "${TOXEE_INSTALLER_SOURCE_DIR}/"
+  DESTINATION "opt/toxee"
+  COMPONENT Runtime
+  USE_SOURCE_PERMISSIONS
+)
+
+install(
+  PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/toxee-wrapper"
+  DESTINATION "usr/bin"
+  COMPONENT Runtime
+  RENAME "toxee"
+)
+
+install(
+  FILES "${CMAKE_CURRENT_LIST_DIR}/../../../linux/toxee.desktop"
+  DESTINATION "usr/share/applications"
+  COMPONENT Runtime
+)
+
+install(
+  FILES "${CMAKE_CURRENT_LIST_DIR}/../../../assets/app_icon.png"
+  DESTINATION "usr/share/icons/hicolor/256x256/apps"
+  COMPONENT Runtime
+  RENAME "toxee.png"
+)
+
+include(CPack)

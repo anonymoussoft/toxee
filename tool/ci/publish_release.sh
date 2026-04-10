@@ -99,7 +99,7 @@ collect_assets() {
     fi
 
     case "$file" in
-      *.zip|*.tar.gz|*.apk|*.aab|*.dmg|*.pkg|*.msi|*.msix|*.exe|*.ipa|*.AppImage) ;;
+      *.zip|*.tar.gz|*.apk|*.aab|*.deb|*.rpm|*.dmg|*.pkg|*.msi|*.msix|*.exe|*.ipa|*.AppImage) ;;
       *) continue ;;
     esac
 
@@ -137,14 +137,14 @@ should_publish_asset() {
   fi
 
   case "$group" in
-    toxee-linux-release)
-      [[ "$basename" == *.AppImage ]] || return 1
+    toxee-linux-*-release)
+      [[ "$basename" == *.deb || "$basename" == *.rpm ]] || return 1
       ;;
-    toxee-macos-release)
-      [[ "$basename" == *.dmg || "$basename" == *.pkg ]] || return 1
+    toxee-macos-*-release)
+      [[ "$basename" == *.pkg ]] || return 1
       ;;
-    toxee-windows-release)
-      [[ "$basename" == *.msi || "$basename" == *.msix || "$basename" == *.exe ]] || return 1
+    toxee-windows-*-release)
+      [[ "$basename" == *.msi ]] || return 1
       ;;
     toxee-android-release)
       [[ "$basename" == *.apk ]] || return 1
