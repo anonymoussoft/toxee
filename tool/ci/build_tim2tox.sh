@@ -140,7 +140,6 @@ prepare_android_libsodium_prefix() {
   local host target api toolchain sysroot
 
   if [[ -f "$prefix/lib/libsodium.a" ]]; then
-    printf '%s\n' "$prefix"
     return
   fi
 
@@ -189,8 +188,10 @@ prepare_android_libsodium_prefix() {
   make -j"$(ci_cpu_count)"
   make install
   popd >/dev/null
+}
 
-  printf '%s\n' "$prefix"
+android_libsodium_prefix_path() {
+  printf '%s\n' "$TIM2TOX_DIR/build/mobile-deps/android-$1"
 }
 
 build_android_ffi_for_abi() {
@@ -198,7 +199,8 @@ build_android_ffi_for_abi() {
   local ndk_path="$2"
   local prefix build_dir built_lib repo_jni_libs toolchain sysroot
 
-  prefix="$(prepare_android_libsodium_prefix "$abi" "$ndk_path")"
+  prefix="$(android_libsodium_prefix_path "$abi")"
+  prepare_android_libsodium_prefix "$abi" "$ndk_path"
   build_dir="$TIM2TOX_DIR/build/ci-android-$abi"
   repo_jni_libs="$REPO_ROOT/android/app/src/main/jniLibs"
   toolchain="$ndk_path/toolchains/llvm/prebuilt/linux-x86_64"
@@ -280,14 +282,17 @@ prepare_ios_dependency_prefix() {
   if [[ ! -f "$prefix/lib/libsodium.a" ]]; then
     (cd "$deploy_dir" && bash deps.sh ios arm64)
   fi
+}
 
-  printf '%s\n' "$prefix"
+ios_dependency_prefix_path() {
+  printf '%s\n' "$TIM2TOX_DIR/third_party/c-toxcore/other/deploy/deps-prefix-ios-arm64"
 }
 
 build_ios_ffi_dylib() {
   local prefix build_dir sdk_path built_lib framework_dir
 
-  prefix="$(prepare_ios_dependency_prefix)"
+  prefix="$(ios_dependency_prefix_path)"
+  prepare_ios_dependency_prefix
   build_dir="$TIM2TOX_DIR/build/ci-ios-arm64"
   sdk_path="$(xcrun --sdk iphoneos --show-sdk-path)"
   export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
@@ -302,10 +307,10 @@ build_ios_ffi_dylib() {
     -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
     -DCMAKE_PREFIX_PATH="$prefix" \
     -DTIM2TOX_DEP_PREFIX="$prefix" \
-    -DCMAKE_C_FLAGS="-miphoneos-version-min=12.0 -arch arm64 -Wno-error=format" \
-    -DCMAKE_CXX_FLAGS="-miphoneos-version-min=12.0 -arch arm64 -Wno-error=deprecated-copy -Wno-error=format" \
-    -DCMAKE_EXE_LINKER_FLAGS="-miphoneos-version-min=12.0 -arch arm64" \
-    -DCMAKE_SHARED_LINKER_FLAGS="-miphoneos-version-min=12.0 -arch arm64" \
+    -DCMAKE_C_FLAGS="-miphoneos-version-min=13.0 -arch arm64 -Wno-error=format" \
+    -DCMAKE_CXX_FLAGS="-miphoneos-version-min=13.0 -arch arm64 -Wno-error=deprecated-copy -Wno-error=format" \
+    -DCMAKE_EXE_LINKER_FLAGS="-miphoneos-version-min=13.0 -arch arm64" \
+    -DCMAKE_SHARED_LINKER_FLAGS="-miphoneos-version-min=13.0 -arch arm64" \
     "${configure_args[@]}"
 
   cmake --build "$build_dir" --config Release --target tim2tox_ffi --parallel "$(ci_cpu_count)"
@@ -335,7 +340,7 @@ build_ios_ffi_dylib() {
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>MinimumOSVersion</key>
-  <string>12.0</string>
+  <string>13.0</string>
 </dict>
 </plist>
 EOF
