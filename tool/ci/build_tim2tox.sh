@@ -219,7 +219,7 @@ build_android_ffi_for_abi() {
     -DTIM2TOX_DEP_PREFIX="$prefix" \
     -DCMAKE_FIND_ROOT_PATH="$prefix;$sysroot" \
     -DCMAKE_C_FLAGS="-Wno-error=format" \
-    -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format" \
+    -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format -DTIM2TOX_DISABLE_SQLITE=1" \
     "${configure_args[@]}"
 
   cmake --build "$build_dir" --config Release --target tim2tox_ffi --parallel "$(ci_cpu_count)"
@@ -275,24 +275,58 @@ build_android_ffi_libs() {
   ci_log "Built Android Tim2Tox JNI libraries for: ${android_abis[*]}"
 }
 
-prepare_ios_dependency_prefix() {
-  local deploy_dir="$TIM2TOX_DIR/third_party/c-toxcore/other/deploy"
-  local prefix="$deploy_dir/deps-prefix-ios-arm64"
-
-  if [[ ! -f "$prefix/lib/libsodium.a" ]]; then
-    (cd "$deploy_dir" && bash deps.sh ios arm64)
-  fi
+ios_dependency_prefix_path() {
+  printf '%s\n' "$TIM2TOX_DIR/build/mobile-deps/ios-arm64"
 }
 
-ios_dependency_prefix_path() {
-  printf '%s\n' "$TIM2TOX_DIR/third_party/c-toxcore/other/deploy/deps-prefix-ios-arm64"
+prepare_ios_libsodium_prefix() {
+  local prefix
+  local download_dir="$TIM2TOX_DIR/build/mobile-deps/downloads"
+  local src_root="$TIM2TOX_DIR/build/mobile-deps/src-ios-arm64"
+  local archive="$download_dir/libsodium-1.0.20.tar.gz"
+  local sdk_path host
+
+  prefix="$(ios_dependency_prefix_path)"
+  if [[ -f "$prefix/lib/libsodium.a" ]]; then
+    return
+  fi
+
+  mkdir -p "$download_dir"
+  download_file_once \
+    "https://github.com/jedisct1/libsodium/releases/download/1.0.20-RELEASE/libsodium-1.0.20.tar.gz" \
+    "$archive"
+
+  rm -rf "$src_root"
+  mkdir -p "$src_root"
+  tar -xzf "$archive" -C "$src_root"
+
+  sdk_path="$(xcrun --sdk iphoneos --show-sdk-path)"
+  host="arm-apple-darwin"
+
+  pushd "$src_root/libsodium-1.0.20" >/dev/null
+  export CC="$(xcrun --sdk iphoneos --find clang)"
+  export CXX="$(xcrun --sdk iphoneos --find clang++)"
+  export AR="$(xcrun --sdk iphoneos --find ar)"
+  export RANLIB="$(xcrun --sdk iphoneos --find ranlib)"
+  export STRIP="$(xcrun --sdk iphoneos --find strip)"
+  export CFLAGS="-arch arm64 -isysroot $sdk_path -miphoneos-version-min=13.0"
+  export CXXFLAGS="$CFLAGS"
+  export LDFLAGS="$CFLAGS"
+  ./configure \
+    --prefix="$prefix" \
+    --host="$host" \
+    --disable-shared \
+    --disable-pie
+  make -j"$(ci_cpu_count)"
+  make install
+  popd >/dev/null
 }
 
 build_ios_ffi_dylib() {
   local prefix build_dir sdk_path built_lib framework_dir
 
   prefix="$(ios_dependency_prefix_path)"
-  prepare_ios_dependency_prefix
+  prepare_ios_libsodium_prefix
   build_dir="$TIM2TOX_DIR/build/ci-ios-arm64"
   sdk_path="$(xcrun --sdk iphoneos --show-sdk-path)"
   export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
@@ -308,7 +342,7 @@ build_ios_ffi_dylib() {
     -DCMAKE_PREFIX_PATH="$prefix" \
     -DTIM2TOX_DEP_PREFIX="$prefix" \
     -DCMAKE_C_FLAGS="-miphoneos-version-min=13.0 -arch arm64 -Wno-error=format" \
-    -DCMAKE_CXX_FLAGS="-miphoneos-version-min=13.0 -arch arm64 -Wno-error=deprecated-copy -Wno-error=format" \
+    -DCMAKE_CXX_FLAGS="-miphoneos-version-min=13.0 -arch arm64 -Wno-error=deprecated-copy -Wno-error=format -DTIM2TOX_DISABLE_SQLITE=1" \
     -DCMAKE_EXE_LINKER_FLAGS="-miphoneos-version-min=13.0 -arch arm64" \
     -DCMAKE_SHARED_LINKER_FLAGS="-miphoneos-version-min=13.0 -arch arm64" \
     "${configure_args[@]}"
