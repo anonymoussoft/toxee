@@ -69,6 +69,29 @@ write_note() {
   printf '%s\n' "$1" >> "$note_file"
 }
 
+resign_ios_bundle_if_needed() {
+  local app_bundle="$1"
+  local frameworks_dir="$2"
+  local identity="${IOS_SIGNING_IDENTITY:-}"
+  local item
+
+  [[ -n "$identity" ]] || ci_die "IOS_SIGNING_IDENTITY is required to re-sign injected iOS native artifacts"
+  command -v codesign >/dev/null 2>&1 || ci_die "codesign is required for signed iOS packaging"
+
+  while IFS= read -r item; do
+    [[ -n "$item" ]] || continue
+    codesign --force --sign "$identity" --timestamp=none "$item"
+  done < <(find "$frameworks_dir" -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) | sort)
+
+  codesign \
+    --force \
+    --sign "$identity" \
+    --timestamp=none \
+    --preserve-metadata=identifier,entitlements \
+    "$app_bundle"
+  codesign --verify --deep --strict "$app_bundle"
+}
+
 package_linux() {
   local bundle_dir staged_dir installer_build_dir release_version deb_arch rpm_arch
   local bundled_sodium="false"
@@ -311,6 +334,10 @@ package_ios() {
   fi
 
   if [[ -f "$signed_marker" ]]; then
+    if [[ "$injected" == "true" ]]; then
+      resign_ios_bundle_if_needed "$app_bundle" "$frameworks_dir"
+      write_note "Re-signed iOS app after injecting Tim2Tox native artifacts."
+    fi
     mkdir -p "$payload_dir"
     cp -R "$app_bundle" "$payload_dir/"
     (cd "$DIST_DIR" && zip -qry "$(basename "$archive_path")" Payload)

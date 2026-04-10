@@ -85,6 +85,263 @@ configure_args=(
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 
+find_android_ndk() {
+  local candidate sdk_root latest
+
+  for candidate in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}"; do
+    if [[ -n "$candidate" && -d "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+
+  for sdk_root in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}"; do
+    [[ -n "$sdk_root" && -d "$sdk_root" ]] || continue
+
+    if [[ -d "$sdk_root/ndk" ]]; then
+      latest="$(find "$sdk_root/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1 || true)"
+      if [[ -n "$latest" ]]; then
+        printf '%s\n' "$latest"
+        return
+      fi
+    fi
+
+    if [[ -d "$sdk_root/ndk-bundle" ]]; then
+      printf '%s\n' "$sdk_root/ndk-bundle"
+      return
+    fi
+  done
+
+  ci_die "Unable to locate Android NDK (checked ANDROID_NDK_HOME, ANDROID_NDK_ROOT, ANDROID_SDK_ROOT, ANDROID_HOME)"
+}
+
+download_file_once() {
+  local url="$1"
+  local dest="$2"
+
+  if [[ ! -f "$dest" ]]; then
+    if command -v curl >/dev/null 2>&1; then
+      curl -L --fail --retry 3 --retry-delay 2 -o "$dest" "$url"
+    elif command -v wget >/dev/null 2>&1; then
+      wget -O "$dest" "$url"
+    else
+      ci_die "Missing curl/wget for downloading $url"
+    fi
+  fi
+}
+
+prepare_android_libsodium_prefix() {
+  local abi="$1"
+  local ndk_path="$2"
+  local prefix="$TIM2TOX_DIR/build/mobile-deps/android-$abi"
+  local download_dir="$TIM2TOX_DIR/build/mobile-deps/downloads"
+  local src_root="$TIM2TOX_DIR/build/mobile-deps/src-android-$abi"
+  local archive="$download_dir/libsodium-1.0.20.tar.gz"
+  local host target api toolchain sysroot
+
+  if [[ -f "$prefix/lib/libsodium.a" ]]; then
+    printf '%s\n' "$prefix"
+    return
+  fi
+
+  case "$abi" in
+    arm64-v8a)
+      target="aarch64-linux-android"
+      api="21"
+      ;;
+    armeabi-v7a)
+      target="armv7a-linux-androideabi"
+      api="21"
+      ;;
+    x86_64)
+      target="x86_64-linux-android"
+      api="21"
+      ;;
+    *)
+      ci_die "Unsupported Android ABI: $abi"
+      ;;
+  esac
+
+  toolchain="$ndk_path/toolchains/llvm/prebuilt/linux-x86_64"
+  sysroot="$toolchain/sysroot"
+
+  mkdir -p "$download_dir"
+  download_file_once \
+    "https://github.com/jedisct1/libsodium/releases/download/1.0.20-RELEASE/libsodium-1.0.20.tar.gz" \
+    "$archive"
+
+  rm -rf "$src_root"
+  mkdir -p "$src_root"
+  tar -xzf "$archive" -C "$src_root"
+
+  pushd "$src_root/libsodium-1.0.20" >/dev/null
+  export CC="$toolchain/bin/${target}${api}-clang"
+  export CXX="$toolchain/bin/${target}${api}-clang++"
+  export AR="$toolchain/bin/llvm-ar"
+  export RANLIB="$toolchain/bin/llvm-ranlib"
+  export STRIP="$toolchain/bin/llvm-strip"
+  ./configure \
+    --prefix="$prefix" \
+    --host="$target" \
+    --with-sysroot="$sysroot" \
+    --disable-shared \
+    --disable-pie
+  make -j"$(ci_cpu_count)"
+  make install
+  popd >/dev/null
+
+  printf '%s\n' "$prefix"
+}
+
+build_android_ffi_for_abi() {
+  local abi="$1"
+  local ndk_path="$2"
+  local prefix build_dir built_lib repo_jni_libs toolchain sysroot
+
+  prefix="$(prepare_android_libsodium_prefix "$abi" "$ndk_path")"
+  build_dir="$TIM2TOX_DIR/build/ci-android-$abi"
+  repo_jni_libs="$REPO_ROOT/android/app/src/main/jniLibs"
+  toolchain="$ndk_path/toolchains/llvm/prebuilt/linux-x86_64"
+  sysroot="$toolchain/sysroot"
+
+  mkdir -p "$OUTPUT_DIR/jniLibs/$abi"
+  export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
+
+  cmake -S "$TIM2TOX_DIR" -B "$build_dir" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_TOOLCHAIN_FILE="$ndk_path/build/cmake/android.toolchain.cmake" \
+    -DANDROID_ABI="$abi" \
+    -DANDROID_PLATFORM=21 \
+    -DANDROID_STL=c++_shared \
+    -DCMAKE_PREFIX_PATH="$prefix" \
+    -DTIM2TOX_DEP_PREFIX="$prefix" \
+    -DCMAKE_FIND_ROOT_PATH="$prefix;$sysroot" \
+    -DCMAKE_C_FLAGS="-Wno-error=format" \
+    -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format" \
+    "${configure_args[@]}"
+
+  cmake --build "$build_dir" --config Release --target tim2tox_ffi --parallel "$(ci_cpu_count)"
+
+  built_lib="$(find "$build_dir" -type f -name 'libtim2tox_ffi.so' | head -n 1 || true)"
+  [[ -n "$built_lib" ]] || ci_die "Failed to locate Android libtim2tox_ffi.so for ABI $abi"
+  cp "$built_lib" "$OUTPUT_DIR/jniLibs/$abi/libtim2tox_ffi.so"
+  ci_log "Captured Android native library for $abi: $built_lib"
+
+  rm -rf "$repo_jni_libs"
+  mkdir -p "$repo_jni_libs"
+  cp -R "$OUTPUT_DIR/jniLibs"/. "$repo_jni_libs/"
+}
+
+build_android_ffi_libs() {
+  local source_dir="${TIM2TOX_ANDROID_LIB_DIR:-}"
+  local repo_jni_libs="$REPO_ROOT/android/app/src/main/jniLibs"
+  local ndk_path abi
+  local -a android_abis=()
+
+  if [[ -z "$source_dir" ]]; then
+    if [[ -d "$repo_jni_libs" ]] && find "$repo_jni_libs" -type f -name "libtim2tox_ffi.so" | grep -q .; then
+      source_dir="$repo_jni_libs"
+    fi
+  fi
+
+  if [[ -n "$source_dir" ]]; then
+    [[ -d "$source_dir" ]] || ci_die "TIM2TOX_ANDROID_LIB_DIR is not a directory: $source_dir"
+    mkdir -p "$OUTPUT_DIR/jniLibs"
+    cp -R "$source_dir"/. "$OUTPUT_DIR/jniLibs/"
+    if [[ "$source_dir" != "$repo_jni_libs" ]]; then
+      rm -rf "$repo_jni_libs"
+      mkdir -p "$repo_jni_libs"
+      cp -R "$source_dir"/. "$repo_jni_libs/"
+      ci_log "Staged Android JNI libraries into $repo_jni_libs"
+    fi
+    ci_log "Synced Android JNI libraries from $source_dir"
+    return
+  fi
+
+  ndk_path="$(find_android_ndk)"
+  if [[ -n "${TIM2TOX_ANDROID_ABIS:-}" ]]; then
+    # shellcheck disable=SC2206
+    android_abis=(${TIM2TOX_ANDROID_ABIS//,/ })
+  else
+    android_abis=(arm64-v8a)
+  fi
+
+  for abi in "${android_abis[@]}"; do
+    build_android_ffi_for_abi "$abi" "$ndk_path"
+  done
+
+  ci_log "Built Android Tim2Tox JNI libraries for: ${android_abis[*]}"
+}
+
+prepare_ios_dependency_prefix() {
+  local deploy_dir="$TIM2TOX_DIR/third_party/c-toxcore/other/deploy"
+  local prefix="$deploy_dir/deps-prefix-ios-arm64"
+
+  if [[ ! -f "$prefix/lib/libsodium.a" ]]; then
+    (cd "$deploy_dir" && bash deps.sh ios arm64)
+  fi
+
+  printf '%s\n' "$prefix"
+}
+
+build_ios_ffi_dylib() {
+  local prefix build_dir sdk_path built_lib framework_dir
+
+  prefix="$(prepare_ios_dependency_prefix)"
+  build_dir="$TIM2TOX_DIR/build/ci-ios-arm64"
+  sdk_path="$(xcrun --sdk iphoneos --show-sdk-path)"
+  export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
+
+  cmake -S "$TIM2TOX_DIR" -B "$build_dir" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_SYSTEM_NAME=iOS \
+    -DCMAKE_OSX_SYSROOT="$sdk_path" \
+    -DCMAKE_OSX_ARCHITECTURES=arm64 \
+    -DCMAKE_C_COMPILER="$(xcrun --sdk iphoneos --find clang)" \
+    -DCMAKE_CXX_COMPILER="$(xcrun --sdk iphoneos --find clang++)" \
+    -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+    -DCMAKE_PREFIX_PATH="$prefix" \
+    -DTIM2TOX_DEP_PREFIX="$prefix" \
+    -DCMAKE_C_FLAGS="-miphoneos-version-min=12.0 -arch arm64 -Wno-error=format" \
+    -DCMAKE_CXX_FLAGS="-miphoneos-version-min=12.0 -arch arm64 -Wno-error=deprecated-copy -Wno-error=format" \
+    -DCMAKE_EXE_LINKER_FLAGS="-miphoneos-version-min=12.0 -arch arm64" \
+    -DCMAKE_SHARED_LINKER_FLAGS="-miphoneos-version-min=12.0 -arch arm64" \
+    "${configure_args[@]}"
+
+  cmake --build "$build_dir" --config Release --target tim2tox_ffi --parallel "$(ci_cpu_count)"
+
+  built_lib="$(find "$build_dir" -type f -name 'libtim2tox_ffi.dylib' | head -n 1 || true)"
+  [[ -n "$built_lib" ]] || ci_die "Failed to locate iOS libtim2tox_ffi.dylib"
+
+  framework_dir="$OUTPUT_DIR/tim2tox_ffi.framework"
+  rm -rf "$framework_dir"
+  mkdir -p "$framework_dir"
+  cp "$built_lib" "$framework_dir/tim2tox_ffi"
+  cat > "$framework_dir/Info.plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>tim2tox_ffi</string>
+  <key>CFBundleIdentifier</key>
+  <string>org.toxee.tim2tox_ffi</string>
+  <key>CFBundleName</key>
+  <string>tim2tox_ffi</string>
+  <key>CFBundlePackageType</key>
+  <string>FMWK</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>MinimumOSVersion</key>
+  <string>12.0</string>
+</dict>
+</plist>
+EOF
+  ci_log "Captured iOS framework from $built_lib"
+}
+
 build_desktop_target() {
   local target="$1"
   local build_dir="$TIM2TOX_DIR/build/ci-$target"
@@ -190,32 +447,6 @@ build_desktop_target() {
   fi
 }
 
-sync_android_ffi_libs() {
-  local source_dir="${TIM2TOX_ANDROID_LIB_DIR:-}"
-  local repo_jni_libs="$REPO_ROOT/android/app/src/main/jniLibs"
-  if [[ -z "$source_dir" ]]; then
-    if [[ -d "$repo_jni_libs" ]] && find "$repo_jni_libs" -type f -name "libtim2tox_ffi.so" | grep -q .; then
-      source_dir="$repo_jni_libs"
-    fi
-  fi
-
-  if [[ -z "$source_dir" ]]; then
-    ci_warn "No Android Tim2Tox JNI libraries found; Android artifacts will be built without bundled libtim2tox_ffi.so"
-    return
-  fi
-
-  [[ -d "$source_dir" ]] || ci_die "TIM2TOX_ANDROID_LIB_DIR is not a directory: $source_dir"
-  mkdir -p "$OUTPUT_DIR/jniLibs"
-  cp -R "$source_dir"/. "$OUTPUT_DIR/jniLibs/"
-  if [[ "$source_dir" != "$repo_jni_libs" ]]; then
-    rm -rf "$repo_jni_libs"
-    mkdir -p "$repo_jni_libs"
-    cp -R "$source_dir"/. "$repo_jni_libs/"
-    ci_log "Staged Android JNI libraries into $repo_jni_libs"
-  fi
-  ci_log "Synced Android JNI libraries from $source_dir"
-}
-
 sync_ios_ffi_artifacts() {
   local copied="false"
 
@@ -234,7 +465,7 @@ sync_ios_ffi_artifacts() {
   fi
 
   if [[ "$copied" != "true" ]]; then
-    ci_warn "No iOS Tim2Tox framework/dylib provided; iOS package will be produced unsigned and without injected Tim2Tox native binary"
+    build_ios_ffi_dylib
   fi
 }
 
@@ -243,7 +474,7 @@ case "$TARGET" in
     build_desktop_target "$TARGET"
     ;;
   android)
-    sync_android_ffi_libs
+    build_android_ffi_libs
     ;;
   ios)
     sync_ios_ffi_artifacts

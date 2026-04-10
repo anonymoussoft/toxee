@@ -67,12 +67,20 @@ test_ios_unsigned_build_is_packaged_as_validation_ipa() {
 test_ios_signed_build_is_packaged_as_ipa() {
   echo "[test] signed iOS build is packaged as ipa"
   rm -rf "$ROOT/dist/ios" "$ROOT/build/ios/iphoneos"
+  local fake_bin="$TMP_ROOT/fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/codesign" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake_bin/codesign"
   mkdir -p "$ROOT/build/ios/iphoneos/Runner.app/Frameworks"
   printf 'signed' > "$ROOT/build/ios/iphoneos/Runner.app/embedded.mobileprovision"
   mkdir -p "$ROOT/build/native-artifacts/ios/tim2tox_ffi.framework"
   printf 'ffi-framework' > "$ROOT/build/native-artifacts/ios/tim2tox_ffi.framework/tim2tox_ffi"
 
-  bash "$ROOT/tool/ci/package_artifacts.sh" --target ios --mode release
+  PATH="$fake_bin:$PATH" IOS_SIGNING_IDENTITY="Test Identity" \
+    bash "$ROOT/tool/ci/package_artifacts.sh" --target ios --mode release
 
   assert_file_exists "$ROOT/dist/ios/toxee-ios-release.ipa"
   local zip_listing
@@ -228,6 +236,21 @@ EOF
   assert_file_missing "$ROOT/dist/github-release/BUILD-NOTES.txt"
 }
 
+test_mobile_build_script_supports_android_and_ios_ci_builds() {
+  echo "[test] mobile build script supports Android and iOS CI builds"
+  rg -n 'build_android_ffi_for_abi|ANDROID_ABIS=|android\\.toolchain\\.cmake|build_ios_ffi_dylib|TIM2TOX_DEP_PREFIX|CMAKE_OSX_SYSROOT' \
+    "$ROOT/tool/ci/build_tim2tox.sh" "$ROOT/third_party/tim2tox/CMakeLists.txt" \
+    "$ROOT/third_party/tim2tox/source/CMakeLists.txt" "$ROOT/third_party/tim2tox/ffi/CMakeLists.txt" >/dev/null || \
+    fail "Mobile CI native build support is missing from tim2tox build scripts/CMake config"
+}
+
+test_signed_ios_packaging_resigns_injected_native_binary() {
+  echo "[test] signed iOS packaging re-signs injected native binary"
+  rg -n 'codesign --force --sign .*IOS_SIGNING_IDENTITY|codesign -d --entitlements|IOS_SIGNING_IDENTITY' \
+    "$ROOT/tool/ci/package_artifacts.sh" >/dev/null || \
+    fail "Signed iOS packaging does not appear to re-sign injected native binaries"
+}
+
 test_android_syncs_jni_libs_into_app_tree
 test_linux_packaging_supports_deb_and_rpm_installers
 test_ios_unsigned_build_is_packaged_as_validation_ipa
@@ -237,5 +260,7 @@ test_analyze_workflow_tolerates_existing_warnings
 test_desktop_release_workflow_uses_multi_arch_installers
 test_release_publish_filters_non_installable_mobile_assets
 test_release_publish_keeps_expected_installer_types
+test_mobile_build_script_supports_android_and_ios_ci_builds
+test_signed_ios_packaging_resigns_injected_native_binary
 
 echo "[PASS] all packaging regression tests passed"

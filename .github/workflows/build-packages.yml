@@ -322,6 +322,11 @@ jobs:
       - name: Enable Android support
         run: flutter config --enable-android
 
+      - name: Install Android native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config
+
       - name: Bootstrap dependencies
         run: dart run tool/bootstrap_deps.dart
 
@@ -346,13 +351,15 @@ jobs:
           fi
 
       - name: Stage optional Android Tim2Tox JNI libs
+        env:
+          TIM2TOX_ANDROID_ABIS: arm64-v8a
         run: bash tool/ci/build_tim2tox.sh --target android --mode "$BUILD_MODE"
 
       - name: Build Android APK
-        run: flutter build apk --release --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
+        run: flutter build apk --release --target-platform android-arm64 --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
 
       - name: Build Android App Bundle
-        run: flutter build appbundle --release --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
+        run: flutter build appbundle --release --target-platform android-arm64 --dart-define=FLUTTER_BUILD_MODE="$BUILD_MODE"
 
       - name: Package Android artifacts
         run: bash tool/ci/package_artifacts.sh --target android --mode "$BUILD_MODE"
@@ -381,7 +388,7 @@ jobs:
           cache: true
 
       - name: Install macOS dependencies
-        run: brew install libsodium
+        run: brew install libsodium coreutils yasm
 
       - name: Enable iOS support
         run: flutter config --enable-ios
