@@ -142,6 +142,64 @@ EOF
   assert_file_missing "$ROOT/dist/github-release/toxee-ios-release.ipa"
 }
 
+test_release_publish_keeps_one_installer_per_platform() {
+  echo "[test] release publish keeps one installer per platform"
+  local artifacts_dir="$TMP_ROOT/release-installers"
+  mkdir -p \
+    "$artifacts_dir/toxee-linux-release" \
+    "$artifacts_dir/toxee-macos-release" \
+    "$artifacts_dir/toxee-windows-release" \
+    "$artifacts_dir/toxee-android-release" \
+    "$artifacts_dir/toxee-ios-release"
+
+  printf 'appimage' > "$artifacts_dir/toxee-linux-release/toxee-linux-x64-release.AppImage"
+  printf 'linux-tar' > "$artifacts_dir/toxee-linux-release/toxee-linux-x64-release.tar.gz"
+  cat > "$artifacts_dir/toxee-linux-release/NOTES.txt" <<'EOF'
+Bundled libtim2tox_ffi.so into Linux bundle.
+EOF
+
+  printf 'dmg' > "$artifacts_dir/toxee-macos-release/toxee-macos-release.dmg"
+  printf 'mac-zip' > "$artifacts_dir/toxee-macos-release/toxee-macos-release.zip"
+  cat > "$artifacts_dir/toxee-macos-release/NOTES.txt" <<'EOF'
+Bundled libtim2tox_ffi.dylib into macOS app.
+EOF
+
+  printf 'msi' > "$artifacts_dir/toxee-windows-release/toxee-windows-x64-release.msi"
+  printf 'win-zip' > "$artifacts_dir/toxee-windows-release/toxee-windows-x64-release.zip"
+  cat > "$artifacts_dir/toxee-windows-release/NOTES.txt" <<'EOF'
+Bundled tim2tox_ffi.dll into Windows package.
+EOF
+
+  printf 'apk' > "$artifacts_dir/toxee-android-release/app-release.apk"
+  printf 'aab' > "$artifacts_dir/toxee-android-release/app-release.aab"
+  cat > "$artifacts_dir/toxee-android-release/NOTES.txt" <<'EOF'
+Android build used repository-provided Tim2Tox JNI libraries.
+EOF
+
+  printf 'ipa' > "$artifacts_dir/toxee-ios-release/toxee-ios-release.ipa"
+  cat > "$artifacts_dir/toxee-ios-release/NOTES.txt" <<'EOF'
+Packaged signed iOS app as IPA.
+Injected Tim2Tox FFI artifact into signed iOS app before IPA packaging.
+EOF
+
+  PATH="/usr/bin:/bin" \
+    RELEASE_DRY_RUN=1 RELEASE_TAG=vtest RELEASE_ARTIFACTS_DIR="$artifacts_dir" \
+    bash "$ROOT/tool/ci/publish_release.sh"
+
+  assert_file_exists "$ROOT/dist/github-release/toxee-linux-x64-release.AppImage"
+  assert_file_exists "$ROOT/dist/github-release/toxee-macos-release.dmg"
+  assert_file_exists "$ROOT/dist/github-release/toxee-windows-x64-release.msi"
+  assert_file_exists "$ROOT/dist/github-release/app-release.apk"
+  assert_file_exists "$ROOT/dist/github-release/toxee-ios-release.ipa"
+  assert_file_exists "$ROOT/dist/github-release/SHA256SUMS.txt"
+
+  assert_file_missing "$ROOT/dist/github-release/toxee-linux-x64-release.tar.gz"
+  assert_file_missing "$ROOT/dist/github-release/toxee-macos-release.zip"
+  assert_file_missing "$ROOT/dist/github-release/toxee-windows-x64-release.zip"
+  assert_file_missing "$ROOT/dist/github-release/app-release.aab"
+  assert_file_missing "$ROOT/dist/github-release/BUILD-NOTES.txt"
+}
+
 test_android_syncs_jni_libs_into_app_tree
 test_linux_package_includes_libsodium
 test_ios_unsigned_build_is_packaged_as_validation_ipa
@@ -150,5 +208,6 @@ test_workflow_does_not_use_secrets_in_if_conditions
 test_analyze_workflow_tolerates_existing_warnings
 test_windows_release_workflow_uses_wix_for_msi
 test_release_publish_filters_non_installable_mobile_assets
+test_release_publish_keeps_one_installer_per_platform
 
 echo "[PASS] all packaging regression tests passed"

@@ -68,11 +68,9 @@ fi
 
 REPO_ROOT="$(ci_repo_root)"
 STAGE_DIR="$REPO_ROOT/dist/github-release"
-BUILD_NOTES_FILE="$STAGE_DIR/BUILD-NOTES.txt"
 CHECKSUM_FILE="$STAGE_DIR/SHA256SUMS.txt"
 
 ci_reset_dir "$STAGE_DIR"
-: > "$BUILD_NOTES_FILE"
 : > "$CHECKSUM_FILE"
 
 copy_release_asset() {
@@ -97,11 +95,6 @@ collect_assets() {
   while IFS= read -r -d '' file; do
     relative_path="${file#$ARTIFACTS_DIR/}"
     if [[ "$(basename "$file")" == "NOTES.txt" ]]; then
-      {
-        printf '=== %s ===\n' "$(dirname "$relative_path")"
-        cat "$file"
-        printf '\n'
-      } >> "$BUILD_NOTES_FILE"
       continue
     fi
 
@@ -143,7 +136,37 @@ should_publish_asset() {
     fi
   fi
 
+  case "$group" in
+    toxee-linux-release)
+      [[ "$basename" == *.AppImage ]] || return 1
+      ;;
+    toxee-macos-release)
+      [[ "$basename" == *.dmg || "$basename" == *.pkg ]] || return 1
+      ;;
+    toxee-windows-release)
+      [[ "$basename" == *.msi || "$basename" == *.msix || "$basename" == *.exe ]] || return 1
+      ;;
+    toxee-android-release)
+      [[ "$basename" == *.apk ]] || return 1
+      ;;
+    toxee-ios-release)
+      [[ "$basename" == *.ipa ]] || return 1
+      ;;
+  esac
+
   return 0
+}
+
+prune_existing_release_assets() {
+  local asset_name
+
+  while IFS= read -r asset_name; do
+    [[ -n "$asset_name" ]] || continue
+    if [[ ! -f "$STAGE_DIR/$asset_name" ]]; then
+      ci_log "Deleting stale release asset: $asset_name"
+      gh release delete-asset "$RELEASE_TAG" "$asset_name" --yes
+    fi
+  done < <(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
 }
 
 create_or_update_release() {
@@ -155,6 +178,7 @@ create_or_update_release() {
 
   if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
     ci_log "Release $RELEASE_TAG already exists; uploading assets with --clobber"
+    prune_existing_release_assets
     gh release upload "$RELEASE_TAG" "$STAGE_DIR"/* --clobber
     return
   fi
@@ -181,10 +205,6 @@ collect_assets
 
 if [[ ! -s "$CHECKSUM_FILE" ]]; then
   ci_die "No release assets were collected from $ARTIFACTS_DIR"
-fi
-
-if [[ ! -s "$BUILD_NOTES_FILE" ]]; then
-  rm -f "$BUILD_NOTES_FILE"
 fi
 
 if is_truthy "$RELEASE_DRY_RUN"; then
