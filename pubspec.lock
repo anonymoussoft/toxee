@@ -249,6 +249,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
+  console:
+    dependency: transitive
+    description:
+      name: console
+      sha256: e04e7824384c5b39389acdd6dc7d33f3efe6b232f6f16d7626f194f6a01ad69a
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.1.0"
   convert:
     dependency: transitive
     description:
@@ -635,6 +643,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.2"
+  flutter_skill:
+    dependency: "direct main"
+    description:
+      name: flutter_skill
+      sha256: b4ee10eba466aee660105b3cc5e17aa509f9f48681c9faeffe6b8fd602acac68
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.36"
   flutter_svg:
     dependency: transitive
     description:
@@ -669,6 +685,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.15.2"
+  get_it:
+    dependency: transitive
+    description:
+      name: get_it
+      sha256: "568d62f0e68666fb5d95519743b3c24a34c7f19d834b0658c46e26d778461f66"
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.2.1"
   haptic_feedback:
     dependency: transitive
     description:
@@ -941,6 +965,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
+  msix:
+    dependency: "direct dev"
+    description:
+      name: msix
+      sha256: b6b08e7a7b5d1845f2b1d31216d5b1fb558e98251efefe54eb79ed00d27bc2ac
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.16.13"
   nested:
     dependency: transitive
     description:
@@ -1021,6 +1053,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.0.3"
+  package_config:
+    dependency: transitive
+    description:
+      name: package_config
+      sha256: f096c55ebb7deb7e384101542bfba8c52696c1b56fca2eb62827989ef2353bbc
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   package_info_plus:
     dependency: transitive
     description:
@@ -1205,6 +1245,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.5+1"
+  pub_semver:
+    dependency: transitive
+    description:
+      name: pub_semver
+      sha256: "5bfcf68ca79ef689f8990d1160781b4bad40a3bd5e5218ad4076ddb7f4081585"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   pull_to_refresh:
     dependency: transitive
     description:

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_skill/flutter_skill.dart';
 
 import 'ui/widgets/app_page_route.dart';
 import 'package:tencent_cloud_chat_common/widgets/material_app.dart';
@@ -65,6 +67,14 @@ Future<void> main() async {
   await runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+
+      // Debug-only: expose the running app to Claude Code via the flutter_skill
+      // MCP server (tap / enter_text / screenshot / hot_reload). kDebugMode is
+      // a compile-time const false in profile/release builds, so the call is
+      // tree-shaken out of non-debug binaries.
+      if (kDebugMode) {
+        FlutterSkillBinding.ensureInitialized();
+      }
 
       final result = await AppBootstrap.initialize();
 

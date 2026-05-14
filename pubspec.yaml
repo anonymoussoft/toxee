@@ -45,6 +45,10 @@ dependencies:
   audioplayers: ^5.2.0
   camera_macos: ^0.0.9
   wakelock_plus: ^1.3.3
+  # Debug-only: MCP toolkit that exposes the running app to Claude Code via
+  # the Dart VM service. Gated by kDebugMode in lib/main.dart so the call is
+  # tree-shaken from profile/release builds.
+  flutter_skill: ^0.9.36
 dev_dependencies:
   flutter_test:
     sdk: flutter
