@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -176,23 +177,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return Builder(
       builder: (context) {
         return TencentCloudChatThemeWidget(
-          build: (context, colorTheme, textStyle) => Container(
-            width: MediaQuery.of(context).size.width,
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  width: 1,
-                  color: colorTheme.backgroundColor,
+          build: (context, colorTheme, textStyle) => GestureDetector(
+            // Whole-bar hit target so the entire row is tappable (min 44pt
+            // height enforced below for mobile ergonomics).
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _onAddFriend(context, userFullInfo.userID ?? ''),
+            child: Container(
+              width: MediaQuery.of(context).size.width,
+              constraints: const BoxConstraints(minHeight: 44),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    width: 1,
+                    color: colorTheme.backgroundColor,
+                  ),
                 ),
+                color: colorTheme.contactAddContactFriendInfoStateButtonBackgroundColor,
               ),
-              color: colorTheme.contactAddContactFriendInfoStateButtonBackgroundColor,
-            ),
-            padding: EdgeInsets.symmetric(
-              vertical: TencentCloudChatScreenAdapter.getHeight(10),
-              horizontal: TencentCloudChatScreenAdapter.getWidth(16),
-            ),
-            child: GestureDetector(
-              onTap: () => _onAddFriend(context, userFullInfo.userID ?? ''),
+              padding: EdgeInsets.symmetric(
+                vertical: TencentCloudChatScreenAdapter.getHeight(10),
+                horizontal: TencentCloudChatScreenAdapter.getWidth(16),
+              ),
+              alignment: Alignment.centerLeft,
               child: Text(
                 AppLocalizations.of(context)!.addFriend,
                 style: TextStyle(
@@ -811,6 +817,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   IconButton(
                                     icon: const Icon(Icons.close, size: 18),
                                     color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    // 44x44 minimum tap area for mobile (Apple HIG / Material 48dp).
+                                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                                    padding: EdgeInsets.zero,
                                     visualDensity: VisualDensity.compact,
                                     onPressed: () {
                                       setState(() {
@@ -840,32 +849,59 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget? _buildMobileDrawer() {
+    final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
     return Drawer(
+      // 280 — Material Drawer guidance for phones; close to the spec width.
       width: 280,
       elevation: 0,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topRight: Radius.circular(AppThemeConfig.cardBorderRadius),
-          bottomRight: Radius.circular(AppThemeConfig.cardBorderRadius),
-        ),
-      ),
+      backgroundColor: scheme.surface,
+      // Default Material Drawer shape (top-right + bottom-right rounded
+      // trailing edge) is fine for mobile — let Material handle it.
       child: SafeArea(
-        child: buildSidebar(
-          context: context,
-          selectedIndex: _index,
-          onTap: (i) {
-            setState(() {
-              _index = i;
-            });
-            Navigator.of(context).pop(); // Close drawer
-            // Refresh IRC app status when switching to Applications page
-            if (i == 2) {
-              _checkIrcAppStatus();
-            }
-          },
-          service: widget.service,
-          connectionStatusStream: widget.service.connectionStatusStream,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _MobileDrawerHeader(
+              service: widget.service,
+              connectionStatusStream: widget.service.connectionStatusStream,
+            ),
+            Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+            const SizedBox(height: AppSpacing.sm),
+            _MobileDrawerItem(
+              selected: _index == 0,
+              icon: Icons.chat_bubble_outline,
+              selectedIcon: Icons.chat_bubble,
+              label: l10n.chats,
+              showUnreadBadge: true,
+              onTap: () {
+                setState(() => _index = 0);
+                Navigator.of(context).pop();
+              },
+            ),
+            _MobileDrawerItem(
+              selected: _index == 1,
+              icon: Icons.contacts_outlined,
+              selectedIcon: Icons.contacts,
+              label: l10n.contacts,
+              onTap: () {
+                setState(() => _index = 1);
+                Navigator.of(context).pop();
+              },
+            ),
+            const Spacer(),
+            _MobileDrawerItem(
+              selected: _index == 3,
+              icon: Icons.settings_outlined,
+              selectedIcon: Icons.settings,
+              label: l10n.settings,
+              onTap: () {
+                setState(() => _index = 3);
+                Navigator.of(context).pop();
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
         ),
       ),
     );
@@ -873,99 +909,112 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget? _buildBottomNavigationBar() {
     final l10n = AppLocalizations.of(context)!;
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
         border: Border(
           top: BorderSide(color: scheme.outlineVariant, width: 1),
         ),
       ),
-      child: BottomNavigationBar(
-        currentIndex: _index,
-        onTap: (i) {
-          setState(() {
-            _index = i;
-          });
-          // Refresh IRC app status when switching to Applications page
-          if (i == 2) {
-            _checkIrcAppStatus();
-          }
-        },
-        type: BottomNavigationBarType.fixed,
-        elevation: 0,
-        selectedItemColor: scheme.primary,
-        unselectedItemColor: scheme.onSurfaceVariant,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        selectedLabelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-        unselectedLabelStyle: Theme.of(context).textTheme.labelSmall,
-        items: [
-          BottomNavigationBarItem(
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.chat_bubble_outline),
-                Positioned(
-                  top: -5,
-                  right: -6,
-                  child: UnconstrainedBox(
-                    child: TencentCloudChatConversationTotalUnreadCount(
-                      builder: (BuildContext _, int totalUnreadCount) {
-                        if (totalUnreadCount == 0) {
-                          return const SizedBox.shrink();
-                        }
-                        final displayText = totalUnreadCount > 99 ? "99+" : "$totalUnreadCount";
-                        final isLargeText = displayText.length > 2;
-                        return UnconstrainedBox(
-                          child: Container(
-                            constraints: const BoxConstraints(minWidth: 16),
-                            height: 16,
-                            padding: EdgeInsets.symmetric(horizontal: isLargeText ? 5 : 4),
-                            decoration: BoxDecoration(
-                              color: AppThemeConfig.errorColor,
-                              borderRadius: BorderRadius.circular(AppThemeConfig.badgeBorderRadius),
-                            ),
-                            child: Center(
-                              child: Text(
-                                displayText,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.0,
-                                    ),
-                                textAlign: TextAlign.center,
+      child: SafeArea(
+        top: false,
+        child: BottomNavigationBar(
+          currentIndex: _index,
+          onTap: (i) {
+            setState(() {
+              _index = i;
+            });
+            // Refresh IRC app status when switching to Applications page
+            if (i == 2) {
+              _checkIrcAppStatus();
+            }
+          },
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          selectedItemColor: scheme.primary,
+          unselectedItemColor: scheme.onSurfaceVariant,
+          backgroundColor: theme.scaffoldBackgroundColor,
+          iconSize: 24,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          selectedLabelStyle: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+          unselectedLabelStyle: theme.textTheme.labelSmall,
+          items: [
+            BottomNavigationBarItem(
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.chat_bubble_outline),
+                  Positioned(
+                    top: -5,
+                    right: -6,
+                    child: UnconstrainedBox(
+                      child: TencentCloudChatConversationTotalUnreadCount(
+                        builder: (BuildContext _, int totalUnreadCount) {
+                          if (totalUnreadCount == 0) {
+                            return const SizedBox.shrink();
+                          }
+                          final displayText = totalUnreadCount > 99 ? "99+" : "$totalUnreadCount";
+                          final isLargeText = displayText.length > 2;
+                          return UnconstrainedBox(
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 16),
+                              height: 16,
+                              padding: EdgeInsets.symmetric(horizontal: isLargeText ? 5 : 4),
+                              decoration: BoxDecoration(
+                                color: AppThemeConfig.errorColor,
+                                borderRadius: BorderRadius.circular(AppThemeConfig.badgeBorderRadius),
+                                border: Border.all(
+                                  color: theme.scaffoldBackgroundColor,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  displayText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.0,
+                                        fontSize: 10,
+                                      ),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
+              activeIcon: const Icon(Icons.chat_bubble),
+              label: l10n.chats,
             ),
-            activeIcon: const Icon(Icons.chat_bubble),
-            label: l10n.chats,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.contacts_outlined),
-            activeIcon: const Icon(Icons.contacts),
-            label: l10n.contacts,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.apps_outlined),
-            activeIcon: const Icon(Icons.apps),
-            label: l10n.applications,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.settings_outlined),
-            activeIcon: const Icon(Icons.settings),
-            label: l10n.settings,
-          ),
-        ],
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.contacts_outlined),
+              activeIcon: const Icon(Icons.contacts),
+              label: l10n.contacts,
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.apps_outlined),
+              activeIcon: const Icon(Icons.apps),
+              label: l10n.applications,
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.settings_outlined),
+              activeIcon: const Icon(Icons.settings),
+              label: l10n.settings,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1425,6 +1474,283 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: Text(AppLocalizations.of(context)!.close),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Top section of the mobile drawer — avatar + nickname + connection status.
+///
+/// Mirrors the desktop sidebar's `_UserAvatar` pattern but laid out
+/// vertically with `AppSpacing.lg` padding for a touch-first feel.
+class _MobileDrawerHeader extends StatefulWidget {
+  const _MobileDrawerHeader({
+    required this.service,
+    required this.connectionStatusStream,
+  });
+
+  final FfiChatService service;
+  final Stream<bool> connectionStatusStream;
+
+  @override
+  State<_MobileDrawerHeader> createState() => _MobileDrawerHeaderState();
+}
+
+class _MobileDrawerHeaderState extends State<_MobileDrawerHeader> {
+  String? _nickname;
+  String? _avatarPath;
+  int _avatarVersion = 0;
+  StreamSubscription<String>? _avatarUpdatedSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+    _avatarUpdatedSub = widget.service.avatarUpdated.listen((updatedUserId) {
+      final selfId = widget.service.selfId;
+      if (selfId.isEmpty) return;
+      final normalizedSelf =
+          selfId.length > 64 ? selfId.substring(0, 64) : selfId;
+      final normalizedUpdated = updatedUserId.length > 64
+          ? updatedUserId.substring(0, 64)
+          : updatedUserId;
+      if (updatedUserId == selfId ||
+          updatedUserId == normalizedSelf ||
+          normalizedUpdated == normalizedSelf) {
+        _loadProfile();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _avatarUpdatedSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadProfile() async {
+    final nick = await Prefs.getNickname();
+    final avatar = await Prefs.getAvatarPath();
+    if (mounted) {
+      setState(() {
+        _nickname = nick;
+        _avatarPath = avatar;
+        _avatarVersion++;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: StreamBuilder<bool>(
+        stream: widget.connectionStatusStream,
+        initialData: widget.service.isConnected,
+        builder: (context, snapshot) {
+          final isConnected = snapshot.data ?? widget.service.isConnected;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: scheme.primary,
+                    child: _avatarPath != null &&
+                            _avatarPath!.isNotEmpty &&
+                            File(_avatarPath!).existsSync()
+                        ? ClipOval(
+                            child: Image.file(
+                              File(_avatarPath!),
+                              key: ValueKey(
+                                  'mobile-drawer-avatar-${_avatarPath!}-$_avatarVersion'),
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : ClipOval(
+                            child: Image.asset(
+                              'images/default_user_icon.png',
+                              package: 'tencent_cloud_chat_common',
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                  ),
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: isConnected
+                            ? AppThemeConfig.successColor
+                            : scheme.onSurfaceVariant,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: scheme.surface,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              AppSpacing.verticalMd,
+              if (_nickname != null && _nickname!.isNotEmpty)
+                Text(
+                  _nickname!,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              AppSpacing.verticalXs,
+              Text(
+                isConnected ? 'Online' : 'Offline',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: isConnected
+                      ? AppThemeConfig.successColor
+                      : scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Mobile drawer nav row — 56px tap target, icon-left + label-right,
+/// 3px primary accent on the left edge when selected (mirrors the
+/// desktop sidebar's selection treatment for visual continuity).
+class _MobileDrawerItem extends StatelessWidget {
+  const _MobileDrawerItem({
+    required this.selected,
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.onTap,
+    this.showUnreadBadge = false,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final VoidCallback onTap;
+  final bool showUnreadBadge;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
+    final bg = selected
+        ? scheme.primary.withValues(alpha: 0.10)
+        : Colors.transparent;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          decoration: BoxDecoration(
+            color: bg,
+            border: Border(
+              left: BorderSide(
+                color: selected ? scheme.primary : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
+          child: Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(selected ? selectedIcon : icon, size: 24, color: color),
+                  if (showUnreadBadge)
+                    Positioned(
+                      top: -5,
+                      right: -6,
+                      child: UnconstrainedBox(
+                        child: TencentCloudChatConversationTotalUnreadCount(
+                          builder: (BuildContext _, int totalUnreadCount) {
+                            if (totalUnreadCount == 0) {
+                              return const SizedBox.shrink();
+                            }
+                            final displayText = totalUnreadCount > 99
+                                ? '99+'
+                                : '$totalUnreadCount';
+                            final isLargeText = displayText.length > 2;
+                            return UnconstrainedBox(
+                              child: Container(
+                                constraints: const BoxConstraints(minWidth: 16),
+                                height: 16,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: isLargeText ? 5 : 4),
+                                decoration: BoxDecoration(
+                                  color: AppThemeConfig.errorColor,
+                                  borderRadius: BorderRadius.circular(
+                                      AppThemeConfig.badgeBorderRadius),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    displayText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.0,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              AppSpacing.horizontalLg,
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: color,
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

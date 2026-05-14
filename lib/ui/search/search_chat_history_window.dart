@@ -319,7 +319,9 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
     );
   }
 
-  /// Mobile: single-column layout — either conversation list or message list with back.
+  /// Mobile: single-column vertical layout — either conversation list or message list with back.
+  /// Vertical-only flow; no left/right split. Result rows are full-width, tappable,
+  /// ~68px tall with a 40px avatar, titleSmall nickname, bodySmall onSurfaceVariant snippet.
   Widget _buildMobileLayout(BuildContext context, AppLocalizations l10n, TextStyle textStyle, ThemeData theme) {
     if (_showMobileDetail) {
       return Column(
@@ -352,52 +354,106 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
         ],
       );
     }
-    return ListView.builder(
+    final keyword = _filterKeyword.trim();
+    final highlightBase = textStyle.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       itemCount: _filteredResults.length,
+      separatorBuilder: (context, _) => Divider(
+        height: 1,
+        thickness: 1,
+        indent: AppSpacing.lg + 40 + AppSpacing.md,
+        color: theme.colorScheme.outlineVariant,
+      ),
       itemBuilder: (context, index) {
         final e = _filteredResults[index];
         final result = e.$1;
-        final count = e.$2.length;
-        final isSelected = index == _selectedIndex;
-        return IntrinsicHeight(
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: isSelected ? 4 : 0,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        final messages = e.$2;
+        final count = messages.length;
+        final topMessage = messages.isNotEmpty ? messages.first : null;
+        final snippet = topMessage != null
+            ? TencentCloudChatUtils.getMessageSummary(message: topMessage, needStatus: false)
+            : l10n.relatedChats(count);
+        return InkWell(
+          onTap: () {
+            setState(() {
+              _selectedIndex = index;
+              _showMobileDetail = true;
+            });
+          },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 68),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
               ),
-              Expanded(
-                child: ListTile(
-                  selected: isSelected,
-                  selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.08),
-                  leading: _avatarWidget(result.avatarUrl, const Icon(Icons.chat)),
-                  title: Text(
-                    result.showName,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: _avatarWidget(result.avatarUrl, const Icon(Icons.chat)),
                   ),
-                  subtitle: Text(
-                    l10n.relatedChats(count),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  AppSpacing.horizontalMd,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                result.showName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (count > 1) ...[
+                              AppSpacing.horizontalSm,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(AppThemeConfig.badgeBorderRadius),
+                                ),
+                                child: Text(
+                                  '$count',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        _buildHighlightedSummary(
+                          snippet,
+                          keyword.isEmpty ? widget.initialKeyword : keyword,
+                          (theme.textTheme.bodySmall ?? highlightBase).copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          theme.colorScheme.primary,
+                          isDark: theme.brightness == Brightness.dark,
+                        ),
+                      ],
                     ),
                   ),
-                  onTap: () {
-                    setState(() {
-                      _selectedIndex = index;
-                      _showMobileDetail = true;
-                    });
-                  },
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },

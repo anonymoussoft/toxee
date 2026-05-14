@@ -986,54 +986,95 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
     Color primaryColor,
     Color secondaryTextColor,
   ) {
-    return Row(
+    final theme = Theme.of(context);
+    final selected = _bootstrapNodeMode == 'manual' ? 'manual' : 'auto';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            value: 'manual',
-            groupValue: _bootstrapNodeMode,
-            title: Text(l10n.manualMode),
-            subtitle: Text(l10n.manualModeDesc, style: Theme.of(context).textTheme.labelSmall),
-            onChanged: (v) {
-              if (v != null) _setBootstrapNodeMode(v);
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
+            segments: [
+              ButtonSegment<String>(
+                value: 'manual',
+                label: Text(l10n.manualMode),
+                icon: const Icon(Icons.tune, size: 18),
+              ),
+              ButtonSegment<String>(
+                value: 'auto',
+                label: Text(l10n.autoMode),
+                icon: const Icon(Icons.public, size: 18),
+              ),
+            ],
+            selected: {selected},
+            showSelectedIcon: false,
+            onSelectionChanged: (set) {
+              if (set.isNotEmpty) _setBootstrapNodeMode(set.first);
             },
-          ),
-        ),
-        Expanded(
-          child: RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            value: 'auto',
-            groupValue: _bootstrapNodeMode,
-            title: Text(l10n.autoMode),
-            subtitle: GestureDetector(
-              onTap: () async {
-                final url = Uri.parse('https://nodes.tox.chat/');
-                if (await canLaunchUrl(url)) {
-                  await launchUrl(url, mode: LaunchMode.externalApplication);
+            style: ButtonStyle(
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return primaryColor.withValues(alpha: 0.12);
                 }
-              },
-              child: RichText(
-                text: TextSpan(
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: secondaryTextColor),
-                  children: [
-                    TextSpan(text: l10n.autoModeDescPrefix),
-                    TextSpan(
-                      text: 'https://nodes.tox.chat/',
-                      style: TextStyle(
-                        color: primaryColor,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ],
+                return Colors.transparent;
+              }),
+              foregroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return primaryColor;
+                }
+                return theme.colorScheme.onSurfaceVariant;
+              }),
+              textStyle: WidgetStatePropertyAll(
+                theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
                 ),
               ),
+              side: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return BorderSide(color: primaryColor.withValues(alpha: 0.4));
+                }
+                return BorderSide(color: theme.colorScheme.outlineVariant);
+              }),
             ),
-            onChanged: (v) {
-              if (v != null) _setBootstrapNodeMode(v);
-            },
           ),
         ),
+        AppSpacing.verticalSm,
+        if (selected == 'manual')
+          Text(
+            l10n.manualModeDesc,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          )
+        else
+          GestureDetector(
+            onTap: () async {
+              final url = Uri.parse('https://nodes.tox.chat/');
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              }
+            },
+            child: RichText(
+              text: TextSpan(
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                children: [
+                  TextSpan(text: l10n.autoModeDescPrefix),
+                  TextSpan(
+                    text: 'https://nodes.tox.chat/',
+                    style: TextStyle(
+                      color: primaryColor,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }

@@ -57,8 +57,10 @@ class ErrorBanner extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.close, size: 18, color: AppThemeConfig.errorColor),
               onPressed: onDismiss,
+              // 44x44 minimum tap area for mobile (Apple HIG / Material 48dp).
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+              visualDensity: VisualDensity.compact,
             ),
         ],
       ),

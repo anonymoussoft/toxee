@@ -269,10 +269,20 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _showExportOptions() async {
     final choice = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppThemeConfig.formCardBorderRadius),
+        ),
+      ),
       builder: (ctx) => SafeArea(
+        top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const _BottomSheetHandle(),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Text(
@@ -293,7 +303,7 @@ class _SettingsPageState extends State<SettingsPage> {
               subtitle: Text(AppLocalizations.of(ctx)!.exportOptionFullBackupSubtitle),
               onTap: () => Navigator.of(ctx).pop('zip'),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
           ],
         ),
       ),
@@ -1077,5 +1087,29 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       );
     }
+  }
+}
+
+/// Small drag handle for the top of a modal bottom sheet.
+///
+/// 32×4 rounded bar in slate-300 (light) / slate-700 (dark) with
+/// `AppSpacing.sm` vertical margin — the modern iOS / Material 3 affordance
+/// that signals "this sheet is draggable / dismissable".
+class _BottomSheetHandle extends StatelessWidget {
+  const _BottomSheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: 32,
+      height: 4,
+      margin: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        // slate-300 (light) / slate-700 (dark) — hairline neutral
+        color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
   }
 }

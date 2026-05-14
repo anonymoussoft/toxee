@@ -60,7 +60,8 @@ class _NewEntryButtonState extends State<NewEntryButton> {
         }
       },
       child: SizedBox(
-        height: 40,
+        // 44pt minimum tap target for mobile (Apple HIG / Material 48dp).
+        height: 44,
         child: OutlinedButton.icon(
           icon: const Icon(Icons.add),
           label: Text(TencentCloudChatLocalizations.of(context)?.newChat ?? 'New'),
