@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import '../../util/app_spacing.dart';
+import '../../util/app_theme_config.dart';
 import '../../util/bootstrap_nodes.dart';
 import '../../util/lan_bootstrap_service.dart';
 import '../../util/prefs.dart';
@@ -270,7 +272,7 @@ class _BootstrapNodesPageState extends State<BootstrapNodesPage> {
                     color: Theme.of(context).colorScheme.primary,
                     onRefresh: _loadNodes,
                     child: ListView.builder(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(AppSpacing.md),
                       itemCount: _nodes.length,
                       itemBuilder: (context, index) {
                         final node = _nodes[index];
@@ -279,85 +281,118 @@ class _BootstrapNodesPageState extends State<BootstrapNodesPage> {
                         final testResult = _testResults[node.publicKey];
                         final latency = _nodeLatencies[node.publicKey];
                         final isTestedSuccess = _nodeTestSuccess[node.publicKey] ?? false;
+                        final outlineVariant = Theme.of(context).colorScheme.outlineVariant;
+                        final statusColor = isOnline
+                            ? AppThemeConfig.successColor
+                            : Theme.of(context).colorScheme.error;
                         return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: ListTile(
-                            leading: Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: isOnline ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            title: Text(
-                              '${node.ipv4}:${node.port}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: colorTheme.primaryTextColor,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (node.location != null) Text(node.location!),
-                                if (node.maintainer != null) Text(AppLocalizations.of(context)!.maintainer(node.maintainer!)),
-                                if (node.lastPing != null)
-                                  Text(appL10n.lastPing(node.lastPing.toString())),
-                                if (testResult != null) ...[
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        isTestedSuccess ? Icons.check_circle : Icons.error,
-                                        size: 14,
-                                        color: isTestedSuccess ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        testResult,
-                                        style: TextStyle(
-                                          color: isTestedSuccess ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
-                                        ),
-                                      ),
-                                      if (latency != null && isTestedSuccess) ...[
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '${latency}ms',
-                                          style: TextStyle(
-                                            color: Theme.of(context).colorScheme.primary,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ],
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: isTesting
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        )
-                                      : const Icon(Icons.network_check),
-                                  onPressed: isTesting ? null : () => _testNode(node),
-                                  tooltip: appL10n.testNode,
+                          elevation: 0,
+                          clipBehavior: Clip.antiAlias,
+                          margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                          shape: RoundedRectangleBorder(
+                            side: BorderSide(color: outlineVariant),
+                            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+                          ),
+                          child: InkWell(
+                            onTap: isOnline ? () => _selectNode(node) : null,
+                            child: ListTile(
+                              leading: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: statusColor,
+                                  shape: BoxShape.circle,
                                 ),
-                                if (isOnline)
-                                  IconButton(
-                                    icon: Icon(
-                                      isTestedSuccess ? Icons.check_circle : Icons.arrow_forward,
-                                      color: isTestedSuccess ? Theme.of(context).colorScheme.primary : null,
+                              ),
+                              title: Text(
+                                '${node.ipv4}:${node.port}',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: colorTheme.primaryTextColor,
+                                      fontFamily: 'monospace',
                                     ),
-                                    onPressed: () => _selectNode(node),
-                                    tooltip: AppLocalizations.of(context)!.selectThisNode,
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (node.location != null)
+                                    Text(
+                                      node.location!,
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  if (node.maintainer != null)
+                                    Text(
+                                      AppLocalizations.of(context)!.maintainer(node.maintainer!),
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  if (node.lastPing != null)
+                                    Text(
+                                      appL10n.lastPing(node.lastPing.toString()),
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  if (testResult != null) ...[
+                                    AppSpacing.verticalXs,
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          isTestedSuccess ? Icons.check_circle : Icons.error,
+                                          size: 14,
+                                          color: isTestedSuccess
+                                              ? AppThemeConfig.successColor
+                                              : Theme.of(context).colorScheme.error,
+                                        ),
+                                        AppSpacing.horizontalXs,
+                                        Text(
+                                          testResult,
+                                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                                color: isTestedSuccess
+                                                    ? AppThemeConfig.successColor
+                                                    : Theme.of(context).colorScheme.error,
+                                              ),
+                                        ),
+                                        if (latency != null && isTestedSuccess) ...[
+                                          AppSpacing.horizontalSm,
+                                          Text(
+                                            '${latency}ms',
+                                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                                  color: AppThemeConfig.successColor,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontFamily: 'monospace',
+                                                ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: isTesting
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.network_check),
+                                    onPressed: isTesting ? null : () => _testNode(node),
+                                    tooltip: appL10n.testNode,
                                   ),
-                              ],
+                                  if (isOnline)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                                      child: Icon(
+                                        isTestedSuccess ? Icons.check_circle : Icons.chevron_right,
+                                        size: 20,
+                                        color: isTestedSuccess
+                                            ? AppThemeConfig.successColor
+                                            : Theme.of(context).iconTheme.color?.withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         );

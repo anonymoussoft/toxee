@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../util/app_spacing.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tencent_cloud_chat_common/data/theme/color/color_base.dart';
 import '../../i18n/app_localizations.dart';
@@ -415,8 +416,14 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
   @override
   Widget build(BuildContext context) {
     final appL10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return TencentCloudChatThemeWidget(
       build: (context, colorTheme, textStyle) {
+        final sectionLabelStyle = theme.textTheme.titleSmall?.copyWith(
+          color: colorTheme.primaryTextColor,
+          fontWeight: FontWeight.w600,
+        );
         return Scaffold(
           backgroundColor: colorTheme.surface,
           appBar: AppBar(
@@ -436,45 +443,56 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                   color: colorTheme.primaryColor,
                   onRefresh: _loadAppState,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(AppSpacing.lg),
                     children: [
                     // IRC Channel App Card
                     Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-                        side: BorderSide(color: colorTheme.dividerColor),
+                        side: BorderSide(color: scheme.outlineVariant),
                       ),
+                      clipBehavior: Clip.antiAlias,
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(AppSpacing.lg),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.chat_bubble_outline,
-                                  color: colorTheme.primaryColor,
-                                  size: 32,
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: colorTheme.primaryColor.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                                    border: Border.all(
+                                      color: colorTheme.primaryColor.withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.chat_bubble_outline,
+                                    color: colorTheme.primaryColor,
+                                    size: 24,
+                                  ),
                                 ),
-                                const SizedBox(width: 12),
+                                AppSpacing.horizontalMd,
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         appL10n.ircChannelApp,
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
+                                        style: theme.textTheme.titleMedium?.copyWith(
                                           color: colorTheme.primaryTextColor,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 2),
                                       Text(
                                         appL10n.ircChannelAppDesc,
-                                        style: TextStyle(
-                                          fontSize: 12,
+                                        style: theme.textTheme.bodySmall?.copyWith(
                                           color: colorTheme.secondaryTextColor,
                                         ),
                                       ),
@@ -483,7 +501,7 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
+                            AppSpacing.verticalLg,
                             if (!_isInstalled)
                               ElevatedButton.icon(
                                 onPressed: _handleInstall,
@@ -492,6 +510,9 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: colorTheme.primaryColor,
                                   foregroundColor: colorTheme.onPrimary,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                                  ),
                                 ),
                               )
                             else ...[
@@ -504,10 +525,14 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                       label: Text(appL10n.uninstall),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: colorTheme.primaryColor,
+                                        side: BorderSide(color: scheme.outlineVariant),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  AppSpacing.horizontalSm,
                                   Expanded(
                                     child: ElevatedButton.icon(
                                       onPressed: _handleAddChannel,
@@ -516,24 +541,23 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: colorTheme.primaryColor,
                                         foregroundColor: colorTheme.onPrimary,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
                               // IRC Server Configuration
-                              const SizedBox(height: 16),
-                              Divider(color: colorTheme.dividerColor),
-                              const SizedBox(height: 8),
+                              AppSpacing.verticalLg,
+                              Divider(color: scheme.outlineVariant, height: 1),
+                              AppSpacing.verticalMd,
                               Text(
                                 appL10n.ircServerConfig,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: colorTheme.primaryTextColor,
-                                ),
+                                style: sectionLabelStyle,
                               ),
-                              const SizedBox(height: 12),
+                              AppSpacing.verticalMd,
                               Row(
                                 children: [
                                   Expanded(
@@ -547,12 +571,12 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                                         ),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                                       ),
                                       style: TextStyle(color: colorTheme.primaryTextColor),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  AppSpacing.horizontalSm,
                                   Expanded(
                                     flex: 1,
                                     child: TextField(
@@ -564,7 +588,7 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                                         ),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                                       ),
                                       keyboardType: TextInputType.number,
                                       style: TextStyle(color: colorTheme.primaryTextColor),
@@ -572,10 +596,15 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
+                              AppSpacing.verticalSm,
                               SwitchListTile(
-                                title: Text(appL10n.ircUseSasl),
-                                subtitle: Text(appL10n.ircUseSaslDesc),
+                                title: Text(appL10n.ircUseSasl, style: theme.textTheme.bodyMedium),
+                                subtitle: Text(
+                                  appL10n.ircUseSaslDesc,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorTheme.secondaryTextColor,
+                                  ),
+                                ),
                                 value: _useSasl,
                                 onChanged: (value) {
                                   setState(() {
@@ -583,8 +612,9 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                   });
                                 },
                                 contentPadding: EdgeInsets.zero,
+                                activeColor: colorTheme.primaryColor,
                               ),
-                              const SizedBox(height: 8),
+                              AppSpacing.verticalSm,
                               ElevatedButton.icon(
                                 onPressed: _saveIrcConfig,
                                 icon: const Icon(Icons.save, size: 18),
@@ -592,116 +622,128 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: colorTheme.primaryColor,
                                   foregroundColor: colorTheme.onPrimary,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                                  ),
                                 ),
                               ),
                               if (_channels.isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                Divider(color: colorTheme.dividerColor),
-                                const SizedBox(height: 8),
+                                AppSpacing.verticalLg,
+                                Divider(color: scheme.outlineVariant, height: 1),
+                                AppSpacing.verticalMd,
                                 Text(
                                   appL10n.ircChannels,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: colorTheme.primaryTextColor,
-                                  ),
+                                  style: sectionLabelStyle,
                                 ),
-                                const SizedBox(height: 8),
-                                ..._channels.map((channel) => ExpansionTile(
-                                      title: Text(
-                                        channel,
-                                        style: TextStyle(
-                                          color: colorTheme.primaryTextColor,
-                                          fontWeight: FontWeight.w500,
+                                AppSpacing.verticalSm,
+                                ..._channels.map((channel) => Container(
+                                      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+                                        border: Border.all(color: scheme.outlineVariant),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: ExpansionTile(
+                                        shape: const Border(),
+                                        collapsedShape: const Border(),
+                                        title: Text(
+                                          channel,
+                                          style: theme.textTheme.bodyLarge?.copyWith(
+                                            color: colorTheme.primaryTextColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                         ),
-                                      ),
-                                      subtitle: _channelStatus.containsKey(channel)
-                                          ? Row(
-                                              children: [
-                                                _AnimatedStatusDot(
-                                                  status: _channelStatus[channel]!,
-                                                  color: _getStatusColor(_channelStatus[channel]!, colorTheme),
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Text(
-                                                  _getStatusText(_channelStatus[channel]!),
-                                                  style: TextStyle(
-                                                    color: _getStatusColor(_channelStatus[channel]!, colorTheme),
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                                if (_channelStatusMessage[channel] != null) ...[
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      _channelStatusMessage[channel]!,
-                                                      style: TextStyle(
-                                                        color: colorTheme.secondaryTextColor,
-                                                        fontSize: 11,
-                                                      ),
-                                                      overflow: TextOverflow.ellipsis,
+                                        subtitle: _channelStatus.containsKey(channel)
+                                            ? Padding(
+                                                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                                                child: Row(
+                                                  children: [
+                                                    _AnimatedStatusDot(
+                                                      status: _channelStatus[channel]!,
+                                                      color: _getStatusColor(_channelStatus[channel]!, colorTheme),
                                                     ),
-                                                  ),
-                                                ],
-                                              ],
-                                            )
-                                          : null,
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.close),
-                                        onPressed: () => _handleRemoveChannel(channel),
-                                        color: colorTheme.secondaryTextColor,
-                                      ),
-                                      children: [
-                                        // User list
-                                        if (_channelUsers.containsKey(channel) && _channelUsers[channel]!.isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.all(16.0),
-                                            child: Column(
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      _getStatusText(_channelStatus[channel]!),
+                                                      style: theme.textTheme.bodySmall?.copyWith(
+                                                        color: _getStatusColor(_channelStatus[channel]!, colorTheme),
+                                                      ),
+                                                    ),
+                                                    if (_channelStatusMessage[channel] != null) ...[
+                                                      AppSpacing.horizontalSm,
+                                                      Expanded(
+                                                        child: Text(
+                                                          _channelStatusMessage[channel]!,
+                                                          style: theme.textTheme.bodySmall?.copyWith(
+                                                            color: colorTheme.secondaryTextColor,
+                                                          ),
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              )
+                                            : null,
+                                        trailing: IconButton(
+                                          icon: const Icon(Icons.close),
+                                          onPressed: () => _handleRemoveChannel(channel),
+                                          color: colorTheme.secondaryTextColor,
+                                          tooltip: appL10n.remove,
+                                        ),
+                                        childrenPadding: const EdgeInsets.fromLTRB(
+                                          AppSpacing.lg,
+                                          0,
+                                          AppSpacing.lg,
+                                          AppSpacing.lg,
+                                        ),
+                                        children: [
+                                          // User list
+                                          if (_channelUsers.containsKey(channel) && _channelUsers[channel]!.isNotEmpty)
+                                            Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   'Users (${_channelUsers[channel]!.length})',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
+                                                  style: theme.textTheme.labelLarge?.copyWith(
                                                     color: colorTheme.primaryTextColor,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
-                                                const SizedBox(height: 8),
+                                                AppSpacing.verticalSm,
                                                 Wrap(
-                                                  spacing: 8,
-                                                  runSpacing: 4,
+                                                  spacing: AppSpacing.sm,
+                                                  runSpacing: AppSpacing.xs,
                                                   children: _channelUsers[channel]!.map((user) => Chip(
                                                     label: Text(
                                                       user,
-                                                      style: TextStyle(
-                                                        fontSize: 11,
+                                                      style: theme.textTheme.bodySmall?.copyWith(
                                                         color: colorTheme.primaryTextColor,
                                                       ),
                                                     ),
                                                     backgroundColor: colorTheme.surface,
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    side: BorderSide(color: scheme.outlineVariant),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius: BorderRadius.circular(AppThemeConfig.badgeBorderRadius),
+                                                    ),
+                                                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
                                                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                                   )).toList(),
                                                 ),
                                               ],
-                                            ),
-                                          )
-                                        else
-                                          Padding(
-                                            padding: const EdgeInsets.all(16.0),
-                                            child: Text(
+                                            )
+                                          else
+                                            Text(
                                               'No users',
-                                              style: TextStyle(
-                                                fontSize: 12,
+                                              style: theme.textTheme.bodySmall?.copyWith(
                                                 color: colorTheme.secondaryTextColor,
                                               ),
                                             ),
-                                          ),
-                                      ],
+                                        ],
+                                      ),
                                     )),
                               ] else ...[
-                                const SizedBox(height: 16),
+                                AppSpacing.verticalLg,
                                 const EmptyStateWidget(
                                   icon: Icons.forum_outlined,
                                   title: 'No IRC channels',

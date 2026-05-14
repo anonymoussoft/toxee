@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../util/app_spacing.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
@@ -675,7 +676,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           width: ResponsiveLayout.responsiveSidebarWidth(context),
                           child: _uikitSidebar(),
                         ),
-                        const VerticalDivider(width: 1),
+                        VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
                       ],
                       Expanded(
                         child: IndexedStack(
@@ -717,8 +722,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       },
                                     ),
                                     Positioned(
-                                      top: 16,
-                                      right: 24,
+                                      top: AppSpacing.lg,
+                                      right: AppSpacing.xl,
                                       child: NewEntryButton(
                                         onAddFriend: _showAddFriendDialog,
                                         onCreateGroup: _showAddGroupDialog,
@@ -769,18 +774,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               ? 1.0
                               : 0.0,
                           child: Material(
-                            elevation: 2,
+                            elevation: 0,
+                            color: AppThemeConfig.successColor.withValues(alpha: 0.08),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              color: colorTheme.secondButtonColor.withValues(alpha: 0.1),
+                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: AppThemeConfig.successColor.withValues(alpha: 0.25),
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
                               child: Row(
                                 children: [
-                                  Icon(
-                                    Icons.cloud_done,
-                                    color: colorTheme.secondButtonColor,
-                                    size: 20,
+                                  const Icon(
+                                    Icons.cloud_done_outlined,
+                                    color: AppThemeConfig.successColor,
+                                    size: 18,
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: AppSpacing.sm),
                                   Expanded(
                                     child: Text(
                                       (_lanBootstrapServiceIP != null && _lanBootstrapServicePort != null)
@@ -789,14 +802,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               _lanBootstrapServicePort!,
                                             )
                                           : '',
-                                      style: TextStyle(
-                                        color: colorTheme.primaryTextColor,
-                                        fontSize: 12,
-                                      ),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.onSurface,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                     ),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.close, size: 18),
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    visualDensity: VisualDensity.compact,
                                     onPressed: () {
                                       setState(() {
                                         _lanBootstrapServiceRunning = false;
@@ -827,10 +842,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget? _buildMobileDrawer() {
     return Drawer(
       width: 280,
+      elevation: 0,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.only(
-          topRight: Radius.circular(16),
-          bottomRight: Radius.circular(16),
+          topRight: Radius.circular(AppThemeConfig.cardBorderRadius),
+          bottomRight: Radius.circular(AppThemeConfig.cardBorderRadius),
         ),
       ),
       child: SafeArea(
@@ -856,82 +873,100 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget? _buildBottomNavigationBar() {
     final l10n = AppLocalizations.of(context)!;
-    return BottomNavigationBar(
-      currentIndex: _index,
-      onTap: (i) {
-        setState(() {
-          _index = i;
-        });
-        // Refresh IRC app status when switching to Applications page
-        if (i == 2) {
-          _checkIrcAppStatus();
-        }
-      },
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: Theme.of(context).colorScheme.primary,
-      unselectedItemColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      items: [
-        BottomNavigationBarItem(
-          icon: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const Icon(Icons.chat),
-              Positioned(
-                top: -5,
-                right: -6,
-                child: UnconstrainedBox(
-                  child: TencentCloudChatConversationTotalUnreadCount(
-                    builder: (BuildContext _, int totalUnreadCount) {
-                      if (totalUnreadCount == 0) {
-                        return Container();
-                      }
-                      final displayText = totalUnreadCount > 99 ? "99+" : "$totalUnreadCount";
-                      final isLargeText = displayText.length > 2;
-                      return UnconstrainedBox(
-                        child: Container(
-                          width: isLargeText ? 26 : (displayText.length == 1 ? 16 : 20),
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            shape: isLargeText ? BoxShape.rectangle : BoxShape.circle,
-                            borderRadius: isLargeText ? BorderRadius.circular(AppThemeConfig.badgeBorderRadius) : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              displayText,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant, width: 1),
+        ),
+      ),
+      child: BottomNavigationBar(
+        currentIndex: _index,
+        onTap: (i) {
+          setState(() {
+            _index = i;
+          });
+          // Refresh IRC app status when switching to Applications page
+          if (i == 2) {
+            _checkIrcAppStatus();
+          }
+        },
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+        selectedItemColor: scheme.primary,
+        unselectedItemColor: scheme.onSurfaceVariant,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        selectedLabelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+        unselectedLabelStyle: Theme.of(context).textTheme.labelSmall,
+        items: [
+          BottomNavigationBarItem(
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.chat_bubble_outline),
+                Positioned(
+                  top: -5,
+                  right: -6,
+                  child: UnconstrainedBox(
+                    child: TencentCloudChatConversationTotalUnreadCount(
+                      builder: (BuildContext _, int totalUnreadCount) {
+                        if (totalUnreadCount == 0) {
+                          return const SizedBox.shrink();
+                        }
+                        final displayText = totalUnreadCount > 99 ? "99+" : "$totalUnreadCount";
+                        final isLargeText = displayText.length > 2;
+                        return UnconstrainedBox(
+                          child: Container(
+                            constraints: const BoxConstraints(minWidth: 16),
+                            height: 16,
+                            padding: EdgeInsets.symmetric(horizontal: isLargeText ? 5 : 4),
+                            decoration: BoxDecoration(
+                              color: AppThemeConfig.errorColor,
+                              borderRadius: BorderRadius.circular(AppThemeConfig.badgeBorderRadius),
+                            ),
+                            child: Center(
+                              child: Text(
+                                displayText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.0,
+                                    ),
+                                textAlign: TextAlign.center,
                               ),
-                              textAlign: TextAlign.center,
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
+            activeIcon: const Icon(Icons.chat_bubble),
+            label: l10n.chats,
           ),
-          label: l10n.chats,
-        ),
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.contacts),
-          label: l10n.contacts,
-        ),
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.apps),
-          label: l10n.applications,
-        ),
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.settings),
-          label: l10n.settings,
-        ),
-      ],
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.contacts_outlined),
+            activeIcon: const Icon(Icons.contacts),
+            label: l10n.contacts,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.apps_outlined),
+            activeIcon: const Icon(Icons.apps),
+            label: l10n.applications,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.settings_outlined),
+            activeIcon: const Icon(Icons.settings),
+            label: l10n.settings,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1343,6 +1378,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+        ),
         title: Text(AppLocalizations.of(context)!.messageReceivers(receivers.length.toString())),
         content: SizedBox(
           width: double.maxFinite,
@@ -1352,17 +1390,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             itemBuilder: (context, index) {
               final userId = receivers[index];
               final nickname = friendMap[userId] ?? userId;
+              final scheme = Theme.of(context).colorScheme;
               return ListTile(
                 leading: CircleAvatar(
-                  child: Text(nickname.isNotEmpty ? nickname.substring(0, 1).toUpperCase() : '?'),
+                  backgroundColor: scheme.primary.withValues(alpha: 0.12),
+                  foregroundColor: scheme.primary,
+                  child: Text(
+                    nickname.isNotEmpty ? nickname.substring(0, 1).toUpperCase() : '?',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
                 ),
-                title: Text(nickname.isNotEmpty ? nickname : userId),
+                title: Text(
+                  nickname.isNotEmpty ? nickname : userId,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
                 subtitle: Text(
                   userId,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                 ),
               );
             },

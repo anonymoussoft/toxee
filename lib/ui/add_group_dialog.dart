@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import '../util/app_spacing.dart';
 import '../util/prefs.dart';
 import '../util/app_theme_config.dart';
 import '../i18n/app_localizations.dart';
@@ -108,7 +109,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
           color: Colors.transparent,
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,12 +118,12 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                     _localeText(context, 'addGroup', fallback: 'Add or Create Group'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 16),
+                  AppSpacing.verticalLg,
                   _buildJoinCard(colorTheme),
-                  const SizedBox(height: 16),
+                  AppSpacing.verticalLg,
                   _buildCreateCard(colorTheme),
                   if (_createdGroupId != null) ...[
-                    const SizedBox(height: 16),
+                    AppSpacing.verticalLg,
                     _buildCreatedInfo(colorTheme),
                   ],
                 ],
@@ -135,28 +136,17 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
   }
 
   Widget _buildJoinCard(colorTheme) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-        side: BorderSide(color: colorTheme.dividerColor),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: colorTheme.primaryColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-            ),
-          ),
-          Padding(
-        padding: const EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Form(
           key: _joinFormKey,
           child: Column(
@@ -164,9 +154,9 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
             children: [
               Text(
                 _localeText(context, 'joinGroup', fallback: 'Join Group by ID'),
-                style: Theme.of(context).textTheme.titleMedium,
+                style: theme.textTheme.titleMedium,
               ),
-              const SizedBox(height: 12),
+              AppSpacing.verticalMd,
               TextFormField(
                 controller: _groupIdController,
                 textAlignVertical: TextAlignVertical.center,
@@ -184,7 +174,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                   return null;
                 },
               ),
-              const SizedBox(height: 12),
+              AppSpacing.verticalMd,
               TextFormField(
                 controller: _requestController,
                 textAlignVertical: TextAlignVertical.center,
@@ -197,7 +187,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                 minLines: 1,
                 maxLines: 4,
               ),
-              const SizedBox(height: 12),
+              AppSpacing.verticalMd,
               TextFormField(
                 controller: _aliasController,
                 textAlignVertical: TextAlignVertical.center,
@@ -208,17 +198,26 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalLg,
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
+                    backgroundColor: scheme.primary,
+                    foregroundColor: scheme.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
                     ),
                   ),
                   icon: _isJoining
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(scheme.onPrimary),
+                          ),
+                        )
                       : const Icon(Icons.group_add),
                   label: Text(_localeText(context, 'joinAction', fallback: 'Send Join Request')),
                   onPressed: _isJoining ? null : _joinGroup,
@@ -227,35 +226,24 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
             ],
           ),
         ),
-        ),
-        ],
       ),
     );
   }
 
   Widget _buildCreateCard(colorTheme) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Card(
       elevation: 0,
+      // Tinted-primary variant signals this is the canonical "create" path.
+      color: scheme.primary.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-        side: BorderSide(color: colorTheme.dividerColor),
+        side: BorderSide(color: scheme.primary.withValues(alpha: 0.4)),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: colorTheme.primaryColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-            ),
-          ),
-          Padding(
-        padding: const EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Form(
           key: _createFormKey,
           child: Column(
@@ -263,9 +251,9 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
             children: [
               Text(
                 _localeText(context, 'createGroup', fallback: 'Create New Group'),
-                style: Theme.of(context).textTheme.titleMedium,
+                style: theme.textTheme.titleMedium,
               ),
-              const SizedBox(height: 12),
+              AppSpacing.verticalMd,
               TextFormField(
                 controller: _createNameController,
                 textAlignVertical: TextAlignVertical.center,
@@ -282,12 +270,12 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalLg,
               Text(
                 _localeText(context, 'groupType', fallback: 'Group Type'),
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: theme.textTheme.bodyMedium,
               ),
-              const SizedBox(height: 8),
+              AppSpacing.verticalSm,
               SegmentedButton<String>(
                 segments: [
                   ButtonSegment(
@@ -308,17 +296,26 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                   });
                 },
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalLg,
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
+                    backgroundColor: scheme.primary,
+                    foregroundColor: scheme.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
                     ),
                   ),
                   icon: _isCreating
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(scheme.onPrimary),
+                          ),
+                        )
                       : const Icon(Icons.group),
                   label: Text(_localeText(context, 'createAction', fallback: 'Create Group')),
                   onPressed: _isCreating ? null : _createGroup,
@@ -327,31 +324,42 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
             ],
           ),
         ),
-        ),
-        ],
       ),
     );
   }
 
   Widget _buildCreatedInfo(colorTheme) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: colorTheme.secondaryColor.withValues(alpha: 0.1),
+        color: scheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             _localeText(context, 'createdGroupId', fallback: 'New Group ID'),
-            style: Theme.of(context).textTheme.titleMedium,
+            style: theme.textTheme.titleMedium,
           ),
-          const SizedBox(height: 8),
-          SelectableText(_createdGroupId ?? ''),
-          const SizedBox(height: 8),
+          AppSpacing.verticalSm,
+          SelectableText(
+            _createdGroupId ?? '',
+            style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+          ),
+          AppSpacing.verticalSm,
           OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: scheme.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+              ),
+              side: BorderSide(color: scheme.primary.withValues(alpha: 0.4)),
+            ),
             icon: const Icon(Icons.copy),
             label: Text(_localeText(context, 'copyId', fallback: 'Copy ID')),
             onPressed: _createdGroupId == null

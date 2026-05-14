@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/bootstrap_nodes.dart';
 import '../../util/lan_bootstrap_service.dart';
@@ -408,13 +409,6 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
     return Theme.of(context).colorScheme.onSurface;
   }
 
-  Color _dividerColor(BuildContext context) {
-    if (_colorTheme != null && _colorTheme.dividerColor != null) {
-      return _colorTheme.dividerColor as Color;
-    }
-    return Theme.of(context).dividerColor;
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -422,32 +416,35 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
     final primaryColor = _primaryColor(context);
     final secondaryTextColor = _secondaryTextColor(context);
     final primaryTextColor = _primaryTextColor(context);
-    final dividerColor = _dividerColor(context);
     final hasService = widget.service != null;
 
+    final outlineVariant = Theme.of(context).colorScheme.outlineVariant;
     return Card(
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
+        side: BorderSide(color: outlineVariant),
         borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SectionHeader(title: l10n.bootstrapNodes),
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
             Text(
               l10n.bootstrapNodeMode,
               style: Theme.of(context).textTheme.titleSmall,
             ),
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
             if (PlatformUtils.isDesktop)
               _buildModeRow(context, l10n, primaryColor, secondaryTextColor, hasService)
             else
               _buildModeRowMobile(context, l10n, primaryColor, secondaryTextColor),
-            const SizedBox(height: 8),
-            const Divider(),
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
+            Divider(height: 1, color: outlineVariant),
+            AppSpacing.verticalSm,
             if (_bootstrapNodeMode == 'manual' || _currentBootstrapNode != null) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,11 +452,11 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                   if (_currentBootstrapNode != null) ...[
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
-                          color: secondaryColor.withValues(alpha: 0.1),
+                          color: secondaryColor.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
-                          border: Border.all(color: dividerColor),
+                          border: Border.all(color: outlineVariant),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,37 +464,34 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                             Row(
                               children: [
                                 Icon(Icons.network_ping, size: 16, color: primaryColor),
-                                const SizedBox(width: 4),
+                                AppSpacing.horizontalXs,
                                 Text(
                                   l10n.currentNode,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: secondaryTextColor,
-                                  ),
+                                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: secondaryTextColor,
+                                      ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
+                            AppSpacing.verticalXs,
                             Text(
                               '${_currentBootstrapNode!.host}:${_currentBootstrapNode!.port}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: primaryTextColor,
-                                fontFamily: 'monospace',
-                              ),
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: primaryTextColor,
+                                    fontFamily: 'monospace',
+                                  ),
                             ),
                             if (_currentBootstrapNode!.pubkey.length > 20)
                               Text(
                                 '${_currentBootstrapNode!.pubkey.substring(0, 20)}...',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: secondaryTextColor,
-                                  fontFamily: 'monospace',
-                                ),
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      color: secondaryTextColor,
+                                      fontFamily: 'monospace',
+                                    ),
                               ),
                             if (_nodeTestResult != null) ...[
-                              const SizedBox(height: 8),
+                              AppSpacing.verticalSm,
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -506,33 +500,31 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                                     height: 8,
                                     decoration: BoxDecoration(
                                       color: _nodeTestResult == 'success'
-                                          ? Theme.of(context).colorScheme.primary
+                                          ? AppThemeConfig.successColor
                                           : Theme.of(context).colorScheme.error,
                                       shape: BoxShape.circle,
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
+                                  AppSpacing.horizontalXs,
                                   Text(
                                     _nodeTestResult == 'success'
                                         ? l10n.online
                                         : l10n.offline,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: _nodeTestResult == 'success'
-                                          ? Theme.of(context).colorScheme.primary
-                                          : Theme.of(context).colorScheme.error,
-                                    ),
+                                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: _nodeTestResult == 'success'
+                                              ? AppThemeConfig.successColor
+                                              : Theme.of(context).colorScheme.error,
+                                        ),
                                   ),
                                   if (_nodeLatency != null && _nodeTestResult == 'success') ...[
-                                    const SizedBox(width: 8),
+                                    AppSpacing.horizontalSm,
                                     Text(
                                       '${_nodeLatency}ms',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: secondaryTextColor,
-                                        fontFamily: 'monospace',
-                                      ),
+                                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                            color: secondaryTextColor,
+                                            fontFamily: 'monospace',
+                                          ),
                                     ),
                                   ],
                                 ],
@@ -542,7 +534,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    AppSpacing.horizontalSm,
                   ],
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -688,41 +680,38 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
               if (_lanBootstrapServiceRunning &&
                   _lanBootstrapServiceIP != null &&
                   _lanBootstrapServicePort != null) ...[
-                const SizedBox(height: 8),
+                AppSpacing.verticalSm,
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: secondaryColor.withValues(alpha: 0.1),
+                    color: secondaryColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
-                    border: Border.all(color: dividerColor),
+                    border: Border.all(color: outlineVariant),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         '${l10n.ipAddress}: $_lanBootstrapServiceIP',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                          color: primaryTextColor,
-                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontFamily: 'monospace',
+                              color: primaryTextColor,
+                            ),
                       ),
                       Text(
                         '${l10n.nodePort}: $_lanBootstrapServicePort',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                          color: primaryTextColor,
-                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontFamily: 'monospace',
+                              color: primaryTextColor,
+                            ),
                       ),
                       if (_lanBootstrapServicePubkey != null)
                         Text(
                           '${l10n.nodePublicKey}: ${_lanBootstrapServicePubkey!.substring(0, 16)}...',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontFamily: 'monospace',
-                            color: secondaryTextColor,
-                          ),
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                fontFamily: 'monospace',
+                                color: secondaryTextColor,
+                              ),
                         ),
                     ],
                   ),
@@ -819,24 +808,22 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                                   _manualNodeTestResult == 'success'
                                       ? l10n.nodeTestSuccess
                                       : l10n.nodeTestFailed,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: _manualNodeTestResult == 'success'
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).colorScheme.error,
-                                  ),
+                                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: _manualNodeTestResult == 'success'
+                                            ? AppThemeConfig.successColor
+                                            : Theme.of(context).colorScheme.error,
+                                      ),
                                 ),
                                 if (_manualNodeLatency != null &&
                                     _manualNodeTestResult == 'success') ...[
-                                  const SizedBox(width: 8),
+                                  AppSpacing.horizontalSm,
                                   Text(
                                     '${_manualNodeLatency}ms',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: secondaryTextColor,
-                                      fontFamily: 'monospace',
-                                    ),
+                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          color: secondaryTextColor,
+                                          fontFamily: 'monospace',
+                                        ),
                                   ),
                                 ],
                               ],
@@ -937,7 +924,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
             value: 'manual',
             groupValue: _bootstrapNodeMode,
             title: Text(l10n.manualMode),
-            subtitle: Text(l10n.manualModeDesc, style: const TextStyle(fontSize: 11)),
+            subtitle: Text(l10n.manualModeDesc, style: Theme.of(context).textTheme.labelSmall),
             onChanged: (v) {
               if (v != null) _setBootstrapNodeMode(v);
             },
@@ -958,7 +945,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
               },
               child: RichText(
                 text: TextSpan(
-                  style: TextStyle(fontSize: 11, color: secondaryTextColor),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: secondaryTextColor),
                   children: [
                     TextSpan(text: l10n.autoModeDescPrefix),
                     TextSpan(
@@ -983,7 +970,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
             value: 'lan',
             groupValue: _bootstrapNodeMode,
             title: Text(l10n.lanMode),
-            subtitle: Text(l10n.lanModeDesc, style: const TextStyle(fontSize: 11)),
+            subtitle: Text(l10n.lanModeDesc, style: Theme.of(context).textTheme.labelSmall),
             onChanged: (v) {
               if (v != null) _setBootstrapNodeMode(v);
             },
@@ -1007,7 +994,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
             value: 'manual',
             groupValue: _bootstrapNodeMode,
             title: Text(l10n.manualMode),
-            subtitle: Text(l10n.manualModeDesc, style: const TextStyle(fontSize: 11)),
+            subtitle: Text(l10n.manualModeDesc, style: Theme.of(context).textTheme.labelSmall),
             onChanged: (v) {
               if (v != null) _setBootstrapNodeMode(v);
             },
@@ -1028,7 +1015,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
               },
               child: RichText(
                 text: TextSpan(
-                  style: TextStyle(fontSize: 11, color: secondaryTextColor),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: secondaryTextColor),
                   children: [
                     TextSpan(text: l10n.autoModeDescPrefix),
                     TextSpan(

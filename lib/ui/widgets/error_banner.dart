@@ -37,21 +37,20 @@ class ErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: AppThemeConfig.errorColor,
-                fontSize: 13,
-              ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppThemeConfig.errorColor,
+                  ),
             ),
           ),
           if (onRetry != null)
             TextButton(
               onPressed: onRetry,
-              child: const Text(
+              child: Text(
                 'Retry',
-                style: TextStyle(
-                  color: AppThemeConfig.errorColor,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: AppThemeConfig.errorColor,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ),
           if (onDismiss != null)

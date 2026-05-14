@@ -55,21 +55,31 @@ class _AccountCardItemState extends State<_AccountCardItem> {
   @override
   Widget build(BuildContext context) {
     final accountNickname = widget.account['nickname'] ?? '';
+    final outlineVariant = Theme.of(context).colorScheme.outlineVariant;
+    final primary = widget.colorTheme.primaryColor as Color;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
+        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
           color: widget.isCurrentAccount
-              ? widget.colorTheme.primaryColor.withValues(alpha: 0.10)
-              : (_isHovered ? widget.colorTheme.primaryColor.withValues(alpha: 0.06) : null),
+              ? primary.withValues(alpha: 0.08)
+              : (_isHovered ? primary.withValues(alpha: 0.04) : null),
+          border: Border.all(
+            color: widget.isCurrentAccount
+                ? primary.withValues(alpha: 0.4)
+                : outlineVariant,
+          ),
         ),
         child: Card(
           elevation: 0,
           color: Colors.transparent,
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
           ),
@@ -86,16 +96,22 @@ class _AccountCardItemState extends State<_AccountCardItem> {
                   color: widget.isCurrentAccount
                       ? widget.colorTheme.onPrimary
                       : widget.colorTheme.onSecondary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            title: Text(accountNickname.isNotEmpty ? accountNickname : 'Unnamed Account'),
-            subtitle: widget.subtitle,
-            trailing: widget.isCurrentAccount ? widget.currentChip : IconButton(
-              icon: const Icon(Icons.swap_horiz),
-              onPressed: widget.onSwitch,
-              tooltip: AppLocalizations.of(context)!.switchToThisAccount,
+            title: Text(
+              accountNickname.isNotEmpty ? accountNickname : 'Unnamed Account',
+              style: Theme.of(context).textTheme.titleSmall,
             ),
+            subtitle: widget.subtitle,
+            trailing: widget.isCurrentAccount
+                ? widget.currentChip
+                : IconButton(
+                    icon: const Icon(Icons.swap_horiz),
+                    onPressed: widget.onSwitch,
+                    tooltip: AppLocalizations.of(context)!.switchToThisAccount,
+                  ),
           ),
         ),
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../util/app_spacing.dart';
 import '../i18n/app_localizations.dart';
 import '../util/app_theme_config.dart';
 import '../util/responsive_layout.dart';
@@ -246,16 +247,16 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
                     height: iconSize,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: primaryColor.withValues(alpha: 0.1),
+                      color: primaryColor.withValues(alpha: 0.08),
                       border: Border.all(
-                        color: primaryColor.withValues(alpha: 0.3),
-                        width: 2,
+                        color: primaryColor.withValues(alpha: 0.4),
+                        width: 1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.2),
-                          blurRadius: 20,
-                          spreadRadius: 2,
+                          color: primaryColor.withValues(alpha: 0.12),
+                          blurRadius: 24,
+                          spreadRadius: 0,
                         ),
                       ],
                     ),
@@ -266,7 +267,7 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
                     ),
                   ),
                 ),
-                SizedBox(height: isSmall ? 32 : 48),
+                SizedBox(height: isSmall ? AppSpacing.xxl : AppSpacing.xxxl),
 
                 // Step message with slide + fade animation
                 SlideTransition(
@@ -286,18 +287,18 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
                     ),
                   ),
                 ),
-                SizedBox(height: isSmall ? 24 : 32),
+                SizedBox(height: isSmall ? AppSpacing.xl : AppSpacing.xxl),
 
                 // Animated progress bar + percentage
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: hPadding),
                   child: _buildAnimatedProgressBar(theme, primaryColor),
                 ),
-                SizedBox(height: isSmall ? 16 : 24),
+                SizedBox(height: isSmall ? AppSpacing.lg : AppSpacing.xl),
 
                 // Step dot indicators
                 _buildStepDots(theme, primaryColor, currentIndex),
-                SizedBox(height: isSmall ? 32 : 48),
+                SizedBox(height: isSmall ? AppSpacing.xxl : AppSpacing.xxxl),
 
                 // App name
                 Text(
@@ -323,17 +324,15 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
         return Column(
           children: [
             ClipRRect(
-              borderRadius:
-                  BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+              borderRadius: BorderRadius.circular(AppSpacing.xs),
               child: LinearProgressIndicator(
                 value: value,
-                minHeight: 8,
-                backgroundColor:
-                    theme.colorScheme.onSurface.withValues(alpha: 0.12),
+                minHeight: 6,
+                backgroundColor: theme.colorScheme.outlineVariant,
                 valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
               ),
             ),
-            const SizedBox(height: 10),
+            AppSpacing.verticalSm,
             Text(
               '${(value * 100).toInt()}%',
               style: theme.textTheme.bodySmall?.copyWith(
@@ -355,16 +354,14 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
         final isActive = i <= currentIndex;
         final isCurrent = i == currentIndex;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
-            width: isCurrent ? 20 : 8,
-            height: 8,
+            width: isCurrent ? 24 : 6,
+            height: 6,
             decoration: BoxDecoration(
-              color: isActive
-                  ? primaryColor
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(4),
+              color: isActive ? primaryColor : theme.colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(AppSpacing.xs),
             ),
           ),
         );
@@ -375,7 +372,7 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
   Widget _buildErrorContent(ThemeData theme, AppLocalizations l10n) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -384,7 +381,7 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
               size: 80,
               color: theme.colorScheme.error,
             ),
-            const SizedBox(height: 24),
+            AppSpacing.verticalXl,
             Text(
               l10n.startupFailed,
               style: theme.textTheme.headlineSmall?.copyWith(
@@ -392,13 +389,13 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
                 color: theme.colorScheme.error,
               ),
             ),
-            const SizedBox(height: 16),
+            AppSpacing.verticalLg,
             Text(
               widget.errorMessage ?? l10n.unknownError,
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: AppSpacing.xxl),
             if (widget.onRetry != null)
               ElevatedButton.icon(
                 onPressed: widget.onRetry,
@@ -406,8 +403,8 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
                 label: Text(l10n.retry),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.md,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius:
@@ -416,7 +413,7 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
                 ),
               ),
             if (widget.onRetry != null && widget.onGoToLogin != null)
-              const SizedBox(height: 12),
+              AppSpacing.verticalMd,
             if (widget.onGoToLogin != null)
               OutlinedButton.icon(
                 onPressed: widget.onGoToLogin,
@@ -424,8 +421,8 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
                 label: Text(l10n.goToLogin),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.md,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius:

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../util/app_spacing.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
@@ -479,8 +480,11 @@ class _ProfilePageState extends State<ProfilePage> {
     required Color primaryColor,
     required Color onPrimary,
     required String displayInitial,
+    bool showOnlineDot = false,
+    bool isConnected = false,
   }) {
-    final double size = 80;
+    final scheme = Theme.of(context).colorScheme;
+    const double size = 88;
     final bool hasCustomAvatar = _avatarPath != null &&
         _avatarPath!.isNotEmpty &&
         File(_avatarPath!).existsSync();
@@ -492,16 +496,9 @@ class _ProfilePageState extends State<ProfilePage> {
         shape: BoxShape.circle,
         color: hasCustomAvatar ? Colors.transparent : primaryColor,
         border: Border.all(
-          color: primaryColor.withValues(alpha: 0.3),
-          width: 2,
+          color: scheme.outlineVariant,
+          width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withValues(alpha: 0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       alignment: Alignment.center,
       child: hasCustomAvatar
@@ -519,39 +516,72 @@ class _ProfilePageState extends State<ProfilePage> {
               style: TextStyle(
                 fontSize: 32,
                 color: onPrimary,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.5,
               ),
             ),
     );
 
-    if (!widget.isEditable) {
-      return avatar;
-    }
-
-    return Stack(
-      children: [
+    final List<Widget> stackChildren = [
+      if (widget.isEditable)
         GestureDetector(
           onTap: _pickAvatar,
           child: avatar,
+        )
+      else
+        avatar,
+    ];
+
+    if (showOnlineDot) {
+      stackChildren.add(Positioned(
+        right: 2,
+        bottom: 2,
+        child: Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: isConnected
+                ? AppThemeConfig.successColor
+                : scheme.outlineVariant,
+            shape: BoxShape.circle,
+            border: Border.all(color: scheme.surface, width: 2),
+          ),
         ),
-        Positioned(
-          right: 0,
-          bottom: 0,
+      ));
+    }
+
+    if (widget.isEditable) {
+      stackChildren.add(Positioned(
+        right: 0,
+        bottom: 0,
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: _pickAvatar,
             child: Container(
-              width: 26,
-              height: 26,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: primaryColor,
                 shape: BoxShape.circle,
-                border: Border.all(color: onPrimary, width: 2),
+                border: Border.all(color: scheme.surface, width: 2),
               ),
               child: Icon(Icons.camera_alt, size: 14, color: onPrimary),
             ),
           ),
         ),
-      ],
+      ));
+    }
+
+    if (stackChildren.length == 1) {
+      return avatar;
+    }
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: stackChildren,
     );
   }
 
@@ -675,8 +705,10 @@ class _ProfilePageState extends State<ProfilePage> {
                         primaryColor: colorTheme.primaryColor,
                         onPrimary: colorTheme.onPrimary,
                         displayInitial: displayInitial,
+                        showOnlineDot: true,
+                        isConnected: isConnected,
                       ),
-                      const SizedBox(width: 16),
+                      AppSpacing.horizontalLg,
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -695,9 +727,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                             .textTheme
                                             .headlineSmall
                                             ?.copyWith(
-                                                fontWeight: FontWeight.bold),
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: -0.4,
+                                            ),
                                       ),
-                                      const SizedBox(height: 4),
+                                      AppSpacing.verticalXs,
                                       Text(
                                         statusText,
                                         style: Theme.of(context)
@@ -724,15 +758,32 @@ class _ProfilePageState extends State<ProfilePage> {
                               ],
                             ),
                             if (_editMode) ...[
-                              const SizedBox(height: 12),
+                              AppSpacing.verticalMd,
                               TextField(
                                 controller: _nickController,
                                 textAlignVertical: TextAlignVertical.center,
                                 decoration: InputDecoration(
-                                  labelText: tL10n?.setNickname ?? appL10n.nickname,
+                                  labelText:
+                                      tL10n?.setNickname ?? appL10n.nickname,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(
                                         AppThemeConfig.inputBorderRadius),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.inputBorderRadius),
+                                    borderSide: BorderSide(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outlineVariant),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.inputBorderRadius),
+                                    borderSide: BorderSide(
+                                      color: colorTheme.primaryColor,
+                                      width: 1.5,
+                                    ),
                                   ),
                                   errorText: _calculateTextLength(
                                               _nickController.text) >
@@ -748,22 +799,38 @@ class _ProfilePageState extends State<ProfilePage> {
                                       () {}); // Rebuild to update error text
                                 },
                               ),
-                              const SizedBox(height: 12),
+                              AppSpacing.verticalMd,
                               TextField(
                                 controller: _statusController,
                                 textAlignVertical: TextAlignVertical.center,
                                 decoration: InputDecoration(
-                                  labelText:
-                                      tL10n?.setSignature ?? appL10n.statusMessage,
+                                  labelText: tL10n?.setSignature ??
+                                      appL10n.statusMessage,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(
                                         AppThemeConfig.inputBorderRadius),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.inputBorderRadius),
+                                    borderSide: BorderSide(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outlineVariant),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.inputBorderRadius),
+                                    borderSide: BorderSide(
+                                      color: colorTheme.primaryColor,
+                                      width: 1.5,
+                                    ),
                                   ),
                                   errorText: _calculateTextLength(
                                               _statusController.text) >
                                           24
                                       ? AppLocalizations.of(context)!
-                                          .statusMessageTooLong
+                                              .statusMessageTooLong
                                       : null,
                                 ),
                                 minLines: 1,
@@ -775,15 +842,28 @@ class _ProfilePageState extends State<ProfilePage> {
                                       () {}); // Rebuild to update error text
                                 },
                               ),
-                              const SizedBox(height: 12),
+                              AppSpacing.verticalMd,
                               SizedBox(
                                 width: double.infinity,
+                                height: 44,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
+                                    backgroundColor: colorTheme.primaryColor,
+                                    foregroundColor: colorTheme.onPrimary,
+                                    disabledBackgroundColor: colorTheme
+                                        .primaryColor
+                                        .withValues(alpha: 0.4),
+                                    disabledForegroundColor:
+                                        colorTheme.onPrimary,
+                                    elevation: 0,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
                                           AppThemeConfig.buttonBorderRadius),
                                     ),
+                                    textStyle: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(fontWeight: FontWeight.w600),
                                   ),
                                   onPressed: (_isSaving ||
                                           _calculateTextLength(
@@ -795,15 +875,20 @@ class _ProfilePageState extends State<ProfilePage> {
                                       ? null
                                       : _handleSave,
                                   child: _isSaving
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
+                                      ? SizedBox(
+                                          width: 18,
+                                          height: 18,
                                           child: CircularProgressIndicator(
-                                              strokeWidth: 2))
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    colorTheme.onPrimary),
+                                          ),
+                                        )
                                       : Text(tL10n?.saveContact ?? appL10n.save),
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              AppSpacing.verticalSm,
                             ],
                             Row(
                               children: [
@@ -812,22 +897,27 @@ class _ProfilePageState extends State<ProfilePage> {
                                   height: 8,
                                   decoration: BoxDecoration(
                                     color: isConnected
-                                        ? colorTheme.secondButtonColor
-                                        : colorTheme.tipsColor,
+                                        ? AppThemeConfig.successColor
+                                        : colorTheme.secondaryTextColor,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                AppSpacing.horizontalXs,
+                                const SizedBox(width: 2),
                                 Text(
                                   isConnected
                                       ? (tL10n?.online ?? appL10n.online)
                                       : (tL10n?.offline ?? appL10n.offline),
-                                  style: TextStyle(
-                                    color: isConnected
-                                        ? colorTheme.secondButtonColor
-                                        : colorTheme.tipsColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelMedium
+                                      ?.copyWith(
+                                        color: isConnected
+                                            ? AppThemeConfig.successColor
+                                            : colorTheme.secondaryTextColor,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.2,
+                                      ),
                                 ),
                               ],
                             ),
@@ -837,39 +927,62 @@ class _ProfilePageState extends State<ProfilePage> {
                     ],
                   ),
                   if (!widget.isEditable || !_editMode)
-                    const SizedBox(height: 16),
+                    AppSpacing.verticalLg,
                   // Chat Button (only for non-editable peer profiles)
                   if (!widget.isEditable && widget.onChat != null) ...[
-                    const SizedBox(height: 12),
+                    AppSpacing.verticalMd,
                     SizedBox(
                       width: double.infinity,
+                      height: 44,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
+                          backgroundColor: colorTheme.primaryColor,
+                          foregroundColor: colorTheme.onPrimary,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
                                 AppThemeConfig.buttonBorderRadius),
                           ),
+                          textStyle: Theme.of(context)
+                              .textTheme
+                              .labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
-                        icon: const Icon(Icons.message_rounded),
+                        icon: const Icon(Icons.message_rounded, size: 18),
                         label: Text(tL10n?.sendMsg ?? appL10n.startChat),
                         onPressed: widget.onChat,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    AppSpacing.verticalLg,
                   ],
                   // User ID
                   Row(
                     children: [
                       Text(
                         tL10n?.userID ?? 'User ID:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colorTheme.secondaryTextColor,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelMedium
+                            ?.copyWith(
+                              color: colorTheme.secondaryTextColor,
+                              letterSpacing: 0.3,
+                            ),
                       ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.copy_all, size: 16),
+                      const Spacer(),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: colorTheme.primaryColor,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs),
+                          minimumSize: const Size(0, 32),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                                AppThemeConfig.buttonBorderRadius),
+                          ),
+                        ),
+                        icon: const Icon(Icons.copy_rounded, size: 16),
                         label: Text(tL10n?.copy ?? appL10n.copy),
                         onPressed: () async {
                           await Clipboard.setData(
@@ -880,15 +993,35 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    widget.userId,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: colorTheme.primaryTextColor,
+                  AppSpacing.verticalXs,
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md, vertical: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: 0.4),
+                      border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(
+                          AppThemeConfig.inputBorderRadius),
+                    ),
+                    child: SelectableText(
+                      widget.userId,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(
+                            fontFamily: 'monospace',
+                            color: colorTheme.primaryTextColor,
+                            letterSpacing: 0.2,
+                            height: 1.4,
+                          ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  AppSpacing.verticalMd,
                   // Custom card text input (clickable to edit, Enter to save, with generate button)
                   if (widget.isEditable) ...[
                     _cardTextEditMode
@@ -905,21 +1038,45 @@ class _ProfilePageState extends State<ProfilePage> {
                                     borderRadius: BorderRadius.circular(
                                         AppThemeConfig.inputBorderRadius),
                                   ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.inputBorderRadius),
+                                    borderSide: BorderSide(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outlineVariant),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.inputBorderRadius),
+                                    borderSide: BorderSide(
+                                      color: colorTheme.primaryColor,
+                                      width: 1.5,
+                                    ),
+                                  ),
                                 ),
                                 maxLines: 2,
                                 autofocus: true,
                                 onSubmitted: (_) => _handleSaveCardText(),
                                 onEditingComplete: _handleSaveCardText,
                               ),
-                              const SizedBox(height: 8),
+                              AppSpacing.verticalSm,
                               SizedBox(
                                 width: double.infinity,
+                                height: 44,
                                 child: ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
+                                    backgroundColor: colorTheme.primaryColor,
+                                    foregroundColor: colorTheme.onPrimary,
+                                    elevation: 0,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
                                           AppThemeConfig.buttonBorderRadius),
                                     ),
+                                    textStyle: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(fontWeight: FontWeight.w600),
                                   ),
                                   icon: const Icon(Icons.refresh, size: 18),
                                   label: Text(appL10n.generateCard),
@@ -928,52 +1085,69 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             ],
                           )
-                        : InkWell(
-                            onTap: () {
-                              setState(() {
-                                _cardTextEditMode = true;
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 16),
-                              decoration: BoxDecoration(
-                                border:
-                                    Border.all(color: colorTheme.dividerColor),
-                                borderRadius: BorderRadius.circular(
-                                    AppThemeConfig.inputBorderRadius),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _cardTextController.text.trim().isNotEmpty
-                                          ? _cardTextController.text.trim()
-                                          : appL10n.scanQrCodeToAddContact,
-                                      style: TextStyle(
-                                        color: _cardTextController.text
+                        : Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(
+                                AppThemeConfig.inputBorderRadius),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(
+                                  AppThemeConfig.inputBorderRadius),
+                              onTap: () {
+                                setState(() {
+                                  _cardTextEditMode = true;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.md),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outlineVariant),
+                                  borderRadius: BorderRadius.circular(
+                                      AppThemeConfig.inputBorderRadius),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _cardTextController.text
                                                 .trim()
                                                 .isNotEmpty
-                                            ? colorTheme.primaryTextColor
-                                            : colorTheme.secondaryTextColor,
-                                        fontStyle: _cardTextController.text
-                                                .trim()
-                                                .isEmpty
-                                            ? FontStyle.italic
-                                            : FontStyle.normal,
+                                            ? _cardTextController.text.trim()
+                                            : appL10n.scanQrCodeToAddContact,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: _cardTextController.text
+                                                      .trim()
+                                                      .isNotEmpty
+                                                  ? colorTheme.primaryTextColor
+                                                  : colorTheme
+                                                      .secondaryTextColor,
+                                              fontStyle: _cardTextController
+                                                      .text
+                                                      .trim()
+                                                      .isEmpty
+                                                  ? FontStyle.italic
+                                                  : FontStyle.normal,
+                                            ),
                                       ),
                                     ),
-                                  ),
-                                  Icon(
-                                    Icons.edit_outlined,
-                                    size: 16,
-                                    color: colorTheme.secondaryTextColor,
-                                  ),
-                                ],
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      size: 16,
+                                      color: colorTheme.secondaryTextColor,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                    const SizedBox(height: 12),
+                    AppSpacing.verticalMd,
                   ],
                   // QR Code
                   Center(
@@ -1017,39 +1191,59 @@ class _ProfilePageState extends State<ProfilePage> {
                               );
                             }
                             final qrPath = snapshot.data!;
+                            final outlinedStyle = OutlinedButton.styleFrom(
+                              foregroundColor: colorTheme.primaryColor,
+                              side: BorderSide(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outlineVariant),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                    AppThemeConfig.buttonBorderRadius),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.lg,
+                                  vertical: AppSpacing.sm),
+                              textStyle: Theme.of(context)
+                                  .textTheme
+                                  .labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w500),
+                            );
                             return Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Stack(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                            color: colorTheme.dividerColor),
-                                        borderRadius: BorderRadius.circular(
-                                            AppThemeConfig.cardBorderRadius),
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(
-                                            AppThemeConfig.cardBorderRadius),
-                                        child: Image.file(
-                                          File(qrPath),
-                                          width: qrWidth,
-                                          height: qrHeight,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
+                                Container(
+                                  padding: const EdgeInsets.all(AppSpacing.sm),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surface,
+                                    border: Border.all(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outlineVariant),
+                                    borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.cardBorderRadius),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.cardBorderRadius - 2),
+                                    child: Image.file(
+                                      File(qrPath),
+                                      width: qrWidth,
+                                      height: qrHeight,
+                                      fit: BoxFit.cover,
                                     ),
-                                  ],
+                                  ),
                                 ),
-                                const SizedBox(height: 12),
+                                AppSpacing.verticalMd,
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     OutlinedButton.icon(
-                                      icon:
-                                          const Icon(Icons.download, size: 16),
+                                      style: outlinedStyle,
+                                      icon: const Icon(Icons.download_rounded,
+                                          size: 16),
                                       label: Text(appL10n.saveImage),
                                       onPressed: () => _handleSaveQr(
                                         primaryColor: colorTheme.primaryColor,
@@ -1057,9 +1251,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                         locale: locale,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    AppSpacing.horizontalSm,
                                     OutlinedButton.icon(
-                                      icon: const Icon(Icons.copy, size: 16),
+                                      style: outlinedStyle,
+                                      icon: const Icon(Icons.copy_rounded,
+                                          size: 16),
                                       label: Text(appL10n.copy),
                                       onPressed: () => _copyQrImage(qrPath),
                                     ),

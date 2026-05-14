@@ -379,6 +379,7 @@ extension _HomePageBootstrap on _HomePageState {
           final receiverCount = FakeUIKit.instance.messageManager?.getMessageReceiverCount(msgID) ?? 0;
 
           if (receiverCount > 0) {
+            final scheme = Theme.of(context).colorScheme;
             return Stack(
               children: [
                 defaultWidget,
@@ -388,27 +389,27 @@ extension _HomePageBootstrap on _HomePageState {
                   child: GestureDetector(
                     onTap: () => _showMessageReceiversDialog(context, msgID, data.groupID!),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs + 2, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                        color: scheme.primary.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(AppThemeConfig.badgeBorderRadius),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.visibility,
+                            Icons.visibility_outlined,
                             size: 14,
-                            color: Theme.of(context).colorScheme.onPrimary,
+                            color: scheme.onPrimary,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: AppSpacing.xs),
                           Text(
                             '$receiverCount',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: scheme.onPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.0,
+                                ),
                           ),
                         ],
                       ),

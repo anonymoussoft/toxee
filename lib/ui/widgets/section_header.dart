@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../util/app_spacing.dart';
 
-/// Reusable section header with a green accent bar on the left.
+/// Reusable section header with a primary-colored accent bar on the left.
 /// Used across settings pages for visual section separation.
 class SectionHeader extends StatelessWidget {
   final String title;

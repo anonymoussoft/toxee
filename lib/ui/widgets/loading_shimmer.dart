@@ -39,8 +39,12 @@ class _LoadingShimmerState extends State<LoadingShimmer>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE0E0E0);
-    final highlightColor = isDark ? const Color(0xFF3A3A3A) : const Color(0xFFF5F5F5);
+    // Slate-200/100 on light, slate-800/700 on dark — matches the
+    // AppThemeConfig palette instead of the old WeChat-clone greys.
+    final baseColor =
+        isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+    final highlightColor =
+        isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
 
     return AnimatedBuilder(
       animation: _controller,

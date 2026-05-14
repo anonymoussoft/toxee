@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../util/app_spacing.dart';
+import '../../util/app_theme_config.dart';
 import 'package:toxee/i18n/app_localizations.dart';
 import 'package:toxee/ui/widgets/search_utils.dart';
 import 'package:toxee/util/responsive_layout.dart';
@@ -177,18 +179,50 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
       appBar: AppBar(
         title: Text(l10n.searchChatHistory),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
+          preferredSize: const Size.fromHeight(64),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
             child: TextField(
               controller: _searchController,
               textAlignVertical: TextAlignVertical.center,
+              style: theme.textTheme.bodyMedium,
               decoration: InputDecoration(
                 hintText: l10n.searchHint,
-                border: const OutlineInputBorder(),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
                 isDense: true,
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerHighest,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.primary,
+                    width: 1.5,
+                  ),
+                ),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.search),
+                  icon: const Icon(Icons.arrow_forward, size: 20),
+                  tooltip: l10n.searchHint,
                   onPressed: () => _applySearchFromField(),
                 ),
               ),
@@ -199,7 +233,18 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
       ),
       body: SafeArea(
         child: _filteredResults.isEmpty
-          ? Center(child: Text(l10n.noResultsFound))
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Text(
+                  l10n.noResultsFound,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
           : ResponsiveLayout.isMobile(context)
               ? _buildMobileLayout(context, l10n, textStyle, theme)
               : Row(
@@ -211,7 +256,7 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
                       child: Container(
                         decoration: BoxDecoration(
                           border: Border(
-                            right: BorderSide(color: theme.dividerColor),
+                            right: BorderSide(color: theme.colorScheme.outlineVariant),
                           ),
                         ),
                         child: ListView.builder(
@@ -235,13 +280,22 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
                                   Expanded(
                                     child: ListTile(
                                       selected: isSelected,
+                                      selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.08),
                                       leading: _avatarWidget(result.avatarUrl, const Icon(Icons.chat)),
                                       title: Text(
                                         result.showName,
+                                        style: theme.textTheme.bodyLarge?.copyWith(
+                                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                        ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      subtitle: Text(l10n.relatedChats(count)),
+                                      subtitle: Text(
+                                        l10n.relatedChats(count),
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                          color: theme.colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
                                       onTap: () {
                                         setState(() => _selectedIndex = index);
                                       },
@@ -272,7 +326,10 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.sm,
+            ),
             child: Row(
               children: [
                 IconButton(
@@ -290,7 +347,7 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
               ],
             ),
           ),
-          const Divider(height: 1),
+          Divider(height: 1, color: theme.colorScheme.outlineVariant),
           Expanded(child: _buildRightPanel(l10n, textStyle, theme)),
         ],
       );
@@ -316,13 +373,22 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
               Expanded(
                 child: ListTile(
                   selected: isSelected,
+                  selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.08),
                   leading: _avatarWidget(result.avatarUrl, const Icon(Icons.chat)),
                   title: Text(
                     result.showName,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  subtitle: Text(l10n.relatedChats(count)),
+                  subtitle: Text(
+                    l10n.relatedChats(count),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                   onTap: () {
                     setState(() {
                       _selectedIndex = index;
@@ -347,26 +413,35 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                l10n.searchResultsCount(messages.length, keyword.isEmpty ? widget.initialKeyword : keyword),
-                style: theme.textTheme.titleSmall,
+              Expanded(
+                child: Text(
+                  l10n.searchResultsCount(messages.length, keyword.isEmpty ? widget.initialKeyword : keyword),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               TextButton.icon(
                 onPressed: () => _openChatAndPop(targetMessage: messages.isNotEmpty ? messages.first : null),
                 icon: const Icon(Icons.open_in_new, size: 18),
                 label: Text(l10n.openChat),
+                style: TextButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        const Divider(height: 1),
+        Divider(height: 1, color: theme.colorScheme.outlineVariant),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             itemCount: messages.length,
             itemBuilder: (context, index) {
               final msg = messages[index];
@@ -375,12 +450,14 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
                 leading: _avatarWidget(msg.faceUrl, Icon(Icons.person, color: theme.colorScheme.onSurfaceVariant)),
                 title: Text(
                   _getSenderDisplayName(msg),
-                  style: theme.textTheme.labelLarge,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
                   child: _buildHighlightedSummary(summary, keyword.isEmpty ? widget.initialKeyword : keyword, textStyle, theme.colorScheme.primary, isDark: theme.brightness == Brightness.dark),
                 ),
                 trailing: Text(

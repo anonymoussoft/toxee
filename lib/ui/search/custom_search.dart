@@ -1,6 +1,8 @@
 import 'dart:async' show Timer;
 
 import 'package:flutter/material.dart';
+import '../../util/app_spacing.dart';
+import '../../util/app_theme_config.dart';
 import 'package:toxee/i18n/app_localizations.dart';
 import 'package:toxee/ui/search/search_chat_history_window.dart';
 import 'package:toxee/ui/widgets/search_utils.dart';
@@ -428,22 +430,53 @@ class _CustomSearchState extends State<CustomSearch> {
               ],
             )
           : AppBar(
-              title: TextField(
-                controller: _searchController,
-                autofocus: true,
-                textAlignVertical: TextAlignVertical.center,
-                decoration: InputDecoration(
-                  hintText: l10n.searchHint,
-                  border: InputBorder.none,
+              titleSpacing: 0,
+              title: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                  decoration: InputDecoration(
+                    hintText: l10n.searchHint,
+                    prefixIcon: Icon(
+                      Icons.search,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    isDense: true,
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchKeyword = value;
+                    });
+                    _debounceTimer?.cancel();
+                    _debounceTimer = Timer(const Duration(milliseconds: 300), _performSearch);
+                  },
+                  onSubmitted: (_) => _performSearch(),
                 ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchKeyword = value;
-                  });
-                  _debounceTimer?.cancel();
-                  _debounceTimer = Timer(const Duration(milliseconds: 300), _performSearch);
-                },
-                onSubmitted: (_) => _performSearch(),
               ),
               actions: [
                 if (widget.closeFunc != null)
@@ -472,7 +505,16 @@ class _CustomSearchState extends State<CustomSearch> {
 
     if (_searchKeyword.trim().isEmpty) {
       return Center(
-        child: Text(l10n.enterKeywordToSearch),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Text(
+            l10n.enterKeywordToSearch,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+            textAlign: TextAlign.center,
+          ),
+        ),
       );
     }
 
@@ -501,7 +543,7 @@ class _CustomSearchState extends State<CustomSearch> {
         if (_errorMessage != null) _buildErrorBanner(l10n),
         if (_isGlobalSearch && (hasContacts || hasGroups || hasMessages))
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
             child: Text(
               l10n.searchSummary(_contactsList.length, _groupsList.length, _messageSearchResults.length),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -596,12 +638,15 @@ class _CustomSearchState extends State<CustomSearch> {
   Widget _buildErrorBanner(AppLocalizations l10n) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
       color: Theme.of(context).colorScheme.errorContainer,
       child: Row(
         children: [
           Icon(Icons.warning_amber_rounded, size: 18, color: Theme.of(context).colorScheme.onErrorContainer),
-          const SizedBox(width: 8),
+          AppSpacing.horizontalSm,
           Expanded(
             child: Text(
               _errorMessage ?? l10n.searchFailed,
@@ -630,12 +675,18 @@ class _CustomSearchState extends State<CustomSearch> {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
       child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
+        title.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
+              letterSpacing: 0.6,
             ),
       ),
     );

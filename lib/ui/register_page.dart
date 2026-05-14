@@ -144,7 +144,14 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Widget _buildPasswordStrengthBar(BuildContext context) {
     final strength = _passwordStrength(_passwordController.text);
-    final colors = [Colors.red, Colors.orange, Colors.amber, AppThemeConfig.primaryColor];
+    // Decorative semantic ramp: weak → strong (red → orange → amber → primary).
+    // Intentionally not themed — these are status colors, not brand colors.
+    final colors = [
+      Colors.red,
+      Colors.orange,
+      Colors.amber,
+      Theme.of(context).colorScheme.primary,
+    ];
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xs, bottom: AppSpacing.sm),
       child: Row(
@@ -152,7 +159,7 @@ class _RegisterPageState extends State<RegisterPage> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             height: 4,
-            margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
+            margin: EdgeInsets.only(right: i < 3 ? AppSpacing.xs : 0),
             decoration: BoxDecoration(
               color: i < strength ? colors[i] : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(2),
@@ -277,7 +284,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           ? Icon(
                               _confirmPasswordController.text == _passwordController.text ? Icons.check_circle : Icons.cancel,
                               color: _confirmPasswordController.text == _passwordController.text
-                                  ? AppThemeConfig.primaryColor : AppThemeConfig.errorColor,
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.error,
                               size: 20,
                             ) : null,
                     ),

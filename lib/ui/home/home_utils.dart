@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../util/app_spacing.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/qr_card_generator.dart';
@@ -36,7 +37,15 @@ Future<String?> promptText(
   await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(title),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+      ),
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+      ),
       content: TextField(
         controller: controller,
         textAlignVertical: TextAlignVertical.center,
@@ -55,7 +64,7 @@ Future<String?> promptText(
               onPressed: () => Navigator.pop(context),
               child: Text(TencentCloudChatLocalizations.of(context)?.cancel ?? 'Cancel'),
             ),
-            const SizedBox(width: 8),
+            AppSpacing.horizontalSm,
             ElevatedButton(
               onPressed: () {
                 result = controller.text;
@@ -66,7 +75,7 @@ Future<String?> promptText(
           ],
         ),
       ],
-      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
     ),
   );
   return result;

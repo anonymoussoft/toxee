@@ -5,6 +5,7 @@ import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localiz
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/locale_controller.dart';
 import '../../util/theme_controller.dart';
@@ -168,22 +169,26 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
     final tL10n = TencentCloudChatLocalizations.of(context);
     if (tL10n == null) return const SizedBox.shrink();
 
+    final outlineVariant = Theme.of(context).colorScheme.outlineVariant;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         // Appearance
         Card(
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
+            side: BorderSide(color: outlineVariant),
             borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SectionHeader(title: tL10n.appearance),
-                const SizedBox(height: 8),
+                AppSpacing.verticalSm,
                 ValueListenableBuilder<ThemeMode>(
                   valueListenable: AppTheme.mode,
                   builder: (context, mode, _) {
@@ -222,19 +227,22 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        AppSpacing.verticalMd,
         // Language
         Card(
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
+            side: BorderSide(color: outlineVariant),
             borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SectionHeader(title: tL10n.language),
-                const SizedBox(height: 8),
+                AppSpacing.verticalSm,
                 ValueListenableBuilder<Locale>(
                   valueListenable: AppLocale.locale,
                   builder: (context, loc, _) {
@@ -289,9 +297,9 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                             onTap: () => setState(() => _languageExpanded = !_languageExpanded),
                             borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
                               decoration: BoxDecoration(
-                                border: Border.all(color: Theme.of(context).dividerColor),
+                                border: Border.all(color: outlineVariant),
                                 borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                               ),
                               child: Row(
@@ -312,15 +320,16 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                           ),
                         ),
                         if (_languageExpanded) ...[
-                          const SizedBox(height: 8),
+                          AppSpacing.verticalSm,
                           ...languages.map((lang) {
                             final isSelected = _isLocaleEqual(selectedLocale!, lang.locale);
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
                                 onTap: () => selectLocale(lang.locale),
+                                borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2, horizontal: AppSpacing.md),
                                   child: Row(
                                     children: [
                                       Icon(
@@ -330,12 +339,12 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                                             ? Theme.of(context).colorScheme.primary
                                             : Theme.of(context).iconTheme.color,
                                       ),
-                                      const SizedBox(width: 12),
+                                      AppSpacing.horizontalMd,
                                       Text(
                                         lang.label,
                                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          fontWeight: isSelected ? FontWeight.w600 : null,
-                                        ),
+                                              fontWeight: isSelected ? FontWeight.w600 : null,
+                                            ),
                                       ),
                                     ],
                                   ),
@@ -353,32 +362,46 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
           ),
         ),
         if (widget.toxId != null && widget.toxId!.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          AppSpacing.verticalMd,
           Card(
+            elevation: 0,
+            clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
+              side: BorderSide(color: outlineVariant),
               borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
             ),
             child: SwitchListTile(
-              title: Text(AppLocalizations.of(context)!.notificationSound),
-              subtitle: Text(AppLocalizations.of(context)!.notificationSoundDesc),
+              title: Text(
+                AppLocalizations.of(context)!.notificationSound,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              subtitle: Text(
+                AppLocalizations.of(context)!.notificationSoundDesc,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _secondaryTextColor(context),
+                    ),
+              ),
               value: _notificationSoundEnabled,
               onChanged: _setNotificationSoundEnabled,
             ),
           ),
         ],
-        const SizedBox(height: 12),
+        AppSpacing.verticalMd,
         // Downloads Directory
         Card(
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+            side: BorderSide(color: outlineVariant),
+            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SectionHeader(title: AppLocalizations.of(context)!.downloadsDirectory),
-                const SizedBox(height: 8),
+                AppSpacing.verticalSm,
                 Row(
                   children: [
                     Expanded(
@@ -387,50 +410,58 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                         readOnly: true,
                         textAlignVertical: TextAlignVertical.center,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontFamily: 'monospace',
-                          color: _primaryTextColor(context),
-                        ),
+                              fontFamily: 'monospace',
+                              color: _primaryTextColor(context),
+                            ),
                         decoration: InputDecoration(
                           hintText: AppLocalizations.of(context)!.downloadsDirectoryDesc,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    AppSpacing.horizontalSm,
                     OutlinedButton.icon(
                       icon: const Icon(Icons.folder_open, size: 18),
                       label: Text(AppLocalizations.of(context)!.selectDownloadsDirectory),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                        ),
+                      ),
                       onPressed: _selectDownloadsDirectory,
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                AppSpacing.verticalXs,
                 Text(
                   AppLocalizations.of(context)!.downloadsDirectoryDesc,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _secondaryTextColor(context),
-                  ),
+                        color: _secondaryTextColor(context),
+                      ),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        AppSpacing.verticalMd,
         // Auto Download Size Limit
         Card(
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
+            side: BorderSide(color: outlineVariant),
             borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SectionHeader(title: AppLocalizations.of(context)!.autoDownloadSizeLimit),
-                const SizedBox(height: 8),
+                AppSpacing.verticalSm,
                 Row(
                   children: [
                     Expanded(
@@ -445,25 +476,30 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                             borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                           ),
                           suffixText: 'MB',
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                         ),
                         onSubmitted: (_) => _saveAutoDownloadSizeLimit(),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    AppSpacing.horizontalSm,
                     ElevatedButton.icon(
                       icon: const Icon(Icons.save, size: 18),
                       label: Text(AppLocalizations.of(context)!.save),
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                        ),
+                      ),
                       onPressed: _saveAutoDownloadSizeLimit,
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                AppSpacing.verticalXs,
                 Text(
                   AppLocalizations.of(context)!.autoDownloadSizeLimitDesc,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _secondaryTextColor(context),
-                  ),
+                        color: _secondaryTextColor(context),
+                      ),
                 ),
               ],
             ),

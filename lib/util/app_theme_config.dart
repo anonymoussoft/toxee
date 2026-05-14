@@ -4,107 +4,151 @@ import 'package:tencent_cloud_chat_common/data/theme/color/light.dart';
 import 'package:tencent_cloud_chat_common/data/theme/tencent_cloud_chat_theme_model.dart';
 import 'package:tencent_cloud_chat_common/data/theme/text_style/text_style.dart';
 
-/// Centralized theme configuration based on WeChat light/dark themes.
+/// Centralized theme tokens for toxee.
+///
+/// Direction: modern messenger (Telegram / Linear inspired) — messenger blue
+/// primary, emerald reserved for online/success, neutral slate scale, hairline
+/// borders, gently softened radii. Solves the "too WeChat-ish" + "typography
+/// hierarchy unclear" feedback by replacing the WeChat green/gray palette and
+/// pushing visual rhythm through the spacing/elevation scale below + the text
+/// theme defined in `main.dart`.
 class AppThemeConfig {
   AppThemeConfig._();
 
   // ──────────────────────────────────────────────
-  //  Light mode colors (WeChat style)
+  //  Light mode — slate neutrals + messenger blue
   // ──────────────────────────────────────────────
 
-  /// Primary color - WeChat Green (light mode)
-  static const Color primaryColor = Color(0xFF07C160);
+  /// Primary brand color — Tailwind blue-600. Used for CTAs, links, focus rings.
+  static const Color primaryColor = Color(0xFF2563EB);
 
-  /// Secondary color - darker green for pressed/hover (light mode)
-  static const Color secondaryColor = Color(0xFF06AD56);
+  /// Pressed/hover state for primary surfaces.
+  static const Color secondaryColor = Color(0xFF1D4ED8);
 
-  /// Self message bubble - WeChat green bubble (light mode)
-  static const Color selfMessageBubbleColorLight = Color(0xFF95EC69);
+  /// Soft tint background for self message bubble.
+  /// Replaces the saturated WeChat green; sits comfortably against the white
+  /// scaffold and keeps "this is me" recognition without shouting.
+  static const Color selfMessageBubbleColorLight = Color(0xFFDBEAFE);
 
-  /// Light mode scaffold background - WeChat gray
-  static const Color lightScaffoldBackground = Color(0xFFEDEDED);
+  /// Self message text on the blue-tinted bubble (slate-900, AAA contrast).
+  static const Color selfMessageTextColorLight = Color(0xFF0F172A);
 
-  /// Light mode gradient colors for startup/login screens and desktop sidebar
-  static const Color lightGradientStart = Color(0xFFEDEDED);
-  static const Color lightGradientEnd = Color(0xFFE6E6E6);
+  /// Scaffold — slate-50. Calmer than the WeChat gray, lets surfaces breathe.
+  static const Color lightScaffoldBackground = Color(0xFFF8FAFC);
 
-  /// Primary text color (light mode) - WeChat near-black
-  static const Color primaryTextColorLight = Color(0xFF111111);
+  /// Gradient anchors for startup / login splash and desktop sidebar.
+  static const Color lightGradientStart = Color(0xFFFFFFFF);
+  static const Color lightGradientEnd = Color(0xFFE4ECFC);
 
-  /// Secondary text color (light mode) - WeChat gray
-  static const Color secondaryTextColorLight = Color(0xFF999999);
+  /// Primary text — slate-900.
+  static const Color primaryTextColorLight = Color(0xFF0F172A);
 
-  /// Divider color (light mode) - WeChat
-  static const Color dividerColorLight = Color(0xFFD9D9D9);
+  /// Secondary text — slate-500 (timestamps, snippets, metadata).
+  static const Color secondaryTextColorLight = Color(0xFF64748B);
 
-  // ──────────────────────────────────────────────
-  //  Dark mode colors (WeChat dark style, softer for readability)
-  // ──────────────────────────────────────────────
-
-  /// Primary color for dark mode - softer green (less saturated, easier on eyes)
-  static const Color primaryColorDark = Color(0xFF5BC973);
-
-  /// Secondary color for dark mode
-  static const Color secondaryColorDark = Color(0xFF4AB063);
-
-  /// Self message bubble - darker muted green (better contrast with soft white text)
-  static const Color selfMessageBubbleColorDark = Color(0xFF2E6B4F);
-
-  /// Self message text on bubble - soft white (not pure white, more coordinated)
-  static const Color selfMessageTextColorDark = Color(0xFFE5E5E5);
-
-  /// Message status/read icon in dark - neutral gray (avoids "too green" next to bubble)
-  static const Color messageStatusIconColorDark = Color(0xFF9E9E9E);
-
-  /// Others message bubble - WeChat dark card (dark mode)
-  static const Color othersMessageBubbleColorDark = Color(0xFF2C2C2C);
-
-  /// Dark mode scaffold background - WeChat dark
-  static const Color darkScaffoldBackground = Color(0xFF191919);
-
-  /// Dark mode gradient colors for startup/login screens and desktop sidebar
-  static const Color darkGradientStart = Color(0xFF1F1F1F);
-  static const Color darkGradientEnd = Color(0xFF272727);
-
-  /// Primary text color (dark mode) - WeChat
-  static const Color primaryTextColorDark = Color(0xFFD1D1D1);
-
-  /// Secondary text color (dark mode) - WeChat
-  static const Color secondaryTextColorDark = Color(0xFF6B6B6B);
-
-  /// Divider color (dark mode) - WeChat
-  static const Color dividerColorDark = Color(0xFF2C2C2C);
+  /// Divider — slate-200 with a cool tint to harmonize with the blue accent.
+  static const Color dividerColorLight = Color(0xFFE4ECFC);
 
   // ──────────────────────────────────────────────
-  //  Shared colors
+  //  Dark mode — slate-900 base, soft-blue primary
   // ──────────────────────────────────────────────
 
-  /// Success/connected status color - WeChat green
-  static const Color successColor = Color(0xFF07C160);
+  /// Lighter blue for dark mode (blue-500). Reads cleanly on slate-900 surface
+  /// without the over-saturation of the light-mode primary.
+  static const Color primaryColorDark = Color(0xFF3B82F6);
 
-  /// Error/disconnected status color - WeChat red
-  static const Color errorColor = Color(0xFFFA5151);
+  static const Color secondaryColorDark = Color(0xFF60A5FA);
+
+  /// Self bubble in dark — desaturated blue, mirrors light mode tinting logic.
+  static const Color selfMessageBubbleColorDark = Color(0xFF1E3A8A);
+
+  /// Self bubble text — near-white slate (avoids harsh pure white).
+  static const Color selfMessageTextColorDark = Color(0xFFE2E8F0);
+
+  /// Message status / read tick in dark — slate-400 neutral so it sits behind
+  /// the bubble color, not on top of it.
+  static const Color messageStatusIconColorDark = Color(0xFF94A3B8);
+
+  /// Others bubble in dark — surface elevation 1.
+  static const Color othersMessageBubbleColorDark = Color(0xFF1E293B);
+
+  /// Scaffold — slate-900.
+  static const Color darkScaffoldBackground = Color(0xFF0F172A);
+
+  /// Gradient anchors in dark — slate-900 → slate-800.
+  static const Color darkGradientStart = Color(0xFF0F172A);
+  static const Color darkGradientEnd = Color(0xFF1E293B);
+
+  /// Primary text — slate-200 (softer than pure white, no glare).
+  static const Color primaryTextColorDark = Color(0xFFE2E8F0);
+
+  /// Secondary text — slate-400.
+  static const Color secondaryTextColorDark = Color(0xFF94A3B8);
+
+  /// Divider — slate-800. Hairline-feel on dark.
+  static const Color dividerColorDark = Color(0xFF1E293B);
 
   // ──────────────────────────────────────────────
-  //  Border radii (WeChat uses tighter radii)
+  //  Semantic colors (shared across modes)
   // ──────────────────────────────────────────────
 
-  /// Standard border radius for cards
-  static const double cardBorderRadius = 12.0;
+  /// Online / connected / success — emerald. Reserved for status, NOT brand.
+  /// Keeps the "green = good" instinct from chat apps without making the whole
+  /// app green like WeChat.
+  static const Color successColor = Color(0xFF059669);
 
-  /// Border radius for buttons
-  static const double buttonBorderRadius = 8.0;
+  /// Error — red-600. Slightly desaturated vs the WeChat red.
+  static const Color errorColor = Color(0xFFDC2626);
 
-  /// Border radius for input fields
-  static const double inputBorderRadius = 8.0;
+  // ──────────────────────────────────────────────
+  //  Spacing scale (4pt grid — for any new screens)
+  // ──────────────────────────────────────────────
 
-  /// Border radius for main form cards (e.g. login form)
-  static const double formCardBorderRadius = 12.0;
+  static const double space2 = 4.0;
+  static const double space3 = 8.0;
+  static const double space4 = 12.0;
+  static const double space5 = 16.0;
+  static const double space6 = 24.0;
+  static const double space7 = 32.0;
+  static const double space8 = 48.0;
 
-  /// Border radius for badges (e.g. unread count)
-  static const double badgeBorderRadius = 8.0;
+  // ──────────────────────────────────────────────
+  //  Border radii — gently looser than WeChat clone
+  // ──────────────────────────────────────────────
 
-  /// Creates a TencentCloudChatThemeModel based on WeChat light/dark themes.
+  static const double cardBorderRadius = 14.0;
+  static const double buttonBorderRadius = 10.0;
+  static const double inputBorderRadius = 10.0;
+  static const double formCardBorderRadius = 16.0;
+  static const double badgeBorderRadius = 10.0;
+
+  // ──────────────────────────────────────────────
+  //  Elevation — single subtle layer
+  // ──────────────────────────────────────────────
+
+  /// Card / sheet shadow for light mode. Single soft layer; avoids the "flat
+  /// then deep" jump that hurt the old look.
+  static const List<BoxShadow> elevationLight = [
+    BoxShadow(
+      color: Color(0x140F172A), // slate-900 @ 8%
+      blurRadius: 14,
+      offset: Offset(0, 2),
+    ),
+  ];
+
+  /// Card / sheet shadow for dark mode — barely-there, mostly for shape edge.
+  static const List<BoxShadow> elevationDark = [
+    BoxShadow(
+      color: Color(0x66000000),
+      blurRadius: 18,
+      offset: Offset(0, 4),
+    ),
+  ];
+
+  /// Builds the TencentCloudChat UIKit theme model from the tokens above.
+  ///
+  /// Name kept as `createYouthfulThemeModel` for source compatibility with the
+  /// existing call site; the actual aesthetic is modern-messenger.
   static TencentCloudChatThemeModel createYouthfulThemeModel() {
     return TencentCloudChatThemeModel(
       lightTheme: LightTencentCloudChatColors(
@@ -120,7 +164,7 @@ class AppThemeConfig {
         dividerColor: dividerColorLight,
         tipsColor: errorColor,
         othersMessageBubbleBorderColor: dividerColorLight,
-        contactItemTabItemNameColor: const Color(0x99999999),
+        contactItemTabItemNameColor: secondaryTextColorLight,
         appBarBackgroundColor: lightScaffoldBackground,
         appBarIconColor: primaryTextColorLight,
         firstButtonColor: primaryColor,
@@ -134,45 +178,45 @@ class AppThemeConfig {
         conversationItemMoreActionItemNormalTextColor: primaryColor,
         conversationItemSwipeActionOneBgColor: primaryColor,
         conversationItemNormalBgColor: lightScaffoldBackground,
-        conversationItemIsPinedBgColor: lightScaffoldBackground,
+        conversationItemIsPinedBgColor: const Color(0xFFEFF6FF), // blue-50
         conversationItemShowNameTextColor: primaryTextColorLight,
-        conversationItemLastMessageTextColor: const Color(0xFF999999),
-        conversationItemTimeTextColor: const Color(0xFF999999),
-        conversationNoConversationTextColor: const Color(0xFF999999),
+        conversationItemLastMessageTextColor: secondaryTextColorLight,
+        conversationItemTimeTextColor: secondaryTextColorLight,
+        conversationNoConversationTextColor: secondaryTextColorLight,
         messageStatusIconColor: primaryColor,
-        // Message bubbles - WeChat style
+        // Message bubbles — soft blue self, white others, hairline divider
         selfMessageBubbleColor: selfMessageBubbleColorLight,
-        selfMessageTextColor: const Color(0xFF000000),
+        selfMessageTextColor: selfMessageTextColorLight,
         othersMessageBubbleColor: Colors.white,
-        othersMessageTextColor: const Color(0xFF000000),
+        othersMessageTextColor: primaryTextColorLight,
         // Desktop gradient (empty page, sidebar)
         desktopBackgroundColorLinearGradientOne: lightGradientStart,
         desktopBackgroundColorLinearGradientTwo: lightGradientEnd,
         // Settings
         settingBackgroundColor: lightScaffoldBackground,
-        settingTitleColor: const Color(0xFF111111),
+        settingTitleColor: primaryTextColorLight,
         settingTabBackgroundColor: lightScaffoldBackground,
         // Contacts
         contactTabItemBackgroundColor: lightScaffoldBackground,
-        contactItemFriendNameColor: const Color(0xFF111111),
+        contactItemFriendNameColor: primaryTextColorLight,
         contactSearchBackgroundColor: const Color(0xFFFFFFFF),
         contactBackgroundColor: lightScaffoldBackground,
       ),
       darkTheme: DarkTencentCloudChatColors(
         primaryColor: primaryColorDark,
         secondaryColor: secondaryColorDark,
-        onPrimary: const Color(0xFF121212),
-        onSecondary: const Color(0xFF121212),
+        onPrimary: const Color(0xFF0F172A),
+        onSecondary: const Color(0xFF0F172A),
         secondButtonColor: primaryColorDark,
         primaryTextColor: primaryTextColorDark,
         backgroundColor: darkScaffoldBackground,
-        surface: const Color(0xFF2C2C2C),
+        surface: othersMessageBubbleColorDark,
         secondaryTextColor: secondaryTextColorDark,
         dividerColor: dividerColorDark,
         tipsColor: errorColor,
         othersMessageBubbleBorderColor: dividerColorDark,
-        contactItemTabItemNameColor: const Color(0xCC6B6B6B),
-        appBarBackgroundColor: const Color(0xFF1F1F1F),
+        contactItemTabItemNameColor: secondaryTextColorDark,
+        appBarBackgroundColor: darkScaffoldBackground,
         appBarIconColor: primaryTextColorDark,
         firstButtonColor: primaryColorDark,
         switchActivatedColor: primaryColorDark,
@@ -185,39 +229,41 @@ class AppThemeConfig {
         conversationItemMoreActionItemNormalTextColor: primaryColorDark,
         conversationItemSwipeActionOneBgColor: primaryColorDark,
         conversationItemNormalBgColor: darkScaffoldBackground,
-        conversationItemIsPinedBgColor: darkScaffoldBackground,
+        conversationItemIsPinedBgColor: const Color(0xFF1E293B),
         conversationItemShowNameTextColor: primaryTextColorDark,
-        conversationItemLastMessageTextColor: const Color(0xFF6B6B6B),
-        conversationItemTimeTextColor: const Color(0xFF6B6B6B),
-        conversationNoConversationTextColor: const Color(0xFF6B6B6B),
+        conversationItemLastMessageTextColor: secondaryTextColorDark,
+        conversationItemTimeTextColor: secondaryTextColorDark,
+        conversationNoConversationTextColor: secondaryTextColorDark,
         messageStatusIconColor: messageStatusIconColorDark,
-        // Message bubbles - WeChat dark style (muted green + soft white text)
+        // Message bubbles — deep blue self, slate-800 others
         selfMessageBubbleColor: selfMessageBubbleColorDark,
         selfMessageTextColor: selfMessageTextColorDark,
         othersMessageBubbleColor: othersMessageBubbleColorDark,
-        othersMessageTextColor: const Color(0xFFD1D1D1),
+        othersMessageTextColor: primaryTextColorDark,
         // Desktop gradient
         desktopBackgroundColorLinearGradientOne: darkGradientStart,
         desktopBackgroundColorLinearGradientTwo: darkGradientEnd,
         // Settings
         settingBackgroundColor: darkScaffoldBackground,
-        settingTitleColor: const Color(0xFFD1D1D1),
+        settingTitleColor: primaryTextColorDark,
         settingTabBackgroundColor: darkScaffoldBackground,
         // Contacts
-        contactTabItemBackgroundColor: const Color(0xFF2C2C2C),
-        contactItemFriendNameColor: const Color(0xFFD1D1D1),
-        contactSearchBackgroundColor: const Color(0xFF2C2C2C),
+        contactTabItemBackgroundColor: othersMessageBubbleColorDark,
+        contactItemFriendNameColor: primaryTextColorDark,
+        contactSearchBackgroundColor: othersMessageBubbleColorDark,
         contactBackgroundColor: darkScaffoldBackground,
       ),
       textStyle: TencentCloudChatTextStyle(
-        navigationTitle: 20,
-        contactTitle: 18,
-        messageBody: 14,
-        messageSnippet: 16,
-        buttonLabel: 16,
-        standardText: 14,
-        standardLargeText: 16,
-        standardSmallText: 12,
+        // Sizes-only API. Hierarchy comes from these + the Material textTheme
+        // in main.dart (which controls weights and tracking).
+        navigationTitle: 18,
+        contactTitle: 17,
+        messageBody: 15,
+        messageSnippet: 14,
+        buttonLabel: 15,
+        standardText: 15,
+        standardLargeText: 17,
+        standardSmallText: 13,
       ),
     );
   }

@@ -163,24 +163,46 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> {
                 brightness: Brightness.light,
                 colorSchemeSeed: AppThemeConfig.primaryColor,
                 scaffoldBackgroundColor: AppThemeConfig.lightScaffoldBackground,
+                // Inter-style hierarchy: titles use weight + tight tracking
+                // for presence, body sits at 15-16pt for comfortable reading,
+                // small labels gain positive tracking for legibility.
                 textTheme: const TextTheme(
-                  headlineSmall:
-                      TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-                  titleLarge:
-                      TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  titleMedium:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  titleSmall:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  bodyLarge: TextStyle(fontSize: 16),
-                  bodyMedium: TextStyle(fontSize: 14),
-                  bodySmall: TextStyle(fontSize: 12),
-                  labelLarge:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  labelMedium:
-                      TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                  labelSmall:
-                      TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+                  headlineSmall: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                      height: 1.25),
+                  titleLarge: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
+                      height: 1.3),
+                  titleMedium: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                      height: 1.35),
+                  titleSmall: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
+                      height: 1.4),
+                  bodyLarge: TextStyle(fontSize: 16, height: 1.5),
+                  bodyMedium: TextStyle(fontSize: 15, height: 1.5),
+                  bodySmall: TextStyle(
+                      fontSize: 13, letterSpacing: 0.1, height: 1.45),
+                  labelLarge: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.1),
+                  labelMedium: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2),
+                  labelSmall: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.4),
                 ),
                 appBarTheme: const AppBarTheme(
                   elevation: 0,
@@ -222,24 +244,46 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> {
                 brightness: Brightness.dark,
                 colorSchemeSeed: AppThemeConfig.primaryColorDark,
                 scaffoldBackgroundColor: AppThemeConfig.darkScaffoldBackground,
+                // Inter-style hierarchy: titles use weight + tight tracking
+                // for presence, body sits at 15-16pt for comfortable reading,
+                // small labels gain positive tracking for legibility.
                 textTheme: const TextTheme(
-                  headlineSmall:
-                      TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-                  titleLarge:
-                      TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  titleMedium:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  titleSmall:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  bodyLarge: TextStyle(fontSize: 16),
-                  bodyMedium: TextStyle(fontSize: 14),
-                  bodySmall: TextStyle(fontSize: 12),
-                  labelLarge:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  labelMedium:
-                      TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                  labelSmall:
-                      TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+                  headlineSmall: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                      height: 1.25),
+                  titleLarge: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
+                      height: 1.3),
+                  titleMedium: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                      height: 1.35),
+                  titleSmall: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
+                      height: 1.4),
+                  bodyLarge: TextStyle(fontSize: 16, height: 1.5),
+                  bodyMedium: TextStyle(fontSize: 15, height: 1.5),
+                  bodySmall: TextStyle(
+                      fontSize: 13, letterSpacing: 0.1, height: 1.45),
+                  labelLarge: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.1),
+                  labelMedium: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2),
+                  labelSmall: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.4),
                 ),
                 appBarTheme: const AppBarTheme(
                   elevation: 0,

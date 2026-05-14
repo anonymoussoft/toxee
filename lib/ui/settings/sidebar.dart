@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../util/app_spacing.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tencent_cloud_chat_common/data/contact/tencent_cloud_chat_contact_data.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
@@ -22,6 +23,7 @@ Widget buildSidebar({
   required FfiChatService service,
   required Stream<bool> connectionStatusStream,
 }) {
+  final scheme = Theme.of(context).colorScheme;
   return TencentCloudChatThemeWidget(
     build: (context, colorTheme, textStyle) => SizedBox(
       width: double.infinity,
@@ -36,6 +38,9 @@ Widget buildSidebar({
               colorTheme.desktopBackgroundColorLinearGradientOne,
             ],
           ),
+          border: Border(
+            right: BorderSide(color: scheme.outlineVariant, width: 1),
+          ),
         ),
         child: Column(
           children: [
@@ -44,7 +49,8 @@ Widget buildSidebar({
               service: service,
               connectionStatusStream: connectionStatusStream,
             ),
-            const Divider(height: 1),
+            Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+            AppSpacing.verticalSm,
             _SidebarItem(
               context: context,
               selected: selectedIndex == 0,
@@ -80,6 +86,7 @@ Widget buildSidebar({
                   'Settings',
               onTap: () => onTap(3),
             ),
+            AppSpacing.verticalSm,
           ],
         ),
       ),
@@ -163,14 +170,15 @@ class _UserAvatarState extends State<_UserAvatar> {
         final maxH = (size.height - 100).clamp(400.0, 800.0);
         return Dialog(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius:
+                BorderRadius.circular(AppThemeConfig.cardBorderRadius),
             child: SizedBox(
               width: maxW,
               height: maxH,
               child: Stack(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(AppSpacing.xl),
                     child: SizedBox(
                       width: (maxW - 48).clamp(256.0, 440.0),
                       height: (maxH - 40).clamp(360.0, 760.0),
@@ -240,13 +248,17 @@ class _UserAvatarState extends State<_UserAvatar> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return TencentCloudChatThemeWidget(
       build: (context, colorTheme, textStyle) {
         return InkWell(
           onTap: () => _showProfileDialog(context),
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(
+              vertical: AppSpacing.lg,
+              horizontal: AppSpacing.sm,
+            ),
             child: StreamBuilder<bool>(
               stream: widget.connectionStatusStream,
               initialData: widget.service
@@ -262,7 +274,7 @@ class _UserAvatarState extends State<_UserAvatar> {
                       children: [
                         // Use CircleAvatar; when no avatar, use same default as chat (UIKit)
                         CircleAvatar(
-                          radius: 32,
+                          radius: 28,
                           backgroundColor: colorTheme.primaryColor,
                           child: _avatarPath != null &&
                                   _avatarPath!.isNotEmpty &&
@@ -272,8 +284,8 @@ class _UserAvatarState extends State<_UserAvatar> {
                                     File(_avatarPath!),
                                     key: ValueKey(
                                         'sidebar-avatar-${_avatarPath!}-$_avatarVersion'),
-                                    width: 64,
-                                    height: 64,
+                                    width: 56,
+                                    height: 56,
                                     fit: BoxFit.cover,
                                   ),
                                 )
@@ -281,34 +293,30 @@ class _UserAvatarState extends State<_UserAvatar> {
                                   child: Image.asset(
                                     'images/default_user_icon.png',
                                     package: 'tencent_cloud_chat_common',
-                                    width: 64,
-                                    height: 64,
+                                    width: 56,
+                                    height: 56,
                                     fit: BoxFit.cover,
                                   ),
                                 ),
                         ),
-                        // Status indicator - positioned at the bottom-right edge of the avatar circle
-                        // Avatar radius is 32, so diameter is 64
-                        // Stack width is 64 (determined by CircleAvatar size), center is at (32, 32)
-                        // To position indicator at the edge: indicator center should be at distance 32 from avatar center
-                        // In bottom-right corner, from center (32, 32) offset (32, 32), indicator center at (64, 64)
-                        // From right: 64 - 64 = 0, but Positioned.right is from edge to indicator center
-                        // Since indicator radius is 7, to place center at edge: right = 0 - 7 = -7
-                        // Similarly for bottom: bottom = 0 - 7 = -7
-                        // This places indicator center exactly on the avatar edge
+                        // Status indicator — sits on the bottom-right edge of
+                        // the avatar. Avatar radius is 28 (diameter 56); the
+                        // 12px dot is offset so its center lands on the rim.
+                        // Color goes through AppThemeConfig semantic tokens:
+                        // emerald for connected, muted secondary for offline.
                         Positioned(
-                          right: -7,
-                          bottom: -7,
+                          right: -2,
+                          bottom: -2,
                           child: Container(
-                            width: 14,
-                            height: 14,
+                            width: 12,
+                            height: 12,
                             decoration: BoxDecoration(
                               color: isConnected
-                                  ? colorTheme.secondButtonColor
-                                  : colorTheme.tipsColor,
+                                  ? AppThemeConfig.successColor
+                                  : colorTheme.secondaryTextColor,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: colorTheme.surface,
+                                color: colorTheme.backgroundColor,
                                 width: 2,
                               ),
                             ),
@@ -318,20 +326,31 @@ class _UserAvatarState extends State<_UserAvatar> {
                     ),
                     // Display nickname below avatar
                     if (_nickname != null && _nickname!.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                      AppSpacing.verticalSm,
                       SizedBox(
                         width: double.infinity,
                         child: Text(
                           _nickname!,
-                          style: TextStyle(
-                            fontSize: 12,
+                          style: theme.textTheme.labelLarge?.copyWith(
                             color: colorTheme.primaryTextColor,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                      ),
+                      AppSpacing.verticalXs,
+                      Text(
+                        isConnected ? 'Online' : 'Offline',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: isConnected
+                              ? AppThemeConfig.successColor
+                              : colorTheme.secondaryTextColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ],
@@ -371,14 +390,18 @@ class _SidebarItemState extends State<_SidebarItem> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return TencentCloudChatThemeWidget(
       build: (context, colorTheme, textStyle) {
         final baseColor = colorTheme.secondaryTextColor;
         final selColor = colorTheme.primaryColor;
+        // Modern-messenger selection: subtle primary-tinted pill plus a
+        // 3px left-edge accent bar. Hover stays restrained — outlineVariant
+        // tone, no primary tint, so it doesn't read as a half-selection.
         final bg = widget.selected
-            ? colorTheme.primaryColor.withValues(alpha: 0.12)
+            ? colorTheme.primaryColor.withValues(alpha: 0.10)
             : (_isHovered
-                ? colorTheme.primaryColor.withValues(alpha: 0.06)
+                ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
                 : Colors.transparent);
         return MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -389,16 +412,31 @@ class _SidebarItemState extends State<_SidebarItem> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              color: bg,
+              constraints: const BoxConstraints(minHeight: 56),
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.md,
+                horizontal: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: bg,
+                border: Border(
+                  left: BorderSide(
+                    color: widget.selected ? selColor : Colors.transparent,
+                    width: 3,
+                  ),
+                ),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      Icon(widget.icon,
-                          color: widget.selected ? selColor : baseColor),
+                      Icon(
+                        widget.icon,
+                        size: 22,
+                        color: widget.selected ? selColor : baseColor,
+                      ),
                       if (widget.showUnreadCount)
                         Positioned(
                           top: -5,
@@ -434,10 +472,11 @@ class _SidebarItemState extends State<_SidebarItem> {
                                         displayText,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color:
-                                              colorTheme.appBarBackgroundColor,
-                                          fontSize: 10,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.0,
                                         ),
                                         textAlign: TextAlign.center,
                                       ),
@@ -450,12 +489,13 @@ class _SidebarItemState extends State<_SidebarItem> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  AppSpacing.verticalXs,
                   Text(
                     widget.label,
-                    style: TextStyle(
-                      fontSize: 12,
+                    style: theme.textTheme.labelMedium?.copyWith(
                       color: widget.selected ? selColor : baseColor,
+                      fontWeight:
+                          widget.selected ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                 ],
@@ -524,14 +564,15 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return TencentCloudChatThemeWidget(
       build: (context, colorTheme, textStyle) {
         final baseColor = colorTheme.secondaryTextColor;
         final selColor = colorTheme.primaryColor;
         final bg = widget.selected
-            ? colorTheme.primaryColor.withValues(alpha: 0.12)
+            ? colorTheme.primaryColor.withValues(alpha: 0.10)
             : (_isHovered
-                ? colorTheme.primaryColor.withValues(alpha: 0.06)
+                ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
                 : Colors.transparent);
         return MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -542,16 +583,31 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              color: bg,
+              constraints: const BoxConstraints(minHeight: 56),
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.md,
+                horizontal: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: bg,
+                border: Border(
+                  left: BorderSide(
+                    color: widget.selected ? selColor : Colors.transparent,
+                    width: 3,
+                  ),
+                ),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      Icon(widget.icon,
-                          color: widget.selected ? selColor : baseColor),
+                      Icon(
+                        widget.icon,
+                        size: 22,
+                        color: widget.selected ? selColor : baseColor,
+                      ),
                       if (_applicationUnreadCount > 0)
                         Positioned(
                           top: -5,
@@ -583,9 +639,11 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
                                       displayText,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: colorTheme.appBarBackgroundColor,
-                                        fontSize: 10,
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.0,
                                       ),
                                       textAlign: TextAlign.center,
                                     ),
@@ -597,12 +655,13 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  AppSpacing.verticalXs,
                   Text(
                     widget.label,
-                    style: TextStyle(
-                      fontSize: 12,
+                    style: theme.textTheme.labelMedium?.copyWith(
                       color: widget.selected ? selColor : baseColor,
+                      fontWeight:
+                          widget.selected ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                 ],

@@ -4,6 +4,7 @@ import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.d
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import '../../i18n/app_localizations.dart';
+import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 
 class AddFriendDialog extends StatefulWidget {
@@ -122,118 +123,118 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
   @override
   Widget build(BuildContext context) {
     return TencentCloudChatThemeWidget(
-      build: (context, colorTheme, textStyle) => ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: (MediaQuery.sizeOf(context).width - 48).clamp(280.0, 520.0),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: Card(
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: colorTheme.primaryColor,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
-                  ),
-                ),
-                Padding(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _localeText(context, 'addContact', fallback: 'Add Contact'),
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _localeText(
-                        context,
-                        'addContactHint',
-                        fallback: 'Enter the peer Tox ID (at least 64 hex characters, or 76 for full address).',
+      build: (context, colorTheme, textStyle) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: (MediaQuery.sizeOf(context).width - 48).clamp(280.0, 520.0),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: Card(
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                side: BorderSide(color: scheme.outlineVariant),
+                borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _localeText(context, 'addContact', fallback: 'Add Contact'),
+                        style: theme.textTheme.titleLarge,
                       ),
-                      style: TextStyle(color: colorTheme.secondaryTextColor),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _idController,
-                      textAlignVertical: TextAlignVertical.center,
-                      decoration: InputDecoration(
-                        labelText: _localeText(context, 'friendUserID', fallback: 'Friend Tox ID'),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                      AppSpacing.verticalSm,
+                      Text(
+                        _localeText(
+                          context,
+                          'addContactHint',
+                          fallback: 'Enter the peer Tox ID (at least 64 hex characters, or 76 for full address).',
                         ),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.paste),
-                          tooltip: _localeText(context, 'paste', fallback: 'Paste'),
-                          onPressed: _pasteFromClipboard,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
-                      validator: _validateToxId,
-                      minLines: 1,
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _messageController,
-                      textAlignVertical: TextAlignVertical.center,
-                      decoration: InputDecoration(
-                        labelText: _localeText(context, 'requestMessage', fallback: 'Request Message'),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
-                        ),
-                        helperText: '${_messageController.text.length}/921',
-                      ),
-                      validator: _validateMessage,
-                      minLines: 1,
-                      maxLines: 4,
-                      onChanged: (value) {
-                        setState(() {}); // Update helper text
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                      AppSpacing.verticalLg,
+                      TextFormField(
+                        controller: _idController,
+                        textAlignVertical: TextAlignVertical.center,
+                        decoration: InputDecoration(
+                          labelText: _localeText(context, 'friendUserID', fallback: 'Friend Tox ID'),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                          ),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.paste),
+                            tooltip: _localeText(context, 'paste', fallback: 'Paste'),
+                            onPressed: _pasteFromClipboard,
                           ),
                         ),
-                        icon: _isSubmitting
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.person_add_alt_1),
-                        label: Text(_localeText(context, 'addContact', fallback: 'Add Contact')),
-                        onPressed: _isSubmitting ? null : _submit,
+                        validator: _validateToxId,
+                        minLines: 1,
+                        maxLines: 3,
                       ),
-                    ),
-                  ],
+                      AppSpacing.verticalLg,
+                      TextFormField(
+                        controller: _messageController,
+                        textAlignVertical: TextAlignVertical.center,
+                        decoration: InputDecoration(
+                          labelText: _localeText(context, 'requestMessage', fallback: 'Request Message'),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                          ),
+                          helperText: '${_messageController.text.length}/921',
+                        ),
+                        validator: _validateMessage,
+                        minLines: 1,
+                        maxLines: 4,
+                        onChanged: (value) {
+                          setState(() {}); // Update helper text
+                        },
+                      ),
+                      AppSpacing.verticalXl,
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: scheme.primary,
+                            foregroundColor: scheme.onPrimary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                            ),
+                          ),
+                          icon: _isSubmitting
+                              ? SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      scheme.onPrimary,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(Icons.person_add_alt_1),
+                          label: Text(_localeText(context, 'addContact', fallback: 'Add Contact')),
+                          onPressed: _isSubmitting ? null : _submit,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              ),
-              ],
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

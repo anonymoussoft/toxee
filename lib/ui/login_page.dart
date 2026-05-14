@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../util/app_spacing.dart';
 
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
@@ -395,7 +396,7 @@ class _LoginPageState extends State<LoginPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Text(
                 nickname.isNotEmpty ? nickname : AppLocalizations.of(context)!.unnamedAccount,
                 style: Theme.of(context).textTheme.titleMedium,
@@ -594,10 +595,14 @@ class _LoginPageState extends State<LoginPage> {
                         // Saved accounts list (main content)
                         if (_accountList.isNotEmpty) ...[
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.fromLTRB(
+                                AppSpacing.xs, 0, 0, AppSpacing.md),
                             child: Text(
                               AppLocalizations.of(context)!.savedAccounts,
-                              style: Theme.of(context).textTheme.titleMedium,
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                    letterSpacing: 0.4,
+                                  ),
                             ),
                           ),
                           ..._accountList.asMap().entries.map((entry) {
@@ -630,149 +635,144 @@ class _LoginPageState extends State<LoginPage> {
                                     }
                                   }
 
-                                  return StaggeredListItem(index: i, child: Card(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-                                    ),
-                                    elevation: 1,
-                                    child: MouseRegion(
-                                      cursor: SystemMouseCursors.click,
-                                      child: InkWell(
-                                        onTap: () => _quickLogin(account),
-                                        onLongPress: () => _showAccountManagementMenu(account),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(12),
-                                        child: Row(
-                                          children: [
-                                            _buildAccountAvatar(account, nickname, colorTheme),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    nickname.isNotEmpty ? nickname : AppLocalizations.of(context)!.unnamedAccount,
-                                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                  if (statusMsg.isNotEmpty)
-                                                    Text(
-                                                      statusMsg,
-                                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                        color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                  const SizedBox(height: 4),
-                                                  Row(
+                                  return StaggeredListItem(
+                                    index: i,
+                                    child: Card(
+                                      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        side: BorderSide(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outlineVariant,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                            AppThemeConfig.cardBorderRadius),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.click,
+                                        child: InkWell(
+                                          onTap: () => _quickLogin(account),
+                                          onLongPress: () =>
+                                              _showAccountManagementMenu(account),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(
+                                                AppSpacing.lg),
+                                            child: Row(
+                                              children: [
+                                                _buildAccountAvatar(
+                                                    account, nickname, colorTheme),
+                                                AppSpacing.horizontalMd,
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.start,
                                                     children: [
                                                       Text(
-                                                        '${AppLocalizations.of(context)!.userId}: $toxIdPrefix...',
-                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                          fontSize: 11,
-                                                          fontFamily: 'monospace',
-                                                        ),
+                                                        nickname.isNotEmpty
+                                                            ? nickname
+                                                            : AppLocalizations.of(context)!.unnamedAccount,
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .titleSmall,
                                                       ),
-                                                      const SizedBox(width: 8),
-                                                      Text(
-                                                        '• ${formatLastLogin(lastLogin)}',
-                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                          fontSize: 11,
+                                                      if (statusMsg.isNotEmpty) ...[
+                                                        const SizedBox(height: 2),
+                                                        Text(
+                                                          statusMsg,
+                                                          style: Theme.of(context)
+                                                              .textTheme
+                                                              .bodySmall
+                                                              ?.copyWith(
+                                                                color: Theme.of(
+                                                                        context)
+                                                                    .colorScheme
+                                                                    .onSurface
+                                                                    .withValues(
+                                                                        alpha: 0.7),
+                                                              ),
+                                                          maxLines: 1,
+                                                          overflow:
+                                                              TextOverflow.ellipsis,
                                                         ),
+                                                      ],
+                                                      const SizedBox(height: 6),
+                                                      Row(
+                                                        children: [
+                                                          Text(
+                                                            '${AppLocalizations.of(context)!.userId}: $toxIdPrefix…',
+                                                            style: Theme.of(context)
+                                                                .textTheme
+                                                                .labelSmall
+                                                                ?.copyWith(
+                                                                  fontFamily: 'monospace',
+                                                                  color: Theme.of(context)
+                                                                      .colorScheme
+                                                                      .onSurface
+                                                                      .withValues(alpha: 0.5),
+                                                                ),
+                                                          ),
+                                                          AppSpacing.horizontalSm,
+                                                          Text(
+                                                            '• ${formatLastLogin(lastLogin)}',
+                                                            style: Theme.of(context)
+                                                                .textTheme
+                                                                .labelSmall
+                                                                ?.copyWith(
+                                                                  color: Theme.of(context)
+                                                                      .colorScheme
+                                                                      .onSurface
+                                                                      .withValues(alpha: 0.5),
+                                                                ),
+                                                          ),
+                                                        ],
                                                       ),
                                                     ],
                                                   ),
-                                                ],
-                                              ),
+                                                ),
+                                                Icon(
+                                                  Icons.chevron_right,
+                                                  size: 20,
+                                                  color: Theme.of(context)
+                                                      .iconTheme
+                                                      .color
+                                                      ?.withValues(alpha: 0.4),
+                                                ),
+                                              ],
                                             ),
-                                            Icon(
-                                              Icons.chevron_right,
-                                              color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.5),
-                                            ),
-                                          ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                    ),
-                                  ));
+                                  );
                                 }).toList(),
+                                AppSpacing.verticalMd,
                         ],
-                        // Import tox_profile.tox
-                        Card(
-                          margin: const EdgeInsets.only(top: 8, bottom: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-                          ),
-                          elevation: 1,
-                          child: InkWell(
-                            onTap: _busy ? null : _importToxProfile,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.upload_file,
-                                    color: colorTheme.primaryColor,
-                                    size: 28,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    AppLocalizations.of(context)!.importAccount,
-                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      color: colorTheme.primaryColor,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                        _LoginActionCard(
+                          icon: Icons.download_outlined,
+                          label: AppLocalizations.of(context)!.importAccount,
+                          color: colorTheme.primaryColor,
+                          onTap: _busy ? null : _importToxProfile,
                         ),
-                        // "Register new account" — opens RegisterPage (like settings)
-                        Card(
-                          margin: const EdgeInsets.only(top: 0, bottom: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-                          ),
-                          elevation: 1,
-                          child: InkWell(
-                            onTap: _busy
-                                ? null
-                                : () async {
-                                    await Navigator.of(context).push<void>(AppPageRoute(
-                                      page: const RegisterPage(),
-                                    ));
-                                    if (mounted) _loadAccountList();
-                                  },
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.person_add, color: colorTheme.primaryColor, size: 28),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    AppLocalizations.of(context)!.registerNewAccount,
-                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      color: colorTheme.primaryColor,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                        const SizedBox(height: AppSpacing.sm),
+                        _LoginActionCard(
+                          icon: Icons.person_add_outlined,
+                          label: AppLocalizations.of(context)!.registerNewAccount,
+                          color: colorTheme.primaryColor,
+                          isPrimary: true,
+                          onTap: _busy
+                              ? null
+                              : () async {
+                                  await Navigator.of(context).push<void>(AppPageRoute(
+                                    page: const RegisterPage(),
+                                  ));
+                                  if (mounted) _loadAccountList();
+                                },
                         ),
                         if (_error != null)
                           Padding(
-                            padding: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.only(top: AppSpacing.md),
                             child: ErrorBanner(message: _error!),
                           ),
                       ],
@@ -789,4 +789,66 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+/// Card-shaped action used on the login screen for "Import account" and
+/// "Register new account". Elevation-0 + hairline border for a modern
+/// messenger look; primary variant uses a tinted background to emphasize the
+/// canonical create-account path.
+class _LoginActionCard extends StatelessWidget {
+  const _LoginActionCard({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.isPrimary = false,
+  });
 
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: isPrimary ? color.withValues(alpha: 0.08) : null,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(
+          color: isPrimary
+              ? color.withValues(alpha: 0.4)
+              : scheme.outlineVariant,
+        ),
+        borderRadius:
+            BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 24),
+              AppSpacing.horizontalMd,
+              Text(
+                label,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: color,
+                    ),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.4),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
