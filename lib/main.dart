@@ -79,11 +79,33 @@ Future<void> main() async {
       final result = await AppBootstrap.initialize();
 
       FlutterError.onError = (FlutterErrorDetails details) {
+        // Capture the widget that triggered the error and (for RenderFlex
+        // overflow) the offending RenderObject's brief description. Without
+        // this, the log only sees the message ("A RenderFlex overflowed by
+        // N pixels") with no clue which widget is at fault.
+        final libraryAndContext = StringBuffer()
+          ..write('Flutter Error: ${details.exception}');
+        final ctx = details.context;
+        if (ctx != null) {
+          libraryAndContext.write(' (context: ${ctx.toString()})');
+        }
+        final lib = details.library;
+        if (lib != null && lib.isNotEmpty) {
+          libraryAndContext.write(' [library: $lib]');
+        }
         AppLogger.logError(
-          'Flutter Error: ${details.exception}',
+          libraryAndContext.toString(),
           details.exception,
           details.stack,
         );
+        final info = StringBuffer();
+        details.informationCollector?.call().forEach((node) {
+          final s = node.toString();
+          if (s.trim().isNotEmpty) info.writeln(s);
+        });
+        if (info.isNotEmpty) {
+          AppLogger.error('Flutter Error details:\n${info.toString().trim()}');
+        }
         FlutterError.presentError(details);
       };
 
@@ -121,6 +143,27 @@ Future<void> main() async {
       },
     ),
   );
+}
+
+/// Default [MaterialScrollBehavior] auto-wraps every desktop Scrollable in a
+/// [Scrollbar] bound to the [PrimaryScrollController]. UIKit-owned Scrollables
+/// typically run with their own controller (or none), so the auto-attached
+/// Scrollbar can't find a [ScrollPosition] and the framework asserts every
+/// frame ("Scrollbar's ScrollController has no ScrollPosition attached").
+/// Skip the auto-wrap when the [Scrollable] didn't pass an explicit controller;
+/// downstream widgets that DO supply one (and the dedicated Scrollbar widgets
+/// the UIKit puts around its lists) still render normally.
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  const _AppScrollBehavior();
+
+  @override
+  Widget buildScrollbar(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    if (details.controller == null) {
+      return child;
+    }
+    return super.buildScrollbar(context, child, details);
+  }
 }
 
 class EchoUIKitApp extends StatefulWidget {
@@ -167,6 +210,7 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> {
             return TencentCloudChatMaterialApp(
               title: 'Toxee',
               debugShowCheckedModeBanner: false,
+              scrollBehavior: const _AppScrollBehavior(),
               themeAnimationDuration: const Duration(milliseconds: 400),
               theme: ThemeData(
                 useMaterial3: true,

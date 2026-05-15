@@ -36,8 +36,11 @@ class CallOverlay extends StatelessWidget {
           return Stack(
             children: [
               child,
-              _NoUnderlineScope(
-                child: CallFloatingWidget(callState: callState, manager: manager),
+              _CallOverlayHost(
+                child: _NoUnderlineScope(
+                  child:
+                      CallFloatingWidget(callState: callState, manager: manager),
+                ),
               ),
             ],
           );
@@ -47,19 +50,21 @@ class CallOverlay extends StatelessWidget {
         return Stack(
           children: [
             child,
-            _NoUnderlineScope(
-              // Asymmetric in/out timing matches Flutter's recommended
-              // pattern: a slightly slower entrance feels deliberate while a
-              // snappier exit keeps the next view from feeling stuck. The
-              // explicit FadeTransition replaces the implicit cross-fade.
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                reverseDuration: const Duration(milliseconds: 150),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                transitionBuilder: (child, animation) =>
-                    FadeTransition(opacity: animation, child: child),
-                child: _buildCallView(),
+            _CallOverlayHost(
+              child: _NoUnderlineScope(
+                // Asymmetric in/out timing matches Flutter's recommended
+                // pattern: a slightly slower entrance feels deliberate while a
+                // snappier exit keeps the next view from feeling stuck. The
+                // explicit FadeTransition replaces the implicit cross-fade.
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  reverseDuration: const Duration(milliseconds: 150),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, animation) =>
+                      FadeTransition(opacity: animation, child: child),
+                  child: _buildCallView(),
+                ),
               ),
             ),
           ],
@@ -81,6 +86,24 @@ class CallOverlay extends StatelessWidget {
       default:
         return const SizedBox.shrink();
     }
+  }
+}
+
+/// Hosts the call UI in its own [Overlay] so descendants that depend on an
+/// Overlay ancestor (Tooltip, PopupMenu, SelectionToolbar) work even though
+/// [CallOverlay] is mounted in the MaterialApp `builder` — above the
+/// app Navigator's Overlay.
+class _CallOverlayHost extends StatelessWidget {
+  const _CallOverlayHost({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Overlay(
+      initialEntries: [
+        OverlayEntry(builder: (_) => child),
+      ],
+    );
   }
 }
 
