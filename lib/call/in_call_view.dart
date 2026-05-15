@@ -11,6 +11,16 @@ import 'call_ui_shell.dart';
 import 'call_ui_components.dart';
 import 'in_call_manager.dart';
 
+/// Drop shadow for the floating local-preview (PiP) card on the call surface.
+/// Named so other call-surface PiP-style cards can share the same elevation.
+const List<BoxShadow> kCallPipShadow = [
+  BoxShadow(
+    color: Color(0x73000000), // Colors.black @ 0.45 alpha
+    blurRadius: 16,
+    offset: Offset(0, 4),
+  ),
+];
+
 /// Full-screen in-call UI using shared shell: top bar, video/identity stage, action dock.
 class InCallView extends StatelessWidget {
   const InCallView({
@@ -115,6 +125,8 @@ class InCallView extends StatelessWidget {
   List<CallDockAction> _buildDockActions(
       BuildContext context, AppLocalizations l10n, bool isVideo) {
     final showSpeakerToggle = CallMediaCapabilities.supportsSpeakerToggle();
+    final supportsRouteSelection =
+        CallMediaCapabilities.supportsAudioRouteSelection();
     final actions = <CallDockAction>[
       CallDockAction(
         icon: callState.isMuted ? Icons.mic_off : Icons.mic,
@@ -130,12 +142,22 @@ class InCallView extends StatelessWidget {
           selected: !callState.isVideoEnabled,
           onPressed: () => manager.toggleVideo(),
         ),
-      if (!showSpeakerToggle &&
-          CallMediaCapabilities.supportsAudioRouteSelection())
+      if (!showSpeakerToggle && supportsRouteSelection)
         CallDockAction(
           icon: Icons.route,
           label: l10n.routeSelection,
           onPressed: () => _showAudioRouteSheet(context, l10n),
+        )
+      else if (!showSpeakerToggle && !supportsRouteSelection)
+        // Desktop (and other platforms where the OS owns the audio route):
+        // surface the affordance as *disabled* with a tooltip explaining that
+        // routing is managed by the system, so users aren't left wondering
+        // whether the app is missing a feature.
+        CallDockAction(
+          icon: Icons.route,
+          label: l10n.routeSelection,
+          enabled: false,
+          tooltip: l10n.callAudioRouteSystem,
         ),
       CallDockAction(
         icon: Icons.call_end,
@@ -311,8 +333,11 @@ class InCallView extends StatelessWidget {
       listenable: manager.previewListenable,
       builder: (context, _) {
         final preview = manager.localPreview;
+        // Offset by the system safe-area top so the preview card clears
+        // notch / Dynamic Island when an ancestor hasn't already absorbed it.
+        final topInset = MediaQuery.paddingOf(context).top;
         return Positioned(
-          top: AppSpacing.lg,
+          top: AppSpacing.lg + topInset,
           right: AppSpacing.lg,
           child: KeyedSubtree(
             key: const ValueKey('call-local-preview-card'),
@@ -325,13 +350,7 @@ class InCallView extends StatelessWidget {
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.18),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.45),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: kCallPipShadow,
               ),
               clipBehavior: Clip.antiAlias,
               child: preview ??

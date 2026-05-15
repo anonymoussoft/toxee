@@ -181,7 +181,12 @@ class _SearchChatHistoryWindowState extends State<SearchChatHistoryWindow> {
       appBar: AppBar(
         title: Text(l10n.searchChatHistory),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(64),
+          // Scale the search field's reserved height with the user's text
+          // scaler so large-text accessibility settings don't clip the
+          // input — clamped to [64, 96] to keep the bar from over-growing.
+          preferredSize: Size.fromHeight(
+            MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 96.0),
+          ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,

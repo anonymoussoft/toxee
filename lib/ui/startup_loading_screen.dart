@@ -220,6 +220,7 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
     final primaryColor = theme.colorScheme.primary;
     final meta = _stepMeta[widget.currentStep]!;
     final currentIndex = _kActiveSteps.indexOf(widget.currentStep);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -233,40 +234,45 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
           desktop: 80.0,
         );
 
+        final iconChip = Container(
+          width: iconSize,
+          height: iconSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: primaryColor.withValues(alpha: 0.08),
+            border: Border.all(
+              color: primaryColor.withValues(alpha: 0.4),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.12),
+                blurRadius: 24,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Icon(
+            meta.icon,
+            size: iconInnerSize,
+            color: primaryColor,
+          ),
+        );
+
         return Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Pulsing icon
-                ScaleTransition(
-                  scale: _pulseAnimation,
-                  child: Container(
-                    width: iconSize,
-                    height: iconSize,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: primaryColor.withValues(alpha: 0.08),
-                      border: Border.all(
-                        color: primaryColor.withValues(alpha: 0.4),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.12),
-                          blurRadius: 24,
-                          spreadRadius: 0,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      meta.icon,
-                      size: iconInnerSize,
-                      color: primaryColor,
-                    ),
+                // Pulsing icon (static when reduce-motion is enabled)
+                if (reduceMotion)
+                  iconChip
+                else
+                  ScaleTransition(
+                    scale: _pulseAnimation,
+                    child: iconChip,
                   ),
-                ),
                 SizedBox(height: isSmall ? AppSpacing.xxl : AppSpacing.xxxl),
 
                 // Step message with slide + fade animation
@@ -303,9 +309,10 @@ class _StartupLoadingScreenState extends State<StartupLoadingScreen>
                 // App name
                 Text(
                   'Toxee',
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                     color:
-                        theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        theme.colorScheme.onSurface.withValues(alpha: 0.85),
                   ),
                 ),
               ],

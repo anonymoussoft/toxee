@@ -1285,5 +1285,80 @@
       "count": {"type": "int"}
     }
   },
-  "ircNoUsers": "No users"
+  "ircNoUsers": "No users",
+  "passwordVisibility": "Toggle password visibility",
+  "@passwordVisibility": {
+    "description": "Tooltip on the show/hide button next to a password field"
+  },
+  "nicknameHintExample": "e.g. Alice",
+  "@nicknameHintExample": {
+    "description": "Concrete example placeholder for the nickname field"
+  },
+  "callAudioRouteSystem": "Audio route managed by system on this platform",
+  "@callAudioRouteSystem": {
+    "description": "Tooltip on a disabled audio-route button when the OS handles routing"
+  },
+  "copyFullToxId": "Copy full ID",
+  "@copyFullToxId": {
+    "description": "Tooltip on the copy button for a full Tox ID"
+  },
+  "themeSystem": "System",
+  "@themeSystem": {
+    "description": "Theme mode option: follow system setting"
+  },
+  "themeLight": "Light",
+  "@themeLight": {
+    "description": "Theme mode option: light"
+  },
+  "themeDark": "Dark",
+  "@themeDark": {
+    "description": "Theme mode option: dark"
+  },
+  "idLabel": "ID:",
+  "@idLabel": {
+    "description": "Inline label prefix shown before an ID value"
+  },
+  "errorBannerLabel": "Error: {message}",
+  "@errorBannerLabel": {
+    "description": "Screen reader label for the error banner live region",
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "searchResultContactSemantics": "{name}, contact",
+  "@searchResultContactSemantics": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "searchResultGroupSemantics": "{name}, group",
+  "@searchResultGroupSemantics": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "searchResultMessageSemantics": "{name}, message",
+  "@searchResultMessageSemantics": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "searchResultConversationSemantics": "{name}, conversation",
+  "@searchResultConversationSemantics": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "importNoFileSelected": "No file selected",
+  "@importNoFileSelected": {},
+  "importCancelled": "Cancelled",
+  "@importCancelled": {},
+  "importedAccountDefaultName": "Imported account",
+  "@importedAccountDefaultName": {},
+  "failedToImport": "Failed to import: {error}",
+  "@failedToImport": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  }
 }

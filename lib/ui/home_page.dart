@@ -733,10 +733,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     Positioned(
                                       top: AppSpacing.lg,
                                       right: AppSpacing.xl,
-                                      child: NewEntryButton(
-                                        onAddFriend: _showAddFriendDialog,
-                                        onCreateGroup: _showAddGroupDialog,
-                                        onJoinIrcChannel: _ircAppInstalled ? _showJoinIrcChannelDialog : null,
+                                      // Right-edge SafeArea only — guards Dynamic
+                                      // Island / right rounded corners on phones
+                                      // in landscape. Top/left/bottom already
+                                      // handled by the surrounding layout.
+                                      child: SafeArea(
+                                        left: false,
+                                        top: false,
+                                        bottom: false,
+                                        child: NewEntryButton(
+                                          onAddFriend: _showAddFriendDialog,
+                                          onCreateGroup: _showAddGroupDialog,
+                                          onJoinIrcChannel: _ircAppInstalled ? _showJoinIrcChannelDialog : null,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -771,71 +780,82 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       top: 0,
                       left: 0,
                       right: 0,
-                      child: AnimatedSlide(
-                        duration: const Duration(milliseconds: 300),
-                        offset: (_lanBootstrapServiceRunning && _lanBootstrapServiceIP != null && _lanBootstrapServicePort != null)
-                            ? Offset.zero
-                            : const Offset(0, -1),
-                        curve: Curves.easeOut,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 300),
-                          opacity: (_lanBootstrapServiceRunning && _lanBootstrapServiceIP != null && _lanBootstrapServicePort != null)
-                              ? 1.0
-                              : 0.0,
-                          child: Material(
-                            elevation: 0,
-                            color: AppThemeConfig.successColor.withValues(alpha: 0.08),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: AppThemeConfig.successColor.withValues(alpha: 0.25),
-                                    width: 1,
-                                  ),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.cloud_done_outlined,
-                                    color: AppThemeConfig.successColor,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Expanded(
-                                    child: Text(
-                                      (_lanBootstrapServiceIP != null && _lanBootstrapServicePort != null)
-                                          ? AppLocalizations.of(context)!.bootstrapServiceRunning(
-                                              _lanBootstrapServiceIP!,
-                                              _lanBootstrapServicePort!,
-                                            )
-                                          : '',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: Theme.of(context).colorScheme.onSurface,
-                                            fontWeight: FontWeight.w500,
-                                          ),
+                      // Asymmetric enter/exit: snappy 250ms in (easeOut) so the
+                      // banner shows up quickly when the LAN service comes
+                      // online, faster 150ms out (easeIn) so dismissing feels
+                      // responsive and doesn't linger.
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        reverseDuration: const Duration(milliseconds: 150),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, animation) {
+                          final slide = Tween<Offset>(
+                            begin: const Offset(0, -1),
+                            end: Offset.zero,
+                          ).animate(animation);
+                          return SlideTransition(
+                            position: slide,
+                            child: FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: (_lanBootstrapServiceRunning && _lanBootstrapServiceIP != null && _lanBootstrapServicePort != null)
+                            ? Material(
+                                key: const ValueKey('lan-bootstrap-banner'),
+                                elevation: 0,
+                                color: AppThemeConfig.successColor.withValues(alpha: 0.08),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: AppThemeConfig.successColor.withValues(alpha: 0.25),
+                                        width: 1,
+                                      ),
                                     ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.close, size: 18),
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    // 44x44 minimum tap area for mobile (Apple HIG / Material 48dp).
-                                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () {
-                                      setState(() {
-                                        _lanBootstrapServiceRunning = false;
-                                      });
-                                    },
-                                    tooltip: AppLocalizations.of(context)!.hide,
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.cloud_done_outlined,
+                                        color: AppThemeConfig.successColor,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: AppSpacing.sm),
+                                      Expanded(
+                                        child: Text(
+                                          AppLocalizations.of(context)!.bootstrapServiceRunning(
+                                            _lanBootstrapServiceIP!,
+                                            _lanBootstrapServicePort!,
+                                          ),
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                color: Theme.of(context).colorScheme.onSurface,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.close, size: 18),
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        // 44x44 minimum tap area for mobile (Apple HIG / Material 48dp).
+                                        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: () {
+                                          setState(() {
+                                            _lanBootstrapServiceRunning = false;
+                                          });
+                                        },
+                                        tooltip: AppLocalizations.of(context)!.hide,
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                                ),
+                              )
+                            : const SizedBox.shrink(key: ValueKey('lan-bootstrap-banner-hidden')),
                       ),
                     ),
                 ],
@@ -1627,7 +1647,9 @@ class _MobileDrawerHeaderState extends State<_MobileDrawerHeader> {
                 ),
               AppSpacing.verticalXs,
               Text(
-                isConnected ? 'Online' : 'Offline',
+                isConnected
+                    ? (AppLocalizations.of(context)?.statusOnline ?? 'Online')
+                    : (AppLocalizations.of(context)?.statusOffline ?? 'Offline'),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: isConnected
                       ? AppThemeConfig.successColor

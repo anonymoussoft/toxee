@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../util/app_spacing.dart';
+import '../util/app_theme_config.dart';
 import '../util/responsive_layout.dart';
 
-/// Slate-900 base background for call surfaces — matches the dark scaffold token
-/// in `AppThemeConfig.darkScaffoldBackground` so the call screen reads as a
+/// Slate-900 base background for call surfaces — aliased to the shared
+/// `AppThemeConfig.darkScaffoldBackground` token so the call screen reads as a
 /// continuation of the app, not a separate aesthetic.
-const Color kCallBackgroundBase = Color(0xFF0F172A);
+const Color kCallBackgroundBase = AppThemeConfig.darkScaffoldBackground;
 
 /// Shared page shell for all call screens: dark surface, safe area, top bar, content, bottom dock.
 class CallSceneShell extends StatelessWidget {

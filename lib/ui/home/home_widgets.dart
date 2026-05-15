@@ -83,24 +83,38 @@ class _NewEntryButtonState extends State<NewEntryButton> {
           await widget.onJoinIrcChannel!();
         }
       },
-      child: SizedBox(
-        // 44pt minimum tap target for mobile (Apple HIG / Material 48dp).
-        height: 44,
-        child: OutlinedButton.icon(
-          icon: const Icon(Icons.add, size: 18),
-          label: Text(
-            tL10n?.newChat ?? 'New',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          onPressed: () => _menuKey.currentState?.showButtonMenu(),
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: theme.colorScheme.primary),
-            foregroundColor: theme.colorScheme.primary,
-            shape: RoundedRectangleBorder(
+      // Single gesture owner: PopupMenuButton handles the tap directly via
+      // Material + InkWell. Previously an inner OutlinedButton.onPressed
+      // raced with PopupMenuButton's own tap detector — two gesture owners
+      // on the same surface. Visual treatment (outlined pill, primary
+      // border, icon+label) is preserved.
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+          onTap: () => _menuKey.currentState?.showButtonMenu(),
+          child: Container(
+            // 44pt minimum tap target for mobile (Apple HIG / Material 48dp).
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.colorScheme.primary),
               borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  tL10n?.newChat ?? 'New',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

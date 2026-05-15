@@ -564,5 +564,22 @@
   "callQualityMedium": "连接一般",
   "callQualityPoor": "连接较差",
   "callQualityUnknown": "—",
-  "callQualityLabel": "通话质量"
+  "callQualityLabel": "通话质量",
+  "passwordVisibility": "切换密码可见",
+  "nicknameHintExample": "例如：Alice",
+  "callAudioRouteSystem": "此平台音频输出由系统管理",
+  "copyFullToxId": "复制完整 ID",
+  "themeSystem": "跟随系统",
+  "themeLight": "浅色",
+  "themeDark": "深色",
+  "idLabel": "ID：",
+  "errorBannerLabel": "错误：{message}",
+  "searchResultContactSemantics": "{name}，联系人",
+  "searchResultGroupSemantics": "{name}，群组",
+  "searchResultMessageSemantics": "{name}，消息",
+  "searchResultConversationSemantics": "{name}，会话",
+  "importNoFileSelected": "未选择文件",
+  "importCancelled": "已取消",
+  "importedAccountDefaultName": "已导入账号",
+  "failedToImport": "导入失败：{error}"
 }

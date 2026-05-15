@@ -7,7 +7,7 @@ enum CallMode { audio, video }
 
 enum CallDirection { outgoing, incoming }
 
-enum CallUIState { idle, ringing, inCall, ended }
+enum CallUIState { idle, ringing, inCall, reconnecting, ended }
 
 /// Read-only call quality for UI display. Defaults to [unknown] until backend provides metrics.
 enum CallQuality { good, medium, poor, unknown }
@@ -43,6 +43,12 @@ class CallStateNotifier extends ChangeNotifier {
 
   /// Call quality for in-call indicator. Defaults to [CallQuality.unknown]; wire from AV layer when available.
   CallQuality get callQuality => CallQuality.unknown;
+
+  /// True when the underlying transport is briefly down mid-call — UI should
+  /// surface a "Reconnecting…" affordance while we wait for recovery rather
+  /// than tear the call screen down.
+  // TODO: wire CallServiceManager quality/state events into reconnecting
+  bool get isReconnecting => _state == CallUIState.reconnecting;
 
   /// Notify listeners now or after this frame to avoid setState/markNeedsBuild during build.
   void _safeNotifyListeners() {

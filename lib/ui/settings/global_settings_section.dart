@@ -192,34 +192,44 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                 ValueListenableBuilder<ThemeMode>(
                   valueListenable: AppTheme.mode,
                   builder: (context, mode, _) {
-                    final isDark = mode == ThemeMode.dark;
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            contentPadding: EdgeInsets.zero,
-                            value: false,
-                            groupValue: isDark,
-                            title: Text(tL10n.lightTheme),
-                            onChanged: (v) {
-                              AppTheme.set(ThemeMode.light);
-                              TencentCloudChat.controller.setBrightnessMode(Brightness.light);
-                            },
+                    return SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<ThemeMode>(
+                        // Three segments: System / Light / Dark.
+                        segments: <ButtonSegment<ThemeMode>>[
+                          ButtonSegment<ThemeMode>(
+                            value: ThemeMode.system,
+                            icon: const Icon(Icons.brightness_auto),
+                            label: Text(AppLocalizations.of(context)!.themeSystem),
                           ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            contentPadding: EdgeInsets.zero,
-                            value: true,
-                            groupValue: isDark,
-                            title: Text(tL10n.darkTheme),
-                            onChanged: (v) {
-                              AppTheme.set(ThemeMode.dark);
-                              TencentCloudChat.controller.setBrightnessMode(Brightness.dark);
-                            },
+                          ButtonSegment<ThemeMode>(
+                            value: ThemeMode.light,
+                            icon: const Icon(Icons.light_mode),
+                            label: Text(AppLocalizations.of(context)!.themeLight),
                           ),
-                        ),
-                      ],
+                          ButtonSegment<ThemeMode>(
+                            value: ThemeMode.dark,
+                            icon: const Icon(Icons.dark_mode),
+                            label: Text(AppLocalizations.of(context)!.themeDark),
+                          ),
+                        ],
+                        selected: <ThemeMode>{mode},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (Set<ThemeMode> selection) {
+                          final chosen = selection.first;
+                          AppTheme.set(chosen);
+                          // For 'system', pick the resolved platform
+                          // brightness so the UIKit layer matches the live
+                          // appearance; otherwise mirror the explicit choice.
+                          final resolved = chosen == ThemeMode.system
+                              ? MediaQuery.platformBrightnessOf(context)
+                              : (chosen == ThemeMode.dark
+                                  ? Brightness.dark
+                                  : Brightness.light);
+                          TencentCloudChat.controller
+                              .setBrightnessMode(resolved);
+                        },
+                      ),
                     );
                   },
                 ),
@@ -329,7 +339,7 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                                 onTap: () => selectLocale(lang.locale),
                                 borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2, horizontal: AppSpacing.md),
+                                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.md),
                                   child: Row(
                                     children: [
                                       Icon(
@@ -370,19 +380,43 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
               side: BorderSide(color: outlineVariant),
               borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
             ),
-            child: SwitchListTile(
-              title: Text(
-                AppLocalizations.of(context)!.notificationSound,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              subtitle: Text(
-                AppLocalizations.of(context)!.notificationSoundDesc,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _secondaryTextColor(context),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              // Match the title/description switch-row pattern used by the
+              // three sibling switches on the main settings page (auto-login,
+              // auto-accept friends, auto-accept group invites). Previously
+              // this row used a bare SwitchListTile which rendered subtly
+              // differently (denser, different padding, different hover).
+              child: _HoverableSettingsRow(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            AppLocalizations.of(context)!.notificationSound,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          AppSpacing.verticalXs,
+                          Text(
+                            AppLocalizations.of(context)!.notificationSoundDesc,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: _secondaryTextColor(context),
+                                    ),
+                          ),
+                        ],
+                      ),
                     ),
+                    Switch(
+                      value: _notificationSoundEnabled,
+                      onChanged: _setNotificationSoundEnabled,
+                    ),
+                  ],
+                ),
               ),
-              value: _notificationSoundEnabled,
-              onChanged: _setNotificationSoundEnabled,
             ),
           ),
         ],
@@ -414,7 +448,9 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                               color: _primaryTextColor(context),
                             ),
                         decoration: InputDecoration(
-                          hintText: AppLocalizations.of(context)!.downloadsDirectoryDesc,
+                          // hintText removed: the same string is shown as the
+                          // helper Text below the field, so the hint was just
+                          // duplicate copy fighting for the user's eye.
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                           ),
@@ -506,6 +542,41 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Mirror of `_HoverableSettingsRow` in settings_page_widgets.dart.
+/// Kept local here so this section can reuse the same hover/padding pattern
+/// without exporting a private widget from `settings_page.dart`.
+class _HoverableSettingsRow extends StatefulWidget {
+  const _HoverableSettingsRow({required this.child});
+  final Widget child;
+  @override
+  State<_HoverableSettingsRow> createState() => _HoverableSettingsRowState();
+}
+
+class _HoverableSettingsRowState extends State<_HoverableSettingsRow> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final hoverColor =
+        Theme.of(context).colorScheme.primary.withValues(alpha: 0.04);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: _isHovered ? hoverColor : Colors.transparent,
+          borderRadius:
+              BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+        ),
+        child: widget.child,
+      ),
     );
   }
 }

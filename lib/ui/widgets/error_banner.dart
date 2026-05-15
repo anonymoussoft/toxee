@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../i18n/app_localizations.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/app_spacing.dart';
 
@@ -17,7 +18,13 @@ class ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Semantics(
+      // Live region announces the error to screen readers when the banner
+      // appears or its message updates.
+      liveRegion: true,
+      container: true,
+      label: AppLocalizations.of(context)?.errorBannerLabel(message) ?? 'Error: $message',
+      child: Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
         vertical: AppSpacing.md,
@@ -63,6 +70,7 @@ class ErrorBanner extends StatelessWidget {
               visualDensity: VisualDensity.compact,
             ),
         ],
+      ),
       ),
     );
   }

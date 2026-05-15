@@ -46,9 +46,11 @@ class _StaggeredListItemState extends State<StaggeredListItem>
 
     // Stagger start based on index
     final delay = widget.staggerDelay * widget.index;
-    // Cap maximum delay to avoid very long waits for long lists
-    final cappedDelay = delay > const Duration(milliseconds: 500)
-        ? const Duration(milliseconds: 500)
+    // Cap at 300ms (down from 500ms) — beyond ~6 items the tail used to
+    // batch in one visible frame; 300ms keeps the cascade perceptible
+    // without making long lists feel sluggish to settle.
+    final cappedDelay = delay > const Duration(milliseconds: 300)
+        ? const Duration(milliseconds: 300)
         : delay;
     Future.delayed(cappedDelay, () {
       if (mounted) _controller.forward();

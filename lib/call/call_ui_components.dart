@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 
 import 'package:flutter/material.dart';
+import '../i18n/app_localizations.dart';
 import '../util/app_spacing.dart';
 import '../util/app_theme_config.dart';
 import '../util/responsive_layout.dart';
@@ -151,6 +152,7 @@ class CallDockAction {
     this.selected = false,
     this.enabled = true,
     this.onPressed,
+    this.tooltip,
   });
 
   final IconData icon;
@@ -160,6 +162,9 @@ class CallDockAction {
   final bool selected;
   final bool enabled;
   final VoidCallback? onPressed;
+  /// Optional hover/long-press tooltip. Useful for disabled actions whose
+  /// label alone doesn't explain why they can't be tapped.
+  final String? tooltip;
 }
 
 /// Thin top status bar for call screens: title, subtitle, optional trailing action.
@@ -233,6 +238,7 @@ class CallTopStatusBar extends StatelessWidget {
               icon: Icon(trailingIcon, color: _kCallMutedForeground, size: 22),
               onPressed: onTrailingPressed,
               splashRadius: 22,
+              tooltip: AppLocalizations.of(context)?.callMinimize ?? 'Minimize call',
             ),
         ],
       ),
@@ -362,7 +368,7 @@ class _CallDockButtonState extends State<_CallDockButton> {
               ]
             : null;
 
-    return SizedBox(
+    final Widget content = SizedBox(
       width: widget.diameter + 24,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -415,6 +421,17 @@ class _CallDockButtonState extends State<_CallDockButton> {
           ),
         ],
       ),
+    );
+
+    final Widget tooltipped =
+        a.tooltip != null ? Tooltip(message: a.tooltip!, child: content) : content;
+
+    return Semantics(
+      label: a.label,
+      button: true,
+      enabled: isEnabled,
+      container: true,
+      child: tooltipped,
     );
   }
 }
@@ -573,20 +590,28 @@ class CallCompactCard extends StatelessWidget {
             ),
           ),
           // Compact end-call button — matches the destructive dock-button feel
-          // but sized down for the floating widget footprint.
-          Material(
-            color: AppThemeConfig.errorColor,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onHangUp,
-              child: const SizedBox(
-                width: 36,
-                height: 36,
-                child: Icon(
-                  Icons.call_end,
-                  color: Colors.white,
-                  size: 18,
+          // but sized down for the floating widget footprint. Wrapped in a
+          // 44×44 hit target (accessibility min touch size) with the 36px
+          // visual circle centered inside.
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Material(
+                color: AppThemeConfig.errorColor,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onHangUp,
+                  child: const SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Icon(
+                      Icons.call_end,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -621,6 +646,13 @@ class RingingCallScene extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final disableAnimations = MediaQuery.disableAnimationsOf(context);
+    final Widget avatar = CallUserAvatar(
+      userId: userId,
+      name: name,
+      radius: avatarRadius,
+      fontSize: avatarFontSize,
+    );
     return CallSceneShell(
       topBar: CallTopStatusBar(
         key: const ValueKey('call-top-bar'),
@@ -631,16 +663,55 @@ class RingingCallScene extends StatelessWidget {
       ),
       bottomBar: bottomBar,
       child: CallIdentityStage(
-        avatar: CallUserAvatar(
-          userId: userId,
-          name: name,
-          radius: avatarRadius,
-          fontSize: avatarFontSize,
-        ),
+        avatar: disableAnimations
+            ? avatar
+            : _RingingAvatarPulse(child: avatar),
         title: name,
         subtitle: primarySubtitle,
         secondaryNote: secondaryNote,
       ),
     );
+  }
+}
+
+/// Subtle 0.97 → 1.0 scale pulse on the ringing-state avatar, repeating every
+/// ~1.2s. Renders only when the caller has not opted out of motion — callers
+/// short-circuit this widget when `MediaQuery.disableAnimationsOf(context)` is
+/// true so the avatar stays perfectly static for reduce-motion users.
+class _RingingAvatarPulse extends StatefulWidget {
+  const _RingingAvatarPulse({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_RingingAvatarPulse> createState() => _RingingAvatarPulseState();
+}
+
+class _RingingAvatarPulseState extends State<_RingingAvatarPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 0.97, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(scale: _scale, child: widget.child);
   }
 }

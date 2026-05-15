@@ -46,6 +46,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _manualHostController = TextEditingController();
   final TextEditingController _manualPortController = TextEditingController();
   final TextEditingController _manualPubkeyController = TextEditingController();
+  final FocusNode _nicknameFocusNode = FocusNode();
 
   @override
   void dispose() {
@@ -54,6 +55,7 @@ class _LoginPageState extends State<LoginPage> {
     _manualHostController.dispose();
     _manualPortController.dispose();
     _manualPubkeyController.dispose();
+    _nicknameFocusNode.dispose();
     super.dispose();
   }
 
@@ -125,32 +127,40 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<String?> _showPasswordDialog(String title) async {
     final passwordController = TextEditingController();
+    bool obscure = true;
     return showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: passwordController,
-          obscureText: true,
-          textAlignVertical: TextAlignVertical.center,
-          decoration: InputDecoration(
-            labelText: AppLocalizations.of(context)!.password,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: passwordController,
+            obscureText: obscure,
+            textAlignVertical: TextAlignVertical.center,
+            decoration: InputDecoration(
+              labelText: AppLocalizations.of(context)!.password,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setLocal(() => obscure = !obscure),
+                tooltip: AppLocalizations.of(context)!.passwordVisibility,
+              ),
             ),
+            onSubmitted: (value) => Navigator.of(context).pop(value),
           ),
-          onSubmitted: (value) => Navigator.of(context).pop(value),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: Text(AppLocalizations.of(context)!.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(passwordController.text),
+              child: Text(AppLocalizations.of(context)!.ok),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
-            child: Text(AppLocalizations.of(context)!.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(passwordController.text),
-            child: Text(AppLocalizations.of(context)!.ok),
-          ),
-        ],
       ),
     );
   }
@@ -178,7 +188,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            AppSpacing.verticalMd,
             TextField(
               controller: confirmController,
               obscureText: true,
@@ -279,6 +289,7 @@ class _LoginPageState extends State<LoginPage> {
           _busy = false;
         });
         AppSnackBar.showError(context, _error!);
+        FocusScope.of(context).requestFocus(_nicknameFocusNode);
       }
       return;
     }
@@ -353,16 +364,17 @@ class _LoginPageState extends State<LoginPage> {
       case LoginControllerFailure(:final message):
         setState(() => _error = message);
         AppSnackBar.showError(context, message);
+        FocusScope.of(context).requestFocus(_nicknameFocusNode);
         break;
     }
   }
 
   /// Import a tox_profile.tox or .zip file via [LoginPageController].
   Future<void> _importToxProfile() async {
+    final l10n = AppLocalizations.of(context)!;
     final result = await _loginController.importAccount(
-      requestPassword: (prompt) => _showConfirmPasswordDialog(
-        AppLocalizations.of(context)!.enterPasswordToImport,
-      ),
+      requestPassword: () => _showConfirmPasswordDialog(l10n.enterPasswordToImport),
+      importedAccountDefaultName: l10n.importedAccountDefaultName,
     );
     if (!mounted) return;
     switch (result) {
@@ -375,9 +387,20 @@ class _LoginPageState extends State<LoginPage> {
           AppLocalizations.of(context)!.accountImportedSuccessfully,
         );
         break;
-      case ImportFailure(:final message):
+      case ImportFailure(:final kind, :final detail):
+        final localized = AppLocalizations.of(context)!;
+        final message = switch (kind) {
+          ImportFailureKind.noFileSelected => localized.importNoFileSelected,
+          ImportFailureKind.cancelled => localized.importCancelled,
+          ImportFailureKind.accountAlreadyExists => localized.accountAlreadyExists,
+          ImportFailureKind.generalError =>
+            localized.failedToImport(detail ?? ''),
+        };
         setState(() => _error = message);
-        if (message != 'No file selected' && message != 'Cancelled') {
+        // Suppress the toast for user-initiated cancellation paths; surface
+        // it for genuine failures.
+        if (kind != ImportFailureKind.noFileSelected &&
+            kind != ImportFailureKind.cancelled) {
           AppSnackBar.showError(context, message);
         }
         break;
@@ -696,7 +719,7 @@ class _LoginPageState extends State<LoginPage> {
                                                             .titleSmall,
                                                       ),
                                                       if (statusMsg.isNotEmpty) ...[
-                                                        const SizedBox(height: 2),
+                                                        AppSpacing.verticalXs,
                                                         Text(
                                                           statusMsg,
                                                           style: Theme.of(context)
@@ -715,7 +738,7 @@ class _LoginPageState extends State<LoginPage> {
                                                               TextOverflow.ellipsis,
                                                         ),
                                                       ],
-                                                      const SizedBox(height: 6),
+                                                      AppSpacing.verticalXs,
                                                       Row(
                                                         children: [
                                                           Text(
@@ -857,6 +880,7 @@ class _LoginActionCard extends StatelessWidget {
                 label,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: color,
+                      fontWeight: isPrimary ? FontWeight.w600 : null,
                     ),
               ),
               const Spacer(),

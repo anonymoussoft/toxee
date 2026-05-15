@@ -1246,10 +1246,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callQualityLabel => 'Call quality';
 
   @override
-  String unreadMessagesSemantics(int count) => '$count unread messages';
+  String unreadMessagesSemantics(int count) {
+    return '$count unread messages';
+  }
 
   @override
-  String matchingMessagesSemantics(int count) => '$count matching messages';
+  String matchingMessagesSemantics(int count) {
+    return '$count matching messages';
+  }
 
   @override
   String get statusOnline => 'Online';
@@ -1264,8 +1268,73 @@ class AppLocalizationsEn extends AppLocalizations {
   String get joinChannelToGetStarted => 'Join a channel to get started';
 
   @override
-  String ircUsersCount(int count) => 'Users ($count)';
+  String ircUsersCount(int count) {
+    return 'Users ($count)';
+  }
 
   @override
   String get ircNoUsers => 'No users';
+
+  @override
+  String get passwordVisibility => 'Toggle password visibility';
+
+  @override
+  String get nicknameHintExample => 'e.g. Alice';
+
+  @override
+  String get callAudioRouteSystem => 'Audio route managed by system on this platform';
+
+  @override
+  String get copyFullToxId => 'Copy full ID';
+
+  @override
+  String get themeSystem => 'System';
+
+  @override
+  String get themeLight => 'Light';
+
+  @override
+  String get themeDark => 'Dark';
+
+  @override
+  String get idLabel => 'ID:';
+
+  @override
+  String errorBannerLabel(String message) {
+    return 'Error: $message';
+  }
+
+  @override
+  String searchResultContactSemantics(String name) {
+    return '$name, contact';
+  }
+
+  @override
+  String searchResultGroupSemantics(String name) {
+    return '$name, group';
+  }
+
+  @override
+  String searchResultMessageSemantics(String name) {
+    return '$name, message';
+  }
+
+  @override
+  String searchResultConversationSemantics(String name) {
+    return '$name, conversation';
+  }
+
+  @override
+  String get importNoFileSelected => 'No file selected';
+
+  @override
+  String get importCancelled => 'Cancelled';
+
+  @override
+  String get importedAccountDefaultName => 'Imported account';
+
+  @override
+  String failedToImport(String error) {
+    return 'Failed to import: $error';
+  }
 }

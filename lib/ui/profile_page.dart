@@ -749,7 +749,21 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                               ],
                             ),
-                            if (_editMode) ...[
+                            // Animated grow/collapse for the edit-fields block.
+                            // Respects MediaQuery.disableAnimationsOf so users
+                            // with reduced-motion preferences see no transition.
+                            AnimatedSize(
+                              duration: MediaQuery.disableAnimationsOf(context)
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 220),
+                              curve: Curves.easeOut,
+                              alignment: Alignment.topCenter,
+                              child: _editMode
+                                  ? Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
                               AppSpacing.verticalMd,
                               TextField(
                                 controller: _nickController,
@@ -835,78 +849,115 @@ class _ProfilePageState extends State<ProfilePage> {
                                 },
                               ),
                               AppSpacing.verticalMd,
-                              SizedBox(
-                                width: double.infinity,
-                                height: 44,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: colorTheme.primaryColor,
-                                    foregroundColor: colorTheme.onPrimary,
-                                    disabledBackgroundColor: colorTheme
-                                        .primaryColor
-                                        .withValues(alpha: 0.4),
-                                    disabledForegroundColor:
-                                        colorTheme.onPrimary,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                          AppThemeConfig.buttonBorderRadius),
-                                    ),
-                                    textStyle: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(fontWeight: FontWeight.w600),
+                              Row(
+                                children: [
+                                  // Explicit labeled Cancel — the icon-toggle
+                                  // alone is too easy to miss as an escape
+                                  // path.
+                                  TextButton(
+                                    onPressed: _isSaving
+                                        ? null
+                                        : () => setState(
+                                            () => _editMode = false),
+                                    child: Text(tL10n?.cancel ?? appL10n.cancel),
                                   ),
-                                  onPressed: (_isSaving ||
-                                          _calculateTextLength(
-                                                  _nickController.text) >
-                                              12 ||
-                                          _calculateTextLength(
-                                                  _statusController.text) >
-                                              24)
-                                      ? null
-                                      : _handleSave,
-                                  child: _isSaving
-                                      ? SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    colorTheme.onPrimary),
+                                  AppSpacing.horizontalSm,
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 44,
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              colorTheme.primaryColor,
+                                          foregroundColor: colorTheme.onPrimary,
+                                          disabledBackgroundColor: colorTheme
+                                              .primaryColor
+                                              .withValues(alpha: 0.4),
+                                          disabledForegroundColor:
+                                              colorTheme.onPrimary,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppThemeConfig
+                                                    .buttonBorderRadius),
                                           ),
-                                        )
-                                      : Text(tL10n?.saveContact ?? appL10n.save),
-                                ),
+                                          textStyle: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(
+                                                  fontWeight: FontWeight.w600),
+                                        ),
+                                        onPressed: (_isSaving ||
+                                                _calculateTextLength(
+                                                        _nickController.text) >
+                                                    12 ||
+                                                _calculateTextLength(
+                                                        _statusController
+                                                            .text) >
+                                                    24)
+                                            ? null
+                                            : _handleSave,
+                                        child: _isSaving
+                                            ? SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor:
+                                                      AlwaysStoppedAnimation<
+                                                              Color>(
+                                                          colorTheme.onPrimary),
+                                                ),
+                                              )
+                                            : Text(tL10n?.saveContact ??
+                                                appL10n.save),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               AppSpacing.verticalSm,
-                            ],
+                                      ],
+                                    )
+                                  : const SizedBox(width: double.infinity),
+                            ),
                             Row(
                               children: [
                                 Container(
                                   width: 8,
                                   height: 8,
                                   decoration: BoxDecoration(
+                                    // Dot uses success/secondary token so the
+                                    // color signal is still present, but the
+                                    // adjacent label always carries primary
+                                    // text contrast (see below) so users who
+                                    // can't distinguish the dot still read it.
                                     color: isConnected
                                         ? AppThemeConfig.successColor
-                                        : colorTheme.secondaryTextColor,
+                                        : (Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? AppThemeConfig
+                                                .secondaryTextColorDark
+                                            : AppThemeConfig
+                                                .secondaryTextColorLight),
                                     shape: BoxShape.circle,
                                   ),
                                 ),
                                 AppSpacing.horizontalXs,
-                                const SizedBox(width: 2),
+                                AppSpacing.horizontalXs,
                                 Text(
                                   isConnected
-                                      ? (tL10n?.online ?? appL10n.online)
-                                      : (tL10n?.offline ?? appL10n.offline),
+                                      ? appL10n.statusOnline
+                                      : appL10n.statusOffline,
                                   style: Theme.of(context)
                                       .textTheme
                                       .labelMedium
                                       ?.copyWith(
-                                        color: isConnected
-                                            ? AppThemeConfig.successColor
-                                            : colorTheme.secondaryTextColor,
+                                        // Always full body-text contrast so
+                                        // status is readable even if the dot
+                                        // color cue is missed.
+                                        color: colorTheme.primaryTextColor,
                                         fontWeight: FontWeight.w600,
                                         letterSpacing: 0.2,
                                       ),
@@ -967,8 +1018,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                               vertical: AppSpacing.xs),
-                          minimumSize: const Size(0, 32),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          minimumSize: const Size(0, 44),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
                                 AppThemeConfig.buttonBorderRadius),
@@ -1272,6 +1322,7 @@ class _ProfilePageState extends State<ProfilePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
+                  flex: 2,
                   child: SingleChildScrollView(
                     child: Padding(
                       padding: const EdgeInsets.only(right: AppSpacing.lg),
@@ -1283,7 +1334,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                 ),
-                SizedBox(width: 280, child: qrSection),
+                Expanded(
+                  flex: 3,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: qrSection,
+                  ),
+                ),
               ],
             ),
           );

@@ -27,7 +27,7 @@ class Prefs {
   static const _kQuitGroups = 'quit_groups_list'; // Groups that user has quit
   static const _kNickname = 'self_nickname';
   static const _kStatusMsg = 'self_status_msg';
-  static const _kThemeMode = 'theme_mode'; // 'light' | 'dark'
+  static const _kThemeMode = 'theme_mode'; // 'system' | 'light' | 'dark'
   static const _kAvatarPath = 'self_avatar_path';
   static String _groupNameKey(String gid) => 'group_name_$gid';
   static const _kLocalFriends = 'local_friends';
@@ -265,14 +265,24 @@ class Prefs {
     }
   }
 
+  /// Returns one of: 'system' | 'light' | 'dark'.
+  /// Default for unknown / unset values is 'system' so first-launch follows
+  /// the OS preference.
   static Future<String> getThemeMode() async {
     final p = await _getPrefs();
-    return p.getString(_kThemeMode) ?? 'light';
+    final raw = p.getString(_kThemeMode);
+    if (raw == 'dark' || raw == 'light' || raw == 'system') return raw!;
+    return 'system';
   }
 
+  /// Persists theme mode. Accepts 'system', 'light', 'dark'; any other value
+  /// is coerced to 'system'.
   static Future<void> setThemeMode(String mode) async {
     final p = await _getPrefs();
-    await p.setString(_kThemeMode, (mode == 'dark') ? 'dark' : 'light');
+    final normalized = (mode == 'dark' || mode == 'light' || mode == 'system')
+        ? mode
+        : 'system';
+    await p.setString(_kThemeMode, normalized);
   }
 
   static Future<String?> getAvatarPath() async {

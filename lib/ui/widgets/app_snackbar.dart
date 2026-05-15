@@ -11,18 +11,27 @@ class AppSnackBar {
     String message, {
     bool isError = false,
     bool isSuccess = false,
+    bool isInfo = false,
     Duration duration = const Duration(seconds: 3),
     String? actionLabel,
     VoidCallback? onAction,
   }) {
-    final brightness = Theme.of(context).brightness;
     Color? backgroundColor;
+    Color? foregroundColor;
     if (isError) {
       backgroundColor = AppThemeConfig.errorColor;
+      foregroundColor = Colors.white;
     } else if (isSuccess) {
-      backgroundColor = brightness == Brightness.dark
-          ? AppThemeConfig.primaryColorDark
-          : AppThemeConfig.primaryColor;
+      // Success uses the dedicated success token (emerald) — was previously
+      // using the primary brand color, which conflated "this happened" with
+      // "this is the brand action".
+      backgroundColor = AppThemeConfig.successColor;
+      foregroundColor = Colors.white;
+    } else if (isInfo) {
+      // Slate-tinted neutral surface for informational messages.
+      backgroundColor =
+          AppThemeConfig.secondaryTextColorLight.withValues(alpha: 0.12);
+      foregroundColor = Theme.of(context).colorScheme.onSurface;
     }
 
     ScaffoldMessenger.of(context)
@@ -31,9 +40,7 @@ class AppSnackBar {
         SnackBar(
           content: Text(
             message,
-            style: TextStyle(
-              color: (isError || isSuccess) ? Colors.white : null,
-            ),
+            style: TextStyle(color: foregroundColor),
           ),
           backgroundColor: backgroundColor,
           behavior: SnackBarBehavior.floating,
@@ -47,7 +54,7 @@ class AppSnackBar {
               ? SnackBarAction(
                   label: actionLabel,
                   onPressed: onAction,
-                  textColor: Colors.white,
+                  textColor: foregroundColor ?? Colors.white,
                 )
               : null,
         ),
@@ -60,5 +67,9 @@ class AppSnackBar {
 
   static void showSuccess(BuildContext context, String message) {
     show(context, message, isSuccess: true);
+  }
+
+  static void showInfo(BuildContext context, String message) {
+    show(context, message, isInfo: true);
   }
 }

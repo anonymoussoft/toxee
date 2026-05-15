@@ -553,11 +553,15 @@ class _CustomSearchState extends State<CustomSearch> {
             final faceUrl = e.friendInfo?.userProfile?.faceUrl;
             final isDark = Theme.of(context).brightness == Brightness.dark;
             final titleStyle = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
-            return ListTile(
-              leading: _avatarWidget(faceUrl, const Icon(Icons.person)),
-              title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
-              subtitle: Text(uid),
-              onTap: () => _navigateToMessage(userID: uid, groupID: null),
+            return Semantics(
+              label: l10n.searchResultContactSemantics(name),
+              button: true,
+              child: ListTile(
+                leading: _avatarWidget(faceUrl, const Icon(Icons.person)),
+                title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
+                subtitle: Text('${l10n.idLabel} $uid'),
+                onTap: () => _navigateToMessage(userID: uid, groupID: null),
+              ),
             );
           }),
         if (hasGroups) _buildSectionHeader(l10n.groups),
@@ -566,11 +570,15 @@ class _CustomSearchState extends State<CustomSearch> {
             final name = TencentCloudChatUtils.checkString(e.groupName) ?? e.groupID;
             final isDark = Theme.of(context).brightness == Brightness.dark;
             final titleStyle = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
-            return ListTile(
-              leading: _avatarWidget(e.faceUrl, const Icon(Icons.group)),
-              title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
-              subtitle: Text(e.groupID),
-              onTap: () => _navigateToMessage(userID: null, groupID: e.groupID),
+            return Semantics(
+              label: l10n.searchResultGroupSemantics(name),
+              button: true,
+              child: ListTile(
+                leading: _avatarWidget(e.faceUrl, const Icon(Icons.group)),
+                title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
+                subtitle: Text('${l10n.idLabel} ${e.groupID}'),
+                onTap: () => _navigateToMessage(userID: null, groupID: e.groupID),
+              ),
             );
           }),
         if (hasMessages) _buildSectionHeader(l10n.searchSectionMessages),
@@ -579,31 +587,35 @@ class _CustomSearchState extends State<CustomSearch> {
             final count = result.totalCount ?? result.messageList.length;
             final isDark = Theme.of(context).brightness == Brightness.dark;
             final titleStyle = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
-            return ListTile(
-              leading: _avatarWidget(result.avatarUrl, const Icon(Icons.chat)),
-              title: _buildHighlightedText(result.showName, _searchKeyword.trim(), titleStyle, isDark: isDark),
-              subtitle: Text(l10n.messageCount(count)),
-              onTap: () {
-                Navigator.of(context).push<String>(
-                  MaterialPageRoute<String>(
-                    builder: (context) => SearchChatHistoryWindow(
-                      initialKeyword: _searchKeyword.trim(),
-                      messageSearchResults: _messageSearchResults,
-                      initialSelectedResult: result,
-                      onNavigateToMessage: _navigateToMessage,
+            return Semantics(
+              label: l10n.searchResultMessageSemantics(result.showName),
+              button: true,
+              child: ListTile(
+                leading: _avatarWidget(result.avatarUrl, const Icon(Icons.chat)),
+                title: _buildHighlightedText(result.showName, _searchKeyword.trim(), titleStyle, isDark: isDark),
+                subtitle: Text(l10n.messageCount(count)),
+                onTap: () {
+                  Navigator.of(context).push<String>(
+                    MaterialPageRoute<String>(
+                      builder: (context) => SearchChatHistoryWindow(
+                        initialKeyword: _searchKeyword.trim(),
+                        messageSearchResults: _messageSearchResults,
+                        initialSelectedResult: result,
+                        onNavigateToMessage: _navigateToMessage,
+                      ),
                     ),
-                  ),
-                ).then((value) {
-                  if (!mounted || value == null) return;
-                  final keyword = value.trim();
-                  if (keyword.isEmpty) return;
-                  setState(() {
-                    _searchKeyword = keyword;
-                    _searchController.text = keyword;
+                  ).then((value) {
+                    if (!mounted || value == null) return;
+                    final keyword = value.trim();
+                    if (keyword.isEmpty) return;
+                    setState(() {
+                      _searchKeyword = keyword;
+                      _searchController.text = keyword;
+                    });
+                    _performSearch();
                   });
-                  _performSearch();
-                });
-              },
+                },
+              ),
             );
           }),
         if (hasFallback) _buildSectionHeader(l10n.searchSectionConversations),
@@ -615,11 +627,15 @@ class _CustomSearchState extends State<CustomSearch> {
                 : (c.groupID ?? c.conversationID);
             final isDark = Theme.of(context).brightness == Brightness.dark;
             final titleStyle = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
-            return ListTile(
-              leading: _avatarWidget(c.faceUrl, const Icon(Icons.chat_bubble_outline)),
-              title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
-              subtitle: Text(id),
-              onTap: () => _navigateToMessage(userID: c.userID, groupID: c.groupID),
+            return Semantics(
+              label: l10n.searchResultConversationSemantics(name),
+              button: true,
+              child: ListTile(
+                leading: _avatarWidget(c.faceUrl, const Icon(Icons.chat_bubble_outline)),
+                title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
+                subtitle: Text('${l10n.idLabel} $id'),
+                onTap: () => _navigateToMessage(userID: c.userID, groupID: c.groupID),
+              ),
             );
           }),
       ],

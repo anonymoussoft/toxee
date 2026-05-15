@@ -2414,28 +2414,154 @@ abstract class AppLocalizations {
   String get callQualityLabel;
 
   /// No description provided for @unreadMessagesSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} unread messages'**
   String unreadMessagesSemantics(int count);
 
   /// No description provided for @matchingMessagesSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} matching messages'**
   String matchingMessagesSemantics(int count);
 
-  /// Online status label (title case).
+  /// Online status label (title case)
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
   String get statusOnline;
 
-  /// Offline status label (title case).
+  /// Offline status label (title case)
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
   String get statusOffline;
 
-  /// No description provided for @noIrcChannels.
+  /// Empty state title when no IRC channels are joined
+  ///
+  /// In en, this message translates to:
+  /// **'No IRC channels'**
   String get noIrcChannels;
 
-  /// No description provided for @joinChannelToGetStarted.
+  /// Empty state subtitle for IRC channels
+  ///
+  /// In en, this message translates to:
+  /// **'Join a channel to get started'**
   String get joinChannelToGetStarted;
 
   /// No description provided for @ircUsersCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Users ({count})'**
   String ircUsersCount(int count);
 
   /// No description provided for @ircNoUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'No users'**
   String get ircNoUsers;
+
+  /// Tooltip on the show/hide button next to a password field
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle password visibility'**
+  String get passwordVisibility;
+
+  /// Concrete example placeholder for the nickname field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Alice'**
+  String get nicknameHintExample;
+
+  /// Tooltip on a disabled audio-route button when the OS handles routing
+  ///
+  /// In en, this message translates to:
+  /// **'Audio route managed by system on this platform'**
+  String get callAudioRouteSystem;
+
+  /// Tooltip on the copy button for a full Tox ID
+  ///
+  /// In en, this message translates to:
+  /// **'Copy full ID'**
+  String get copyFullToxId;
+
+  /// Theme mode option: follow system setting
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get themeSystem;
+
+  /// Theme mode option: light
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeLight;
+
+  /// Theme mode option: dark
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeDark;
+
+  /// Inline label prefix shown before an ID value
+  ///
+  /// In en, this message translates to:
+  /// **'ID:'**
+  String get idLabel;
+
+  /// Screen reader label for the error banner live region
+  ///
+  /// In en, this message translates to:
+  /// **'Error: {message}'**
+  String errorBannerLabel(String message);
+
+  /// No description provided for @searchResultContactSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, contact'**
+  String searchResultContactSemantics(String name);
+
+  /// No description provided for @searchResultGroupSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, group'**
+  String searchResultGroupSemantics(String name);
+
+  /// No description provided for @searchResultMessageSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, message'**
+  String searchResultMessageSemantics(String name);
+
+  /// No description provided for @searchResultConversationSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, conversation'**
+  String searchResultConversationSemantics(String name);
+
+  /// No description provided for @importNoFileSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'No file selected'**
+  String get importNoFileSelected;
+
+  /// No description provided for @importCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get importCancelled;
+
+  /// No description provided for @importedAccountDefaultName.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported account'**
+  String get importedAccountDefaultName;
+
+  /// No description provided for @failedToImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to import: {error}'**
+  String failedToImport(String error);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

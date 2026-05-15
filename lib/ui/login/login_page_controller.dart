@@ -34,9 +34,24 @@ final class ImportSuccess extends ImportResult {
   const ImportSuccess();
 }
 
+/// Reason an import failed. The UI maps this to a localized message;
+/// keeping a kind enum (instead of stringly-typed messages) lets the UI
+/// distinguish user-initiated cancellation from genuine errors without
+/// fragile string comparisons.
+enum ImportFailureKind {
+  noFileSelected,
+  cancelled,
+  accountAlreadyExists,
+  generalError,
+}
+
 final class ImportFailure extends ImportResult {
-  const ImportFailure(this.message);
-  final String message;
+  const ImportFailure(this.kind, {this.detail});
+  final ImportFailureKind kind;
+
+  /// Raw underlying error string for [ImportFailureKind.generalError]; null
+  /// for cancellation / file-not-selected / duplicate-account cases.
+  final String? detail;
 }
 
 /// Orchestrates login and import flows for [LoginPage].
@@ -68,9 +83,12 @@ class LoginPageController {
     }
   }
 
-  /// Imports an account from a .tox or .zip file. Uses [requestPassword] when file is encrypted.
+  /// Imports an account from a .tox or .zip file. Uses [requestPassword] when
+  /// file is encrypted. The UI supplies an [importedAccountDefaultName] which
+  /// is used when the imported backup carries no nickname.
   Future<ImportResult> importAccount({
-    required Future<String?> Function(String prompt) requestPassword,
+    required Future<String?> Function() requestPassword,
+    required String importedAccountDefaultName,
   }) async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -78,7 +96,7 @@ class LoginPageController {
         allowedExtensions: ['tox', 'zip'],
       );
       if (result == null || result.files.single.path == null) {
-        return const ImportFailure('No file selected');
+        return const ImportFailure(ImportFailureKind.noFileSelected);
       }
       final filePath = result.files.single.path!;
       final isZip = filePath.toLowerCase().endsWith('.zip');
@@ -91,12 +109,12 @@ class LoginPageController {
         final toxId = metadata['toxId']!;
         final existingAccount = await Prefs.getAccountByToxId(toxId);
         if (existingAccount != null) {
-          return const ImportFailure('Account already exists');
+          return const ImportFailure(ImportFailureKind.accountAlreadyExists);
         }
         final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
         final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
         if (await File(profileFilePath).exists()) {
-          return const ImportFailure('Account already exists');
+          return const ImportFailure(ImportFailureKind.accountAlreadyExists);
         }
         try {
           accountData = await AccountExportService.importFullBackup(
@@ -106,8 +124,8 @@ class LoginPageController {
         } catch (e) {
           if (e.toString().contains('Password required') ||
               e.toString().contains('password')) {
-            password = await requestPassword('Enter password to import');
-            if (password == null) return const ImportFailure('Cancelled');
+            password = await requestPassword();
+            if (password == null) return const ImportFailure(ImportFailureKind.cancelled);
             accountData = await AccountExportService.importFullBackup(
               filePath: filePath,
               password: password,
@@ -125,8 +143,8 @@ class LoginPageController {
         } catch (e) {
           if (e.toString().contains('Password required') ||
               e.toString().contains('password')) {
-            password = await requestPassword('Enter password to import');
-            if (password == null) return const ImportFailure('Cancelled');
+            password = await requestPassword();
+            if (password == null) return const ImportFailure(ImportFailureKind.cancelled);
             accountData = await AccountExportService.importAccountData(
               filePath: filePath,
               password: password,
@@ -144,7 +162,7 @@ class LoginPageController {
       if (!isZip) {
         final existingAccount = await Prefs.getAccountByToxId(toxId);
         if (existingAccount != null) {
-          return const ImportFailure('Account already exists');
+          return const ImportFailure(ImportFailureKind.accountAlreadyExists);
         }
       }
 
@@ -152,14 +170,14 @@ class LoginPageController {
         final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
         final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
         if (await File(profileFilePath).exists()) {
-          return const ImportFailure('Account already exists');
+          return const ImportFailure(ImportFailureKind.accountAlreadyExists);
         }
         await Directory(profileDir).create(recursive: true);
         await File(profileFilePath).writeAsBytes(toxProfile);
       }
 
       final displayNickname =
-          importedNickname.isNotEmpty ? importedNickname : 'Imported account';
+          importedNickname.isNotEmpty ? importedNickname : importedAccountDefaultName;
       await Prefs.addAccount(
         toxId: toxId,
         nickname: displayNickname,
@@ -174,7 +192,7 @@ class LoginPageController {
       return const ImportSuccess();
     } catch (e, st) {
       AppLogger.logError('[LoginPageController] Import failed', e, st);
-      return ImportFailure('Failed to import: ${e.toString()}');
+      return ImportFailure(ImportFailureKind.generalError, detail: e.toString());
     }
   }
 }

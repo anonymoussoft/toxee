@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../util/app_spacing.dart';
+import '../../util/app_theme_config.dart';
+
+// 4pt matches AppSpacing.xs grid — keeps skeleton bars aligned to the
+// same rhythm as live content.
+const double _kSkeletonRadius = 4.0;
 
 /// A skeleton/shimmer loading placeholder for lists.
 /// Uses pure Flutter animations without external packages.
@@ -39,12 +44,29 @@ class _LoadingShimmerState extends State<LoadingShimmer>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // Slate-200/100 on light, slate-800/700 on dark — matches the
-    // AppThemeConfig palette instead of the old WeChat-clone greys.
-    final baseColor =
-        isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
-    final highlightColor =
-        isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
+    // Token-derived shimmer palette:
+    //   dark  base = othersMessageBubbleColorDark (slate-800, our surface-1)
+    //   dark  highlight = base lerped 20% toward the slate-400 secondary
+    //                     text color — gives a perceptible shimmer band
+    //                     without introducing a new color token.
+    //   light base = dividerColorLight (slate-200 / cool blue tint, our
+    //                hairline divider; reads as a "muted surface").
+    //   light highlight = base lerped 50% toward white — softer than the
+    //                     old slate-50 hex but still clearly above base.
+    final baseColor = isDark
+        ? AppThemeConfig.othersMessageBubbleColorDark
+        : AppThemeConfig.dividerColorLight;
+    final highlightColor = isDark
+        ? Color.lerp(
+            AppThemeConfig.othersMessageBubbleColorDark,
+            AppThemeConfig.secondaryTextColorDark,
+            0.20,
+          )!
+        : Color.lerp(
+            AppThemeConfig.dividerColorLight,
+            Colors.white,
+            0.50,
+          )!;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -139,7 +161,7 @@ class _ShimmerBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: color,
           shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
-          borderRadius: isCircle ? null : BorderRadius.circular(4),
+          borderRadius: isCircle ? null : BorderRadius.circular(_kSkeletonRadius),
         ),
       ),
     );

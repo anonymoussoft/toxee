@@ -39,6 +39,8 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _statusFocused = false;
   bool _passwordFocused = false;
   bool _confirmPasswordFocused = false;
+  bool _passwordObscure = true;
+  bool _confirmPasswordObscure = true;
 
   @override
   void dispose() {
@@ -200,7 +202,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     textAlignVertical: TextAlignVertical.center,
                     decoration: InputDecoration(
                       labelText: AppLocalizations.of(context)!.nickname,
-                      hintText: AppLocalizations.of(context)!.nickname,
+                      hintText: AppLocalizations.of(context)!.nicknameHintExample,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                       ),
@@ -253,7 +255,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   TextFormField(
                     controller: _passwordController,
                     focusNode: _passwordFocusNode,
-                    obscureText: true,
+                    obscureText: _passwordObscure,
                     textAlignVertical: TextAlignVertical.center,
                     decoration: InputDecoration(
                       labelText: AppLocalizations.of(context)!.password,
@@ -262,6 +264,11 @@ class _RegisterPageState extends State<RegisterPage> {
                         borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                       ),
                       prefixIcon: Icon(Icons.lock_outline, color: _passwordFocused ? Theme.of(context).colorScheme.primary : null),
+                      suffixIcon: IconButton(
+                        icon: Icon(_passwordObscure ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _passwordObscure = !_passwordObscure),
+                        tooltip: AppLocalizations.of(context)!.passwordVisibility,
+                      ),
                     ),
                     onChanged: (_) {
                       if (mounted) setState(() {});
@@ -272,7 +279,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   TextFormField(
                     controller: _confirmPasswordController,
                     focusNode: _confirmPasswordFocusNode,
-                    obscureText: true,
+                    obscureText: _confirmPasswordObscure,
                     textAlignVertical: TextAlignVertical.center,
                     decoration: InputDecoration(
                       labelText: AppLocalizations.of(context)!.confirmPassword,
@@ -280,14 +287,24 @@ class _RegisterPageState extends State<RegisterPage> {
                         borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                       ),
                       prefixIcon: Icon(Icons.lock_outline, color: _confirmPasswordFocused ? Theme.of(context).colorScheme.primary : null),
-                      suffixIcon: _confirmPasswordController.text.isNotEmpty && _passwordController.text.isNotEmpty
-                          ? Icon(
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_confirmPasswordController.text.isNotEmpty && _passwordController.text.isNotEmpty)
+                            Icon(
                               _confirmPasswordController.text == _passwordController.text ? Icons.check_circle : Icons.cancel,
                               color: _confirmPasswordController.text == _passwordController.text
                                   ? Theme.of(context).colorScheme.primary
                                   : Theme.of(context).colorScheme.error,
                               size: 20,
-                            ) : null,
+                            ),
+                          IconButton(
+                            icon: Icon(_confirmPasswordObscure ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _confirmPasswordObscure = !_confirmPasswordObscure),
+                            tooltip: AppLocalizations.of(context)!.passwordVisibility,
+                          ),
+                        ],
+                      ),
                     ),
                     validator: (value) {
                       final pwd = _passwordController.text;
@@ -319,7 +336,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius)),
                       ),
                       onPressed: (_busy ||
                               calculateTextLength(_nicknameController.text) > 12 ||

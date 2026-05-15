@@ -78,12 +78,30 @@ extension _SettingsPageBuild on _SettingsPageState {
                       label: Text(AppLocalizations.of(context)!.setPassword),
                       onPressed: _setAccountPassword,
                     ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.logout, size: 18),
-                      label: Text(AppLocalizations.of(context)!.logOut),
-                      onPressed: _logout,
-                    ),
                   ],
+                ),
+                AppSpacing.verticalMd,
+                Divider(height: 1, color: outlineVariant),
+                AppSpacing.verticalMd,
+                // Logout is isolated on its own row so it does not visually
+                // mingle with the neutral Export / Set Password actions; it
+                // also gets the error tint to flag the state-changing intent.
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: Text(AppLocalizations.of(context)!.logOut),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppThemeConfig.errorColor,
+                      side: const BorderSide(
+                          color: AppThemeConfig.errorColor),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                            AppThemeConfig.buttonBorderRadius),
+                      ),
+                    ),
+                    onPressed: _logout,
+                  ),
                 ),
                 AppSpacing.verticalLg,
                 Container(
@@ -264,9 +282,38 @@ extension _SettingsPageBuild on _SettingsPageState {
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '${AppLocalizations.of(context)!.userId}: ${_getToxIdPrefix(accountToxId)}...',
-                              style: Theme.of(context).textTheme.bodySmall,
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    '${AppLocalizations.of(context)!.userId}: ${_getToxIdPrefix(accountToxId)}...',
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ),
+                                // Copy the full (untruncated) Tox ID. The
+                                // visible prefix-with-ellipsis was previously
+                                // a dead end for users who needed the full id.
+                                IconButton(
+                                  icon: const Icon(Icons.copy_outlined, size: 16),
+                                  tooltip: AppLocalizations.of(context)!.copyFullToxId,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                      minWidth: 32, minHeight: 32),
+                                  onPressed: () async {
+                                    await Clipboard.setData(
+                                        ClipboardData(text: accountToxId));
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(AppLocalizations.of(
+                                                context)!
+                                            .idCopiedToClipboard),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
                             Text(
                               '${AppLocalizations.of(context)!.lastLogin}: ${_formatLastLoginTime(lastLogin, context)}',

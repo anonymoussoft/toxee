@@ -1246,28 +1246,97 @@ class AppLocalizationsZh extends AppLocalizations {
   String get callQualityLabel => '通话质量';
 
   @override
-  String unreadMessagesSemantics(int count) => '$count条未读消息';
+  String unreadMessagesSemantics(int count) {
+    return '$count unread messages';
+  }
 
   @override
-  String matchingMessagesSemantics(int count) => '$count条匹配消息';
+  String matchingMessagesSemantics(int count) {
+    return '$count matching messages';
+  }
 
   @override
-  String get statusOnline => '在线';
+  String get statusOnline => 'Online';
 
   @override
-  String get statusOffline => '离线';
+  String get statusOffline => 'Offline';
 
   @override
-  String get noIrcChannels => '没有IRC频道';
+  String get noIrcChannels => 'No IRC channels';
 
   @override
-  String get joinChannelToGetStarted => '加入频道开始使用';
+  String get joinChannelToGetStarted => 'Join a channel to get started';
 
   @override
-  String ircUsersCount(int count) => '用户 ($count)';
+  String ircUsersCount(int count) {
+    return 'Users ($count)';
+  }
 
   @override
-  String get ircNoUsers => '暂无用户';
+  String get ircNoUsers => 'No users';
+
+  @override
+  String get passwordVisibility => '切换密码可见';
+
+  @override
+  String get nicknameHintExample => '例如：Alice';
+
+  @override
+  String get callAudioRouteSystem => '此平台音频输出由系统管理';
+
+  @override
+  String get copyFullToxId => '复制完整 ID';
+
+  @override
+  String get themeSystem => '跟随系统';
+
+  @override
+  String get themeLight => '浅色';
+
+  @override
+  String get themeDark => '深色';
+
+  @override
+  String get idLabel => 'ID：';
+
+  @override
+  String errorBannerLabel(String message) {
+    return '错误：$message';
+  }
+
+  @override
+  String searchResultContactSemantics(String name) {
+    return '$name，联系人';
+  }
+
+  @override
+  String searchResultGroupSemantics(String name) {
+    return '$name，群组';
+  }
+
+  @override
+  String searchResultMessageSemantics(String name) {
+    return '$name，消息';
+  }
+
+  @override
+  String searchResultConversationSemantics(String name) {
+    return '$name，会话';
+  }
+
+  @override
+  String get importNoFileSelected => '未选择文件';
+
+  @override
+  String get importCancelled => '已取消';
+
+  @override
+  String get importedAccountDefaultName => '已导入账号';
+
+  @override
+  String failedToImport(String error) {
+    return '导入失败：$error';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -2426,6 +2495,69 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get callQualityLabel => '通话质量';
+
+  @override
+  String get passwordVisibility => '切换密码可见';
+
+  @override
+  String get nicknameHintExample => '例如：Alice';
+
+  @override
+  String get callAudioRouteSystem => '此平台音频输出由系统管理';
+
+  @override
+  String get copyFullToxId => '复制完整 ID';
+
+  @override
+  String get themeSystem => '跟随系统';
+
+  @override
+  String get themeLight => '浅色';
+
+  @override
+  String get themeDark => '深色';
+
+  @override
+  String get idLabel => 'ID：';
+
+  @override
+  String errorBannerLabel(String message) {
+    return '错误：$message';
+  }
+
+  @override
+  String searchResultContactSemantics(String name) {
+    return '$name，联系人';
+  }
+
+  @override
+  String searchResultGroupSemantics(String name) {
+    return '$name，群组';
+  }
+
+  @override
+  String searchResultMessageSemantics(String name) {
+    return '$name，消息';
+  }
+
+  @override
+  String searchResultConversationSemantics(String name) {
+    return '$name，会话';
+  }
+
+  @override
+  String get importNoFileSelected => '未选择文件';
+
+  @override
+  String get importCancelled => '已取消';
+
+  @override
+  String get importedAccountDefaultName => '已导入账号';
+
+  @override
+  String failedToImport(String error) {
+    return '导入失败：$error';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -3584,4 +3716,67 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get callQualityLabel => '通話品質';
+
+  @override
+  String get passwordVisibility => '切換密碼可見';
+
+  @override
+  String get nicknameHintExample => '例如：Alice';
+
+  @override
+  String get callAudioRouteSystem => '此平台音訊輸出由系統管理';
+
+  @override
+  String get copyFullToxId => '複製完整 ID';
+
+  @override
+  String get themeSystem => '跟隨系統';
+
+  @override
+  String get themeLight => '淺色';
+
+  @override
+  String get themeDark => '深色';
+
+  @override
+  String get idLabel => 'ID：';
+
+  @override
+  String errorBannerLabel(String message) {
+    return '錯誤：$message';
+  }
+
+  @override
+  String searchResultContactSemantics(String name) {
+    return '$name，聯絡人';
+  }
+
+  @override
+  String searchResultGroupSemantics(String name) {
+    return '$name，群組';
+  }
+
+  @override
+  String searchResultMessageSemantics(String name) {
+    return '$name，訊息';
+  }
+
+  @override
+  String searchResultConversationSemantics(String name) {
+    return '$name，會話';
+  }
+
+  @override
+  String get importNoFileSelected => '未選擇檔案';
+
+  @override
+  String get importCancelled => '已取消';
+
+  @override
+  String get importedAccountDefaultName => '已匯入帳號';
+
+  @override
+  String failedToImport(String error) {
+    return '匯入失敗：$error';
+  }
 }

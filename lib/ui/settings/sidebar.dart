@@ -448,40 +448,49 @@ class _SidebarItemState extends State<_SidebarItem> {
                             child: TencentCloudChatConversationTotalUnreadCount(
                               builder: (BuildContext _, int totalUnreadCount) {
                                 if (totalUnreadCount == 0) {
-                                  return Container();
+                                  return const SizedBox.shrink();
                                 }
                                 final displayText = totalUnreadCount > 99
                                     ? "99+"
                                     : "$totalUnreadCount";
-                                final isLargeText = displayText.length > 2;
-                                return UnconstrainedBox(
-                                  child: Container(
-                                    width: isLargeText
-                                        ? 26
-                                        : (displayText.length == 1 ? 16 : 20),
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: colorTheme.tipsColor,
-                                      shape: isLargeText
-                                          ? BoxShape.rectangle
-                                          : BoxShape.circle,
-                                      borderRadius: isLargeText
-                                          ? BorderRadius.circular(
-                                              AppThemeConfig.badgeBorderRadius)
-                                          : null,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        displayText,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                          height: 1.0,
+                                // Constraint-based sizing instead of fixed
+                                // pixel widths — matches the bottom-nav
+                                // badge in home_page.dart and lets text
+                                // scale gracefully.
+                                return Semantics(
+                                  label: AppLocalizations.of(context)
+                                          ?.unreadMessagesSemantics(totalUnreadCount) ??
+                                      'Unread messages: $totalUnreadCount',
+                                  container: true,
+                                  child: ExcludeSemantics(
+                                    child: UnconstrainedBox(
+                                      child: Container(
+                                        constraints:
+                                            const BoxConstraints(minWidth: 16),
+                                        height: 16,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.xs,
                                         ),
-                                        textAlign: TextAlign.center,
+                                        decoration: BoxDecoration(
+                                          color: AppThemeConfig.errorColor,
+                                          borderRadius: BorderRadius.circular(
+                                              AppThemeConfig.badgeBorderRadius),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            displayText,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              height: 1.0,
+                                              fontSize: 10,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -621,34 +630,40 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
                                 final displayText = _applicationUnreadCount > 99
                                     ? "99+"
                                     : "$_applicationUnreadCount";
-                                final isLargeText = displayText.length > 2;
-                                return Container(
-                                  width: isLargeText
-                                      ? 26
-                                      : (displayText.length == 1 ? 16 : 20),
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    color: colorTheme.tipsColor,
-                                    shape: isLargeText
-                                        ? BoxShape.rectangle
-                                        : BoxShape.circle,
-                                    borderRadius: isLargeText
-                                        ? BorderRadius.circular(
-                                            AppThemeConfig.badgeBorderRadius)
-                                        : null,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      displayText,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.labelSmall
-                                          ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.0,
+                                return Semantics(
+                                  label: AppLocalizations.of(context)
+                                          ?.unreadMessagesSemantics(
+                                              _applicationUnreadCount) ??
+                                      'Unread messages: $_applicationUnreadCount',
+                                  container: true,
+                                  child: ExcludeSemantics(
+                                    child: Container(
+                                      constraints:
+                                          const BoxConstraints(minWidth: 16),
+                                      height: 16,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: AppSpacing.xs,
                                       ),
-                                      textAlign: TextAlign.center,
+                                      decoration: BoxDecoration(
+                                        color: AppThemeConfig.errorColor,
+                                        borderRadius: BorderRadius.circular(
+                                            AppThemeConfig.badgeBorderRadius),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          displayText,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.0,
+                                            fontSize: 10,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 );
