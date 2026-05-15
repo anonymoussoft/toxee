@@ -251,13 +251,13 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> {
                         BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                   ),
                 ),
-                // Thin, always-visible scrollbars on desktop. Flutter still
-                // auto-hides on touch platforms unless a Scrollbar widget is
-                // explicitly wrapped, so this is desktop-friendly without
-                // breaking the mobile feel.
+                // Thin scrollbars across the app. We deliberately leave
+                // thumbVisibility unset (rather than always-on) because some
+                // UIKit-owned Scrollables don't have a tightly-bound
+                // ScrollController, and forcing the Scrollbar to paint there
+                // floods the log with "ScrollController has no ScrollPosition
+                // attached" assertions on every frame.
                 scrollbarTheme: ScrollbarThemeData(
-                  thumbVisibility: WidgetStateProperty.resolveWith(
-                      (states) => true),
                   trackVisibility: WidgetStateProperty.all(false),
                   thickness: WidgetStateProperty.all(6.0),
                   radius: const Radius.circular(3.0),
@@ -346,13 +346,9 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> {
                         BorderRadius.circular(AppThemeConfig.inputBorderRadius),
                   ),
                 ),
-                // Thin, always-visible scrollbars on desktop. Flutter still
-                // auto-hides on touch platforms unless a Scrollbar widget is
-                // explicitly wrapped, so this is desktop-friendly without
-                // breaking the mobile feel.
+                // Thin scrollbars across the app. See light-theme comment
+                // above for why thumbVisibility is intentionally unset.
                 scrollbarTheme: ScrollbarThemeData(
-                  thumbVisibility: WidgetStateProperty.resolveWith(
-                      (states) => true),
                   trackVisibility: WidgetStateProperty.all(false),
                   thickness: WidgetStateProperty.all(6.0),
                   radius: const Radius.circular(3.0),
