@@ -156,15 +156,64 @@ void main() {
         expect(importedProfile, equals(fixture.savedata));
       });
 
-      // NOTE: encryptProfileFile / decryptProfileFile / exportAccountData(password:)
-      // all share an FFI use-after-free pattern (the `finally` block frees the
-      // ciphertext buffer before `writeAsBytes` flushes). In some environments
-      // — including this test process — the freed memory is reused before the
-      // file write completes, so the on-disk bytes are garbage. The
-      // refactor MUST NOT change this behaviour, so we don't gate the safety
-      // net on it. We instead exercise the in-memory encryption primitives
-      // directly to prove the FFI round-trips correctly, and leave a TODO for
-      // the production buffer-lifetime fix.
+      // Regression test for the FFI buffer-use-after-free that previously
+      // caused garbage on disk in some allocators when exportAccountData was
+      // called with a password (or encryptProfileFile / decryptProfileFile
+      // ran). Fix: lib/util/account_export/encryption.dart now copies the FFI
+      // buffer into Dart-owned memory via Uint8List.fromList before the
+      // `finally` block frees it. This test exercises the full encrypted
+      // roundtrip end to end and asserts byte equality of the decrypted
+      // profile against the original savedata.
+      test('encrypted export/import roundtrip preserves profile bytes',
+          () async {
+        const password = 'correct horse battery staple';
+        final exportPath = await AccountExportService.exportAccountData(
+          toxId: fixture.toxId,
+          password: password,
+          filePath: p.join(env.extras, 'encrypted.tox'),
+        );
+        expect(File(exportPath).existsSync(), isTrue);
+
+        final exportBytes = await File(exportPath).readAsBytes();
+        expect(exportBytes, isNot(equals(fixture.savedata)),
+            reason: 'encrypted .tox must differ from the plain savedata');
+        expect(
+            await AccountExportService.isProfileFileEncrypted(exportPath),
+            isTrue,
+            reason: 'on-disk bytes must carry the Tox-encrypted magic header');
+
+        final imported = await AccountExportService.importAccountData(
+          filePath: exportPath,
+          password: password,
+        );
+        expect(imported['toxId'], fixture.publicKeyHex);
+        final importedProfile = imported['toxProfile'] as Uint8List;
+        expect(importedProfile, equals(fixture.savedata),
+            reason:
+                'decrypted profile must equal source — regression for FFI buffer UAF');
+      });
+
+      test('encryptProfileFile then decryptProfileFile preserves plaintext',
+          () async {
+        const password = 'another-password-value';
+        final scratch = File(p.join(env.extras, 'scratch_profile.bin'));
+        await scratch.writeAsBytes(fixture.savedata);
+
+        await AccountExportService.encryptProfileFile(scratch.path, password);
+        final encryptedOnDisk = await scratch.readAsBytes();
+        expect(encryptedOnDisk, isNot(equals(fixture.savedata)),
+            reason: 'in-place encryptProfileFile must produce ciphertext');
+        expect(
+            await AccountExportService.isProfileFileEncrypted(scratch.path),
+            isTrue);
+
+        await AccountExportService.decryptProfileFile(scratch.path, password);
+        final decryptedOnDisk = await scratch.readAsBytes();
+        expect(decryptedOnDisk, equals(fixture.savedata),
+            reason:
+                'in-place decryptProfileFile must restore original savedata — regression for FFI buffer UAF');
+      });
+
       test('isProfileFileEncrypted returns false for plain savedata bytes',
           () async {
         final plain = File(p.join(env.extras, 'plain_profile.bin'));

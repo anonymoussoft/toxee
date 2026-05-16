@@ -4,12 +4,13 @@
 // All FFI plumbing (malloc, asTypedList, free) is isolated here so the
 // callers can stay declarative.
 //
-// IMPORTANT: This module preserves the existing production semantics
-// byte-for-byte, including the known buffer-lifetime caveat in the
-// *ProfileFile helpers (the ciphertext/plaintext view is handed to
-// File.writeAsBytes and then freed in `finally`). Don't "fix" that here
-// without coordinating an explicit behaviour-change patch — the refactor
-// charter is to split the file, not to alter semantics.
+// Buffer ownership: every Uint8List that crosses this module's boundary
+// (returned from passEncrypt/passDecrypt, or handed to File.writeAsBytes)
+// is a Dart-owned copy of the FFI buffer, made via Uint8List.fromList
+// before the finally-block free runs. The previous implementation returned
+// asTypedList views over freed memory; in some allocators that produced
+// garbage ciphertext on disk for encrypted profiles. See the
+// encrypted-roundtrip regression test in test/account_export/.
 
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -48,7 +49,7 @@ Uint8List passEncrypt(Uint8List plaintext, String password) {
     if (encryptedLen < 0) {
       throw Exception('Encryption failed');
     }
-    return Uint8List.sublistView(ciphertextPtr.asTypedList(encryptedLen));
+    return Uint8List.fromList(ciphertextPtr.asTypedList(encryptedLen));
   } finally {
     pkgffi.malloc.free(plaintextPtr);
     pkgffi.malloc.free(ciphertextPtr);
@@ -84,7 +85,7 @@ Uint8List passDecrypt(Uint8List ciphertext, String password) {
       throw Exception(
           'Decryption failed - incorrect password or corrupted file');
     }
-    return Uint8List.sublistView(plaintextPtr.asTypedList(decryptedLen));
+    return Uint8List.fromList(plaintextPtr.asTypedList(decryptedLen));
   } finally {
     pkgffi.malloc.free(ciphertextPtr);
     pkgffi.malloc.free(plaintextPtr);
@@ -153,7 +154,7 @@ Future<void> encryptProfileFile(String profileFilePath, String password) async {
     );
     if (encryptedLen < 0) throw Exception('Encryption failed');
     final encrypted =
-        Uint8List.sublistView(ciphertextPtr.asTypedList(encryptedLen));
+        Uint8List.fromList(ciphertextPtr.asTypedList(encryptedLen));
     await file.writeAsBytes(encrypted);
   } finally {
     pkgffi.malloc.free(plaintextPtr);
@@ -197,7 +198,7 @@ Future<void> decryptProfileFile(String profileFilePath, String password) async {
           'Decryption failed - incorrect password or corrupted file');
     }
     final decrypted =
-        Uint8List.sublistView(plaintextPtr.asTypedList(decryptedLen));
+        Uint8List.fromList(plaintextPtr.asTypedList(decryptedLen));
     await file.writeAsBytes(decrypted);
   } finally {
     pkgffi.malloc.free(ciphertextPtr);
