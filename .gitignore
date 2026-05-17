@@ -51,3 +51,8 @@ app.*.map.json
 third_party/tencent_cloud_chat_sdk/
 pubspec_overrides.yaml
 tool/vendor_state.json
+
+# Local agent / tooling state
+.claude/
+.cache/
+dist/
