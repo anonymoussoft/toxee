@@ -1,0 +1,143 @@
+name: Tim2Tox Auto Tests (Nightly Wall-Clock)
+
+# Tier 3 (nightly regression): runs the tim2tox auto_tests scenario suite
+# under real wall-clock timing — same code paths users hit, no virtual
+# mono_time substitution. Catches protocol-level regressions that virtual
+# mode hides (real DHT timing, real socket scheduling, real toxav RTP
+# pacing).
+#
+# Scope: phases 1-10, 12-14 (all phases except 11 Network/DHT, which
+# depends on real WAN connectivity we don't pay for in CI). RETRY_COUNT=0
+# so a single flake fails the run and we open a deduped issue.
+#
+# Trigger: nightly cron at 02:00 UTC + manual dispatch.
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  auto-tests-wall-clock:
+    name: auto_tests (wall-clock, phases 1-10,12-14)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Linux native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libsodium-dev \
+            libopus-dev \
+            libvpx-dev
+
+      - name: Bootstrap dependencies
+        run: dart run tool/bootstrap_deps.dart
+
+      - name: Install toxee Flutter packages
+        run: flutter pub get
+
+      - name: Build libtim2tox_ffi.so (Linux, toxav + DHT bootstrap)
+        run: bash tool/ci/build_tim2tox.sh --target linux --mode release --toxav --dht-bootstrap
+
+      - name: Stage libtim2tox_ffi.so for runtime loader
+        id: stage_lib
+        run: |
+          set -euo pipefail
+          src_dir="$GITHUB_WORKSPACE/build/native-artifacts/linux"
+          if [[ ! -f "$src_dir/libtim2tox_ffi.so" ]]; then
+            echo "::error::libtim2tox_ffi.so not found under $src_dir"
+            ls -la "$src_dir" || true
+            exit 1
+          fi
+          echo "LD_LIBRARY_PATH=$src_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "lib_dir=$src_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Install auto_tests Flutter packages
+        working-directory: third_party/tim2tox/auto_tests
+        run: flutter pub get
+
+      - name: Run auto_tests (wall-clock, phases 1-10,12-14)
+        id: run_tests
+        working-directory: third_party/tim2tox/auto_tests
+        env:
+          # Wall-clock: deliberately NO RUN_VIRTUAL — we want real Tox timers.
+          RETRY_COUNT: '0'
+          SKIP_PUB_GET: 'auto'
+        run: |
+          chmod +x ./run_tests_ordered.sh
+          ./run_tests_ordered.sh 1-10 12-14
+
+      - name: Build failure issue body
+        if: failure()
+        id: issue_body
+        run: |
+          set -euo pipefail
+          body_file="$RUNNER_TEMP/nightly_failure_body.md"
+          summary_glob=(third_party/tim2tox/auto_tests/test_summary_*.txt)
+          {
+            echo "Nightly wall-clock auto_tests run failed."
+            echo ""
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+            echo "## Summary tail"
+            echo ""
+            echo '```'
+            if compgen -G "third_party/tim2tox/auto_tests/test_summary_*.txt" > /dev/null; then
+              # Most recent summary file (largest mtime).
+              latest_summary="$(ls -1t third_party/tim2tox/auto_tests/test_summary_*.txt | head -n 1)"
+              tail -200 "$latest_summary" || true
+            else
+              echo "(no test_summary_*.txt produced)"
+            fi
+            echo '```'
+          } > "$body_file"
+          echo "body_path=$body_file" >> "$GITHUB_OUTPUT"
+
+      - name: Open GitHub issue on failure
+        if: failure()
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "Nightly auto_tests failed: ${{ github.run_started_at }}"
+          content-filepath: ${{ steps.issue_body.outputs.body_path }}
+          labels: |
+            ci-failure
+            nightly
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-tests-nightly-logs
+          if-no-files-found: warn
+          path: |
+            third_party/tim2tox/auto_tests/test_results_*.log
+            third_party/tim2tox/auto_tests/test_summary_*.txt
+            third_party/tim2tox/auto_tests/merged_results/

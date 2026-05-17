@@ -1,0 +1,140 @@
+name: Tim2Tox Auto Tests (Full Matrix)
+
+# Tier 4 (pre-release full matrix): runs the entire tim2tox auto_tests
+# scenario suite — every phase, wall-clock, on both Linux and macOS.
+# Includes phase 11 (Network/DHT), which depends on real WAN connectivity
+# and is intentionally excluded from PR and nightly tiers.
+#
+# Trigger:
+#   - workflow_dispatch (on-demand)
+#   - pull_request labeled `ci:full` (opt-in heavy run on a feature PR)
+#   - push to release/** branches (every release-train candidate)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+  push:
+    branches:
+      - 'release/**'
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  auto-tests-full:
+    name: auto_tests full (${{ matrix.os }})
+    # PR runs are opt-in via the `ci:full` label. Dispatch and release/**
+    # pushes always run.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libsodium-dev \
+            libopus-dev \
+            libvpx-dev
+
+      - name: Install macOS native dependencies
+        if: runner.os == 'macOS'
+        run: |
+          # cmake, pkg-config, ninja typically pre-installed on macos-14;
+          # `brew install` is idempotent so re-running is cheap.
+          brew update
+          brew install libsodium opus libvpx cmake ninja pkg-config
+
+      - name: Bootstrap dependencies
+        run: dart run tool/bootstrap_deps.dart
+
+      - name: Install toxee Flutter packages
+        run: flutter pub get
+
+      - name: Build libtim2tox_ffi (Linux, toxav + DHT bootstrap)
+        if: runner.os == 'Linux'
+        run: bash tool/ci/build_tim2tox.sh --target linux --mode release --toxav --dht-bootstrap
+
+      - name: Build libtim2tox_ffi (macOS, toxav + DHT bootstrap)
+        if: runner.os == 'macOS'
+        run: bash tool/ci/build_tim2tox.sh --target macos --mode release --toxav --dht-bootstrap
+
+      - name: Stage libtim2tox_ffi.so for runtime loader (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          src_dir="$GITHUB_WORKSPACE/build/native-artifacts/linux"
+          if [[ ! -f "$src_dir/libtim2tox_ffi.so" ]]; then
+            echo "::error::libtim2tox_ffi.so not found under $src_dir"
+            ls -la "$src_dir" || true
+            exit 1
+          fi
+          echo "LD_LIBRARY_PATH=$src_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Stage libtim2tox_ffi.dylib for runtime loader (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          src_dir="$GITHUB_WORKSPACE/build/native-artifacts/macos"
+          if [[ ! -f "$src_dir/libtim2tox_ffi.dylib" ]]; then
+            echo "::error::libtim2tox_ffi.dylib not found under $src_dir"
+            ls -la "$src_dir" || true
+            exit 1
+          fi
+          # macOS dlopen consults DYLD_LIBRARY_PATH (not LD_LIBRARY_PATH).
+          echo "DYLD_LIBRARY_PATH=$src_dir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Install auto_tests Flutter packages
+        working-directory: third_party/tim2tox/auto_tests
+        run: flutter pub get
+
+      - name: Run auto_tests (wall-clock, all phases)
+        working-directory: third_party/tim2tox/auto_tests
+        env:
+          # Wall-clock: deliberately NO RUN_VIRTUAL.
+          RETRY_COUNT: '0'
+          SKIP_PUB_GET: 'auto'
+        run: |
+          chmod +x ./run_tests_ordered.sh
+          ./run_tests_ordered.sh 1-14
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-tests-full-logs-${{ matrix.os }}
+          if-no-files-found: warn
+          path: |
+            third_party/tim2tox/auto_tests/test_results_*.log
+            third_party/tim2tox/auto_tests/test_summary_*.txt
+            third_party/tim2tox/auto_tests/merged_results/

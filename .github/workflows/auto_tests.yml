@@ -1,16 +1,16 @@
-name: Tim2Tox Auto Tests (Virtual)
+name: Tim2Tox Auto Tests (PR)
 
-# Runs a safe subset of the tim2tox auto_tests scenario suite in virtual-clock
-# mode (RUN_VIRTUAL=1) so PRs get fast feedback without DHT / wall-clock flake.
+# Tier 2 (PR-blocking): runs the tim2tox auto_tests scenario suite in
+# virtual-clock mode (RUN_VIRTUAL=1) so every PR gets fast, deterministic
+# feedback. Wall-clock + real-network coverage lives in the nightly and
+# full-matrix workflows.
 #
-# Scope: Phase 1 (basic), Phase 4 (group), Phase 12 (other). ~17 tests, ~10-15
-# min wall time. Phases excluded on purpose:
-#   - Phase 5  (ToxAV): needs BUILD_TOXAV=ON; CI build_tim2tox.sh ships TOXAV=OFF
-#   - Phase 9  (conference): known flake
-#   - Phase 10 (group_ext): runtime > CI budget
-#   - Phase 11 (network/DHT): real-network dependent
+# Scope: phases 1-8, 10, 12-14. ~30 min wall-time budget.
+#   - Phase 5  (ToxAV)        included now that build_tim2tox.sh ships TOXAV=ON via --toxav.
+#   - Phase 9  (conference)   excluded — known flake under CI clock.
+#   - Phase 11 (network/DHT)  excluded — depends on real network.
 #
-# Trigger: PRs + pushes to main/master only. Ubuntu only to keep CI cost low.
+# Trigger: PRs + pushes to main/master only. Ubuntu only to keep cost low.
 
 on:
   push:
@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   auto-tests-virtual:
-    name: auto_tests (virtual, phases 1+4+12)
+    name: auto_tests (virtual, phases 1-8,10,12-14)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -52,7 +52,9 @@ jobs:
             cmake \
             ninja-build \
             pkg-config \
-            libsodium-dev
+            libsodium-dev \
+            libopus-dev \
+            libvpx-dev
 
       - name: Bootstrap dependencies
         run: dart run tool/bootstrap_deps.dart
@@ -60,8 +62,8 @@ jobs:
       - name: Install toxee Flutter packages
         run: flutter pub get
 
-      - name: Build libtim2tox_ffi.so (Linux)
-        run: bash tool/ci/build_tim2tox.sh --target linux --mode release
+      - name: Build libtim2tox_ffi.so (Linux, toxav + DHT bootstrap)
+        run: bash tool/ci/build_tim2tox.sh --target linux --mode release --toxav --dht-bootstrap
 
       - name: Stage libtim2tox_ffi.so for runtime loader
         id: stage_lib
@@ -82,16 +84,16 @@ jobs:
         working-directory: third_party/tim2tox/auto_tests
         run: flutter pub get
 
-      - name: Run auto_tests (RUN_VIRTUAL=1, phases 1,4,12)
+      - name: Run auto_tests (RUN_VIRTUAL=1, phases 1-8,10,12-14)
         working-directory: third_party/tim2tox/auto_tests
         env:
           RUN_VIRTUAL: '1'
+          RETRY_COUNT: '1'
           # Skip the in-script `flutter pub get` since we just ran it above.
           SKIP_PUB_GET: 'auto'
-          # Some assertion guard checks shell out; leave default behaviour.
         run: |
           chmod +x ./run_tests_ordered.sh
-          ./run_tests_ordered.sh 1,4,12
+          ./run_tests_ordered.sh 1-8 10 12-14
 
       - name: Upload test logs on failure
         if: failure()

@@ -9,6 +9,8 @@ source "$SCRIPT_DIR/common.sh"
 TARGET=""
 MODE="release"
 WINDOWS_ARCH="${TIM2TOX_WINDOWS_ARCH:-x64}" # x64|arm64
+ENABLE_TOXAV=0
+ENABLE_DHT_BOOTSTRAP=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,9 +22,28 @@ while [[ $# -gt 0 ]]; do
       MODE="${2:-}"
       shift 2
       ;;
+    --toxav)
+      ENABLE_TOXAV=1
+      shift
+      ;;
+    --dht-bootstrap)
+      ENABLE_DHT_BOOTSTRAP=1
+      shift
+      ;;
     --help|-h)
       cat <<'EOF'
-Usage: build_tim2tox.sh --target <linux|windows|macos|android|ios> [--mode <debug|profile|release>]
+Usage: build_tim2tox.sh --target <linux|windows|macos|android|ios>
+                        [--mode <debug|profile|release>]
+                        [--toxav]
+                        [--dht-bootstrap]
+
+Options:
+  --target          Build target (required).
+  --mode            Build mode (default: release).
+  --toxav           Enable BUILD_TOXAV/MUST_BUILD_TOXAV (default: off).
+                    Required by auto_tests calling scenarios.
+  --dht-bootstrap   Enable DHT_BOOTSTRAP/BOOTSTRAP_DAEMON (default: off).
+                    Required by auto_tests using local bootstrap nodes.
 EOF
       exit 0
       ;;
@@ -84,6 +105,35 @@ configure_args=(
   -DDEBUG=OFF
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
+
+# Replace existing OFF entries in-place (don't append duplicates) so the
+# upstream defaults stay authoritative and the toggles only flip a single
+# value. Mirror BUILD_TOXAV with MUST_BUILD_TOXAV and DHT_BOOTSTRAP with
+# BOOTSTRAP_DAEMON — auto_tests need both halves of each pair.
+set_configure_arg() {
+  local key="$1"
+  local value="$2"
+  local i
+  for i in "${!configure_args[@]}"; do
+    case "${configure_args[$i]}" in
+      -D"${key}"=*)
+        configure_args[$i]="-D${key}=${value}"
+        return 0
+        ;;
+    esac
+  done
+  configure_args+=("-D${key}=${value}")
+}
+
+if [[ "$ENABLE_TOXAV" -eq 1 ]]; then
+  set_configure_arg "BUILD_TOXAV" "ON"
+  set_configure_arg "MUST_BUILD_TOXAV" "ON"
+fi
+
+if [[ "$ENABLE_DHT_BOOTSTRAP" -eq 1 ]]; then
+  set_configure_arg "DHT_BOOTSTRAP" "ON"
+  set_configure_arg "BOOTSTRAP_DAEMON" "ON"
+fi
 
 find_android_ndk() {
   local candidate sdk_root latest

@@ -39,6 +39,10 @@ dart run tool/check_complexity.dart   # warns on files in lib/ > 500 LOC
 flutter test
 flutter test test/call_bridge_service_test.dart            # single file
 flutter test --plain-name 'sends signaling on accept'      # single test by name
+
+# Tim2Tox auto_tests local smoke (Tier 1; recommended before every push, ~2 min on M-series)
+# Tiers 2/3/4 run in CI — see third_party/tim2tox/auto_tests/README.en.md "CI pipeline".
+(cd third_party/tim2tox/auto_tests && RUN_VIRTUAL=1 ./run_tests_ordered.sh 1,3,12 14)
 ```
 
 If `flutter pub get` fails with a `package_config.json` parse error, run `dart tool/bootstrap_deps.dart` (note: no `run`) before retrying — `pubspec_overrides.yaml` must be generated before pub resolution.
