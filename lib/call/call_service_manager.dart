@@ -9,6 +9,7 @@ import 'package:tim2tox_dart/service/call_bridge_service.dart';
 import 'package:tim2tox_dart/service/tuicallkit_adapter.dart';
 import 'package:tim2tox_dart/service/tuicallkit_tuicore_integration.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
+import '../adapters/logger_adapter.dart';
 import 'call_state_notifier.dart';
 import 'call_overlay_manager.dart';
 import 'audio_handler.dart';
@@ -189,18 +190,21 @@ class CallServiceManager implements CallOverlayManager {
   Future<void> initialize() async {
     if (_initialized) return;
 
-    _avService = ToxAVService(_chatService.tim2toxFfi);
+    final logger = AppLoggerAdapter();
+    _avService = ToxAVService(_chatService.tim2toxFfi, logger: logger);
     await _avService!.initialize();
 
     _callBridge = CallBridgeService(
       TencentCloudChatSdkPlatform.instance,
       _avService!,
+      logger: logger,
     );
 
     _adapter = await TUICallKitAdapter.initialize(
       TencentCloudChatSdkPlatform.instance,
       _avService!,
       _callBridge!,
+      logger: logger,
     );
     registerToxAVWithTUICore(_adapter!);
     _adapter!.isCallIdle = () => _callState.state == CallUIState.idle;

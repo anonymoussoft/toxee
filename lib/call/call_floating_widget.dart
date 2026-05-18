@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../i18n/app_localizations.dart';
 import '../util/app_theme_config.dart';
@@ -194,7 +196,11 @@ class _CallFloatingWidgetState extends State<CallFloatingWidget>
                       radius: widgetHeight * 0.3,
                       fontSize: widgetHeight * 0.25,
                     ),
-                    onHangUp: widget.manager.hangUp,
+                    // PiP has no surface for errors — explicitly mark the
+                    // hang-up future as fire-and-forget. The async work is
+                    // observable in the main call UI / logs if anything goes
+                    // wrong.
+                    onHangUp: () => unawaited(widget.manager.hangUp()),
                   ),
                   // Drag-handle pip: small slate-400 bar at top-center signals
                   // "this is draggable" without competing with the content.

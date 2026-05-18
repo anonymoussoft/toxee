@@ -27,13 +27,13 @@ class FakeInCallManager implements InCallManager {
   );
 
   @override
-  void toggleMute() {}
+  Future<void> toggleMute() async {}
 
   @override
-  void toggleVideo() {}
+  Future<void> toggleVideo() async {}
 
   @override
-  void hangUp() {}
+  Future<void> hangUp() async {}
 
   @override
   Future<void> selectAudioRoute(String routeId) async {}

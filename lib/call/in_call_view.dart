@@ -184,7 +184,7 @@ class InCallView extends StatelessWidget {
         icon: callState.isMuted ? Icons.mic_off : Icons.mic,
         label: callState.isMuted ? l10n.callUnmute : l10n.callMute,
         selected: callState.isMuted,
-        onPressed: () => manager.toggleMute(),
+        onPressed: () async => manager.toggleMute(),
       ),
       if (isVideo)
         CallDockAction(
@@ -192,7 +192,7 @@ class InCallView extends StatelessWidget {
           label:
               callState.isVideoEnabled ? l10n.callVideoOff : l10n.callVideoOn,
           selected: !callState.isVideoEnabled,
-          onPressed: () => manager.toggleVideo(),
+          onPressed: () async => manager.toggleVideo(),
         ),
       if (!showSpeakerToggle && supportsRouteSelection)
         CallDockAction(
@@ -215,9 +215,9 @@ class InCallView extends StatelessWidget {
         icon: Icons.call_end,
         label: l10n.callHangUp,
         destructive: true,
-        onPressed: () {
+        onPressed: () async {
           unawaited(HapticFeedback.lightImpact());
-          manager.hangUp();
+          await manager.hangUp();
         },
       ),
     ];
