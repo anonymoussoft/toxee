@@ -45,6 +45,15 @@ class FakeIM {
   DateTime? _coldStartRestoreAt;
   static const Duration _kColdStartGrace = Duration(seconds: 15);
 
+  static bool _setEquals(Set<String> a, Set<String> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (final v in a) {
+      if (!b.contains(v)) return false;
+    }
+    return true;
+  }
+
   /// Run an async body inside a timer/listener callback. Catches and logs any
   /// throw so a single failed Tox FFI call cannot kill the polling loop or
   /// stop subsequent invocations.
@@ -602,7 +611,16 @@ class FakeIM {
     final authoritativeIds = inColdStartGrace
         ? toxFriendIds.union(missingFromTox)
         : toxFriendIds;
-    await Prefs.setLocalFriends(authoritativeIds);
+    // Only write to SharedPreferences when the set actually changed. The
+    // steady-state poll runs every 5s and most cycles see no friend churn —
+    // unconditional writes were doing one disk/IPC write per tick for no
+    // semantic effect. Compare against `localFriends` we already read at the
+    // top of this method; if the deletion path above changed Prefs, that
+    // write already covers the diff.
+    if (deletedFriendIds.isEmpty &&
+        !_setEquals(normalizedLocalFriends, authoritativeIds)) {
+      await Prefs.setLocalFriends(authoritativeIds);
+    }
 
     // Update previous friend IDs for next-poll diff.
     _previousFriendIds = authoritativeIds;
