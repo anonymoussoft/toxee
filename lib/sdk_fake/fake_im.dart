@@ -45,128 +45,129 @@ class FakeIM {
   DateTime? _coldStartRestoreAt;
   static const Duration _kColdStartGrace = Duration(seconds: 15);
 
+  /// Run an async body inside a timer/listener callback. Catches and logs any
+  /// throw so a single failed Tox FFI call cannot kill the polling loop or
+  /// stop subsequent invocations.
+  Future<void> _runGuarded(String label, Future<void> Function() body) async {
+    if (_disposed) return;
+    try {
+      await body();
+    } catch (e, st) {
+      AppLogger.logError('[FakeIM] $label failed', e, st);
+    }
+  }
+
   void start() {
     // When a friend's avatar is received and saved, refresh conversations and contact list so the UI updates
     _avatarUpdatedSub = ffi.avatarUpdated.listen((uid) {
       if (_disposed) return;
-      unawaited(_refreshConversations());
-      unawaited(_emitContacts());
+      unawaited(_runGuarded('avatarUpdated→refresh', () async {
+        await _refreshConversations();
+        await _emitContacts();
+      }));
+    }, onError: (e, st) {
+      AppLogger.logError('[FakeIM] ffi.avatarUpdated stream error', e, st);
     });
     // When a friend's nickname changes, refresh conversations so the UI updates
     _nicknameUpdatedSub = ffi.nicknameUpdated.listen((uid) {
       if (_disposed) return;
-      unawaited(_refreshConversations());
+      unawaited(_runGuarded('nicknameUpdated→refresh', _refreshConversations));
+    }, onError: (e, st) {
+      AppLogger.logError('[FakeIM] ffi.nicknameUpdated stream error', e, st);
     });
     // Reduced delay from 2000ms to 500ms for faster startup
     // Start checking friend list immediately with shorter initial delay
     // This allows faster detection of friend online status
     _startupInitTimer?.cancel();
-    _startupInitTimer = Timer(const Duration(milliseconds: 500), () async {
-      if (_disposed) return;
-      // Retry mechanism: if friend list is empty, wait a bit more and retry
-      // Use exponential backoff for retries: 200ms, 400ms, 800ms, 1600ms, 3200ms
-      int retries = 0;
-      const maxRetries = 5;
-      int retryDelay = 200; // Start with 200ms
+    _startupInitTimer = Timer(const Duration(milliseconds: 500), () {
+      unawaited(_runGuarded('startupInit', () async {
+        // Retry mechanism: if friend list is empty, wait a bit more and retry
+        // Use exponential backoff for retries: 200ms, 400ms, 800ms, 1600ms, 3200ms
+        int retries = 0;
+        const maxRetries = 5;
+        int retryDelay = 200; // Start with 200ms
 
-      while (retries < maxRetries) {
-        if (_disposed) return;
-        final friends = await ffi.getFriendList();
-        if (_disposed) return;
-        if (friends.isNotEmpty || retries >= maxRetries - 1) {
-          // Friend list is populated or we've exhausted retries, proceed with initialization
-          // Seed conversations from friend list
-          unawaited(_refreshConversations());
-          unawaited(_emitContacts());
+        while (retries < maxRetries) {
           if (_disposed) return;
-          _seedHistory();
-          break;
-        }
-        // Friend list is still empty, wait and retry with exponential backoff
-        retries++;
-        await Future.delayed(Duration(milliseconds: retryDelay));
-        retryDelay = (retryDelay * 2).clamp(200, 3200); // Exponential backoff, max 3200ms
-      }
-
-      if (_disposed) return;
-
-      // After initial emit, start a more frequent polling for online status updates
-      // Optimized: Poll every 500ms for the first 10 seconds (20 polls) for faster detection
-      // Then switch to 2 seconds for the next 20 seconds (10 polls)
-      // This provides faster initial detection while reducing CPU usage after initial period
-      int startupPollCount = 0;
-      const fastPollDuration = 20; // 20 * 500ms = 10 seconds
-      const slowPollDuration = 10; // 10 * 2s = 20 seconds
-
-      // Fast polling phase: 500ms intervals for first 10 seconds
-      _startupFastPollTimer =
-          Timer.periodic(const Duration(milliseconds: 500), (timer) async {
-        if (_disposed) {
-          timer.cancel();
-          return;
-        }
-        startupPollCount++;
-        if (startupPollCount >= fastPollDuration) {
-          timer.cancel();
-          _startupFastPollTimer = null;
-          // Switch to slower polling
-          int slowPollCount = 0;
-          _startupSlowPollTimer =
-              Timer.periodic(const Duration(seconds: 2), (slowTimer) async {
-            if (_disposed) {
-              slowTimer.cancel();
-              return;
-            }
-            slowPollCount++;
-            if (slowPollCount >= slowPollDuration) {
-              slowTimer.cancel();
-              _startupSlowPollTimer = null;
-              return;
-            }
-
-            // Check if any friend's online status has changed
-            final friends = await ffi.getFriendList();
+          final friends = await ffi.getFriendList();
+          if (_disposed) return;
+          if (friends.isNotEmpty || retries >= maxRetries - 1) {
+            // Friend list is populated or we've exhausted retries, proceed with initialization
+            // Seed conversations from friend list
+            unawaited(_runGuarded('startupInit→refreshConv', _refreshConversations));
+            unawaited(_runGuarded('startupInit→emitContacts', _emitContacts));
             if (_disposed) return;
-            bool statusChanged = false;
-            for (final friend in friends) {
-              if (friend.online) {
-                statusChanged = true;
-                break;
-              }
-            }
-
-            if (statusChanged) {
-              await _emitContacts();
-            }
-          });
-          return;
-        }
-
-        // Check if any friend's online status has changed
-        final friends = await ffi.getFriendList();
-        if (_disposed) return;
-        bool statusChanged = false;
-        for (final friend in friends) {
-          if (friend.online) {
-            statusChanged = true;
+            await _runGuarded('startupInit→seedHistory', _seedHistory);
             break;
           }
+          // Friend list is still empty, wait and retry with exponential backoff
+          retries++;
+          await Future.delayed(Duration(milliseconds: retryDelay));
+          retryDelay = (retryDelay * 2).clamp(200, 3200);
         }
 
-        // If status changed, immediately refresh contacts to update UI
-        if (statusChanged) {
-          await _emitContacts();
-        }
-      });
+        if (_disposed) return;
+
+        // After initial emit, start a more frequent polling for online status updates
+        // Optimized: Poll every 500ms for the first 10 seconds (20 polls) for faster detection
+        // Then switch to 2 seconds for the next 20 seconds (10 polls)
+        int startupPollCount = 0;
+        const fastPollDuration = 20; // 20 * 500ms = 10 seconds
+        const slowPollDuration = 10; // 10 * 2s = 20 seconds
+
+        // Fast polling phase: 500ms intervals for first 10 seconds
+        _startupFastPollTimer =
+            Timer.periodic(const Duration(milliseconds: 500), (timer) {
+          if (_disposed) {
+            timer.cancel();
+            return;
+          }
+          startupPollCount++;
+          if (startupPollCount >= fastPollDuration) {
+            timer.cancel();
+            _startupFastPollTimer = null;
+            int slowPollCount = 0;
+            _startupSlowPollTimer =
+                Timer.periodic(const Duration(seconds: 2), (slowTimer) {
+              if (_disposed) {
+                slowTimer.cancel();
+                return;
+              }
+              slowPollCount++;
+              if (slowPollCount >= slowPollDuration) {
+                slowTimer.cancel();
+                _startupSlowPollTimer = null;
+                return;
+              }
+              unawaited(_runGuarded('slowPoll', () async {
+                final friends = await ffi.getFriendList();
+                if (_disposed) return;
+                if (friends.any((f) => f.online)) {
+                  await _emitContacts();
+                }
+              }));
+            });
+            return;
+          }
+          unawaited(_runGuarded('fastPoll', () async {
+            final friends = await ffi.getFriendList();
+            if (_disposed) return;
+            if (friends.any((f) => f.online)) {
+              await _emitContacts();
+            }
+          }));
+        });
+      }));
     });
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (_disposed) return;
-      final friends = await ffi.getFriendList();
-      await _refreshConversationsWithFriends(friends);
-      await _emitContactsWithFriends(friends);
-      await _emitFriendAppsWithFriends(friends);
-      _scanTyping();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      unawaited(_runGuarded('steadyRefresh', () async {
+        final friends = await ffi.getFriendList();
+        await _refreshConversationsWithFriends(friends);
+        await _emitContactsWithFriends(friends);
+        await _emitFriendAppsWithFriends(friends);
+        await _scanTyping();
+      }));
     });
     // Also emit contacts immediately after friend operations to ensure UI updates
     // This is handled by the periodic timer, but we can also trigger it manually if needed
@@ -248,7 +249,9 @@ class FakeIM {
       _emitUnreadTotal();
       // Always refresh the conversation list so the latest message preview is
       // accurate, even if we dropped the bus emit above.
-      unawaited(_refreshConversations());
+      unawaited(_runGuarded('messages→refreshConv', _refreshConversations));
+    }, onError: (e, st) {
+      AppLogger.logError('[FakeIM] ffi.messages stream error', e, st);
     });
   }
 
