@@ -1538,12 +1538,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       
       // Load group info for each group and add to UIKit
       for (final gid in allGroups) {
-        final savedName = await Prefs.getGroupName(gid);
+        // resolveGroupDisplayName picks alias > canonical name > gid so UIKit
+        // always shows the user's locally-chosen label when one was set.
+        final displayName = await Prefs.resolveGroupDisplayName(gid);
         final savedAvatar = await Prefs.getGroupAvatar(gid);
         final groupInfo = V2TimGroupInfo(
           groupID: gid,
           groupType: "work",
-          groupName: savedName,
+          groupName: displayName == gid ? null : displayName,
           faceUrl: savedAvatar,
         );
         // addGroupInfoToJoinedGroupList will check if group already exists and update it if needed
@@ -1663,13 +1665,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     // Update group info in UIKit to ensure it has the latest data (including cleared avatar)
     // This is called after getGroupList() to ensure the new group is added even if getGroupList
-    // didn't include it (e.g., due to timing issues)
-    final savedName = await Prefs.getGroupName(groupId);
+    // didn't include it (e.g., due to timing issues).
+    // resolveGroupDisplayName picks alias > canonical name > gid; when no
+    // alias/name is set we pass `null` to UIKit (gid is fallback, not a
+    // real name) so UIKit doesn't display the raw id as a label.
+    final resolvedName = await Prefs.resolveGroupDisplayName(groupId);
     final savedAvatar = await Prefs.getGroupAvatar(groupId);
     final groupInfo = V2TimGroupInfo(
       groupID: groupId,
       groupType: "work",
-      groupName: savedName,
+      groupName: resolvedName == groupId ? null : resolvedName,
       faceUrl: savedAvatar, // This will be null if cleared, ensuring UIKit doesn't use old avatar
     );
     if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Adding groupInfo: groupID=${groupInfo.groupID}, groupName=${groupInfo.groupName}');

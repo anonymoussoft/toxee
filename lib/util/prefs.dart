@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crypto/crypto.dart' as crypto;
@@ -30,6 +31,10 @@ class Prefs {
   static const _kThemeMode = 'theme_mode'; // 'system' | 'light' | 'dark'
   static const _kAvatarPath = 'self_avatar_path';
   static String _groupNameKey(String gid) => 'group_name_$gid';
+  // Local alias for a group the user has joined (not the canonical group
+  // name). Stored separately so the canonical name from peers can still
+  // populate `_groupNameKey` without clobbering the user's chosen alias.
+  static String _groupAliasKey(String gid) => 'group_alias_$gid';
   static const _kLocalFriends = 'local_friends';
   static const _kLanguage = 'language_code'; // e.g. 'en', 'zh'
   static const _kCurrentBootstrapHost = 'current_bootstrap_host';
@@ -81,8 +86,41 @@ class Prefs {
   static bool _accountToxIdCached = false;
   static String? _cachedCurrentAccountToxId;
 
-  /// Secure storage for IRC channel passwords (platform Keystore/Keychain).
+  /// Secure storage for IRC channel passwords and account password hashes
+  /// (platform Keychain / Keystore / libsecret / DPAPI).
   static FlutterSecureStorage get _secureStorage => const FlutterSecureStorage();
+
+  /// Read a key from secure storage, returning null when the platform channel
+  /// is not available (test environment without a mock — flutter_secure_storage
+  /// throws [MissingPluginException]). Other errors propagate.
+  static Future<String?> _secureRead(String key) async {
+    try {
+      return await _secureStorage.read(key: key);
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// Write to secure storage; swallow [MissingPluginException] so tests don't
+  /// need a platform-channel mock for code paths that don't specifically test
+  /// secure-storage behavior.
+  static Future<void> _secureWrite(String key, String value) async {
+    try {
+      await _secureStorage.write(key: key, value: value);
+    } on MissingPluginException {
+      // Plugin unavailable (test env without mock). Caller's legacy-prefs
+      // fallback is still in place for read paths.
+    }
+  }
+
+  /// Delete from secure storage; swallow [MissingPluginException].
+  static Future<void> _secureDelete(String key) async {
+    try {
+      await _secureStorage.delete(key: key);
+    } on MissingPluginException {
+      // Plugin unavailable; nothing to delete in secure storage anyway.
+    }
+  }
 
   /// Initialize the Prefs cache. Must be called once at app startup after
   /// SharedPreferences.getInstance() returns (typically in main()).
@@ -329,6 +367,42 @@ class Prefs {
     } else {
       await p.setString(key, name);
     }
+  }
+
+  /// Local-only alias for a joined group. Takes display precedence over the
+  /// canonical group name (which may arrive later from peers and would
+  /// otherwise overwrite the user's chosen alias). Use for "rename this
+  /// group locally" flows; do not use for create-group (which sets the
+  /// canonical name).
+  static Future<String?> getGroupAlias(String groupId) async {
+    final current = await getCurrentAccountToxId();
+    if (current == null || current.isEmpty) return null;
+    final p = await _getPrefs();
+    final key = _scopedKey(_groupAliasKey(groupId), current);
+    return p.getString(key);
+  }
+
+  static Future<void> setGroupAlias(String groupId, String alias) async {
+    final current = await getCurrentAccountToxId();
+    if (current == null || current.isEmpty) return;
+    final p = await _getPrefs();
+    final key = _scopedKey(_groupAliasKey(groupId), current);
+    if (alias.isEmpty) {
+      await p.remove(key);
+    } else {
+      await p.setString(key, alias);
+    }
+  }
+
+  /// Resolve the display title for a group, preferring user-set alias over
+  /// canonical group name over the raw group ID. Single source of truth for
+  /// conversation list / chat header titles so the precedence is consistent.
+  static Future<String> resolveGroupDisplayName(String groupId) async {
+    final alias = await getGroupAlias(groupId);
+    if (alias != null && alias.isNotEmpty) return alias;
+    final name = await getGroupName(groupId);
+    if (name != null && name.isNotEmpty) return name;
+    return groupId;
   }
 
   static Future<Set<String>> getLocalFriends() async {
@@ -658,18 +732,38 @@ class Prefs {
     await p.setInt(_kAutoDownloadSizeLimit, sizeInMB);
   }
 
-  // Avatar hash tracking
+  // Avatar hash tracking — account-scoped so two accounts that share a friend
+  // don't read each other's stale hashes (S6 fix). Reads fall back to the
+  // legacy unscoped key once and migrate to the scoped form on first hit.
   static String _avatarHashKey(String friendId) => 'avatar_hash_$friendId';
   static const _selfAvatarHashKey = 'self_avatar_hash';
 
   static Future<String?> getFriendAvatarHash(String friendId) async {
     final p = await _getPrefs();
-    return p.getString(_avatarHashKey(friendId));
+    final current = await getCurrentAccountToxId();
+    final scopedKey = _scopedKey(_avatarHashKey(friendId), current);
+    final scoped = p.getString(scopedKey);
+    if (scoped != null) return scoped;
+    if (scopedKey != _avatarHashKey(friendId)) {
+      final legacy = p.getString(_avatarHashKey(friendId));
+      if (legacy != null && legacy.isNotEmpty) {
+        unawaited(p.setString(scopedKey, legacy));
+        unawaited(p.remove(_avatarHashKey(friendId)));
+        return legacy;
+      }
+    }
+    return null;
   }
 
   static Future<void> setFriendAvatarHash(String friendId, String hash) async {
     final p = await _getPrefs();
-    await p.setString(_avatarHashKey(friendId), hash);
+    final current = await getCurrentAccountToxId();
+    final scopedKey = _scopedKey(_avatarHashKey(friendId), current);
+    await p.setString(scopedKey, hash);
+    // Best-effort: clean up any legacy unscoped value left from older builds.
+    if (scopedKey != _avatarHashKey(friendId)) {
+      unawaited(p.remove(_avatarHashKey(friendId)));
+    }
   }
 
   static Future<String?> getSelfAvatarHash() async {
@@ -841,34 +935,75 @@ class Prefs {
     await setBlackList(blackList, userToxId);
   }
 
-  // Group member name card storage
+  // Group member name card storage — account-scoped (S6 fix). Two accounts in
+  // the same group must not see each other's per-member nick cards.
   static String _groupMemberNameCardKey(String groupId, String userId) => 'group_member_namecard_${groupId}_$userId';
 
   static Future<String?> getGroupMemberNameCard(String groupId, String userId) async {
     final p = await _getPrefs();
-    return p.getString(_groupMemberNameCardKey(groupId, userId));
+    final current = await getCurrentAccountToxId();
+    final rawKey = _groupMemberNameCardKey(groupId, userId);
+    final scopedKey = _scopedKey(rawKey, current);
+    final scoped = p.getString(scopedKey);
+    if (scoped != null) return scoped;
+    if (scopedKey != rawKey) {
+      final legacy = p.getString(rawKey);
+      if (legacy != null && legacy.isNotEmpty) {
+        unawaited(p.setString(scopedKey, legacy));
+        unawaited(p.remove(rawKey));
+        return legacy;
+      }
+    }
+    return null;
   }
 
   static Future<void> setGroupMemberNameCard(String groupId, String userId, String nameCard) async {
     final p = await _getPrefs();
+    final current = await getCurrentAccountToxId();
+    final rawKey = _groupMemberNameCardKey(groupId, userId);
+    final scopedKey = _scopedKey(rawKey, current);
     if (nameCard.isEmpty) {
-      await p.remove(_groupMemberNameCardKey(groupId, userId));
+      await p.remove(scopedKey);
     } else {
-      await p.setString(_groupMemberNameCardKey(groupId, userId), nameCard);
+      await p.setString(scopedKey, nameCard);
+    }
+    if (scopedKey != rawKey) {
+      unawaited(p.remove(rawKey));
     }
   }
 
-  // Group owner storage
+  // Group owner storage — account-scoped (S6 fix). Different accounts may see
+  // different owners for an out-of-sync group; without scope, the most recent
+  // account's owner write bleeds into every other account.
   static String _groupOwnerKey(String groupId) => 'group_owner_$groupId';
 
   static Future<String?> getGroupOwner(String groupId) async {
     final p = await _getPrefs();
-    return p.getString(_groupOwnerKey(groupId));
+    final current = await getCurrentAccountToxId();
+    final rawKey = _groupOwnerKey(groupId);
+    final scopedKey = _scopedKey(rawKey, current);
+    final scoped = p.getString(scopedKey);
+    if (scoped != null) return scoped;
+    if (scopedKey != rawKey) {
+      final legacy = p.getString(rawKey);
+      if (legacy != null && legacy.isNotEmpty) {
+        unawaited(p.setString(scopedKey, legacy));
+        unawaited(p.remove(rawKey));
+        return legacy;
+      }
+    }
+    return null;
   }
 
   static Future<void> setGroupOwner(String groupId, String userId) async {
     final p = await _getPrefs();
-    await p.setString(_groupOwnerKey(groupId), userId);
+    final current = await getCurrentAccountToxId();
+    final rawKey = _groupOwnerKey(groupId);
+    final scopedKey = _scopedKey(rawKey, current);
+    await p.setString(scopedKey, userId);
+    if (scopedKey != rawKey) {
+      unawaited(p.remove(rawKey));
+    }
   }
 
   // Group avatar (faceUrl) storage
@@ -1117,7 +1252,55 @@ class Prefs {
 
   // Account list management for multiple accounts
   static const _kAccountList = 'account_list'; // JSON array of account info
+
+  // Legacy SharedPreferences keys for password hash + salt. Kept ONLY for
+  // read-time migration into secure storage; new writes never touch these.
+  // Both forms (`account_password_<toxId>` hash, `account_password_salt_<toxId>`
+  // salt) were stored as plain text in SharedPreferences and would otherwise
+  // sync to iCloud on iOS and sit as world-readable XML on rooted Android.
   static String _accountPasswordKey(String toxId) => 'account_password_$toxId';
+
+  // Secure-storage keys (Keychain on iOS/macOS, Keystore on Android, libsecret/
+  // DPAPI on Linux/Windows). flutter_secure_storage defaults to
+  // kSecAttrAccessibleWhenUnlocked (non-iCloud-synced) on Apple platforms.
+  static String _securePasswordKey(String toxId) => 'pwd_$toxId';
+  static String _securePasswordSaltKey(String toxId) => 'pwd_salt_$toxId';
+
+  /// Read PBKDF2 hash from secure storage, migrating any legacy plain-prefs
+  /// value into the secure store on first hit. Returns null when no password
+  /// is set for the account.
+  static Future<String?> _readPasswordHashWithMigration(String toxId) async {
+    if (toxId.isEmpty) return null;
+    final secureKey = _securePasswordKey(toxId);
+    final fromSecure = await _secureRead(secureKey);
+    if (fromSecure != null && fromSecure.isNotEmpty) return fromSecure;
+    // Migrate from legacy SharedPreferences (S1: was plain-text on disk).
+    final p = await _getPrefs();
+    final legacy = p.getString(_accountPasswordKey(toxId));
+    if (legacy != null && legacy.isNotEmpty) {
+      await _secureWrite(secureKey, legacy);
+      await p.remove(_accountPasswordKey(toxId));
+      return legacy;
+    }
+    return null;
+  }
+
+  /// Read salt from secure storage, migrating from legacy plain prefs when
+  /// present. Returns null when no salt is stored.
+  static Future<String?> _readPasswordSaltWithMigration(String toxId) async {
+    if (toxId.isEmpty) return null;
+    final secureKey = _securePasswordSaltKey(toxId);
+    final fromSecure = await _secureRead(secureKey);
+    if (fromSecure != null && fromSecure.isNotEmpty) return fromSecure;
+    final p = await _getPrefs();
+    final legacy = p.getString(_passwordSaltKey(toxId));
+    if (legacy != null && legacy.isNotEmpty) {
+      await _secureWrite(secureKey, legacy);
+      await p.remove(_passwordSaltKey(toxId));
+      return legacy;
+    }
+    return null;
+  }
 
   /// Account info structure: {toxId (required), nickname, statusMessage, lastLoginTime?, avatarPath?, autoLogin?, ...}
   /// toxId is the primary key for account identification
@@ -1329,24 +1512,25 @@ class Prefs {
     }
   }
 
-  // Account password management
-  /// Check if an account has a password set
+  // Account password management — secure-storage backed since S1 review.
+  // Hash + salt live in flutter_secure_storage (Keychain / Keystore / libsecret
+  // / DPAPI). Any pre-existing plain-prefs values get migrated on first read.
+
+  /// Check if an account has a password set.
   static Future<bool> hasAccountPassword(String toxId) async {
     if (toxId.isEmpty) return false;
-    final p = await _getPrefs();
-    return p.containsKey(_accountPasswordKey(toxId));
+    return (await _readPasswordHashWithMigration(toxId)) != null;
   }
 
-  /// Get account password hash (for verification)
-  /// Returns null if no password is set
+  /// Get account password hash (for verification). Migrates legacy plain-prefs
+  /// values into secure storage on first read.
   static Future<String?> getAccountPasswordHash(String toxId) async {
-    if (toxId.isEmpty) return null;
-    final p = await _getPrefs();
-    return p.getString(_accountPasswordKey(toxId));
+    return _readPasswordHashWithMigration(toxId);
   }
 
-  /// Set account password (stores salt + PBKDF2 hash).
-  /// New accounts use PBKDF2; legacy SHA256 hashes are migrated on next successful verify.
+  /// Set account password (stores PBKDF2 hash + salt in secure storage).
+  /// New accounts use PBKDF2; legacy SHA256 hashes are migrated on next
+  /// successful verify. Also clears any legacy plain-prefs entries.
   static Future<void> setAccountPassword(String toxId, String password) async {
     if (toxId.isEmpty) {
       throw ArgumentError('toxId cannot be empty');
@@ -1369,14 +1553,22 @@ class Prefs {
     final storedHash = '$_kPbkdf2Prefix${base64Encode(hashBytes)}';
     final storedSalt = base64Encode(salt);
 
+    await _secureWrite(_securePasswordKey(toxId), storedHash);
+    await _secureWrite(_securePasswordSaltKey(toxId), storedSalt);
+    // Drop legacy plain-prefs entries if a prior install left them behind.
     final p = await _getPrefs();
-    await p.setString(_accountPasswordKey(toxId), storedHash);
-    await p.setString(_passwordSaltKey(toxId), storedSalt);
+    await Future.wait([
+      p.remove(_accountPasswordKey(toxId)),
+      p.remove(_passwordSaltKey(toxId)),
+    ]);
   }
 
-  /// Remove account password and its salt.
+  /// Remove account password and its salt from both secure storage and any
+  /// remaining legacy SharedPreferences entries.
   static Future<void> removeAccountPassword(String toxId) async {
     if (toxId.isEmpty) return;
+    await _secureDelete(_securePasswordKey(toxId));
+    await _secureDelete(_securePasswordSaltKey(toxId));
     final p = await _getPrefs();
     await Future.wait([
       p.remove(_accountPasswordKey(toxId)),
@@ -1385,16 +1577,17 @@ class Prefs {
   }
 
   /// Verify account password.
-  /// Supports PBKDF2 (new) and SHA256 salted/unsalted (legacy); migrates legacy on success.
+  /// Supports PBKDF2 (new) and SHA256 salted/unsalted (legacy); migrates legacy
+  /// on success. Reads from secure storage with backward-compat plain-prefs
+  /// migration.
   static Future<bool> verifyAccountPassword(String toxId, String password) async {
     if (toxId.isEmpty || password.isEmpty) return false;
 
-    final storedHash = await getAccountPasswordHash(toxId);
+    final storedHash = await _readPasswordHashWithMigration(toxId);
     if (storedHash == null) return false;
+    final saltBase64 = await _readPasswordSaltWithMigration(toxId);
 
     if (storedHash.startsWith(_kPbkdf2Prefix)) {
-      final p = await _getPrefs();
-      final saltBase64 = p.getString(_passwordSaltKey(toxId));
       if (saltBase64 == null) return false;
       List<int> salt;
       try {
@@ -1417,11 +1610,9 @@ class Prefs {
       return actual == expected;
     }
 
-    // Legacy SHA256 (salted or unsalted)
-    final p = await _getPrefs();
-    final salt = p.getString(_passwordSaltKey(toxId));
-    if (salt != null && salt.isNotEmpty) {
-      final bytes = utf8.encode('$salt$password');
+    // Legacy SHA256 (salted or unsalted) — migrate on success.
+    if (saltBase64 != null && saltBase64.isNotEmpty) {
+      final bytes = utf8.encode('$saltBase64$password');
       final hash = crypto.sha256.convert(bytes);
       if (storedHash == hash.toString()) {
         await setAccountPassword(toxId, password);

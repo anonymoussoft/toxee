@@ -145,18 +145,16 @@ class FakeConversationManager {
         .where((g) => !quitGroups.contains(g))
         .toList();
     final groupMeta = await Future.wait(emitGroups.map((gid) async {
-      final res = await Future.wait([
-        Prefs.getGroupName(gid),
+      final res = await Future.wait<Object?>([
+        Prefs.resolveGroupDisplayName(gid),
         Prefs.getGroupAvatar(gid),
       ]);
-      return (name: res[0], avatar: res[1]);
+      return (name: res[0] as String, avatar: res[1] as String?);
     }));
     for (int i = 0; i < emitGroups.length; i++) {
       final gid = emitGroups[i];
-      final savedName = groupMeta[i].name;
+      final name = groupMeta[i].name;
       final savedAvatar = groupMeta[i].avatar;
-      final name =
-          (savedName != null && savedName.isNotEmpty) ? savedName : gid;
       // Check if this group is pinned using 'group_${normalizedGid}' format
       // to match what setPinned stores
       final groupPinnedKey = 'group_${normalizeToxId(gid)}';
@@ -238,10 +236,9 @@ class FakeConversationManager {
       AppLogger.debug(
           '[FakeConversationManager] setPinned: Saved to Prefs, pinned set: ${next.toList()}');
 
-      // Always get the latest group name from Prefs to ensure consistency
-      final savedName = await Prefs.getGroupName(gid);
-      final name =
-          (savedName != null && savedName.isNotEmpty) ? savedName : gid;
+      // Resolve display name with the same precedence as the rest of the
+      // app: alias > canonical name > gid.
+      final name = await Prefs.resolveGroupDisplayName(gid);
       final conv = FakeConversation(
         conversationID: conversationID,
         title: name,

@@ -79,8 +79,11 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
     setState(() => _isJoining = true);
     try {
       await widget.service.joinGroup(gid, requestMessage: wording);
+      // Local alias only — do NOT clobber the canonical group name. When
+      // the canonical name arrives from peers later, the alias still takes
+      // display precedence via Prefs.resolveGroupDisplayName.
       if (alias.isNotEmpty) {
-        await Prefs.setGroupName(gid, alias);
+        await Prefs.setGroupAlias(gid, alias);
       }
       await widget.onGroupChanged?.call(gid,
           displayName: alias.isNotEmpty ? alias : null);

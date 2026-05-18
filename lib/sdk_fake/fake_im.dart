@@ -339,21 +339,21 @@ class FakeIM {
       }
     }
     
-    // Build the list of groups to emit, then parallel-fetch saved name +
-    // avatar instead of 2N sequential awaits.
+    // Build the list of groups to emit, then parallel-fetch display name
+    // (alias > canonical name > gid) + avatar instead of 2N sequential
+    // awaits.
     final emitGroups = groups.where((g) => !quitGroups.contains(g)).toList();
     final groupMeta = await Future.wait(emitGroups.map((gid) async {
-      final res = await Future.wait([
-        Prefs.getGroupName(gid),
+      final res = await Future.wait<Object?>([
+        Prefs.resolveGroupDisplayName(gid),
         Prefs.getGroupAvatar(gid),
       ]);
-      return (name: res[0], avatar: res[1]);
+      return (name: res[0] as String, avatar: res[1] as String?);
     }));
     for (int i = 0; i < emitGroups.length; i++) {
       final gid = emitGroups[i];
-      final savedName = groupMeta[i].name;
+      final name = groupMeta[i].name;
       final savedAvatar = groupMeta[i].avatar;
-      final name = (savedName != null && savedName.isNotEmpty) ? savedName : gid;
       // Pinned key for groups is 'group_${normalizedGid}' (matches FakeConversationManager.setPinned).
       // Group IDs like 'tox_0' / 'tox_conf_xyz' are short enough to pass through
       // normalizeToxId unchanged, but normalizing keeps the rule uniform.
