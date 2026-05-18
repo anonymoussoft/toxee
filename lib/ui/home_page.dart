@@ -1716,10 +1716,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _updateTray();
   }
 
+  /// Dialog inset on narrow phones — Flutter's default symmetric(40, 24)
+  /// leaves only ~240pt of usable width on a 320pt iPhone SE, which
+  /// crowds the form. We tighten the horizontal inset on viewports below
+  /// 400pt so the dialog can use the full responsive cap defined inside
+  /// the dialog body (clamp 280-480/560).
+  EdgeInsets _dialogInset(BuildContext ctx) {
+    final w = MediaQuery.sizeOf(ctx).width;
+    return w < 400
+        ? const EdgeInsets.symmetric(horizontal: 16, vertical: 24)
+        : const EdgeInsets.symmetric(horizontal: 40, vertical: 24);
+  }
+
   Future<void> _showAddFriendDialog() async {
     await showDialog(
       context: context,
       builder: (ctx) => Dialog(
+        insetPadding: _dialogInset(ctx),
         child: AddFriendDialog(
           service: widget.service,
           onFriendAdded: (id) async {
@@ -1735,6 +1748,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await showDialog(
       context: context,
       builder: (ctx) => Dialog(
+        insetPadding: _dialogInset(ctx),
         child: AddGroupDialog(
           service: widget.service,
           onGroupChanged: (gid, {String? displayName}) async {
