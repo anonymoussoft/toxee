@@ -106,30 +106,33 @@ class FakeConversationManager {
     final sortingMode = await Prefs.getFriendListSortingMode();
     AppLogger.debug(
         '[FakeConversationManager] getConversationList: Processing ${friendMap.length} friends from friendMap');
-    for (final f in friendMap.values) {
-      // Only filter out pending friend requests that haven't been accepted yet
-      // If a friend is in the friend list (normalizedFriendIds), they have been accepted
-      // and should appear in the conversation list even if they're still in pendingFriendIds
+    // Filter pending-friend-request entries that aren't accepted yet.
+    final emitFriends = friendMap.values.where((f) {
       final normalizedUserId = normalizeToxId(f.userId);
       if (pendingFriendIds.contains(f.userId) &&
           !normalizedFriendIds.contains(normalizedUserId)) {
-        continue; // Filter out pending friend requests that haven't been accepted
+        return false;
       }
-      // Load avatar path for conversation list and chat header
-      final avatarPath = await Prefs.getFriendAvatarPath(f.userId);
-      final activity = await Prefs.getFriendActivity(f.userId);
-      activityByC2cId['c2c_${f.userId}'] = activity;
-      // Check if this normalized user ID is in the pinned set
-      // pinned contains normalized user IDs (without 'c2c_' prefix)
+      return true;
+    }).toList();
+    // Parallel-fetch avatar path + activity timestamp so the N friends don't
+    // generate 2N sequential awaits per call.
+    final c2cMeta = await Future.wait(emitFriends.map((f) async {
+      final res = await Future.wait<Object?>([
+        Prefs.getFriendAvatarPath(f.userId),
+        Prefs.getFriendActivity(f.userId),
+      ]);
+      return (avatar: res[0] as String?, activity: res[1] as DateTime?);
+    }));
+    for (int i = 0; i < emitFriends.length; i++) {
+      final f = emitFriends[i];
+      final normalizedUserId = normalizeToxId(f.userId);
+      activityByC2cId['c2c_${f.userId}'] = c2cMeta[i].activity;
       final isPinned = _pinned.contains(normalizedUserId);
-      if (isPinned || _pinned.isNotEmpty) {
-        AppLogger.debug(
-            '[FakeConversationManager] getConversationList: C2C - userId=${f.userId}, normalizedUserId=$normalizedUserId, isPinned=$isPinned, pinned set: ${_pinned.toList()}');
-      }
       list.add(FakeConversation(
         conversationID: 'c2c_${f.userId}',
         title: f.nickName.isNotEmpty ? f.nickName : f.userId,
-        faceUrl: avatarPath,
+        faceUrl: c2cMeta[i].avatar,
         unreadCount: _ffi.getUnreadOf(f.userId),
         isGroup: false,
         isPinned: isPinned,
@@ -138,28 +141,26 @@ class FakeConversationManager {
     // Get quit groups to filter them out
     final quitGroups = await Prefs.getQuitGroups();
 
-    for (final gid in _ffi.knownGroups) {
-      // Skip groups that the user has quit
-      if (quitGroups.contains(gid)) {
-        AppLogger.debug(
-            '[FakeConversationManager] getConversationList: Skipping quit group: $gid');
-        continue;
-      }
-      // Always get the latest group name and avatar from Prefs to ensure consistency
-      final savedName = await Prefs.getGroupName(gid);
-      final savedAvatar = await Prefs.getGroupAvatar(gid);
-      // Use saved name if available and not empty, otherwise fall back to group ID
+    final emitGroups = _ffi.knownGroups
+        .where((g) => !quitGroups.contains(g))
+        .toList();
+    final groupMeta = await Future.wait(emitGroups.map((gid) async {
+      final res = await Future.wait([
+        Prefs.getGroupName(gid),
+        Prefs.getGroupAvatar(gid),
+      ]);
+      return (name: res[0], avatar: res[1]);
+    }));
+    for (int i = 0; i < emitGroups.length; i++) {
+      final gid = emitGroups[i];
+      final savedName = groupMeta[i].name;
+      final savedAvatar = groupMeta[i].avatar;
       final name =
           (savedName != null && savedName.isNotEmpty) ? savedName : gid;
       // Check if this group is pinned using 'group_${normalizedGid}' format
       // to match what setPinned stores
-      final normalizedGid = normalizeToxId(gid);
-      final groupPinnedKey = 'group_$normalizedGid';
+      final groupPinnedKey = 'group_${normalizeToxId(gid)}';
       final isPinned = _pinned.contains(groupPinnedKey);
-      if (isPinned || _pinned.isNotEmpty) {
-        AppLogger.debug(
-            '[FakeConversationManager] getConversationList: Group - gid=$gid, normalizedGid=$normalizedGid, groupPinnedKey=$groupPinnedKey, isPinned=$isPinned, pinned set: ${_pinned.toList()}');
-      }
       list.add(
         FakeConversation(
           conversationID: 'group_$gid',

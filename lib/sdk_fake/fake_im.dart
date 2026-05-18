@@ -316,24 +316,27 @@ class FakeIM {
       friendMap[normalizedId] = (userId: normalizedId, nickName: f.nickName, online: f.online);
     }
 
-    for (final entry in friendMap.entries) {
-      final f = entry.value;
-      // Only skip friends that have pending applications (requests not yet accepted)
-      // If a friend is in the friend list (normalizedFriendIds), they have been accepted
-      // and should appear in the conversation list even if they're still in pendingFriendIds
-      // pendingFriendIds is checked against both raw and normalized form because
-      // FfiChatService applications may carry either.
+    // Filter pending-friend-request entries first, then parallel-fetch
+    // avatars. The pending filter skips entries whose application is still
+    // outstanding (raw or normalized form) and not yet in the friend list.
+    final emitFriends = friendMap.entries
+        .map((e) => e.value)
+        .where((f) {
       if ((pendingFriendIds.contains(f.userId) ||
               pendingFriendIds.any((p) => normalizeToxId(p) == f.userId)) &&
           !normalizedFriendIds.contains(f.userId)) {
-        continue;
+        return false;
       }
-      // Load avatar path for conversation list and chat header
-      final avatarPath = await Prefs.getFriendAvatarPath(f.userId);
+      return true;
+    }).toList();
+    final c2cAvatars = await Future.wait(
+        emitFriends.map((f) => Prefs.getFriendAvatarPath(f.userId)));
+    for (int i = 0; i < emitFriends.length; i++) {
+      final f = emitFriends[i];
       final conv = FakeConversation(
         conversationID: 'c2c_${f.userId}',
         title: f.nickName.isNotEmpty ? f.nickName : f.userId,
-        faceUrl: avatarPath,
+        faceUrl: c2cAvatars[i],
         unreadCount: ffi.getUnreadOf(f.userId),
         isGroup: false,
         isPinned: pinned.contains(f.userId),
@@ -381,19 +384,20 @@ class FakeIM {
       }
     }
     
-    for (final gid in groups) {
-      // Note: quitGroups are already filtered out above, but double-check for safety
-      if (quitGroups.contains(gid)) {
-        continue;
-      }
-      // Note: If group is in persistedGroups but not in knownGroups,
-      // it will be added to knownGroups when init() completes or when the group is accessed
-      // For now, we'll just include it in the conversation list
-      // Always get the latest group name and avatar from Prefs to ensure consistency
-      final savedName = await Prefs.getGroupName(gid);
-      final savedAvatar = await Prefs.getGroupAvatar(gid);
-      // Use saved name if available and not empty, otherwise fall back to group ID
-      // But avoid using default "tox_0" style names - prefer the group ID format
+    // Build the list of groups to emit, then parallel-fetch saved name +
+    // avatar instead of 2N sequential awaits.
+    final emitGroups = groups.where((g) => !quitGroups.contains(g)).toList();
+    final groupMeta = await Future.wait(emitGroups.map((gid) async {
+      final res = await Future.wait([
+        Prefs.getGroupName(gid),
+        Prefs.getGroupAvatar(gid),
+      ]);
+      return (name: res[0], avatar: res[1]);
+    }));
+    for (int i = 0; i < emitGroups.length; i++) {
+      final gid = emitGroups[i];
+      final savedName = groupMeta[i].name;
+      final savedAvatar = groupMeta[i].avatar;
       final name = (savedName != null && savedName.isNotEmpty) ? savedName : gid;
       // Pinned key for groups is 'group_${normalizedGid}' (matches FakeConversationManager.setPinned).
       // Group IDs like 'tox_0' / 'tox_conf_xyz' are short enough to pass through
@@ -511,16 +515,26 @@ class FakeIM {
     _toxFriendListReceived = true; // Tox returned a non-empty list; trust it from now on
     final friendMap = <String, FakeUser>{};
     final toxFriendIds = <String>{};
-    for (final f in friends) {
-      final normalizedId = normalizeToxId(f.userId);
+    // Parallel-fetch avatar paths instead of N sequential awaits. With ~100
+    // friends this collapses the loop from N microtasks to a single batch.
+    final normalizedTox = friends
+        .map((f) => (
+              normalized: normalizeToxId(f.userId),
+              source: f,
+            ))
+        .toList();
+    final toxAvatars = await Future.wait(
+        normalizedTox.map((e) => Prefs.getFriendAvatarPath(e.normalized)));
+    for (int i = 0; i < normalizedTox.length; i++) {
+      final normalizedId = normalizedTox[i].normalized;
+      final f = normalizedTox[i].source;
       toxFriendIds.add(normalizedId);
-      final avatarPath = await Prefs.getFriendAvatarPath(normalizedId);
       friendMap[normalizedId] = FakeUser(
         userID: normalizedId,
         nickName: f.nickName,
         status: f.status,
         online: f.online,
-        faceUrl: avatarPath,
+        faceUrl: toxAvatars[i],
       );
     }
 
@@ -541,18 +555,26 @@ class FakeIM {
     if (inColdStartGrace && missingFromTox.isNotEmpty) {
       // Re-hydrate missing friends from cache so the UI stays stable while
       // Tox finishes loading. They will be marked offline.
-      for (final pendingId in missingFromTox) {
-        if (friendMap.containsKey(pendingId)) continue;
-        final cachedNick = await Prefs.getFriendNickname(pendingId);
-        final cachedStatus = await Prefs.getFriendStatusMessage(pendingId);
-        final cachedAvatar = await Prefs.getFriendAvatarPath(pendingId);
-        friendMap[pendingId] = FakeUser(
+      // Parallel-fetch nickname/status/avatar instead of 3N sequential awaits.
+      final toHydrate = missingFromTox
+          .where((pendingId) => !friendMap.containsKey(pendingId))
+          .toList();
+      final hydrated = await Future.wait(toHydrate.map((pendingId) async {
+        final results = await Future.wait([
+          Prefs.getFriendNickname(pendingId),
+          Prefs.getFriendStatusMessage(pendingId),
+          Prefs.getFriendAvatarPath(pendingId),
+        ]);
+        return FakeUser(
           userID: pendingId,
-          nickName: cachedNick ?? '',
-          status: cachedStatus ?? '',
+          nickName: results[0] ?? '',
+          status: results[1] ?? '',
           online: false,
-          faceUrl: cachedAvatar,
+          faceUrl: results[2],
         );
+      }));
+      for (final user in hydrated) {
+        friendMap[user.userID] = user;
       }
     } else if (_coldStartRestoreAt != null && !inColdStartGrace) {
       // Grace expired: clear the timestamp so we don't keep checking.
