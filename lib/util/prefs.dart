@@ -766,6 +766,20 @@ class Prefs {
     }
   }
 
+  /// Remove the cached avatar hash for [friendId] (both scoped and legacy
+  /// unscoped variants). Used when a friend is deleted so the on-disk
+  /// hash key doesn't linger forever (A8).
+  static Future<void> removeFriendAvatarHash(String friendId) async {
+    if (friendId.isEmpty) return;
+    final p = await _getPrefs();
+    final current = await getCurrentAccountToxId();
+    final scopedKey = _scopedKey(_avatarHashKey(friendId), current);
+    await p.remove(scopedKey);
+    if (scopedKey != _avatarHashKey(friendId)) {
+      await p.remove(_avatarHashKey(friendId));
+    }
+  }
+
   static Future<String?> getSelfAvatarHash() async {
     final p = await _getPrefs();
     return p.getString(_selfAvatarHashKey);

@@ -29,12 +29,13 @@ class FakeConversationManager {
   StreamSubscription? _unreadSub;
   Set<String> _pinned = {};
 
-  void start() {
-    Prefs.getPinned().then((value) {
-      // Note: pinned contains normalized IDs (for C2C) or 'group_${normalizedGid}' (for groups)
-      // Do NOT normalize here as it would break the 'group_xxx' format
-      _pinned = value.toSet();
-    });
+  /// Initialize the manager. Awaits the initial pinned-conversations read so
+  /// callers (FakeUIKit.startWithFfi) can guarantee [_pinned] is populated
+  /// before they hand the manager to UIKit. Previously this read was
+  /// fire-and-forget, which meant the first `getConversationList()` after
+  /// login could return every conversation as un-pinned until the read
+  /// resolved on a later microtask (A7).
+  Future<void> start() async {
     _convSub = _bus.on<FakeConversation>(FakeIM.topicConversation).listen((c) {
       for (final l in _listeners) {
         l.onNewConversation?.call([c]);
@@ -46,6 +47,13 @@ class FakeConversationManager {
         l.onTotalUnreadChanged?.call(u.total);
       }
     });
+    // Await once at start so the first sync read of [_pinned] in
+    // getConversationList() / setPinned() sees the persisted set. Note:
+    // pinned contains normalized IDs (for C2C) or 'group_${normalizedGid}'
+    // (for groups) — do NOT normalize here as it would break the
+    // 'group_xxx' format.
+    final value = await Prefs.getPinned();
+    _pinned = value.where((s) => s.isNotEmpty).toSet();
   }
 
   void addListener(FakeConversationListener l) {
@@ -306,6 +314,67 @@ class FakeConversationManager {
     _bus.emit(FakeIM.topicConversation, conv);
     // Trigger conversation list refresh
     await FakeUIKit.instance.im?.refreshConversations();
+  }
+
+  /// Delete a conversation. A9: previously the ConversationManagerAdapter
+  /// stub did nothing here, so UIKit's "delete conversation" reappeared on
+  /// the next 5s poll. We now clear the underlying history (the source the
+  /// poll reads from), drop the pinned flag, and force-refresh the
+  /// conversation list so the UI updates immediately.
+  ///
+  /// Group semantics: we deliberately only clear the group's local history.
+  /// Quitting the group (leaving it on the Tox side) is a separate user
+  /// action and lives behind a different UI path.
+  Future<void> deleteConversation(String conversationID) async {
+    AppLogger.debug(
+        '[FakeConversationManager] deleteConversation: START - conversationID=$conversationID');
+    if (conversationID.isEmpty ||
+        conversationID == 'c2c_' ||
+        conversationID == 'group_') {
+      AppLogger.debug(
+          '[FakeConversationManager] deleteConversation: invalid conversationID, returning');
+      return;
+    }
+
+    if (conversationID.startsWith('group_')) {
+      final gid = conversationID.substring(6);
+      if (gid.isEmpty) return;
+      try {
+        await _ffi.clearGroupHistory(gid);
+      } catch (e, st) {
+        AppLogger.logError(
+            '[FakeConversationManager] deleteConversation: clearGroupHistory failed',
+            e,
+            st);
+      }
+      final pinnedKey = 'group_${normalizeToxId(gid)}';
+      if (_pinned.remove(pinnedKey)) {
+        await Prefs.setPinned(_pinned.where((s) => s.isNotEmpty).toSet());
+      }
+    } else {
+      final rawId = conversationID.startsWith('c2c_')
+          ? conversationID.substring(4)
+          : conversationID;
+      if (rawId.isEmpty) return;
+      final normalizedId = normalizeToxId(rawId);
+      try {
+        await _ffi.clearC2CHistory(normalizedId);
+      } catch (e, st) {
+        AppLogger.logError(
+            '[FakeConversationManager] deleteConversation: clearC2CHistory failed',
+            e,
+            st);
+      }
+      if (_pinned.remove(normalizedId)) {
+        await Prefs.setPinned(_pinned.where((s) => s.isNotEmpty).toSet());
+      }
+    }
+
+    // Force a refresh now so the UI updates instead of waiting for the
+    // next 5s poll cycle.
+    await FakeUIKit.instance.im?.refreshConversations();
+    AppLogger.debug(
+        '[FakeConversationManager] deleteConversation: DONE - conversationID=$conversationID');
   }
 
   void dispose() {

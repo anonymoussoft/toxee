@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import '../util/friend_asset_cleanup.dart';
 import '../util/prefs.dart';
 import '../util/tox_utils.dart';
 import '../util/logger.dart';
@@ -26,6 +27,7 @@ class FakeIM {
   StreamSubscription<dynamic>? _avatarUpdatedSub;
   StreamSubscription<dynamic>? _nicknameUpdatedSub;
   StreamSubscription<dynamic>? _messagesSub;
+  StreamSubscription<dynamic>? _friendDeletedSub;
   final Map<String, bool> _typingPrev = {};
   Set<String> _previousFriendIds = {};
   Set<String> _previousGroupIds = {};
@@ -65,6 +67,22 @@ class FakeIM {
   }
 
   void start() {
+    // A8: when a friend is deleted (detected by the steady-state poll diffing
+    // Tox's friend list against our previous snapshot), purge the on-disk
+    // avatar file + avatar_hash_<id> / friend_avatar_path_<id> prefs keys.
+    // tim2tox's FfiChatService.deleteFriend does not handle these, so the
+    // cleanup has to happen client-side. Subscribing here means *any* path
+    // that ends in a topicFriendDeleted emit (manual delete, account switch,
+    // remote-side removal) triggers the cleanup.
+    _friendDeletedSub =
+        bus.on<FakeFriendDeleted>(topicFriendDeleted).listen((evt) {
+      final id = evt.userID;
+      if (id.isEmpty) return;
+      unawaited(_runGuarded('friendDeleted→cleanupAssets',
+          () => FriendAssetCleanup.deleteAllAssetsFor(id)));
+    }, onError: (e, st) {
+      AppLogger.logError('[FakeIM] topicFriendDeleted stream error', e, st);
+    });
     // When a friend's avatar is received and saved, refresh conversations and contact list so the UI updates
     _avatarUpdatedSub = ffi.avatarUpdated.listen((uid) {
       if (_disposed) return;
@@ -222,6 +240,8 @@ class FakeIM {
     _nicknameUpdatedSub = null;
     _messagesSub?.cancel();
     _messagesSub = null;
+    _friendDeletedSub?.cancel();
+    _friendDeletedSub = null;
     _startupInitTimer?.cancel();
     _startupInitTimer = null;
     _refreshTimer?.cancel();

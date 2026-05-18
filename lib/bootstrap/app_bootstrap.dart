@@ -1,3 +1,4 @@
+import '../util/account_reconciliation.dart';
 import 'app_bootstrap_result.dart';
 import 'app_runtime_bootstrap.dart';
 import 'desktop_shell_bootstrap.dart';
@@ -16,6 +17,10 @@ class AppBootstrap {
     if (prefsResult != null) {
       return prefsResult;
     }
+    // After Prefs is initialized, repair any orphaned per-account profile
+    // directories left behind by a partially-completed import (A2). Safe
+    // to run on every cold start; no-op when nothing is orphaned.
+    await AccountReconciliation.reconcileOrphanedProfiles();
     await AppRuntimeBootstrap.initialize();
     await DesktopShellBootstrap.initializeIfNeeded();
     return const AppBootstrapSuccess();

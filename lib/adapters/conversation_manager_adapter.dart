@@ -29,9 +29,10 @@ class ConversationManagerAdapter implements ConversationManagerProvider {
   
   @override
   Future<void> deleteConversation(String conversationID) async {
-    // FakeConversationManager doesn't have deleteConversation method
-    // This should be handled by clearing messages
-    // For now, we'll do nothing as the original implementation also didn't have this
+    // A9: forward to FakeConversationManager which clears the underlying
+    // history and emits a refresh so the UI updates immediately instead
+    // of waiting for the 5s poll to re-emit the conversation.
+    await _conversationManager.deleteConversation(conversationID);
   }
   
   @override

@@ -48,7 +48,9 @@ class SessionRuntimeCoordinator {
 
     try {
       if (!FakeUIKit.instance.isStarted) {
-        FakeUIKit.instance.startWithFfi(service);
+        // Async since A7: awaits initial pinned-conversation read so the
+        // platform bridge installed below never sees an empty pinned set.
+        await FakeUIKit.instance.startWithFfi(service);
       }
 
       if (TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform) {

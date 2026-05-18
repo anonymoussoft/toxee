@@ -35,11 +35,17 @@ class FakeUIKit {
   /// Check if FakeUIKit has been started
   bool get isStarted => _started;
 
-  void startWithFfi(FfiChatService service) {
+  Future<void> startWithFfi(FfiChatService service) async {
     if (_started) return;
     _im = FakeIM(service, eventBusInstance)..start();
-    conversationManager = FakeConversationManager(eventBusInstance, service)
-      ..start();
+    // FakeConversationManager.start() is async: it awaits the initial pinned
+    // read from Prefs so the first getConversationList() does not race the
+    // fire-and-forget read (A7). We await it here so the platform/UIKit
+    // bridge — installed immediately after this method returns — never sees
+    // an empty pinned set when it asks for conversations.
+    final convMgr = FakeConversationManager(eventBusInstance, service);
+    conversationManager = convMgr;
+    await convMgr.start();
     messageManager = FakeMessageManager(eventBusInstance, service)..start();
     contactManager = FakeContactManager(eventBusInstance, service)..start();
     // Group-member last-seen cache subscribes to the message bus so new
