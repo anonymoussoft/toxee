@@ -262,18 +262,29 @@ class FakeIM {
 
   Future<void> _refreshConversationsWithFriends(
       List<({String userId, String nickName, String status, bool online})> friends) async {
-    final pinned = await Prefs.getPinned();
+    // `pinned` stores **normalized** keys: bare normalized userID for C2C and
+    // 'group_${normalizedGid}' for groups (see FakeConversationManager.setPinned).
+    // We must check membership using the same shape — using raw 76-char IDs or
+    // bare gids would silently lose the pinned flag and let it disagree with
+    // FakeConversationManager.getConversationList.
+    final pinned = (await Prefs.getPinned())
+        .where((s) => s.isNotEmpty)
+        .toSet();
     // Get pending friend applications (requests we sent that haven't been accepted yet)
     // These should not appear in the conversation list
     final pendingApps = await ffi.getFriendApplications();
     final pendingFriendIds = pendingApps.map((a) => a.userId).toSet();
-    
+
     // Create a set of normalized friend IDs from the friend list
     // This is used to check if a pending application has been accepted
     final normalizedFriendIds = friends.map((f) => normalizeToxId(f.userId)).toSet();
-    
-    // Build Tox-only friend map. Tox is the single source of truth for friends.
-    // No longer merge from Prefs — stale Prefs entries caused ghost contacts.
+
+    // Build Tox-only friend map keyed by **normalized** ID. Tox is the single
+    // source of truth for friends. No longer merge from Prefs — stale Prefs
+    // entries caused ghost contacts. Normalization here MUST match what
+    // FakeConversationManager.getConversationList emits, otherwise the same
+    // friend will produce two different conversationIDs depending on which
+    // emitter fired last.
     final friendMap = <String, ({String userId, String nickName, bool online})>{};
     for (final f in friends) {
       final normalizedId = normalizeToxId(f.userId);
@@ -285,9 +296,12 @@ class FakeIM {
       // Only skip friends that have pending applications (requests not yet accepted)
       // If a friend is in the friend list (normalizedFriendIds), they have been accepted
       // and should appear in the conversation list even if they're still in pendingFriendIds
-      final normalizedUserId = normalizeToxId(f.userId);
-      if (pendingFriendIds.contains(f.userId) && !normalizedFriendIds.contains(normalizedUserId)) {
-        continue; // Filter out pending friend requests that haven't been accepted
+      // pendingFriendIds is checked against both raw and normalized form because
+      // FfiChatService applications may carry either.
+      if ((pendingFriendIds.contains(f.userId) ||
+              pendingFriendIds.any((p) => normalizeToxId(p) == f.userId)) &&
+          !normalizedFriendIds.contains(f.userId)) {
+        continue;
       }
       // Load avatar path for conversation list and chat header
       final avatarPath = await Prefs.getFriendAvatarPath(f.userId);
@@ -356,13 +370,17 @@ class FakeIM {
       // Use saved name if available and not empty, otherwise fall back to group ID
       // But avoid using default "tox_0" style names - prefer the group ID format
       final name = (savedName != null && savedName.isNotEmpty) ? savedName : gid;
+      // Pinned key for groups is 'group_${normalizedGid}' (matches FakeConversationManager.setPinned).
+      // Group IDs like 'tox_0' / 'tox_conf_xyz' are short enough to pass through
+      // normalizeToxId unchanged, but normalizing keeps the rule uniform.
+      final groupPinnedKey = 'group_${normalizeToxId(gid)}';
       final conv = FakeConversation(
         conversationID: 'group_$gid',
         title: name,
         faceUrl: savedAvatar,
         unreadCount: ffi.getUnreadOf(gid),
         isGroup: true,
-        isPinned: pinned.contains('group_$gid'),
+        isPinned: pinned.contains(groupPinnedKey),
         groupType: gid.startsWith('tox_conf_') ? 'conference' : 'group',
       );
       bus.emit(topicConversation, conv);
