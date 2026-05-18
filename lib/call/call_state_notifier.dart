@@ -72,6 +72,7 @@ class CallStateNotifier extends ChangeNotifier {
 
   /// Notify listeners now or after this frame to avoid setState/markNeedsBuild during build.
   void _safeNotifyListeners() {
+    if (_isDisposed) return;
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (!_isDisposed) notifyListeners();
@@ -112,7 +113,7 @@ class CallStateNotifier extends ChangeNotifier {
     _durationTimer?.cancel();
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _callDuration += const Duration(seconds: 1);
-      notifyListeners();
+      _safeNotifyListeners();
     });
     _safeNotifyListeners();
   }
@@ -130,34 +131,34 @@ class CallStateNotifier extends ChangeNotifier {
         _state = CallUIState.idle;
         _inviteID = null;
         _remoteUserID = null;
-        if (!_isDisposed) notifyListeners();
+        _safeNotifyListeners();
       }
     });
   }
 
   void toggleMute() {
     _isMuted = !_isMuted;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void toggleVideo() {
     _isVideoEnabled = !_isVideoEnabled;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void toggleSpeaker() {
     _isSpeakerOn = !_isSpeakerOn;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void minimize() {
     _isMinimized = true;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void restore() {
     _isMinimized = false;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void updateFloatingPosition(Offset position) {
