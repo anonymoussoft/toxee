@@ -75,11 +75,13 @@ class PrefsUpgrader {
   static Future<void> _runGlobalMigration(
       int from, int to, SharedPreferences p) async {
     if (from == 0 && to == 1) {
-      // v0→v1: ensure theme_mode has a valid value if missing
-      final theme = p.getString('theme_mode');
-      if (theme == null || theme.isEmpty) {
-        await p.setString('theme_mode', 'light');
-      }
+      // v0→v1: previously this step forced theme_mode = 'light' when missing.
+      // That overrode Prefs.getThemeMode()'s 'system' default for every user
+      // who first ran the app on this migration step, locking them to light
+      // mode regardless of OS theme. The default now stays 'system' (the
+      // getter handles missing keys); existing 'light' values written by
+      // earlier builds are preserved as-is so we don't surprise users who
+      // explicitly chose light.
       return;
     }
     if (from == 1 && to == 2) {

@@ -120,8 +120,27 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
   @override
   Future<void> remove(String key) => _prefs.remove(key);
   
+  /// S4 fix: do NOT call SharedPreferences.clear() — that would wipe global
+  /// settings (theme, locale, bootstrap nodes, account list, every other
+  /// account's data) along with the current account's. Instead, scope the
+  /// clear to keys ending in `_<accountPrefix>`. When no account prefix is
+  /// installed (legacy instance-id mode), refuse and log a warning rather than
+  /// silently destroying user data — the interface contract calls this
+  /// "clear all preferences", but toxee's prefs store mixes per-account and
+  /// global keys in one bucket, so an honest implementation cannot wipe
+  /// everything safely.
   @override
-  Future<void> clear() => _prefs.clear();
+  Future<void> clear() async {
+    final prefix = _accountPrefix;
+    if (prefix == null || prefix.isEmpty) {
+      // No way to identify which keys belong to "this account"; refuse rather
+      // than wipe the entire SharedPreferences store.
+      return;
+    }
+    final suffix = '_$prefix';
+    final keysToRemove = _prefs.getKeys().where((k) => k.endsWith(suffix)).toList();
+    await Future.wait(keysToRemove.map(_prefs.remove));
+  }
   
   // ExtendedPreferencesService methods
   @override

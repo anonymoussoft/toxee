@@ -222,6 +222,57 @@ void main() {
             isFalse);
       });
 
+      // S2 regression: encryptProfileFile / decryptProfileFile must use a
+      // temp-file-then-rename pattern so a kill mid-write does not corrupt
+      // the original .tox blob. We can't actually kill the process from a
+      // unit test, but we can verify the staging file is cleaned up on
+      // success — its presence after a successful encrypt would indicate
+      // a non-atomic write path.
+      test('encryptProfileFile leaves no .new staging file after success',
+          () async {
+        const password = 's2-atomic-encrypt-test';
+        final scratch = File(p.join(env.extras, 's2_encrypt.bin'));
+        await scratch.writeAsBytes(fixture.savedata);
+        await AccountExportService.encryptProfileFile(scratch.path, password);
+        expect(File('${scratch.path}.new').existsSync(), isFalse,
+            reason: 'atomic-write staging file must be renamed away');
+        expect(
+            await AccountExportService.isProfileFileEncrypted(scratch.path),
+            isTrue);
+      });
+
+      test('decryptProfileFile leaves no .new staging file after success',
+          () async {
+        const password = 's2-atomic-decrypt-test';
+        final scratch = File(p.join(env.extras, 's2_decrypt.bin'));
+        await scratch.writeAsBytes(fixture.savedata);
+        await AccountExportService.encryptProfileFile(scratch.path, password);
+        await AccountExportService.decryptProfileFile(scratch.path, password);
+        expect(File('${scratch.path}.new').existsSync(), isFalse,
+            reason: 'atomic-write staging file must be renamed away');
+        expect(await scratch.readAsBytes(), equals(fixture.savedata));
+      });
+
+      // A3 regression: encryptProfileFile must refuse to re-encrypt an
+      // already-encrypted file. Otherwise an error-recovery path that calls
+      // it twice on logout would produce an unrecoverable double-encrypted
+      // blob.
+      test('encryptProfileFile is a no-op when file is already encrypted',
+          () async {
+        const password = 'a3-double-encrypt-guard';
+        final scratch = File(p.join(env.extras, 'a3_double_encrypt.bin'));
+        await scratch.writeAsBytes(fixture.savedata);
+        await AccountExportService.encryptProfileFile(scratch.path, password);
+        final once = await scratch.readAsBytes();
+        await AccountExportService.encryptProfileFile(scratch.path, password);
+        final twice = await scratch.readAsBytes();
+        expect(twice, equals(once),
+            reason: 'second encrypt on already-encrypted data must be a no-op');
+        await AccountExportService.decryptProfileFile(scratch.path, password);
+        expect(await scratch.readAsBytes(), equals(fixture.savedata),
+            reason: 'decrypt of single-encrypted blob must recover plaintext');
+      });
+
       test(
           'isProfileFileEncrypted returns false for empty / missing / short files',
           () async {
