@@ -178,64 +178,76 @@ class FakeIM {
       if (m.filePath != null || m.mediaKind != null) {
         AppLogger.log('[FakeIM] Received file message from ffi.messages stream: msgID=${m.msgID}, filePath=${m.filePath}, fileName=${m.fileName}, isPending=${m.isPending}');
       }
-      String convId = ''; // Initialize to avoid compiler error
+      String? convId;
       if (m.groupId != null) {
         // Group message
         convId = 'group_${m.groupId}';
       } else if (m.isSelf) {
-        // Self-sent C2C message: first try to find the conversation from message history
+        // Self-sent C2C message: first try to find the conversation from message history.
         // This is critical for forward messages, which should be added to the target conversation,
-        // not the current active conversation (activePeerId)
-        String? targetUserID;
-        bool foundInHistory = false;
+        // not the current active conversation (activePeerId).
         if (m.msgID != null) {
           final result = ffi.findUserIDAndGroupIDFromMsgID(m.msgID!);
-          targetUserID = result.$1; // userID
-          // If found in history, use that conversation
-          if (targetUserID != null) {
+          final targetUserID = result.$1;
+          if (targetUserID != null && targetUserID != ffi.selfId) {
             convId = 'c2c_$targetUserID';
-            foundInHistory = true;
           }
         }
-        
-        // If not found in history, use activePeerId as fallback
-        // This handles the case where message hasn't been saved to history yet
-        if (!foundInHistory) {
+        // Fallbacks if not found in history: activePeerId, then most recent peer.
+        // We refuse to emit a self-conversation (`c2c_${selfId}`) because there
+        // is no such chat in the product — doing so creates a ghost entry in
+        // the conversation list. If we can't resolve a target, drop the
+        // immediate emit; the conversation refresh below will pick the message
+        // up from history on the next cycle.
+        if (convId == null) {
           if (ffi.activePeerId != null && ffi.activePeerId != ffi.selfId) {
             convId = 'c2c_${ffi.activePeerId}';
           } else {
-            // Fallback: find from lastMessages (most recent conversation)
-            final recentPeer = ffi.lastMessages.keys.isNotEmpty ? ffi.lastMessages.keys.first : null;
-            convId = recentPeer != null && recentPeer != ffi.selfId ? 'c2c_$recentPeer' : 'c2c_${ffi.selfId}';
+            final recentPeer = ffi.lastMessages.keys
+                .firstWhere((k) => k != ffi.selfId, orElse: () => '');
+            if (recentPeer.isNotEmpty) {
+              convId = 'c2c_$recentPeer';
+            }
           }
         }
       } else {
-        // Received message: sender is the peer
+        // Received message: sender is the peer.
         // Normalize friend ID to ensure consistent conversationID
-        // This matches the normalization used in FfiChatService when saving messages
+        // (matches FfiChatService normalization when saving history).
         final fromUserId = m.fromUserId;
-        final normalizedFrom = fromUserId.length > 64 
-            ? fromUserId.substring(0, 64).trim() 
+        final normalizedFrom = fromUserId.length > 64
+            ? fromUserId.substring(0, 64).trim()
             : fromUserId.trim();
-        convId = 'c2c_$normalizedFrom';
+        // Drop self-echo: a "received" message from selfId is malformed and
+        // would land in a ghost self-conversation.
+        if (normalizedFrom.isNotEmpty && normalizedFrom != ffi.selfId) {
+          convId = 'c2c_$normalizedFrom';
+        }
       }
-      final msg = FakeMessage(
-        msgID: m.msgID ?? '${m.timestamp.millisecondsSinceEpoch}_${m.fromUserId}',
-        conversationID: convId,
-        fromUser: m.fromUserId,
-        text: m.text,
-        timestampMs: m.timestamp.millisecondsSinceEpoch,
-        filePath: m.filePath,
-        fileName: m.fileName, // Pass original file name
-        mediaKind: m.mediaKind,
-        isPending: m.isPending,
-        isReceived: m.isReceived,
-        isRead: m.isRead,
-      );
-      bus.emit(topicMessage, msg);
+
+      if (convId == null) {
+        AppLogger.log('[FakeIM] dropping unroutable message emit: '
+            'msgID=${m.msgID} isSelf=${m.isSelf} groupId=${m.groupId} '
+            'fromUser=${m.fromUserId} (no target peer, history refresh will recover)');
+      } else {
+        final msg = FakeMessage(
+          msgID: m.msgID ?? '${m.timestamp.millisecondsSinceEpoch}_${m.fromUserId}',
+          conversationID: convId,
+          fromUser: m.fromUserId,
+          text: m.text,
+          timestampMs: m.timestamp.millisecondsSinceEpoch,
+          filePath: m.filePath,
+          fileName: m.fileName,
+          mediaKind: m.mediaKind,
+          isPending: m.isPending,
+          isReceived: m.isReceived,
+          isRead: m.isRead,
+        );
+        bus.emit(topicMessage, msg);
+      }
       _emitUnreadTotal();
-      // Trigger conversation refresh when new message arrives to update lastMessage
-      // This ensures the conversation list shows the latest message
+      // Always refresh the conversation list so the latest message preview is
+      // accurate, even if we dropped the bus emit above.
       unawaited(_refreshConversations());
     });
   }
