@@ -167,7 +167,11 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                 borderRadius: BorderRadius.circular(AppRadii.dialog),
               ),
               clipBehavior: Clip.antiAlias,
-              child: Padding(
+              // SingleChildScrollView lets the form scroll when the keyboard
+              // pushes content up on small screens — without it, the bottom
+              // (counter, action row) would be clipped on iPhone SE-class
+              // viewports.
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 child: Form(
                   key: _formKey,
