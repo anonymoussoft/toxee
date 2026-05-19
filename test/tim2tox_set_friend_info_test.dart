@@ -4,9 +4,13 @@
 // `code: 0 "success"` without persisting anything. The UIKit profile-page
 // "set friend remark" silently failed.
 //
-// The fix routes `friendRemark` through the injected
-// `ExtendedPreferencesService.setString` with key `friend_remark_<userID>`
-// (a key shared with toxee's UI-side `Prefs.setFriendRemark`).
+// The fix routes `friendRemark` through the typed
+// `ExtendedPreferencesService.setFriendRemark` so the host adapter applies
+// its per-account scoping (toxee scopes by current Tox-ID prefix); the same
+// scope is read back in `fakeUserToV2TimFriendInfo` so the alias becomes
+// visible across the contact list, search, and chat headers — not just the
+// editing UI's ephemeral state.
+//
 // `friendCustomInfo` has no place to land in the current
 // `ExtendedPreferencesService` interface and is intentionally a TODO; this
 // test confirms the remark side now persists.
@@ -50,7 +54,7 @@ void main() {
       );
     });
 
-    test('persists friendRemark under friend_remark_<userID>', () async {
+    test('persists friendRemark via the typed setFriendRemark API', () async {
       const userID = 'peer-alice';
       const remark = 'Alice (from work)';
 
@@ -60,7 +64,12 @@ void main() {
       );
       expect(cb.code, 0);
 
-      final stored = await prefs.getString('friend_remark_$userID');
+      // Read back via the same typed API the converter uses, so this test
+      // does not depend on the host adapter's internal key shape. What
+      // matters is that the round-trip (setFriendInfo → getFriendRemark)
+      // returns the value — that's what makes the alias visible to the
+      // contact list and chat headers via the converter.
+      final stored = await prefs.getFriendRemark(userID);
       expect(stored, remark);
     });
 
@@ -68,7 +77,7 @@ void main() {
       const userID = 'peer-bob';
       final cb = await platform.setFriendInfo(userID: userID);
       expect(cb.code, 0);
-      expect(await prefs.getString('friend_remark_$userID'), isNull);
+      expect(await prefs.getFriendRemark(userID), isNull);
     });
 
     test('friendCustomInfo is accepted but not yet persisted (TODO)', () async {
@@ -130,6 +139,22 @@ class _InMemoryPrefs implements ExtendedPreferencesService {
   @override
   Future<void> clear() async {
     _store.clear();
+  }
+
+  // Friend remark: matches the host adapter's behavior except for scoping.
+  // The production toxee adapter writes under `friend_remark_<id>_<scope>`;
+  // the test only cares about round-trip, so we use the bare key.
+  @override
+  Future<String?> getFriendRemark(String friendId) async =>
+      _store['friend_remark_$friendId'] as String?;
+
+  @override
+  Future<void> setFriendRemark(String friendId, String? remark) async {
+    if (remark == null || remark.isEmpty) {
+      _store.remove('friend_remark_$friendId');
+    } else {
+      _store['friend_remark_$friendId'] = remark;
+    }
   }
 
   @override
