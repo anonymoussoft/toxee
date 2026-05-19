@@ -152,7 +152,9 @@ prepare_flutter_deps() {
     return
   fi
   if [[ ! -f "$FLUTTER_APP_DIR/pubspec.lock" ]] || \
-     [[ "$FLUTTER_APP_DIR/pubspec.yaml" -nt "$FLUTTER_APP_DIR/pubspec.lock" ]]; then
+     [[ "$FLUTTER_APP_DIR/pubspec.yaml" -nt "$FLUTTER_APP_DIR/pubspec.lock" ]] || \
+     { [[ -f "$FLUTTER_APP_DIR/pubspec_overrides.yaml" ]] && \
+       [[ "$FLUTTER_APP_DIR/pubspec_overrides.yaml" -nt "$FLUTTER_APP_DIR/pubspec.lock" ]]; }; then
     info "Running flutter pub get..."
     (cd "$FLUTTER_APP_DIR" && flutter pub get) >>"$FLUTTER_BUILD_LOG" 2>&1
   fi

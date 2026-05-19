@@ -228,7 +228,14 @@ void main(List<String> args) async {
     overrides.writeln('    path: third_party/chat-uikit-flutter/$p');
   }
   overrides.writeln('  record_linux: ^1.2.1');
-  File('$repoRoot/pubspec_overrides.yaml').writeAsStringSync(overrides.toString());
+  // Only rewrite when content differs, so we don't bump the mtime on no-op runs
+  // (Flutter build scripts gate `flutter pub get` on pubspec_overrides.yaml freshness).
+  final overridesFile = File('$repoRoot/pubspec_overrides.yaml');
+  final newOverrides = overrides.toString();
+  if (!overridesFile.existsSync() ||
+      overridesFile.readAsStringSync() != newOverrides) {
+    overridesFile.writeAsStringSync(newOverrides);
+  }
 
   stdout.writeln('Bootstrap complete.');
 }

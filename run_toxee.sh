@@ -28,8 +28,36 @@ APP_SUPPORT_LOG="$HOME/Library/Containers/com.example.toxee/Data/Library/Applica
 
 mkdir -p "$BUILD_DIR"
 
-# Bootstrap dependencies so pubspec_overrides and third_party are ready
-(cd "$FLUTTER_APP_DIR" && dart run tool/bootstrap_deps.dart) >> "$BUILD_DIR/bootstrap.log" 2>&1 || true
+# ----- CLI flags -----------------------------------------------------
+CLEAN=false
+SKIP_BOOTSTRAP=false
+SKIP_PUB_GET=false
+for arg in "$@"; do
+  case "$arg" in
+    --clean)          CLEAN=true ;;
+    --skip-bootstrap) SKIP_BOOTSTRAP=true ;;
+    --skip-pub-get)   SKIP_PUB_GET=true ;;
+    --help|-h)
+      cat <<EOF
+Usage: $0 [--clean] [--skip-bootstrap] [--skip-pub-get]
+
+  --clean           Wipe Flutter build cache before building (slow).
+  --skip-bootstrap  Skip dart run tool/bootstrap_deps.dart.
+  --skip-pub-get    Skip the cache-aware pub get probe entirely.
+EOF
+      exit 0 ;;
+    *)
+      echo "Unknown option: $arg (use --help)" >&2
+      exit 1 ;;
+  esac
+done
+
+# Bootstrap dependencies so pubspec_overrides and third_party are ready.
+# bootstrap_deps.dart is itself cache-aware (sha256+patches_sha256), but skip
+# the whole probe when the caller knows nothing changed.
+if [[ "$SKIP_BOOTSTRAP" != "true" ]]; then
+  (cd "$FLUTTER_APP_DIR" && dart run tool/bootstrap_deps.dart) >> "$BUILD_DIR/bootstrap.log" 2>&1 || true
+fi
 
 # Process IDs
 APP_PID=""
@@ -171,10 +199,23 @@ build_native() {
 build_flutter() {
   : > "$FLUTTER_BUILD_LOG"
 
-  # pub get if needed
-  if [[ ! -f "$FLUTTER_APP_DIR/pubspec.lock" ]] || \
-     [[ "$FLUTTER_APP_DIR/pubspec.yaml" -nt "$FLUTTER_APP_DIR/pubspec.lock" ]]; then
-    (cd "$FLUTTER_APP_DIR" && flutter pub get) >> "$FLUTTER_BUILD_LOG" 2>&1
+  # pub get only when the lock file is missing or older than the spec files.
+  # bootstrap_deps.dart now writes pubspec_overrides.yaml in-place only when
+  # content changes, so its mtime is a reliable cache-busting signal.
+  if [[ "$SKIP_PUB_GET" != "true" ]]; then
+    local need_pub_get=false
+    if [[ ! -f "$FLUTTER_APP_DIR/pubspec.lock" ]]; then
+      need_pub_get=true
+    elif [[ "$FLUTTER_APP_DIR/pubspec.yaml" -nt "$FLUTTER_APP_DIR/pubspec.lock" ]]; then
+      need_pub_get=true
+    elif [[ -f "$FLUTTER_APP_DIR/pubspec_overrides.yaml" && \
+            "$FLUTTER_APP_DIR/pubspec_overrides.yaml" -nt "$FLUTTER_APP_DIR/pubspec.lock" ]]; then
+      need_pub_get=true
+    fi
+    if [[ "$need_pub_get" == "true" ]]; then
+      echo -e "${YELLOW}    Resolving Flutter dependencies...${NC}"
+      (cd "$FLUTTER_APP_DIR" && flutter pub get) >> "$FLUTTER_BUILD_LOG" 2>&1
+    fi
   fi
 
   # Ensure macOS project exists
@@ -183,13 +224,16 @@ build_flutter() {
     (cd "$FLUTTER_APP_DIR" && flutter create . --platforms=macos) >> "$FLUTTER_BUILD_LOG" 2>&1
   fi
 
-  # Determine build strategy
+  # Only force a clean rebuild when the app bundle is missing (cold start)
+  # or the user passes --clean. Trust Flutter's incremental build otherwise:
+  # mtime changes on pubspec.yaml from git operations no longer trigger a
+  # wipe-and-rebuild that re-downloads every dependency.
   local needs_clean=false
   if [[ ! -d "$APP_BUNDLE" ]] || [[ ! -f "$APP_EXECUTABLE" ]]; then
     needs_clean=true
-  elif [[ "$FLUTTER_APP_DIR/pubspec.yaml" -nt "$APP_BUNDLE" ]]; then
+  elif [[ "$CLEAN" == "true" ]]; then
     needs_clean=true
-    echo -e "${YELLOW}    pubspec.yaml changed, cleaning...${NC}"
+    echo -e "${YELLOW}    --clean requested, wiping build cache...${NC}"
   fi
 
   if [[ "$needs_clean" == "true" ]]; then

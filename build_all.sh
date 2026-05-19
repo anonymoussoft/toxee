@@ -61,6 +61,8 @@ fi
 BUILD_MODE="release"
 PLATFORMS=""
 CLEAN=false
+SKIP_BOOTSTRAP=false
+FORCE_PUB_GET=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -76,6 +78,14 @@ while [[ $# -gt 0 ]]; do
             CLEAN=true
             shift
             ;;
+        --skip-bootstrap)
+            SKIP_BOOTSTRAP=true
+            shift
+            ;;
+        --force-pub-get)
+            FORCE_PUB_GET=true
+            shift
+            ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -84,6 +94,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --platform PLATFORM  Build for specific platform: macos, linux, windows, android, ios"
             echo "                       Can be specified multiple times. If not specified, builds for all available platforms."
             echo "  --clean              Clean build before building"
+            echo "  --skip-bootstrap     Skip dart run tool/bootstrap_deps.dart"
+            echo "  --force-pub-get      Force flutter pub get even when pubspec.lock is fresh"
             echo "  --help               Show this help message"
             exit 0
             ;;
@@ -95,9 +107,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Bootstrap dependencies (submodules, vendor SDK, overrides)
-print_info "Bootstrapping dependencies..."
-dart run tool/bootstrap_deps.dart
+# Bootstrap dependencies (submodules, vendor SDK, overrides).
+# bootstrap_deps.dart is itself cache-aware; --skip-bootstrap is just a fast-path
+# when the caller knows the SDK/patches/submodules haven't changed.
+if [ "$SKIP_BOOTSTRAP" = false ]; then
+    print_info "Bootstrapping dependencies..."
+    dart run tool/bootstrap_deps.dart
+fi
 
 # Clean if requested
 if [ "$CLEAN" = true ]; then
@@ -105,9 +121,24 @@ if [ "$CLEAN" = true ]; then
     flutter clean
 fi
 
-# Get dependencies
-print_info "Getting Flutter dependencies..."
-flutter pub get
+# Get dependencies only when the lock file is missing or older than the spec files.
+# Saves 1-3 minutes on hot dev loops where dependencies haven't changed.
+need_pub_get=false
+if [ "$FORCE_PUB_GET" = true ] || [ "$CLEAN" = true ]; then
+    need_pub_get=true
+elif [ ! -f pubspec.lock ]; then
+    need_pub_get=true
+elif [ pubspec.yaml -nt pubspec.lock ]; then
+    need_pub_get=true
+elif [ -f pubspec_overrides.yaml ] && [ pubspec_overrides.yaml -nt pubspec.lock ]; then
+    need_pub_get=true
+fi
+if [ "$need_pub_get" = true ]; then
+    print_info "Getting Flutter dependencies..."
+    flutter pub get
+else
+    print_info "Flutter dependencies up to date — skipping pub get."
+fi
 
 # Determine which platforms to build
 if [ -z "$PLATFORMS" ]; then
