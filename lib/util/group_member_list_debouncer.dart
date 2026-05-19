@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat_common.dart';
 
+import '../sdk_fake/uikit_data_facade.dart';
+
 class GroupMemberListDebouncer {
   static final GroupMemberListDebouncer _instance = GroupMemberListDebouncer._internal();
   factory GroupMemberListDebouncer() => _instance;
@@ -36,8 +38,7 @@ class GroupMemberListDebouncer {
       final timeSinceLastLoad = DateTime.now().difference(lastLoadTime);
       if (timeSinceLastLoad < _minLoadInterval) {
         // Too soon, return cached data if available
-        final cachedList = TencentCloudChat.instance.dataInstance.groupProfile
-            .getGroupMemberList(groupID);
+        final cachedList = UikitDataFacade.getGroupMemberList(groupID);
         if (cachedList.isNotEmpty) {
           // Return cached data to prevent duplicate calls
           return cachedList;
@@ -52,8 +53,7 @@ class GroupMemberListDebouncer {
     _lastLoadTime[groupID] = DateTime.now();
 
     // Create and store the future
-    final loadFuture = TencentCloudChat.instance.dataInstance.groupProfile
-        .loadGroupMemberList(
+    final loadFuture = UikitDataFacade.loadGroupMemberList(
       groupID: groupID,
       loadGroupAdminAndOwnerOnly: loadGroupAdminAndOwnerOnly,
       nextSeq: nextSeq,

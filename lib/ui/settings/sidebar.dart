@@ -8,6 +8,7 @@ import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation_tatal_unread_count.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import '../../sdk_fake/uikit_data_facade.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/prefs.dart';
 import '../../i18n/app_localizations.dart';
@@ -600,8 +601,7 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
       }
     });
     // Get initial count
-    _applicationUnreadCount =
-        TencentCloudChat.instance.dataInstance.contact.applicationUnreadCount;
+    _applicationUnreadCount = UikitDataFacade.applicationUnreadCount;
   }
 
   @override

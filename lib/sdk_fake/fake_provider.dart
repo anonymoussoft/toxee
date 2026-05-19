@@ -21,6 +21,7 @@ import '../../util/prefs.dart';
 import 'fake_uikit_core.dart';
 import 'fake_im.dart';
 import 'fake_models.dart';
+import 'uikit_data_facade.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
 
@@ -127,8 +128,7 @@ class FakeChatDataProvider implements ChatDataProvider {
           }
           // Also remove from UIKit's conversation list to ensure UI updates
           // This is important because buildConversationList only adds/updates, it doesn't remove
-          TencentCloudChat.instance.dataInstance.conversation
-              .removeConversation([c.conversationID]);
+          UikitDataFacade.removeConversation([c.conversationID]);
           print(
               '[FakeChatDataProvider] Removed quit group conversation ${c.conversationID} from UIKit conversation list via FakeConversation event');
           return; // Skip adding this conversation
@@ -322,8 +322,7 @@ class FakeChatDataProvider implements ChatDataProvider {
 
       // Also remove from UIKit's conversation list to ensure UI updates.
       // buildConversationList only adds/updates; it doesn't remove, so we need explicit removal.
-      TencentCloudChat.instance.dataInstance.conversation
-          .removeConversation([convId]);
+      UikitDataFacade.removeConversation([convId]);
       print(
           '[FakeChatDataProvider] Removed conversation $convId from UIKit conversation list via FakeFriendDeleted event');
     });
@@ -340,8 +339,7 @@ class FakeChatDataProvider implements ChatDataProvider {
 
       // Also remove from UIKit's conversation list to ensure UI updates
       // buildConversationList only adds/updates, it doesn't remove, so we need to explicitly remove
-      TencentCloudChat.instance.dataInstance.conversation
-          .removeConversation([convId]);
+      UikitDataFacade.removeConversation([convId]);
       print(
           '[FakeChatDataProvider] Removed conversation $convId from UIKit conversation list via FakeGroupDeleted event');
     });

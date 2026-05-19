@@ -25,8 +25,7 @@ extension _HomePagePlugins on _HomePageState {
     final userId = widget.service.selfId;
     if (userId.isEmpty) return;
 
-    final basic = TencentCloudChat.instance.dataInstance.basic;
-    if (basic.hasPlugins("sticker")) {
+    if (UikitDataFacade.hasPlugin("sticker")) {
       _stickerPluginRegistered = true;
       AppLogger.debug('[HomePage] _tryRegisterStickerPluginSync: Plugin already registered');
       return;
@@ -45,7 +44,7 @@ extension _HomePagePlugins on _HomePageState {
 
     stickerPlugin.init(json.encode(initData)).then((initResult) {
       if (!mounted) return;
-      basic.addPlugin(
+      UikitDataFacade.addPlugin(
         TencentCloudChatPluginItem(
           name: "sticker",
           initData: initData,
@@ -71,11 +70,10 @@ extension _HomePagePlugins on _HomePageState {
       AppLogger.debug('[HomePage] Sticker plugin: selfId not available yet, will retry when available');
       return;
     }
-    final basic = TencentCloudChat.instance.dataInstance.basic;
-    final hasPlugin = basic.hasPlugins("sticker");
-    AppLogger.debug('[HomePage] _tryRegisterStickerPlugin: basic.hasPlugins("sticker")=$hasPlugin');
+    final hasPlugin = UikitDataFacade.hasPlugin("sticker");
+    AppLogger.debug('[HomePage] _tryRegisterStickerPlugin: hasPlugin("sticker")=$hasPlugin');
     if (hasPlugin) {
-      final plugin = basic.getPlugin("sticker");
+      final plugin = UikitDataFacade.getPlugin("sticker");
       AppLogger.debug('[HomePage] _tryRegisterStickerPlugin: Plugin already exists: ${plugin != null}, instance=${plugin?.pluginInstance}');
       _stickerPluginRegistered = true;
       AppLogger.debug('[HomePage] Sticker plugin already registered');
@@ -98,7 +96,7 @@ extension _HomePagePlugins on _HomePageState {
         final initResult = await stickerPlugin.init(json.encode(initData));
         AppLogger.debug('[HomePage] Sticker plugin init result: $initResult');
         if (!mounted) return;
-        basic.addPlugin(
+        UikitDataFacade.addPlugin(
           TencentCloudChatPluginItem(
             name: "sticker",
             initData: initData,
@@ -110,27 +108,25 @@ extension _HomePagePlugins on _HomePageState {
 
         Future.delayed(const Duration(milliseconds: 100), () {
           if (mounted) {
-            basic.notifyListener(TencentCloudChatBasicDataKeys.addUsedComponent as dynamic);
+            UikitDataFacade.notifyAddUsedComponent();
             AppLogger.debug('[HomePage] Triggered plugin update notification');
             try {
-              final conversationData = TencentCloudChat.instance.dataInstance.conversation;
-              final currentConv = conversationData.currentConversation;
-              if (currentConv != null) {
-                conversationData.notifyListener(TencentCloudChatConversationDataKeys.currentConversation as dynamic);
+              if (UikitDataFacade.currentConversation != null) {
+                UikitDataFacade.notifyCurrentConversation();
                 AppLogger.debug('[HomePage] Triggered conversation update to force message component rebuild');
               }
             } catch (e) {
               AppLogger.logError('[HomePage] Failed to trigger conversation update: $e', e, StackTrace.current);
             }
             try {
-              basic.notifyListener(TencentCloudChatBasicDataKeys.addUsedComponent as dynamic);
+              UikitDataFacade.notifyAddUsedComponent();
               AppLogger.debug('[HomePage] Triggered basic data update for plugin registration');
             } catch (e) {
               AppLogger.logError('[HomePage] Failed to trigger basic data update: $e', e, StackTrace.current);
             }
           }
         });
-        final plugin = basic.getPlugin("sticker");
+        final plugin = UikitDataFacade.getPlugin("sticker");
         AppLogger.debug('[HomePage] Plugin verification: plugin=${plugin != null}');
         if (plugin != null) {
           AppLogger.debug('[HomePage] Sticker plugin verified: name=${plugin.name}, instance=${plugin.pluginInstance}, initData=${plugin.initData}');
@@ -151,10 +147,10 @@ extension _HomePagePlugins on _HomePageState {
           }
         } else {
           AppLogger.debug('[HomePage] WARNING: Sticker plugin not found after registration!');
-          AppLogger.debug('[HomePage] Available plugins: ${basic.plugins.map((p) => p.name).join(", ")}');
+          AppLogger.debug('[HomePage] Available plugins: ${UikitDataFacade.plugins.map((p) => p.name).join(", ")}');
         }
-        final finalCheck = basic.hasPlugins("sticker");
-        final finalPlugin = basic.getPlugin("sticker");
+        final finalCheck = UikitDataFacade.hasPlugin("sticker");
+        final finalPlugin = UikitDataFacade.getPlugin("sticker");
         AppLogger.debug('[HomePage] Final plugin check: hasPlugins=$finalCheck, getPlugin=${finalPlugin != null}');
       } catch (e, stackTrace) {
         AppLogger.logError('[HomePage] Failed to register sticker plugin: $e', e, stackTrace);
@@ -166,13 +162,12 @@ extension _HomePagePlugins on _HomePageState {
     if (_textTranslatePluginRegistered || !mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _textTranslatePluginRegistered) return;
-      final basic = TencentCloudChat.instance.dataInstance.basic;
-      if (!basic.hasPlugins("textTranslate")) {
+      if (!UikitDataFacade.hasPlugin("textTranslate")) {
         final plugin = TencentCloudChatTextTranslate(
           onTranslateFailed: () {},
           onTranslateSuccess: (localCustomData) {},
         );
-        basic.addPlugin(
+        UikitDataFacade.addPlugin(
           TencentCloudChatPluginItem(
             name: "textTranslate",
             pluginInstance: plugin,
@@ -189,10 +184,9 @@ extension _HomePagePlugins on _HomePageState {
     if (_soundToTextPluginRegistered || !mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _soundToTextPluginRegistered) return;
-      final basic = TencentCloudChat.instance.dataInstance.basic;
-      if (!basic.hasPlugins("soundToText")) {
+      if (!UikitDataFacade.hasPlugin("soundToText")) {
         final plugin = TencentCloudChatSoundToText();
-        basic.addPlugin(
+        UikitDataFacade.addPlugin(
           TencentCloudChatPluginItem(
             name: "soundToText",
             pluginInstance: plugin,

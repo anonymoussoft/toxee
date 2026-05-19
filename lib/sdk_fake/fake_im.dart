@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import '../util/friend_asset_cleanup.dart';
 import '../util/prefs.dart';
@@ -95,6 +96,18 @@ class FakeIM {
   /// copy so callers cannot mutate internal state.
   Map<String, DateTime> get debugPendingFriendAdds =>
       Map.unmodifiable(_pendingFriendAdds);
+
+  /// Test-only: number of currently-active internal timers. Used by the
+  /// session-lifecycle re-entry tests to detect timer leaks across a
+  /// logout→login cycle (a second login that doubles this count vs the first
+  /// indicates dispose() did not cancel the first session's timers).
+  @visibleForTesting
+  int get debugActiveTimerCount {
+    int count = 0;
+    if (_refreshTimer != null && _refreshTimer!.isActive) count++;
+    if (_startupInitTimer != null && _startupInitTimer!.isActive) count++;
+    return count;
+  }
 
   static bool _setEquals(Set<String> a, Set<String> b) {
     if (identical(a, b)) return true;

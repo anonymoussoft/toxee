@@ -10,6 +10,7 @@ import 'package:toxee/util/responsive_layout.dart';
 import '../widgets/app_page_route.dart';
 import '../widgets/empty_state_widget.dart';
 import '../widgets/loading_shimmer.dart';
+import '../../sdk_fake/uikit_data_facade.dart';
 import 'package:tencent_cloud_chat_common/chat_sdk/components/tencent_cloud_chat_search_sdk.dart';
 import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_message_options.dart';
 import 'package:tencent_cloud_chat_common/components/tencent_cloud_chat_components_utils.dart';
@@ -73,8 +74,7 @@ class _CustomSearchState extends State<CustomSearch> {
   /// Returns result items for conversations that have at least one message whose text/summary contains [keyword] (case-insensitive).
   Future<List<TencentCloudChatSearchResultItemData>> _searchLocalMessageContent(String keyword) async {
     final result = <TencentCloudChatSearchResultItemData>[];
-    final conversationList = TencentCloudChat.instance.dataInstance.conversation.conversationList;
-    final messageData = TencentCloudChat.instance.dataInstance.messageData;
+    final conversationList = UikitDataFacade.conversationList;
     final messageSDK = TencentCloudChat.instance.chatSDKInstance.messageSDK;
     final lowerKeyword = keyword.toLowerCase();
 
@@ -89,7 +89,7 @@ class _CustomSearchState extends State<CustomSearch> {
       final key = (c.userID != null && c.userID!.isNotEmpty)
           ? c.userID!
           : (c.groupID ?? c.conversationID);
-      List<V2TimMessage> list = messageData.getMessageList(key: key);
+      List<V2TimMessage> list = UikitDataFacade.getMessageList(key: key);
       // Build full list: in-memory (newest) + paginated history (older). Message order is newest-first.
       List<V2TimMessage> allMessages = List<V2TimMessage>.from(list);
       if (c.userID != null || c.groupID != null) {
@@ -242,7 +242,7 @@ class _CustomSearchState extends State<CustomSearch> {
 
         List<V2TimConversation> fallback = [];
         if (contacts.isEmpty && groups.isEmpty && messages.isEmpty) {
-          final conversationList = TencentCloudChat.instance.dataInstance.conversation.conversationList;
+          final conversationList = UikitDataFacade.conversationList;
           fallback = conversationList.where((c) {
             return _matchesKeywordCaseInsensitive(c.showName, keyword) ||
                 _matchesKeywordCaseInsensitive(c.userID, keyword) ||
@@ -277,10 +277,9 @@ class _CustomSearchState extends State<CustomSearch> {
           // Fallback: search in-memory + paginated persisted history when SDK returns no results.
           if (messages.isEmpty) {
             final key = widget.userID ?? widget.groupID ?? '';
-            final messageData = TencentCloudChat.instance.dataInstance.messageData;
             final messageSDK = TencentCloudChat.instance.chatSDKInstance.messageSDK;
             final lowerKeyword = keyword.toLowerCase();
-            List<V2TimMessage> list = messageData.getMessageList(key: key);
+            List<V2TimMessage> list = UikitDataFacade.getMessageList(key: key);
             List<V2TimMessage> allMessages = List<V2TimMessage>.from(list);
             if (widget.userID != null || widget.groupID != null) {
               try {
@@ -349,7 +348,7 @@ class _CustomSearchState extends State<CustomSearch> {
       _errorMessage = null; // Will be set below after fallback attempt.
       if (_isGlobalSearch && _searchKeyword.trim().isNotEmpty) {
         final keyword = _searchKeyword.trim();
-        final conversationList = TencentCloudChat.instance.dataInstance.conversation.conversationList;
+        final conversationList = UikitDataFacade.conversationList;
         final fallback = conversationList.where((c) {
           return _matchesKeywordCaseInsensitive(c.showName, keyword) ||
               _matchesKeywordCaseInsensitive(c.userID, keyword) ||
@@ -385,9 +384,9 @@ class _CustomSearchState extends State<CustomSearch> {
     V2TimMessage? targetMessage,
   }) async {
     if (targetMessage != null) {
-      TencentCloudChat.instance.dataInstance.conversation.currentTargetMessage = targetMessage;
+      UikitDataFacade.currentTargetMessage = targetMessage;
     }
-    if (TencentCloudChat.instance.dataInstance.basic.usedComponents.contains(TencentCloudChatComponentsEnum.message)) {
+    if (UikitDataFacade.usedComponents.contains(TencentCloudChatComponentsEnum.message)) {
       if (!_isDesktop(context)) {
         navigateToMessage(
           context: context,
@@ -401,9 +400,9 @@ class _CustomSearchState extends State<CustomSearch> {
         final conv = await TencentCloudChat.instance.chatSDKInstance.conversationSDK
             .getConversation(userID: userID, groupID: groupID);
         if (targetMessage != null) {
-          TencentCloudChat.instance.dataInstance.conversation.currentTargetMessage = targetMessage;
+          UikitDataFacade.currentTargetMessage = targetMessage;
         }
-        TencentCloudChat.instance.dataInstance.conversation.currentConversation = conv;
+        UikitDataFacade.currentConversation = conv;
       }
     }
   }

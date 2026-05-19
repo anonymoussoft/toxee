@@ -18,6 +18,7 @@ import '../sdk_fake/fake_uikit_core.dart';
 import '../sdk_fake/fake_models.dart';
 import '../sdk_fake/fake_im.dart';
 import '../sdk_fake/fake_provider.dart';
+import '../sdk_fake/uikit_data_facade.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
 import '../runtime/session_runtime_coordinator.dart';
 import '../runtime/tim_sdk_initializer.dart';
@@ -53,7 +54,6 @@ import 'package:tencent_cloud_chat_common/components/tencent_cloud_chat_componen
 import 'package:tencent_cloud_chat_sdk/models/v2_tim_callback.dart';
 import 'package:tencent_cloud_chat_common/data/conversation/tencent_cloud_chat_conversation_data.dart';
 import 'package:tencent_cloud_chat_common/data/contact/tencent_cloud_chat_contact_data.dart';
-import 'package:tencent_cloud_chat_common/data/basic/tencent_cloud_chat_basic_data.dart';
 import 'package:tencent_cloud_chat_common/data/group_profile/tencent_cloud_chat_group_profile_data.dart';
 import 'group/group_member_list_wrapper.dart';
 import 'package:tencent_cloud_chat_common/eventbus/tencent_cloud_chat_eventbus.dart';
@@ -69,11 +69,6 @@ import 'package:tencent_cloud_chat_text_translate/tencent_cloud_chat_text_transl
 import 'package:tencent_cloud_chat_sound_to_text/tencent_cloud_chat_sound_to_text.dart';
 import 'search/custom_search.dart' as search_pkg;
 import 'package:tencent_cloud_chat_sdk/enum/conversation_type.dart';
-import 'package:tencent_cloud_chat_sdk/native_im/adapter/tim_message_manager.dart';
-import 'package:tencent_cloud_chat_sdk/enum/V2TimAdvancedMsgListener.dart';
-import 'package:tencent_cloud_chat_sdk/models/v2_tim_message.dart';
-import 'package:tim2tox_dart/utils/message_history_persistence.dart';
-import 'package:tim2tox_dart/utils/binary_replacement_history_hook.dart';
 import 'settings/settings_page.dart';
 import 'settings/sidebar.dart';
 import 'applications/applications_page.dart';
@@ -152,8 +147,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int? _lanBootstrapServicePort;
   Timer? _bootstrapServiceStatusTimer;
   final _bag = DisposableBag();
-  StreamSubscription<bool>? _persistenceHookSub;
-  bool _persistenceHookInstalled = false;
   bool _disposed = false;
   ContactBuilderOverrideHandle? _contactBuilderOverride;
   late final HomeSessionController _sessionController;
@@ -661,9 +654,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _updateTray() async {
     if (!AppTray.instance.isSupported) return;
     // Get total unread count from UIKit (includes all conversations and groups)
-    final uikitUnreadCount = TencentCloudChat.instance.dataInstance.conversation.totalUnreadCount;
+    final uikitUnreadCount = UikitDataFacade.totalUnreadCount;
     // Get friend application unread count
-    final applicationUnreadCount = TencentCloudChat.instance.dataInstance.contact.applicationUnreadCount;
+    final applicationUnreadCount = UikitDataFacade.applicationUnreadCount;
     // Total count = conversation unread + friend applications
     final totalCount = uikitUnreadCount + applicationUnreadCount;
     await AppTray.instance.update(count: totalCount, online: widget.service.isConnected);
@@ -683,7 +676,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       try {
         // Set contact event handlers for navigation
         // Note: onNavigateToChat is an alias for onTapContactItem (getter that returns _onTapContactItem)
-        TencentCloudChat.instance.dataInstance.contact.contactEventHandlers = TencentCloudChatContactEventHandlers(
+        UikitDataFacade.contactEventHandlers = TencentCloudChatContactEventHandlers(
           uiEventHandlers: TencentCloudChatContactUIEventHandlers(
             onTapContactItem: ({String? userID, String? groupID}) async {
               // Handle navigation from contact list and profile page "Send Message" button
@@ -751,9 +744,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               _lastShouldShowMasterDetail = showMasterDetail;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 try {
-                  TencentCloudChat.instance.dataInstance.conversation
-                      .conversationConfig
-                      .setConfigs(forceDesktopLayout: showMasterDetail);
+                  UikitDataFacade.setConversationConfig(
+                      forceDesktopLayout: showMasterDetail);
                 } catch (_) {
                   // Config object may not exist yet on the very first frame
                   // (UIKit init is async); next layout pass will pick it up.
@@ -1434,7 +1426,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   void _selectConversation({String? peerId, String? groupId}) {
-    final convData = TencentCloudChat.instance.dataInstance.conversation;
     final bool hasPeer = peerId != null && peerId.isNotEmpty;
     final bool hasGroup = groupId != null && groupId.isNotEmpty;
     if (!hasPeer && !hasGroup) {
@@ -1444,7 +1435,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final String targetConvId = hasGroup ? 'group_$groupId' : 'c2c_${peerId!}';
 
     V2TimConversation? target;
-    for (final conv in convData.conversationList) {
+    for (final conv in UikitDataFacade.conversationList) {
       if (conv.conversationID == targetConvId) {
         target = conv;
         break;
@@ -1460,7 +1451,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         unreadCount: 0,
       );
     }
-    convData.currentConversation = target;
+    UikitDataFacade.currentConversation = target;
   }
 
   Future<void> _setAutoAcceptFriends(bool value) async {
@@ -1549,18 +1540,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           faceUrl: savedAvatar,
         );
         // addGroupInfoToJoinedGroupList will check if group already exists and update it if needed
-        TencentCloudChat.instance.dataInstance.contact.addGroupInfoToJoinedGroupList(groupInfo);
+        UikitDataFacade.addGroupInfoToJoinedGroupList(groupInfo);
       }
-      
+
       // Also call getGroupList() to refresh the list from SDK
       // However, we need to preserve existing groups because SDK may not know about historical groups
       // Save existing groups before calling getGroupList()
-      final groupsBeforeSDK = List<V2TimGroupInfo>.from(TencentCloudChat.instance.dataInstance.contact.groupList);
+      final groupsBeforeSDK = List<V2TimGroupInfo>.from(UikitDataFacade.groupList);
       if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Groups before getGroupList(): ${groupsBeforeSDK.length}, groupIds=${groupsBeforeSDK.map((g) => '${g.groupID}(${g.groupName})').toList()}');
-      
+
       await TencentCloudChat.instance.chatSDKInstance.contactSDK.getGroupList();
-      
-      final sdkGroupList = TencentCloudChat.instance.dataInstance.contact.groupList;
+
+      final sdkGroupList = UikitDataFacade.groupList;
       if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: SDK returned ${sdkGroupList.length} groups: ${sdkGroupList.map((g) => '${g.groupID}(${g.groupName})').toList()}');
       
       // Use quitGroups that was already loaded earlier (line 1836)
@@ -1595,9 +1586,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Merged ${mergedGroups.length} groups: ${mergedGroups.map((g) => '${g.groupID}(${g.groupName})').toList()}');
       
       // Update with merged groups
-      TencentCloudChat.instance.dataInstance.contact.buildGroupList(mergedGroups, '_loadPersistedGroupsIntoUIKit_merge');
-      
-      final finalGroupList = TencentCloudChat.instance.dataInstance.contact.groupList;
+      UikitDataFacade.buildGroupList(mergedGroups, '_loadPersistedGroupsIntoUIKit_merge');
+
+      final finalGroupList = UikitDataFacade.groupList;
       if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Final groupList length=${finalGroupList.length}, groupIds=${finalGroupList.map((g) => g.groupID).toList()}');
       
       // Refresh conversations to ensure conversation list is in sync with group list
@@ -1618,24 +1609,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // Clear UIKit's in-memory message list for this group ID.
     // When a group ID is reused (e.g., quit tox_7 then create new tox_7),
     // UIKit's _messageListMap may still hold old messages from the previous group.
-    TencentCloudChat.instance.dataInstance.messageData.clearMessageList(groupID: groupId);
+    UikitDataFacade.clearMessageList(groupID: groupId);
 
     // CRITICAL: Save existing groups before calling getGroupList()
     // This is necessary because buildGroupList() clears the entire list and only keeps SDK-returned groups
     // SDK may not know about historical groups, so we need to preserve them
-    final existingGroups = List<V2TimGroupInfo>.from(TencentCloudChat.instance.dataInstance.contact.groupList);
+    final existingGroups = List<V2TimGroupInfo>.from(UikitDataFacade.groupList);
     if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Saved ${existingGroups.length} existing groups before getGroupList: ${existingGroups.map((g) => '${g.groupID}(${g.groupName})').toList()}');
 
     // Delete old group info from UIKit first to ensure clean state
     // This is important when group ID is reused (e.g., numeric IDs)
-    TencentCloudChat.instance.dataInstance.contact.deleteGroupInfoFromJoinedGroupList(groupId);
+    UikitDataFacade.deleteGroupInfoFromJoinedGroupList(groupId);
     
     // Refresh group list in UIKit first to ensure we have the latest list from SDK
     // However, we need to merge SDK groups with existing groups to preserve historical groups
     try {
       if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Calling getGroupList()');
       await TencentCloudChat.instance.chatSDKInstance.contactSDK.getGroupList();
-      final sdkGroupList = TencentCloudChat.instance.dataInstance.contact.groupList;
+      final sdkGroupList = UikitDataFacade.groupList;
       if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: After getGroupList(), SDK returned ${sdkGroupList.length} groups: ${sdkGroupList.map((g) => '${g.groupID}(${g.groupName})').toList()}');
       
       // Merge SDK groups with existing groups (excluding the group being updated)
@@ -1659,7 +1650,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Merged ${mergedGroups.length} groups (${existingGroups.length} existing + ${sdkGroupList.length} SDK): ${mergedGroups.map((g) => '${g.groupID}(${g.groupName})').toList()}');
       
       // Update the group list with merged groups
-      TencentCloudChat.instance.dataInstance.contact.buildGroupList(mergedGroups, '_handleGroupChanged_merge');
+      UikitDataFacade.buildGroupList(mergedGroups, '_handleGroupChanged_merge');
     } catch (e) {
       if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: getGroupList() failed: $e');
     }
@@ -1678,8 +1669,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       faceUrl: savedAvatar, // This will be null if cleared, ensuring UIKit doesn't use old avatar
     );
     if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Adding groupInfo: groupID=${groupInfo.groupID}, groupName=${groupInfo.groupName}');
-    TencentCloudChat.instance.dataInstance.contact.addGroupInfoToJoinedGroupList(groupInfo);
-    final afterAddGroupList = TencentCloudChat.instance.dataInstance.contact.groupList;
+    UikitDataFacade.addGroupInfoToJoinedGroupList(groupInfo);
+    final afterAddGroupList = UikitDataFacade.groupList;
     if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: After addGroupInfoToJoinedGroupList(), groupList length=${afterAddGroupList.length}, groupIds=${afterAddGroupList.map((g) => g.groupID).toList()}');
     
     // Ensure group is in knownGroups and persisted before refreshing conversations

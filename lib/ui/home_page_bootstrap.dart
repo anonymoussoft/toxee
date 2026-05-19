@@ -7,7 +7,10 @@ extension _HomePageBootstrap on _HomePageState {
     AppLogger.debug('[HomePage] HYBRID MODE: Binary replacement + Platform interface');
 
     TimSdkInitializer.ensureInitialized().then((_) {
-      _initBinaryReplacementPersistenceHook();
+      // BinaryReplacementHistoryHook is now installed inside
+      // SessionRuntimeCoordinator.ensureInitialized() — same atomic init
+      // block as the platform — to close the platform-installed-but-hook-
+      // not-installed window. Don't re-install here.
       if (!mounted) return;
       TencentCloudChat.instance.chatSDKInstance.groupSDK.initGroupListener();
       AppLogger.debug('[HomePage] Registered UIKit group listener for GroupTipsEvent dispatch');
@@ -20,8 +23,7 @@ extension _HomePageBootstrap on _HomePageState {
     ChatDataProviderRegistry.provider ??= FakeChatDataProvider(ffiService: widget.service);
     ChatMessageProviderRegistry.provider ??= FakeChatMessageProvider();
 
-    final basic = TencentCloudChat.instance.dataInstance.basic;
-    basic.addUsedComponent(conv_pkg.TencentCloudChatConversationManager.register());
+    UikitDataFacade.addUsedComponent(conv_pkg.TencentCloudChatConversationManager.register());
 
     if (widget.service.selfId.isNotEmpty) {
       AppLogger.debug('[HomePage] initState: Registering sticker plugin early (before message component)');
@@ -29,7 +31,7 @@ extension _HomePageBootstrap on _HomePageState {
     }
 
     final messageRegisterResult = msg_pkg.TencentCloudChatMessageManager.register();
-    basic.addUsedComponent((
+    UikitDataFacade.addUsedComponent((
       componentEnum: messageRegisterResult.componentEnum,
       widgetBuilder: ({required Map<String, dynamic> options}) {
         final userID = options["userID"] as String?;
@@ -52,7 +54,7 @@ extension _HomePageBootstrap on _HomePageState {
       },
     ));
 
-    basic.addUsedComponent(contact_pkg.TencentCloudChatContactManager.register());
+    UikitDataFacade.addUsedComponent(contact_pkg.TencentCloudChatContactManager.register());
 
     contact_pkg.TencentCloudChatContactManager.builder.setBuilders(
       groupMemberListPageBuilder: ({required V2TimGroupInfo groupInfo, required List<V2TimGroupMemberFullInfo> memberInfoList}) {
@@ -61,12 +63,12 @@ extension _HomePageBootstrap on _HomePageState {
     );
 
     final searchRegisterResult = search_pkg.CustomSearchManager.register();
-    basic.addUsedComponent((
+    UikitDataFacade.addUsedComponent((
       componentEnum: searchRegisterResult.componentEnum,
       widgetBuilder: searchRegisterResult.widgetBuilder,
     ));
 
-    basic.notifyListener(TencentCloudChatBasicDataKeys.addUsedComponent as dynamic);
+    UikitDataFacade.notifyAddUsedComponent();
 
     AppLogger.debug('[HomePage] initState: Calling _ensureStickerPluginRegistered');
     _ensureStickerPluginRegistered();
@@ -181,10 +183,9 @@ extension _HomePageBootstrap on _HomePageState {
         }
 
         final convId = 'group_$groupID';
-        final conversationData = TencentCloudChat.instance.dataInstance.conversation;
         if (_currentConversationID == convId) {
           if (kDebugMode) debugPrint('[HomePage] Quit group $groupID is currently open, clearing chat window');
-          conversationData.currentConversation = null;
+          UikitDataFacade.currentConversation = null;
           if (mounted) {
             _bootstrapSetState(() {
               _currentConversationID = null;
@@ -192,23 +193,22 @@ extension _HomePageBootstrap on _HomePageState {
           }
         }
 
-        conversationData.removeConversation([convId]);
+        UikitDataFacade.removeConversation([convId]);
         if (kDebugMode) debugPrint('[HomePage] Removed conversation $convId from conversation list');
 
         FakeUIKit.instance.eventBusInstance.emit(FakeIM.topicGroupDeleted, FakeGroupDeleted(groupID: groupID));
         if (kDebugMode) debugPrint('[HomePage] Emitted FakeGroupDeleted event for group $groupID');
       } else if (data.currentUpdatedFields == TencentCloudChatGroupProfileDataKeys.builder) {
-        final groupProfileData = TencentCloudChat.instance.dataInstance.groupProfile;
-        if (groupProfileData.updateGroupID.isEmpty || groupProfileData.updateGroupInfo.groupID.isEmpty) {
+        if (UikitDataFacade.updateGroupID.isEmpty || UikitDataFacade.updateGroupInfo.groupID.isEmpty) {
           Future.microtask(() async {
-            final currentConv = TencentCloudChat.instance.dataInstance.conversation.currentConversation;
+            final currentConv = UikitDataFacade.currentConversation;
             String? targetGroupID;
             V2TimGroupInfo? targetGroupInfo;
 
             if (currentConv?.groupID != null && currentConv!.groupID!.isNotEmpty) {
               targetGroupID = currentConv.groupID!;
             } else {
-              final convList = TencentCloudChat.instance.dataInstance.conversation.conversationList;
+              final convList = UikitDataFacade.conversationList;
               for (final conv in convList) {
                 if (conv.groupID != null && conv.groupID!.isNotEmpty) {
                   targetGroupID = conv.groupID!;
@@ -218,11 +218,10 @@ extension _HomePageBootstrap on _HomePageState {
             }
 
             if (targetGroupID != null && targetGroupID.isNotEmpty) {
-              final contactData = TencentCloudChat.instance.dataInstance.contact;
-              targetGroupInfo = contactData.getGroupInfo(targetGroupID);
+              targetGroupInfo = UikitDataFacade.getGroupInfo(targetGroupID);
 
               if (targetGroupInfo.groupID.isEmpty) {
-                final groupList = contactData.groupList;
+                final groupList = UikitDataFacade.groupList;
                 final foundGroup = groupList.firstWhere(
                   (g) => g.groupID == targetGroupID,
                   orElse: () => V2TimGroupInfo(groupID: '', groupType: ''),
@@ -243,8 +242,8 @@ extension _HomePageBootstrap on _HomePageState {
                 );
               }
 
-              groupProfileData.updateGroupID = targetGroupID;
-              groupProfileData.updateGroupInfo = targetGroupInfo;
+              UikitDataFacade.updateGroupID = targetGroupID;
+              UikitDataFacade.updateGroupInfo = targetGroupInfo;
             }
           });
         }
@@ -347,9 +346,8 @@ extension _HomePageBootstrap on _HomePageState {
         required MessageInputBuilderData data,
         required MessageInputBuilderMethods methods,
       }) {
-        final basic = TencentCloudChat.instance.dataInstance.basic;
-        final hasStickerPlugin = basic.hasPlugins("sticker");
-        final stickerPluginInstance = basic.getPlugin("sticker")?.pluginInstance;
+        final hasStickerPlugin = UikitDataFacade.hasPlugin("sticker");
+        final stickerPluginInstance = UikitDataFacade.getPlugin("sticker")?.pluginInstance;
 
         AppLogger.debug('[HomePage] messageInputBuilder: Dynamically checking plugin - hasStickerPlugin=$hasStickerPlugin, instance=${stickerPluginInstance != null}');
 
@@ -470,18 +468,17 @@ extension _HomePageBootstrap on _HomePageState {
           widget.service.setActivePeer(conversationID);
         }
 
-        final convData = TencentCloudChat.instance.dataInstance.conversation;
-        convData.currentConversation = conversation;
+        UikitDataFacade.currentConversation = conversation;
 
         return false;
       },
     );
 
-    basic.updateInitializedStatus(status: true);
-    basic.updateLoginStatus(status: true);
+    UikitDataFacade.updateInitializedStatus(true);
+    UikitDataFacade.updateLoginStatus(true);
     final selfId = widget.service.selfId;
     AppLogger.debug('[HomePage] _buildHomePage: Setting current user info, selfId=$selfId');
-    basic.updateCurrentUserInfo(userFullInfo: V2TimUserFullInfo(userID: selfId));
+    UikitDataFacade.updateCurrentUserInfo(V2TimUserFullInfo(userID: selfId));
 
     if (!_stickerPluginRegistered &&
         !_stickerPluginRegistrationScheduled &&
@@ -504,8 +501,8 @@ extension _HomePageBootstrap on _HomePageState {
 
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
-        final hasPluginAfter = basic.hasPlugins("sticker");
-        final pluginAfter = basic.getPlugin("sticker");
+        final hasPluginAfter = UikitDataFacade.hasPlugin("sticker");
+        final pluginAfter = UikitDataFacade.getPlugin("sticker");
         AppLogger.debug('[HomePage] _buildHomePage: Plugin status after 500ms - hasPlugin=$hasPluginAfter, plugin=${pluginAfter != null}, instance=${pluginAfter?.pluginInstance}');
       }
     });
@@ -513,13 +510,13 @@ extension _HomePageBootstrap on _HomePageState {
     final provider = ChatDataProviderRegistry.provider;
     if (provider != null) {
       provider.getInitialConversations().then((list) {
-        TencentCloudChat.instance.dataInstance.conversation.buildConversationList(list, 'external_init');
+        UikitDataFacade.buildConversationList(list, 'external_init');
       });
       provider.conversationStream.listen((list) {
-        TencentCloudChat.instance.dataInstance.conversation.buildConversationList(list, 'external_stream');
+        UikitDataFacade.buildConversationList(list, 'external_stream');
       });
       provider.totalUnreadStream.listen((total) {
-        TencentCloudChat.instance.dataInstance.conversation.setTotalUnreadCount(total);
+        UikitDataFacade.setTotalUnreadCount(total);
       });
     } else {
       TencentCloudChatConversationController.instance.init();
@@ -590,22 +587,22 @@ extension _HomePageBootstrap on _HomePageState {
           ),
         );
       }));
-      TencentCloudChat.instance.dataInstance.contact.buildFriendList(mapped, "home");
+      UikitDataFacade.buildFriendList(mapped, "home");
       final freshUserIds = list.map((u) => u.userID).toSet();
-      final currentContactList = TencentCloudChat.instance.dataInstance.contact.contactList;
+      final currentContactList = UikitDataFacade.contactList;
       final staleUserIds = currentContactList
           .where((c) => !freshUserIds.contains(c.userID))
           .map((c) => c.userID)
           .where((id) => id.isNotEmpty)
           .toList();
       if (staleUserIds.isNotEmpty) {
-        TencentCloudChat.instance.dataInstance.contact.deleteFromFriendList(staleUserIds, 'home_sync');
+        UikitDataFacade.deleteFromFriendList(staleUserIds, 'home_sync');
       }
       final statuses = list
           .map((u) => V2TimUserStatus(userID: u.userID, statusType: u.online ? 1 : 0, onlineDevices: const []))
           .toList();
       if (statuses.isNotEmpty) {
-        TencentCloudChat.instance.dataInstance.contact.buildUserStatusList(statuses, "home");
+        UikitDataFacade.buildUserStatusList(statuses, "home");
       }
 
       final groups = widget.service.knownGroups;
@@ -618,7 +615,7 @@ extension _HomePageBootstrap on _HomePageState {
           groupName: savedName,
           faceUrl: savedAvatar,
         );
-        TencentCloudChat.instance.dataInstance.contact.addGroupInfoToJoinedGroupList(groupInfo);
+        UikitDataFacade.addGroupInfoToJoinedGroupList(groupInfo);
       }
 
       final friendIds = list.map((u) {
@@ -642,8 +639,8 @@ extension _HomePageBootstrap on _HomePageState {
     _appsSub = FakeUIKit.instance.eventBusInstance.on<List<FakeFriendApplication>>(FakeIM.topicFriendApps).listen((list) async {
       final mapped =
           list.map((a) => V2TimFriendApplication(userID: a.userID, addWording: a.wording, type: 1, nickname: "", faceUrl: "")).toList();
-      TencentCloudChat.instance.dataInstance.contact.buildApplicationList(mapped, "home");
-      TencentCloudChat.instance.dataInstance.contact.setApplicationUnreadCount(mapped);
+      UikitDataFacade.buildApplicationList(mapped, "home");
+      UikitDataFacade.setApplicationUnreadCount(mapped);
       _pendingFriendApps = List<V2TimFriendApplication>.from(mapped);
       if (_autoAcceptFriends && mapped.isNotEmpty) {
         _acceptFriendApplications(mapped).catchError((e) {
@@ -674,7 +671,7 @@ extension _HomePageBootstrap on _HomePageState {
         return originalStateBuilder(userFullInfo: userFullInfo);
       },
       userProfileDeleteButtonBuilder: ({required V2TimUserFullInfo userFullInfo}) {
-        final friendIDList = TencentCloudChat.instance.dataInstance.contact.contactList
+        final friendIDList = UikitDataFacade.contactList
             .map((e) => normalizeToxId(e.userID))
             .toSet();
         final normalizedUserID = normalizeToxId(userFullInfo.userID ?? '');

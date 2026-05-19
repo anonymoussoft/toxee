@@ -5,6 +5,7 @@ import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.d
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_group_member_list.dart';
 import '../../i18n/app_localizations.dart';
 import '../../sdk_fake/fake_uikit_core.dart';
+import '../../sdk_fake/uikit_data_facade.dart';
 import '../../util/group_member_last_seen_cache.dart';
 import '../../util/responsive_layout.dart';
 import '../widgets/empty_state_widget.dart';
@@ -32,7 +33,7 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
   bool _hasLoaded = false; // Track if we've already loaded to prevent reloads on widget rebuilds
 
   void _enrichAvatars(List<V2TimGroupMemberFullInfo> members) {
-    final contactList = TencentCloudChat.instance.dataInstance.contact.contactList;
+    final contactList = UikitDataFacade.contactList;
     final friendFaceUrls = <String, String>{};
     final friendNickNames = <String, String>{};
     for (final friend in contactList) {
@@ -101,8 +102,7 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
     try {
       // Call data layer directly to get fresh data from native
       // (bypass GroupMemberListDebouncer to avoid stale cached data)
-      final updatedList = await TencentCloudChat.instance.dataInstance.groupProfile
-          .loadGroupMemberList(
+      final updatedList = await UikitDataFacade.loadGroupMemberList(
         groupID: widget.groupInfo.groupID,
         loadGroupAdminAndOwnerOnly: false,
       );

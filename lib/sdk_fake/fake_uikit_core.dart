@@ -12,6 +12,7 @@ import 'fake_im.dart';
 import 'fake_managers.dart';
 import 'fake_models.dart';
 import 'fake_msg_provider.dart';
+import 'uikit_data_facade.dart';
 import '../util/logger.dart';
 
 class FakeUIKit {
@@ -204,8 +205,7 @@ class FakeUIKit {
       msg.status = MessageStatus.V2TIM_MSG_STATUS_SEND_SUCC;
       msg.customElem =
           V2TimCustomElem(data: callRecordJson, desc: '', extension: '');
-      TencentCloudChat.instance.dataInstance.messageData
-          .onReceiveNewMessage(msg);
+      UikitDataFacade.onReceiveNewMessage(msg);
       AppLogger.info(
           '[FakeUIKit] Call record injected into messageData: msgID=$msgID, userID=$remoteUserID');
     } catch (e) {
@@ -231,19 +231,6 @@ class FakeUIKit {
     _started = false;
     callSystemReady.value = false;
     // Clear TencentCloudChat.dataInstance (singleton) so next login/account does not see previous account's data
-    try {
-      final data = TencentCloudChat.instance.dataInstance;
-      data.contact.clear();
-      data.conversation.clear();
-      data.messageData.clear();
-      data.groupProfile.clear();
-      data.basic.clear();
-      data.search.clear();
-      // Notify listeners so UI stops showing stale lists (clear() does not notify)
-      data.contact.buildGroupList([], 'FakeUIKit.dispose');
-      data.conversation.buildConversationList([], 'FakeUIKit.dispose');
-    } catch (e, st) {
-      AppLogger.logError('[FakeUIKit] Failed to clear TencentCloudChat singleton data', e, st);
-    }
+    UikitDataFacade.clearAll(reason: 'FakeUIKit.dispose');
   }
 }
