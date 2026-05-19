@@ -659,17 +659,13 @@ extension _HomePageBootstrap on _HomePageState {
     _contactBuilderOverride = ContactBuilderOverrideHandle.capture();
     _bag.add(() => _contactBuilderOverride?.restore());
 
-    final originalContentBuilder = _contactBuilderOverride!.originalContentBuilder;
-    final originalStateBuilder = _contactBuilderOverride!.originalStateBuilder;
-    final originalDeleteBuilder = _contactBuilderOverride!.originalDeleteBuilder;
-
+    // Only override the delete-button slot: when the user is a friend we
+    // render the upstream default widget directly; otherwise we render the
+    // toxee "Add Friend" affordance. Content + state slots are left null so
+    // the manager falls through to upstream defaults — no pass-through
+    // closure needed (which would otherwise round-trip through the manager
+    // and recurse on restore).
     contact_pkg.TencentCloudChatContactManager.builder.setBuilders(
-      userProfileContentBuilder: ({required V2TimUserFullInfo userFullInfo}) {
-        return originalContentBuilder(userFullInfo: userFullInfo);
-      },
-      userProfileStateButtonBuilder: ({required V2TimUserFullInfo userFullInfo}) {
-        return originalStateBuilder(userFullInfo: userFullInfo);
-      },
       userProfileDeleteButtonBuilder: ({required V2TimUserFullInfo userFullInfo}) {
         final friendIDList = UikitDataFacade.contactList
             .map((e) => normalizeToxId(e.userID))
@@ -678,12 +674,18 @@ extension _HomePageBootstrap on _HomePageState {
         final isFriend = friendIDList.contains(normalizedUserID);
 
         if (isFriend) {
-          return originalDeleteBuilder(userFullInfo: userFullInfo);
+          return TencentCloudChatUserProfileDeleteButton(
+            userFullInfo: userFullInfo,
+          );
         } else {
           return _buildAddFriendButton(userFullInfo);
         }
       },
     );
+
+    _groupBuilderOverride = GroupProfileBuilderOverrideHandle.capture();
+    _bag.add(() => _groupBuilderOverride?.restore());
+    _groupBuilderOverride!.installOverrides();
   }
 }
 

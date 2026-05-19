@@ -86,15 +86,26 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
         _isLoading = true;
         _hasLoaded = false;
       });
+      // An in-flight fetch for the previous group is harmless: it snapshots
+      // its own groupID at entry and will abort after the await when it sees
+      // widget.groupInfo.groupID has changed. Re-enter unconditionally.
       _refreshMemberList();
     }
   }
 
   Future<void> _refreshMemberList() async {
-    // Prevent duplicate calls within the same widget instance + groupID.
-    // didUpdateWidget resets _hasLoaded when the groupID changes so this
-    // guard does not block legitimate cross-group refreshes.
-    if (_isRefreshing || _hasLoaded) {
+    // Snapshot at entry. After every await we re-check that the widget is
+    // still bound to the same group; otherwise a stale fetch from a previous
+    // group would poison the new group's state.
+    final groupID = widget.groupInfo.groupID;
+
+    // Prevent duplicate concurrent calls. _hasLoaded is reset in
+    // didUpdateWidget when the group changes, so this guard does not block
+    // legitimate cross-group refreshes. We deliberately do NOT also gate on
+    // `_isRefreshing` here: when didUpdateWidget re-enters with a stale call
+    // still in flight, the stale call will see groupID != widget.groupInfo
+    // .groupID after its await and abort, so a concurrent re-entry is safe.
+    if (_hasLoaded) {
       return;
     }
 
@@ -103,36 +114,39 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
       // Call data layer directly to get fresh data from native
       // (bypass GroupMemberListDebouncer to avoid stale cached data)
       final updatedList = await UikitDataFacade.loadGroupMemberList(
-        groupID: widget.groupInfo.groupID,
+        groupID: groupID,
         loadGroupAdminAndOwnerOnly: false,
       );
 
-      if (mounted) {
-        // Deduplicate by userID (defense in depth)
-        final seen = <String>{};
-        final dedupedList = updatedList
-            .whereType<V2TimGroupMemberFullInfo>()
-            .where((m) => seen.add(m.userID))
-            .toList();
-        _enrichAvatars(dedupedList);
-        // Load group history from disk so in-memory cache is populated before building time map
-        try {
-          final ffi = FakeUIKit.instance.im?.ffi;
-          if (ffi != null) {
-            await ffi.messageHistoryPersistence.loadHistory(widget.groupInfo.groupID);
-          }
-        } catch (_) {
-          // Ignore load errors; time map will be empty
-        }
-        final timeMap = _buildLastMessageTimeMap(widget.groupInfo.groupID);
-        if (!mounted) return;
-        setState(() {
-          _currentMemberList = dedupedList;
-          _lastMessageTimeMap = timeMap;
-          _isLoading = false;
-          _hasLoaded = true; // Mark as loaded to prevent reloads
-        });
+      if (!mounted || groupID != widget.groupInfo.groupID) {
+        return;
       }
+
+      // Deduplicate by userID (defense in depth)
+      final seen = <String>{};
+      final dedupedList = updatedList
+          .whereType<V2TimGroupMemberFullInfo>()
+          .where((m) => seen.add(m.userID))
+          .toList();
+      _enrichAvatars(dedupedList);
+      // Load group history from disk so in-memory cache is populated before building time map
+      try {
+        final ffi = FakeUIKit.instance.im?.ffi;
+        if (ffi != null) {
+          await ffi.messageHistoryPersistence.loadHistory(groupID);
+        }
+      } catch (_) {
+        // Ignore load errors; time map will be empty
+      }
+      if (!mounted || groupID != widget.groupInfo.groupID) return;
+      final timeMap = _buildLastMessageTimeMap(groupID);
+      if (!mounted || groupID != widget.groupInfo.groupID) return;
+      setState(() {
+        _currentMemberList = dedupedList;
+        _lastMessageTimeMap = timeMap;
+        _isLoading = false;
+        _hasLoaded = true; // Mark as loaded to prevent reloads
+      });
     } finally {
       _isRefreshing = false;
     }

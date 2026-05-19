@@ -1,43 +1,31 @@
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart' as contact_pkg;
-import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact_builders.dart';
-import 'package:tencent_cloud_chat_sdk/models/v2_tim_user_full_info.dart';
 
-/// Handle to restore contact profile builders when the page is disposed.
-/// Call [capture] before applying overrides, then [restore] in dispose.
+/// Capture+restore handle for toxee's contact-profile builder overrides.
+///
+/// We do not snapshot the prior builder closures. The upstream
+/// `setBuilders(...)` is destructive (any slot not passed is nulled), and
+/// each slot falls through to a hard-coded upstream default widget when
+/// null. So `restore()` just calls `setBuilders()` with no args, which nulls
+/// all slots and reverts the manager to upstream defaults — exactly the
+/// state before any toxee override was applied. Capturing closures over
+/// `manager.getXxx` would create a self-referential loop after restore (the
+/// closure ends up dispatching back into itself via the manager) and
+/// stack-overflow on the next access; this design avoids that.
 class ContactBuilderOverrideHandle {
-  ContactBuilderOverrideHandle._({
-    required this.originalContentBuilder,
-    required this.originalStateBuilder,
-    required this.originalDeleteBuilder,
-  });
-
-  final UserProfileContentBuilder originalContentBuilder;
-  final UserProfileStateButtonBuilder originalStateBuilder;
-  final UserProfileDeleteButtonBuilder originalDeleteBuilder;
+  ContactBuilderOverrideHandle._();
 
   bool _restored = false;
 
-  /// Captures current profile builders. Call this before [contact_pkg.TencentCloudChatContactManager.builder.setBuilders].
+  /// Captures the override scope. Call this before
+  /// [contact_pkg.TencentCloudChatContactManager.builder.setBuilders].
   static ContactBuilderOverrideHandle capture() {
-    final manager = contact_pkg.TencentCloudChatContactManager.builder;
-    return ContactBuilderOverrideHandle._(
-      originalContentBuilder: ({required V2TimUserFullInfo userFullInfo}) =>
-          manager.getUserProfileContentBuilder(userFullInfo: userFullInfo),
-      originalStateBuilder: ({required V2TimUserFullInfo userFullInfo}) =>
-          manager.getUserProfileStateButtonBuilder(userFullInfo: userFullInfo),
-      originalDeleteBuilder: ({required V2TimUserFullInfo userFullInfo}) =>
-          manager.getUserProfileDeleteButtonBuilder(userFullInfo: userFullInfo),
-    );
+    return ContactBuilderOverrideHandle._();
   }
 
-  /// Restores the captured builders. Idempotent.
+  /// Restores the upstream defaults. Idempotent.
   void restore() {
     if (_restored) return;
     _restored = true;
-    contact_pkg.TencentCloudChatContactManager.builder.setBuilders(
-      userProfileContentBuilder: originalContentBuilder,
-      userProfileStateButtonBuilder: originalStateBuilder,
-      userProfileDeleteButtonBuilder: originalDeleteBuilder,
-    );
+    contact_pkg.TencentCloudChatContactManager.builder.setBuilders();
   }
 }
