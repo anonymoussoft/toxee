@@ -103,17 +103,62 @@ class CallOverlay extends StatelessWidget {
 /// Overlay ancestor (Tooltip, PopupMenu, SelectionToolbar) work even though
 /// [CallOverlay] is mounted in the MaterialApp `builder` — above the
 /// app Navigator's Overlay.
-class _CallOverlayHost extends StatelessWidget {
+///
+/// Stateful because `Overlay.initialEntries` is only consulted on the first
+/// build. When [CallOverlay] swaps between the in-call view and the minimized
+/// floating widget (same widget type, different child), a stateless host
+/// would keep rendering the original OverlayEntry forever. Holding the
+/// [OverlayEntry] in state and calling `markNeedsBuild()` on every parent
+/// rebuild forces the OverlayEntry to re-invoke its builder so the latest
+/// [child] actually paints.
+class _CallOverlayHost extends StatefulWidget {
   const _CallOverlayHost({required this.child});
   final Widget child;
 
   @override
+  State<_CallOverlayHost> createState() => _CallOverlayHostState();
+}
+
+class _CallOverlayHostState extends State<_CallOverlayHost> {
+  late final OverlayEntry _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    _entry = OverlayEntry(builder: (_) => widget.child);
+  }
+
+  @override
+  void didUpdateWidget(_CallOverlayHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.child != widget.child) {
+      // Re-evaluate the entry's builder so the new child paints. The builder
+      // closes over `widget.child` via `this.widget`, so markNeedsBuild is
+      // enough — no need to re-create the entry.
+      _entry.markNeedsBuild();
+    }
+  }
+
+  @override
+  void dispose() {
+    // OverlayEntry.dispose() asserts the entry is no longer attached to an
+    // Overlay (`_overlay == null`). The .mounted getter is a separate
+    // ValueNotifier and doesn't reflect that internal field reliably during
+    // tree finalization, so we always attempt remove() first and swallow
+    // the "not in any overlay" StateError if the parent Overlay already
+    // detached the entry.
+    try {
+      _entry.remove();
+    } catch (_) {
+      // Already removed by the parent Overlay's own teardown — fine.
+    }
+    _entry.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Overlay(
-      initialEntries: [
-        OverlayEntry(builder: (_) => child),
-      ],
-    );
+    return Overlay(initialEntries: [_entry]);
   }
 }
 
