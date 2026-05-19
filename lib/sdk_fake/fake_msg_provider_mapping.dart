@@ -16,6 +16,75 @@
 part of 'fake_msg_provider.dart';
 
 extension _FakeChatMessageProviderMapping on FakeChatMessageProvider {
+  List<FakeMessage> _normalizeControlSignalsInHistory(
+    List<FakeMessage> history,
+  ) {
+    final normalized = <FakeMessage>[];
+    for (final msg in history) {
+      final isControlText = (msg.mediaKind == null || msg.mediaKind!.isEmpty) &&
+          msg.text.isNotEmpty &&
+          msg.text.startsWith('__');
+      if (!isControlText) {
+        normalized.add(msg);
+        continue;
+      }
+
+      if (msg.text.startsWith('__revoke__:')) {
+        final payload = _parseRevokeControlSignalPayload(msg.text);
+        final targetMsgID = payload == null
+            ? null
+            : _resolveRevokedFakeMessageID(payload, msg, normalized);
+        if (targetMsgID != null && targetMsgID.isNotEmpty) {
+          normalized.removeWhere((item) => item.msgID == targetMsgID);
+        }
+        continue;
+      }
+
+      if (msg.text.startsWith('__face__:') ||
+          msg.text.startsWith('__custom__:') ||
+          msg.text.startsWith('__location__:')) {
+        normalized.add(_rewriteControlSignalForBubble(msg));
+        continue;
+      }
+
+      normalized.add(msg);
+    }
+    return normalized;
+  }
+
+  String? _resolveRevokedFakeMessageID(
+    Map<String, dynamic> payload,
+    FakeMessage signal,
+    List<FakeMessage> history,
+  ) {
+    final revokedID = payload['msgID'] as String?;
+    if (revokedID != null &&
+        revokedID.isNotEmpty &&
+        history.any((msg) => msg.msgID == revokedID)) {
+      return revokedID;
+    }
+
+    final senderTimestampMs =
+        payload['senderTimestampMs'] is int ? payload['senderTimestampMs'] as int : null;
+    if (senderTimestampMs == null) return revokedID;
+
+    final senderUID =
+        (payload['fromUserId'] as String?) ?? signal.fromUser;
+    FakeMessage? best;
+    var bestDelta = 5000;
+    for (final msg in history.reversed) {
+      if (msg.msgID.isEmpty) continue;
+      if (senderUID.isNotEmpty && msg.fromUser != senderUID) continue;
+      if (msg.text.startsWith('__')) continue;
+      final delta = (msg.timestampMs - senderTimestampMs).abs();
+      if (delta <= bestDelta) {
+        best = msg;
+        bestDelta = delta;
+      }
+    }
+    return best?.msgID ?? revokedID;
+  }
+
   /// Map a call record FakeMessage to V2TimMessage with custom element.
   V2TimMessage _mapCallRecordMsg(FakeMessage m) {
     AppLogger.log('[FakeMessageProvider] _mapCallRecordMsg: msgID=${m.msgID}, conv=${m.conversationID}, textLen=${m.text.length}');
@@ -567,7 +636,9 @@ extension _FakeChatMessageProviderMapping on FakeChatMessageProvider {
     }
 
     try {
-      final hist = await mgr.getHistory(conversationID);
+      final hist = _normalizeControlSignalsInHistory(
+        await mgr.getHistory(conversationID),
+      );
 
       // Pre-load avatars for all message senders so _mapMsg can set faceUrl synchronously.
       // Without this, the async cache is empty when history messages are first mapped,

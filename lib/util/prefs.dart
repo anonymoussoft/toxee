@@ -993,6 +993,34 @@ class Prefs {
     await setBlackList(blackList, userToxId);
   }
 
+  // Per-peer C2C receive option (Do Not Disturb), account-scoped. Mirrors
+  // the key shape used by SharedPreferencesAdapter — uses the 16-char Tox-ID
+  // prefix `_scopedKey` style so both the platform write path and the UI
+  // read path land on the same SharedPreferences key.
+  static String _c2cRecvOptKey(String userID, String? userToxId) {
+    final prefix = (userToxId != null && userToxId.length >= 16)
+        ? userToxId.substring(0, 16)
+        : userToxId;
+    return scopedPrefsKey('c2c_recv_opt_$userID', prefix);
+  }
+
+  static Future<int> getC2CReceiveMessageOpt(String userID,
+      [String? userToxId]) async {
+    final p = await _getPrefs();
+    return p.getInt(_c2cRecvOptKey(userID, userToxId)) ?? 0;
+  }
+
+  static Future<void> setC2CReceiveMessageOpt(String userID, int opt,
+      [String? userToxId]) async {
+    final p = await _getPrefs();
+    final key = _c2cRecvOptKey(userID, userToxId);
+    if (opt == 0) {
+      await p.remove(key);
+    } else {
+      await p.setInt(key, opt);
+    }
+  }
+
   // Group member name card storage — account-scoped (S6 fix). Two accounts in
   // the same group must not see each other's per-member nick cards.
   static String _groupMemberNameCardKey(String groupId, String userId) => 'group_member_namecard_${groupId}_$userId';

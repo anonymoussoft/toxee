@@ -37,6 +37,17 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
   static const _kCurrentBootstrapPubkey = 'current_bootstrap_pubkey';
   static const _kAutoDownloadSizeLimit = 'auto_download_size_limit';
   static String _blackListKey(String? userToxId) => userToxId != null && userToxId.isNotEmpty ? 'black_list_$userToxId' : 'black_list';
+  // Per-peer C2C receive option (DND). Account-scoped via the standard
+  // 16-char Tox-ID prefix (matches `Prefs._scopedKey` convention used by
+  // `group_member_namecard`, drafts, pin/mute, etc.). The blacklist key
+  // (`_blackListKey`) uses a full-toxId scheme for legacy reasons; for new
+  // keys we follow the 16-char prefix style.
+  static String _c2cRecvOptKey(String userID, String? userToxId) {
+    final prefix = (userToxId != null && userToxId.length >= 16)
+        ? userToxId.substring(0, 16)
+        : userToxId;
+    return scopedPrefsKey('c2c_recv_opt_$userID', prefix);
+  }
 
   SharedPreferencesAdapter(this._prefs, {int? instanceId, String? accountPrefix})
       : _instanceId = instanceId,
@@ -483,6 +494,23 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
     final blackList = await getBlackList(userToxId);
     blackList.removeAll(userIDs);
     await setBlackList(blackList, userToxId);
+  }
+
+  @override
+  Future<int> getC2CReceiveMessageOpt(String userID, [String? userToxId]) async {
+    final key = _c2cRecvOptKey(userID, userToxId);
+    return _prefs.getInt(key) ?? 0;
+  }
+
+  @override
+  Future<void> setC2CReceiveMessageOpt(String userID, int opt,
+      [String? userToxId]) async {
+    final key = _c2cRecvOptKey(userID, userToxId);
+    if (opt == 0) {
+      await _prefs.remove(key);
+    } else {
+      await _prefs.setInt(key, opt);
+    }
   }
 }
 

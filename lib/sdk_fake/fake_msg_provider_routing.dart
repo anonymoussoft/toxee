@@ -20,6 +20,7 @@ part of 'fake_msg_provider.dart';
 extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
   Future<void> _onTopicMessage(FakeMessage m) async {
     final conv = m.conversationID;
+    final list = _buffers.putIfAbsent(conv, () => <V2TimMessage>[]);
 
     // R-3 / U-1 / U-2 / H-H: filter control-signal text BEFORE it enters
     // the per-conversation buffer. The sister handler in
@@ -32,9 +33,9 @@ extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
         m.text.isNotEmpty &&
         m.text.startsWith('__')) {
       if (m.text.startsWith('__revoke__:')) {
-        // Drop the bubble entirely. The actual local delete + listener
-        // fan-out happens in tim2tox_sdk_platform's intercept; this just
-        // prevents the raw text from being mirrored into the buffer.
+        // FakeMessage path: apply the revoke to the visible buffer/history
+        // ourselves before swallowing the control signal.
+        await _applyRevokeControlSignalToBuffer(m, list);
         AppLogger.log(
             '[FakeMessageProvider] swallowed __revoke__ signal: msgID=${m.msgID}');
         return;
@@ -51,7 +52,6 @@ extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
     }
 
     AppLogger.log('[FakeMessageProvider] EventBus received: msgID=${m.msgID}, conv=$conv, mediaKind=${m.mediaKind}, fromUser=${m.fromUser}');
-    final list = _buffers.putIfAbsent(conv, () => <V2TimMessage>[]);
     // Pre-load avatar if not in cache to ensure new messages show correct avatar immediately
     // Note: FakeMessage doesn't have isSelf, so we check by comparing fromUser with selfId
     final ffi = FakeUIKit.instance.im?.ffi;
@@ -648,6 +648,84 @@ extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
     }
 
     return msg;
+  }
+
+  Future<void> _applyRevokeControlSignalToBuffer(
+    FakeMessage signal,
+    List<V2TimMessage> list,
+  ) async {
+    final payload = _parseRevokeControlSignalPayload(signal.text);
+    final idsToDelete = <String>{signal.msgID};
+    final targetMsgID = payload == null
+        ? null
+        : _resolveRevokedV2MessageID(payload, signal, list);
+    if (targetMsgID != null && targetMsgID.isNotEmpty) {
+      idsToDelete.add(targetMsgID);
+      _removeMessagesFromBuffer(signal.conversationID, [targetMsgID]);
+    }
+
+    final mgr = FakeUIKit.instance.messageManager;
+    if (mgr != null && idsToDelete.isNotEmpty) {
+      try {
+        await mgr.deleteMessages(idsToDelete.toList());
+      } catch (e) {
+        AppLogger.log(
+            '[FakeMessageProvider] revoke cleanup via messageManager failed (swallowed): $e');
+      }
+    }
+  }
+
+  Map<String, dynamic>? _parseRevokeControlSignalPayload(String text) {
+    if (!text.startsWith('__revoke__:')) return null;
+    try {
+      final parsed = json.decode(text.substring('__revoke__:'.length));
+      if (parsed is Map<String, dynamic>) {
+        return parsed;
+      }
+      if (parsed is Map) {
+        return Map<String, dynamic>.from(parsed);
+      }
+    } catch (_) {
+      // Swallow parse failures — callers still suppress the control message.
+    }
+    return null;
+  }
+
+  String? _resolveRevokedV2MessageID(
+    Map<String, dynamic> payload,
+    FakeMessage signal,
+    List<V2TimMessage> list,
+  ) {
+    final revokedID = payload['msgID'] as String?;
+    if (revokedID != null &&
+        revokedID.isNotEmpty &&
+        list.any((msg) => msg.msgID == revokedID || msg.id == revokedID)) {
+      return revokedID;
+    }
+
+    final senderTimestampMs =
+        payload['senderTimestampMs'] is int ? payload['senderTimestampMs'] as int : null;
+    if (senderTimestampMs == null) return revokedID;
+
+    final senderUID =
+        (payload['fromUserId'] as String?) ?? signal.fromUser;
+    V2TimMessage? best;
+    var bestDelta = 5000;
+    for (final msg in list.reversed) {
+      final candidateID = msg.msgID ?? msg.id;
+      if (candidateID == null || candidateID.isEmpty) continue;
+      final sender = msg.sender ?? '';
+      if (senderUID.isNotEmpty && sender != senderUID) continue;
+      final text = msg.textElem?.text ?? '';
+      if (text.startsWith('__')) continue;
+      final tsMs = (msg.timestamp ?? 0) * 1000;
+      final delta = (tsMs - senderTimestampMs).abs();
+      if (delta <= bestDelta) {
+        best = msg;
+        bestDelta = delta;
+      }
+    }
+    return best?.msgID ?? best?.id ?? revokedID;
   }
 
   /// U-1 / U-2 (FakeMessage path): rewrite a FakeMessage whose text starts
