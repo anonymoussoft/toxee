@@ -24,7 +24,7 @@ FLUTTER_BUILD_LOG="$BUILD_DIR/flutter_build.log"
 APP_BUNDLE="$FLUTTER_APP_DIR/build/macos/Build/Products/Debug/Toxee.app"
 APP_EXE_DIR="$APP_BUNDLE/Contents/MacOS"
 APP_EXECUTABLE="$APP_EXE_DIR/Toxee"
-APP_SUPPORT_LOG="$HOME/Library/Containers/com.example.toxee/Data/Library/Application Support/com.example.toxee/flutter_client.log"
+APP_SUPPORT_LOG="$HOME/Library/Containers/com.toxee.app/Data/Library/Application Support/com.toxee.app/flutter_client.log"
 
 mkdir -p "$BUILD_DIR"
 

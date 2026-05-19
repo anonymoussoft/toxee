@@ -167,6 +167,21 @@ class FakeChatDataProvider implements ChatDataProvider {
     FakeUIKit.instance.eventBusInstance
         .on<FakeMessage>(FakeIM.topicMessage)
         .listen((msg) async {
+      // R-3 / U-1 / U-2: never let raw control-signal payloads
+      // (`__revoke__:`, `__face__:`, `__custom__:`, `__location__:`) end
+      // up as the visible "last message" preview in the conversation
+      // list. `__revoke__:` is dropped entirely; the others fall through
+      // (FakeChatMessageProvider's routing layer has already rewritten
+      // the bubble text by the time we read FfiChatService.lastMessages,
+      // but we still mask out the raw-JSON preview here for messages
+      // that arrive through this listener directly).
+      if ((msg.mediaKind == null || msg.mediaKind!.isEmpty) &&
+          msg.text.isNotEmpty &&
+          msg.text.startsWith('__')) {
+        if (msg.text.startsWith('__revoke__:')) {
+          return; // Swallow revoke signals.
+        }
+      }
       // When a new message arrives for a previously-deleted conversation, allow it to
       // be recreated (e.g. friend was re-added, or a new message from re-joined group).
       // Remove from _sdkDeletedConvIds so the conversation can reappear.
@@ -704,7 +719,20 @@ class FakeChatDataProvider implements ChatDataProvider {
     } else {
       // Text message
       if (chatMsg.text.isNotEmpty) {
-        msg.textElem = V2TimTextElem(text: chatMsg.text);
+        // U-1 / U-2: keep raw control-signal payloads out of the
+        // conversation-list "last message" preview. The full rewrite (with
+        // customElem.data carrying the original JSON) happens on the
+        // V2TimAdvancedMsgListener path in tim2tox_sdk_platform; here we
+        // only need a friendly preview string.
+        String previewText = chatMsg.text;
+        if (previewText.startsWith('__face__:')) {
+          previewText = '[Sticker]';
+        } else if (previewText.startsWith('__custom__:')) {
+          previewText = '[Custom Message]';
+        } else if (previewText.startsWith('__location__:')) {
+          previewText = '[Location]';
+        }
+        msg.textElem = V2TimTextElem(text: previewText);
       }
     }
 

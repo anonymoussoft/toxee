@@ -20,6 +20,36 @@ part of 'fake_msg_provider.dart';
 extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
   Future<void> _onTopicMessage(FakeMessage m) async {
     final conv = m.conversationID;
+
+    // R-3 / U-1 / U-2 / H-H: filter control-signal text BEFORE it enters
+    // the per-conversation buffer. The sister handler in
+    // tim2tox_sdk_platform.dart's `_setupMessageListener` does the same
+    // for the V2TimAdvancedMsgListener path; this is the FakeMessage path
+    // and it has to do its own filtering or the raw JSON shows up in the
+    // chat bubble. Only text messages (mediaKind null/empty) are
+    // candidates — file transfers go through a different envelope.
+    if ((m.mediaKind == null || m.mediaKind!.isEmpty) &&
+        m.text.isNotEmpty &&
+        m.text.startsWith('__')) {
+      if (m.text.startsWith('__revoke__:')) {
+        // Drop the bubble entirely. The actual local delete + listener
+        // fan-out happens in tim2tox_sdk_platform's intercept; this just
+        // prevents the raw text from being mirrored into the buffer.
+        AppLogger.log(
+            '[FakeMessageProvider] swallowed __revoke__ signal: msgID=${m.msgID}');
+        return;
+      }
+      // For __face__ / __custom__ / __location__ we keep the message but
+      // hand `_mapMsg` a rewritten FakeMessage so the bubble shows a
+      // human-readable placeholder. `_mapMsg` already understands plain
+      // text, so this is the lightest possible touch.
+      if (m.text.startsWith('__face__:') ||
+          m.text.startsWith('__custom__:') ||
+          m.text.startsWith('__location__:')) {
+        m = _rewriteControlSignalForBubble(m);
+      }
+    }
+
     AppLogger.log('[FakeMessageProvider] EventBus received: msgID=${m.msgID}, conv=$conv, mediaKind=${m.mediaKind}, fromUser=${m.fromUser}');
     final list = _buffers.putIfAbsent(conv, () => <V2TimMessage>[]);
     // Pre-load avatar if not in cache to ensure new messages show correct avatar immediately
@@ -618,5 +648,38 @@ extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
     }
 
     return msg;
+  }
+
+  /// U-1 / U-2 (FakeMessage path): rewrite a FakeMessage whose text starts
+  /// with `__face__:`, `__custom__:`, or `__location__:` into one with a
+  /// human-friendly placeholder text. The original JSON payload is not
+  /// preserved in the FakeMessage envelope (no customElem field), so the
+  /// V2TimAdvancedMsgListener path in `tim2tox_sdk_platform.dart` is where
+  /// the original payload survives via `customElem.data` for future rich
+  /// rendering.
+  FakeMessage _rewriteControlSignalForBubble(FakeMessage m) {
+    String placeholder;
+    if (m.text.startsWith('__face__:')) {
+      placeholder = '[Sticker]';
+    } else if (m.text.startsWith('__location__:')) {
+      placeholder = '[Location]';
+    } else if (m.text.startsWith('__custom__:')) {
+      placeholder = '[Custom Message]';
+    } else {
+      return m;
+    }
+    return FakeMessage(
+      msgID: m.msgID,
+      conversationID: m.conversationID,
+      fromUser: m.fromUser,
+      text: placeholder,
+      timestampMs: m.timestampMs,
+      filePath: m.filePath,
+      fileName: m.fileName,
+      mediaKind: m.mediaKind,
+      isPending: m.isPending,
+      isReceived: m.isReceived,
+      isRead: m.isRead,
+    );
   }
 }
