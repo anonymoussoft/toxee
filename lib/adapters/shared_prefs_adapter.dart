@@ -26,6 +26,10 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
   static String _friendNicknameKey(String friendId) => 'friend_nickname_$friendId';
   static String _friendStatusMsgKey(String friendId) => 'friend_status_msg_$friendId';
   static String _friendAvatarPathKey(String friendId) => 'friend_avatar_path_$friendId';
+  // Matches the key shape used by toxee's UI-side Prefs.setFriendRemark, so
+  // both the platform write path and the UI write path land on the same
+  // account-scoped slot once `_prefixKey` is applied.
+  static String _friendRemarkKey(String friendId) => 'friend_remark_$friendId';
   static const _kLocalFriends = 'local_friends';
   static const _kBootstrapNodeMode = 'bootstrap_node_mode';
   static const _kCurrentBootstrapHost = 'current_bootstrap_host';
@@ -213,15 +217,29 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
       setString(_prefixKey(_friendStatusMsgKey(friendId)), statusMessage);
   
   @override
-  Future<String?> getFriendAvatarPath(String friendId) => 
+  Future<String?> getFriendAvatarPath(String friendId) =>
       _getStringScoped(_friendAvatarPathKey(friendId));
-  
+
   @override
   Future<void> setFriendAvatarPath(String friendId, String? path) async {
     if (path != null) {
       await setString(_prefixKey(_friendAvatarPathKey(friendId)), path);
     } else {
       await remove(_prefixKey(_friendAvatarPathKey(friendId)));
+    }
+  }
+
+  @override
+  Future<String?> getFriendRemark(String friendId) =>
+      _getStringScoped(_friendRemarkKey(friendId));
+
+  @override
+  Future<void> setFriendRemark(String friendId, String? remark) async {
+    final key = _prefixKey(_friendRemarkKey(friendId));
+    if (remark == null || remark.isEmpty) {
+      await remove(key);
+    } else {
+      await setString(key, remark);
     }
   }
   
