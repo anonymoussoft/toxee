@@ -56,12 +56,85 @@ void main() {
     expect(sdk.inviteCallCount, 0);
     expect(bridge.getCallInfo('invite-1'), isNull);
   });
+
+  test('acceptInvitation returns false when SDK accept returns non-zero code',
+      () async {
+    final sdk = _FakeSdkPlatform()..acceptCode = 7000;
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    bridge.registerOutgoingCall(
+      inviteID: 'invite-A',
+      inviter: 'peer',
+      invitee: 'self',
+      data: '{"type":"audio"}',
+      friendNumber: 3,
+    );
+
+    final ok = await bridge.acceptInvitation('invite-A');
+
+    expect(ok, isFalse,
+        reason:
+            'SDK accept failed; the async result must propagate to the caller. '
+            'Pre-fix the void contract silently dropped this branch.');
+    expect(av.answeredFriendNumbers, isEmpty,
+        reason: 'ToxAV answer must not be issued when signaling accept fails');
+  });
+
+  test('acceptInvitation returns false when ToxAV answer fails', () async {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend()..answerResult = false;
+    final bridge = CallBridgeService(sdk, av);
+    bridge.registerOutgoingCall(
+      inviteID: 'invite-B',
+      inviter: 'peer',
+      invitee: 'self',
+      data: '{"type":"audio"}',
+      friendNumber: 4,
+    );
+
+    final ok = await bridge.acceptInvitation('invite-B');
+
+    expect(ok, isFalse);
+    expect(av.answeredFriendNumbers, const [4]);
+  });
+
+  test('endCall is a no-op for an unknown inviteID instead of throwing',
+      () async {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+
+    final ok = await bridge.endCall('never-registered');
+
+    expect(ok, isFalse);
+    expect(av.endedFriendNumbers, isEmpty);
+    expect(sdk.cancelledInviteIds, isEmpty);
+  });
+
+  test('rejectInvitation propagates SDK reject failure to caller', () async {
+    final sdk = _FakeSdkPlatform()..rejectCode = 6000;
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    bridge.registerOutgoingCall(
+      inviteID: 'invite-R',
+      inviter: 'peer',
+      invitee: 'self',
+      data: '{}',
+      friendNumber: 5,
+    );
+
+    final ok = await bridge.rejectInvitation('invite-R');
+
+    expect(ok, isFalse);
+  });
 }
 
 class _FakeSdkPlatform extends TencentCloudChatSdkPlatform {
   V2TimSignalingListener? listener;
   final List<String> cancelledInviteIds = <String>[];
   int inviteCallCount = 0;
+  int acceptCode = 0;
+  int rejectCode = 0;
 
   @override
   Future<void> addSignalingListener({
@@ -105,7 +178,7 @@ class _FakeSdkPlatform extends TencentCloudChatSdkPlatform {
     required String inviteID,
     String? data,
   }) async {
-    return V2TimCallback(code: 0, desc: 'ok');
+    return V2TimCallback(code: acceptCode, desc: acceptCode == 0 ? 'ok' : 'no');
   }
 
   @override
@@ -113,12 +186,14 @@ class _FakeSdkPlatform extends TencentCloudChatSdkPlatform {
     required String inviteID,
     String? data,
   }) async {
-    return V2TimCallback(code: 0, desc: 'ok');
+    return V2TimCallback(code: rejectCode, desc: rejectCode == 0 ? 'ok' : 'no');
   }
 }
 
 class _FakeAvBackend implements CallAvBackend {
   final List<int> endedFriendNumbers = <int>[];
+  final List<int> answeredFriendNumbers = <int>[];
+  bool answerResult = true;
 
   @override
   bool get isInitialized => true;
@@ -132,7 +207,8 @@ class _FakeAvBackend implements CallAvBackend {
     int audioBitRate = 64000,
     int videoBitRate = 5000000,
   }) async {
-    return true;
+    answeredFriendNumbers.add(friendNumber);
+    return answerResult;
   }
 
   @override

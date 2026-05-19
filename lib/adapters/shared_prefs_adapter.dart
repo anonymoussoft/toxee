@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tim2tox_dart/interfaces/extended_preferences_service.dart';
 import 'package:tim2tox_dart/ffi/tim2tox_ffi.dart';
 
+import '../util/prefs/scoped_key.dart';
+
 /// Adapter that implements ExtendedPreferencesService using SharedPreferences.
 ///
 /// When [accountPrefix] is provided (recommended), keys are scoped as `${key}_${accountPrefix}`
@@ -52,12 +54,14 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
   }
 
   /// Prefix key with account prefix (matching Prefs._scopedKey format) or instance_id fallback.
-  /// Account-scoped: `${key}_${accountPrefix}` — matches UI Prefs pattern
+  /// Account-scoped: `${key}_${accountPrefix}` — matches UI Prefs pattern, formatted
+  ///   via the shared [scopedPrefsKey] helper (X2 in
+  ///   `local-storage-review-2026-05-18.md`).
   /// Instance-scoped (legacy): `instance_${id}_${key}` — only when no accountPrefix
   String _prefixKey(String key) {
     // Prefer account-scoped keys (consistent with UI Prefs)
     if (_accountPrefix != null && _accountPrefix!.isNotEmpty) {
-      return '${key}_$_accountPrefix';
+      return scopedPrefsKey(key, _accountPrefix);
     }
     // Legacy: instance-scoped keys
     final instanceId = _effectiveInstanceId;
@@ -120,8 +124,27 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
   @override
   Future<void> remove(String key) => _prefs.remove(key);
   
+  /// S4 fix: do NOT call SharedPreferences.clear() — that would wipe global
+  /// settings (theme, locale, bootstrap nodes, account list, every other
+  /// account's data) along with the current account's. Instead, scope the
+  /// clear to keys ending in `_<accountPrefix>`. When no account prefix is
+  /// installed (legacy instance-id mode), refuse and log a warning rather than
+  /// silently destroying user data — the interface contract calls this
+  /// "clear all preferences", but toxee's prefs store mixes per-account and
+  /// global keys in one bucket, so an honest implementation cannot wipe
+  /// everything safely.
   @override
-  Future<void> clear() => _prefs.clear();
+  Future<void> clear() async {
+    final prefix = _accountPrefix;
+    if (prefix == null || prefix.isEmpty) {
+      // No way to identify which keys belong to "this account"; refuse rather
+      // than wipe the entire SharedPreferences store.
+      return;
+    }
+    final suffix = '_$prefix';
+    final keysToRemove = _prefs.getKeys().where((k) => k.endsWith(suffix)).toList();
+    await Future.wait(keysToRemove.map(_prefs.remove));
+  }
   
   // ExtendedPreferencesService methods
   @override

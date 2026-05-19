@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:camera/camera.dart';
 import 'package:camera_macos/camera_macos.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:tim2tox_dart/service/toxav_service.dart';
 
 import '../util/logger.dart';
+import 'call_codec_profile.dart';
 import 'call_video_transform.dart';
 
 class VideoPlaneData {
@@ -170,6 +172,16 @@ Uint8List _convertYuv420ToRgba(_Yuv420Frame frame) {
 
 /// Video capture (camera → YUV420 → ToxAV) and receive (YUV420 → display).
 /// Extends ChangeNotifier so UI can react to camera initialization.
+///
+/// Lifecycle invariants:
+///   - [startCapture] and [stop] must not race. Concurrent calls are
+///     serialized via [_startFuture] / [_stopFuture]; a `stop` issued mid-init
+///     waits for init to settle before tearing down, and a `startCapture`
+///     issued before the previous `stop` finishes waits for it to complete.
+///   - After [dispose] (or [disposeAsync]), [_disposed] is `true` and all
+///     mutating operations short-circuit; [notifyListeners] is suppressed so
+///     a late-arriving `notifyListeners` from in-flight stop work cannot
+///     throw against the disposed listenable.
 class VideoHandler extends ChangeNotifier {
   ToxAVService? _avService;
   int _friendNumber = 0;
@@ -182,12 +194,40 @@ class VideoHandler extends ChangeNotifier {
   bool _usingMacOSCamera = false;
   int? _macosTextureId;
 
-  /// Throttle: skip frames to reduce CPU/bandwidth usage (~15fps max).
+  /// Throttle: skip frames to reduce CPU/bandwidth usage. Derived from
+  /// [_codecProfile.videoFps] so an adaptive bitrate downgrade can also
+  /// drop frame rate, not just bit rate.
   DateTime _lastFrameTime = DateTime.fromMillisecondsSinceEpoch(0);
-  static const _minFrameInterval = Duration(milliseconds: 66); // ~15fps
+  CallCodecProfile _codecProfile = CallCodecProfile.defaultProfile;
+  Duration get _minFrameInterval => _codecProfile.minFrameInterval;
+
+  /// Update the codec profile in response to a peer-suggested bitrate
+  /// change (forwarded by `CallServiceManager` from the ToxAV bitrate
+  /// callbacks). Hot-swapping is safe — the throttle picks up the new
+  /// interval on the next frame.
+  void setCodecProfile(CallCodecProfile profile) {
+    _codecProfile = profile;
+  }
 
   /// Guard against overlapping compute() calls.
   bool _converting = false;
+
+  /// Set once `dispose` or `disposeAsync` has been called. Suppresses any
+  /// subsequent `notifyListeners` so in-flight `stop()` work cannot throw
+  /// against an already-disposed [ChangeNotifier].
+  bool _disposed = false;
+
+  /// Future tracking an in-flight `startCapture` body. `stop()` waits on
+  /// this so it doesn't tear down camera state mid-init.
+  Future<void>? _startFuture;
+
+  /// Future tracking an in-flight `_doStop` body. `startCapture` waits on
+  /// this so it doesn't race a previous teardown.
+  Future<void>? _stopFuture;
+
+  /// Whether the handler has been disposed.
+  @visibleForTesting
+  bool get isDisposed => _disposed;
 
   /// Latest remote frame as RGB for display. UI can listen and show via RawImage.
   final ValueNotifier<ui.Image?> remoteImage = ValueNotifier<ui.Image?>(null);
@@ -200,8 +240,31 @@ class VideoHandler extends ChangeNotifier {
   /// Start camera capture and send YUV420 frames to ToxAV.
   /// On macOS uses [camera_macos] (official camera plugin has no macOS impl);
   /// that triggers the system camera permission dialog and provides the stream.
+  ///
+  /// If a previous [stop] is still tearing down, this waits for it to complete
+  /// before initializing a fresh camera session. After [dispose] this is a
+  /// no-op.
   Future<void> startCapture(int friendNumber, ToxAVService avService) async {
-    if (_capturing) return;
+    if (_disposed) return;
+    // Wait for any in-flight stop so we don't initialize against a
+    // half-torn-down camera session.
+    final pending = _stopFuture;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {}
+    }
+    if (_disposed || _capturing) return;
+    final future = _doStartCapture(friendNumber, avService);
+    _startFuture = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_startFuture, future)) _startFuture = null;
+    }
+  }
+
+  Future<void> _doStartCapture(int friendNumber, ToxAVService avService) async {
     _friendNumber = friendNumber;
     _avService = avService;
     _capturing = true;
@@ -468,7 +531,33 @@ class VideoHandler extends ChangeNotifier {
     return CameraPreview(_controller!);
   }
 
+  /// Stop capture and release camera resources.
+  ///
+  /// Coalesces concurrent calls onto the in-flight future and waits for any
+  /// in-flight [startCapture] to settle before tearing down, so a `stop`
+  /// issued mid-init reliably releases the camera handle.
   Future<void> stop() async {
+    final inFlight = _stopFuture;
+    if (inFlight != null) return inFlight;
+    // Let any in-flight start finish before tearing down. Otherwise stop's
+    // teardown can race with the start path that's still attaching the
+    // image stream / writing _controller.
+    final pendingStart = _startFuture;
+    if (pendingStart != null) {
+      try {
+        await pendingStart;
+      } catch (_) {}
+    }
+    final future = _doStop();
+    _stopFuture = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_stopFuture, future)) _stopFuture = null;
+    }
+  }
+
+  Future<void> _doStop() async {
     _capturing = false;
     if (_usingMacOSCamera) {
       try {
@@ -490,18 +579,61 @@ class VideoHandler extends ChangeNotifier {
   }
 
   Future<void> switchCamera() async {
+    if (_disposed) return;
+    // Re-fetch the device list so a USB camera plugged in mid-call (or a
+    // built-in camera disappearing because another app grabbed it) is
+    // reflected in the next index step. Previously `_cameras` was cached
+    // for the lifetime of the handler and `switchCamera` only round-robined
+    // the original device list.
+    try {
+      final fresh = await availableCameras();
+      if (fresh.isNotEmpty) {
+        _cameras = fresh;
+      }
+    } catch (e) {
+      debugPrint('[VideoHandler] switchCamera availableCameras error: $e');
+    }
     if (_cameras == null || _cameras!.length < 2) return;
     final wasCapturing = _capturing;
     await stop();
     _cameraIndex++;
-    if (wasCapturing && _avService != null) {
+    if (!_disposed && wasCapturing && _avService != null) {
       await startCapture(_friendNumber, _avService!);
     }
   }
 
+  /// Async-safe disposal: awaits any in-flight start/stop before disposing.
+  /// Prefer this in lifecycle owners that can await (e.g. `CallServiceManager`
+  /// teardown). The sync [dispose] override is retained for compatibility with
+  /// the [ChangeNotifier] contract.
+  Future<void> disposeAsync() async {
+    if (_disposed) return;
+    _disposed = true;
+    final pendingStart = _startFuture;
+    if (pendingStart != null) {
+      try {
+        await pendingStart;
+      } catch (_) {}
+    }
+    await stop();
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    // Silently no-op after dispose so an in-flight `_doStop()` that completes
+    // *after* `dispose()` does not throw against the disposed listenable.
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
   @override
   void dispose() {
-    stop();
+    if (_disposed) return; // Idempotent — super.dispose() throws on re-entry.
+    _disposed = true;
+    // Kick off teardown; the [notifyListeners] override above keeps the
+    // in-flight stop from throwing on this now-disposed notifier.
+    unawaited(stop());
     super.dispose();
   }
 }

@@ -8,13 +8,13 @@ import 'package:toxee/call/ringing_call_manager.dart';
 
 class FakeRingingCallManager implements RingingCallManager {
   @override
-  void acceptCall() {}
+  Future<void> acceptCall() async {}
 
   @override
-  void rejectCall() {}
+  Future<void> rejectCall() async {}
 
   @override
-  void hangUp() {}
+  Future<void> hangUp() async {}
 }
 
 Widget buildIncomingCallTestApp(CallStateNotifier callState) {

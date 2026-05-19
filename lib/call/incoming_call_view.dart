@@ -44,18 +44,18 @@ class IncomingCallView extends StatelessWidget {
             icon: Icons.call_end,
             label: l10n.callReject,
             destructive: true,
-            onPressed: () {
+            onPressed: () async {
               unawaited(HapticFeedback.lightImpact());
-              manager.rejectCall();
+              await manager.rejectCall();
             },
           ),
           CallDockAction(
             icon: Icons.call,
             label: l10n.callAccept,
             affirmative: true,
-            onPressed: () {
+            onPressed: () async {
               unawaited(HapticFeedback.mediumImpact());
-              manager.acceptCall();
+              await manager.acceptCall();
             },
           ),
         ],

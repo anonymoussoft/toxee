@@ -125,8 +125,32 @@ Future<bool> isProfileFileEncrypted(String profileFilePath) async {
   }
 }
 
+/// Atomic in-place write: stage bytes to `<path>.new`, fsync, then rename over
+/// the original. `File.writeAsBytes(flush: true)` issues fsync on the file
+/// descriptor before close, and `rename()` is atomic on a single filesystem on
+/// POSIX (renameat2/AT_REPLACE behavior) and Windows (MoveFileEx with replace).
+/// This protects the account profile from corruption if the process is killed
+/// mid-write — the previous file is preserved up to the moment of rename, and
+/// the .new file is best-effort cleaned up on failure.
+Future<void> _writeBytesAtomic(File target, Uint8List bytes) async {
+  final stage = File('${target.path}.new');
+  try {
+    await stage.writeAsBytes(bytes, flush: true);
+    await stage.rename(target.path);
+  } catch (_) {
+    if (await stage.exists()) {
+      try {
+        await stage.delete();
+      } catch (_) {}
+    }
+    rethrow;
+  }
+}
+
 /// Encrypt a profile file in place (plain -> encrypted). Used after register
-/// or on logout. No-op when [password] is empty.
+/// or on logout. No-op when [password] is empty. Refuses to re-encrypt an
+/// already-encrypted file (silent double-encrypt would produce an unrecoverable
+/// blob).
 Future<void> encryptProfileFile(String profileFilePath, String password) async {
   if (password.isEmpty) return;
   final file = File(profileFilePath);
@@ -135,6 +159,11 @@ Future<void> encryptProfileFile(String profileFilePath, String password) async {
   }
   final plainData = await file.readAsBytes();
   if (plainData.isEmpty) throw Exception('Profile file is empty');
+  // Guard against accidental double-encryption: an error-recovery path that
+  // calls encryptProfileFile after the file was already encrypted on logout
+  // would otherwise produce a double-encrypted blob that the user's password
+  // cannot decrypt in one pass.
+  if (isDataEncrypted(plainData)) return;
   final ffiLib = Tim2ToxFfi.open();
   final plaintextPtr = pkgffi.malloc<ffi.Uint8>(plainData.length);
   final ciphertextPtr =
@@ -155,7 +184,7 @@ Future<void> encryptProfileFile(String profileFilePath, String password) async {
     if (encryptedLen < 0) throw Exception('Encryption failed');
     final encrypted =
         Uint8List.fromList(ciphertextPtr.asTypedList(encryptedLen));
-    await file.writeAsBytes(encrypted);
+    await _writeBytesAtomic(file, encrypted);
   } finally {
     pkgffi.malloc.free(plaintextPtr);
     pkgffi.malloc.free(ciphertextPtr);
@@ -199,7 +228,7 @@ Future<void> decryptProfileFile(String profileFilePath, String password) async {
     }
     final decrypted =
         Uint8List.fromList(plaintextPtr.asTypedList(decryptedLen));
-    await file.writeAsBytes(decrypted);
+    await _writeBytesAtomic(file, decrypted);
   } finally {
     pkgffi.malloc.free(ciphertextPtr);
     pkgffi.malloc.free(plaintextPtr);

@@ -2,14 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
+import 'package:collection/collection.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crypto/crypto.dart' as crypto;
 
+import 'logger.dart';
 import 'tox_utils.dart';
 import '../models/account_summary.dart';
+import 'prefs/scoped_key.dart';
 
 part 'prefs/window_prefs.dart';
 part 'prefs/security_prefs.dart';
@@ -166,10 +169,15 @@ class Prefs {
   }
 
   /// Storage key for pinned/conversation list scoped by account (avoids loading other account's data).
+  ///
+  /// Truncates the full toxId to its 16-char prefix and delegates the actual
+  /// `'${key}_${prefix}'` formatting to the shared [scopedPrefsKey] helper —
+  /// historically this and [SharedPreferencesAdapter._prefixKey] had two
+  /// independent implementations (X2 in `local-storage-review-2026-05-18.md`).
   static String _scopedKey(String baseKey, String? toxId) {
-    if (toxId == null || toxId.isEmpty) return baseKey;
+    if (toxId == null || toxId.isEmpty) return scopedPrefsKey(baseKey, null);
     final prefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
-    return '${baseKey}_$prefix';
+    return scopedPrefsKey(baseKey, prefix);
   }
 
   static Future<String?> getCurrentAccountToxId() async {
@@ -339,8 +347,21 @@ class Prefs {
   static Future<void> setAvatarPath(String? path) async {
     final current = await getCurrentAccountToxId();
     if (current != null && current.isNotEmpty) {
+      // Active account present: write ONLY to the scoped account-list entry.
+      //
+      // We deliberately do NOT also write the legacy unscoped _kAvatarPath
+      // here: that key is global, so writing it would leak the current
+      // account's avatar to whoever logs in next (or to the
+      // pre-login-account UI). The corresponding getter ([getAvatarPath])
+      // already prefers the scoped account-list entry and refuses to fall
+      // back to _kAvatarPath when an account is active, mirroring this
+      // asymmetry.
       await setAccountAvatarPath(current, path);
+      return;
     }
+    // No active account — write to the legacy unscoped key. This branch
+    // covers pre-login UI surfaces (rare; first-run wizard and similar
+    // before a profile has been created).
     final p = await _getPrefs();
     if (path == null || path.isEmpty) {
       await p.remove(_kAvatarPath);
@@ -523,8 +544,10 @@ class Prefs {
   }
 
   /// Get auto-accept friends setting for a specific account.
-  /// Priority: scoped key > account_list JSON fallback > global fallback.
-  /// When [toxId] is null, uses current account so callers get the right account's setting.
+  /// Reads the scoped key only; the previous read-time fallback into
+  /// `account_list` JSON is now an eager migration (see
+  /// PrefsUpgrader.runAccountMigrations v1→v2). When [toxId] is null, uses
+  /// the current account so callers get the right account's setting.
   static Future<bool> getAutoAcceptFriends([String? toxId]) async {
     final p = await _getPrefs();
     var effectiveToxId = toxId;
@@ -535,14 +558,6 @@ class Prefs {
       final key = _scopedKey(_kAccountAutoAcceptFriends, effectiveToxId);
       final val = p.getBool(key);
       if (val != null) return val;
-      // Fallback: check account_list JSON (pre-migration data)
-      final account = await getAccountByToxId(effectiveToxId);
-      if (account != null && account.containsKey('autoAcceptFriends')) {
-        final result = account['autoAcceptFriends'] == 'true';
-        // Migrate to scoped key
-        await p.setBool(key, result);
-        return result;
-      }
     }
     return p.getBool(_kAutoAcceptFriends) ?? false;
   }
@@ -564,7 +579,10 @@ class Prefs {
   }
 
   /// Get auto-accept group invites setting for a specific account.
-  /// When [toxId] is null, uses current account.
+  /// Reads the scoped key only; the previous read-time fallback into
+  /// `account_list` JSON is now an eager migration (see
+  /// PrefsUpgrader.runAccountMigrations v1→v2). When [toxId] is null, uses
+  /// the current account.
   static Future<bool> getAutoAcceptGroupInvites([String? toxId]) async {
     final p = await _getPrefs();
     var effectiveToxId = toxId;
@@ -575,12 +593,6 @@ class Prefs {
       final key = _scopedKey(_kAccountAutoAcceptGroupInvites, effectiveToxId);
       final val = p.getBool(key);
       if (val != null) return val;
-      final account = await getAccountByToxId(effectiveToxId);
-      if (account != null && account.containsKey('autoAcceptGroupInvites')) {
-        final result = account['autoAcceptGroupInvites'] == 'true';
-        await p.setBool(key, result);
-        return result;
-      }
     }
     return p.getBool(_kAutoAcceptGroupInvites) ?? false;
   }
@@ -602,7 +614,11 @@ class Prefs {
   }
 
   /// Get auto-login setting for a specific account.
-  /// When [toxId] is null, uses current account (e.g. on startup after current is set).
+  /// Reads the scoped key only; the previous read-time fallback into
+  /// `account_list` JSON is now an eager migration (see
+  /// PrefsUpgrader.runAccountMigrations v1→v2). When [toxId] is null, uses
+  /// the current account (e.g. on startup after current is set).
+  /// Default for new accounts is `true` — preserved from the prior behavior.
   static Future<bool> getAutoLogin([String? toxId]) async {
     final p = await _getPrefs();
     var effectiveToxId = toxId;
@@ -613,12 +629,6 @@ class Prefs {
       final key = _scopedKey(_kAccountAutoLogin, effectiveToxId);
       final val = p.getBool(key);
       if (val != null) return val;
-      final account = await getAccountByToxId(effectiveToxId);
-      if (account != null && account.containsKey('autoLogin')) {
-        final result = account['autoLogin'] == 'true';
-        await p.setBool(key, result);
-        return result;
-      }
       return true; // Default for new accounts
     }
     return p.getBool(_kAutoLogin) ?? true;
@@ -641,7 +651,11 @@ class Prefs {
   }
 
   /// Get notification sound enabled setting for a specific account.
-  /// When [toxId] is null, uses current account.
+  /// Reads the scoped key only; the previous read-time fallback into
+  /// `account_list` JSON is now an eager migration (see
+  /// PrefsUpgrader.runAccountMigrations v1→v2). When [toxId] is null, uses
+  /// the current account. Default for new accounts is `true` — preserved
+  /// from the prior behavior.
   static Future<bool> getNotificationSoundEnabled([String? toxId]) async {
     final p = await _getPrefs();
     var effectiveToxId = toxId;
@@ -652,12 +666,6 @@ class Prefs {
       final key = _scopedKey(_kAccountNotificationSound, effectiveToxId);
       final val = p.getBool(key);
       if (val != null) return val;
-      final account = await getAccountByToxId(effectiveToxId);
-      if (account != null && account.containsKey('notificationSoundEnabled')) {
-        final result = account['notificationSoundEnabled'] == 'true';
-        await p.setBool(key, result);
-        return result;
-      }
       return true; // Default
     }
     return p.getBool(_kNotificationSoundEnabled) ?? true;
@@ -763,6 +771,20 @@ class Prefs {
     // Best-effort: clean up any legacy unscoped value left from older builds.
     if (scopedKey != _avatarHashKey(friendId)) {
       unawaited(p.remove(_avatarHashKey(friendId)));
+    }
+  }
+
+  /// Remove the cached avatar hash for [friendId] (both scoped and legacy
+  /// unscoped variants). Used when a friend is deleted so the on-disk
+  /// hash key doesn't linger forever (A8).
+  static Future<void> removeFriendAvatarHash(String friendId) async {
+    if (friendId.isEmpty) return;
+    final p = await _getPrefs();
+    final current = await getCurrentAccountToxId();
+    final scopedKey = _scopedKey(_avatarHashKey(friendId), current);
+    await p.remove(scopedKey);
+    if (scopedKey != _avatarHashKey(friendId)) {
+      await p.remove(_avatarHashKey(friendId));
     }
   }
 
@@ -1125,6 +1147,14 @@ class Prefs {
 
   /// Import scoped preferences for an account from a map.
   /// Used for full backup (.zip) import/restore.
+  ///
+  /// Each key is imported independently inside a try/catch: if one entry
+  /// has a malformed value (e.g. a `List<dynamic>` whose elements aren't
+  /// all strings, triggering a CastError inside `.cast<String>()`), we
+  /// log a structured warning and continue with the rest of the keys. A
+  /// partial restore is strictly better than failing the whole import and
+  /// leaving the user with nothing — the user can re-import or repair the
+  /// offending key later.
   static Future<void> importScopedPrefsForAccount(String toxId, Map<String, dynamic> data) async {
     if (toxId.isEmpty) return;
     final prefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
@@ -1132,16 +1162,27 @@ class Prefs {
     for (final entry in data.entries) {
       final scopedKey = '${entry.key}_$prefix';
       final value = entry.value;
-      if (value is String) {
-        await p.setString(scopedKey, value);
-      } else if (value is int) {
-        await p.setInt(scopedKey, value);
-      } else if (value is double) {
-        await p.setDouble(scopedKey, value);
-      } else if (value is bool) {
-        await p.setBool(scopedKey, value);
-      } else if (value is List) {
-        await p.setStringList(scopedKey, value.cast<String>());
+      try {
+        if (value is String) {
+          await p.setString(scopedKey, value);
+        } else if (value is int) {
+          await p.setInt(scopedKey, value);
+        } else if (value is double) {
+          await p.setDouble(scopedKey, value);
+        } else if (value is bool) {
+          await p.setBool(scopedKey, value);
+        } else if (value is List) {
+          // .cast<String>() is lazy; force materialization so any
+          // non-string element throws here (in the try) rather than later
+          // inside SharedPreferences.
+          await p.setStringList(scopedKey, List<String>.from(value));
+        }
+        // Other types (null, Map, etc.) are silently skipped — there's no
+        // SharedPreferences setter for them.
+      } catch (e, st) {
+        AppLogger.warn(
+            '[Prefs.importScopedPrefsForAccount] skipping key '
+            '"${entry.key}" for account prefix=$prefix: $e\n$st');
       }
     }
   }
@@ -1435,50 +1476,54 @@ class Prefs {
     await setAccountList(accounts);
   }
 
-  /// Get account info by Tox ID (primary key)
-  /// Normalizes toxId by trimming whitespace for matching
+  /// Get account info by Tox ID (primary key).
+  /// Normalizes toxId by trimming whitespace for matching.
+  ///
+  /// Fallback ordering (preserved across the C9 refactor):
+  ///   1. exact match
+  ///   2. case-insensitive match
+  ///   3. 64-char prefix match (for long toxIds)
+  ///   4. compareToxIds predicate (e.g. 16-char list entry vs 64-char lookup)
+  ///
+  /// Uses [firstWhereOrNull] instead of `firstWhere` + try/catch StateError,
+  /// so no exception-as-control-flow.
   static Future<Map<String, String>?> getAccountByToxId(String toxId) async {
     final normalizedToxId = toxId.trim();
     final accounts = await getAccountList();
-    try {
-      // Try exact match first
-      return accounts.firstWhere((acc) {
+
+    // 1. Exact match
+    final exact = accounts.firstWhereOrNull((acc) {
+      final accToxId = acc['toxId']?.trim() ?? '';
+      return accToxId == normalizedToxId;
+    });
+    if (exact != null) return exact;
+
+    // 2. Case-insensitive match
+    final lowered = normalizedToxId.toLowerCase();
+    final ci = accounts.firstWhereOrNull((acc) {
+      final accToxId = acc['toxId']?.trim() ?? '';
+      return accToxId.toLowerCase() == lowered;
+    });
+    if (ci != null) return ci;
+
+    // 3. 64-char prefix match (only for long lookups)
+    if (normalizedToxId.length >= 64) {
+      final prefix = normalizedToxId.substring(0, 64);
+      final byPrefix = accounts.firstWhereOrNull((acc) {
         final accToxId = acc['toxId']?.trim() ?? '';
-        return accToxId == normalizedToxId;
+        if (accToxId.length >= 64) {
+          return accToxId.substring(0, 64) == prefix;
+        }
+        return false;
       });
-    } catch (e) {
-      // Try case-insensitive match
-      try {
-        return accounts.firstWhere((acc) {
-          final accToxId = acc['toxId']?.trim() ?? '';
-          return accToxId.toLowerCase() == normalizedToxId.toLowerCase();
-        });
-      } catch (e2) {
-        // Try partial match (first 64 chars for long toxIds)
-        if (normalizedToxId.length >= 64) {
-          try {
-            return accounts.firstWhere((acc) {
-              final accToxId = acc['toxId']?.trim() ?? '';
-              if (accToxId.length >= 64) {
-                return accToxId.substring(0, 64) == normalizedToxId.substring(0, 64);
-              }
-              return false;
-            });
-          } catch (e3) {
-            // fall through to compareToxIds fallback
-          }
-        }
-        // Fallback: compare with normalize/prefix so 16-char list entry matches 64-char lookup
-        try {
-          return accounts.firstWhere((acc) {
-            final accToxId = acc['toxId']?.trim() ?? '';
-            return compareToxIds(accToxId, normalizedToxId);
-          });
-        } catch (e4) {
-          return null;
-        }
-      }
+      if (byPrefix != null) return byPrefix;
     }
+
+    // 4. compareToxIds fallback (covers 16-char list entry vs 64-char lookup)
+    return accounts.firstWhereOrNull((acc) {
+      final accToxId = acc['toxId']?.trim() ?? '';
+      return compareToxIds(accToxId, normalizedToxId);
+    });
   }
 
   /// All accounts whose nickname (trimmed) matches [nickname].

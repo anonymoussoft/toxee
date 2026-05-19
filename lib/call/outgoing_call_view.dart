@@ -45,9 +45,9 @@ class OutgoingCallView extends StatelessWidget {
             icon: Icons.call_end,
             label: l10n.callHangUp,
             destructive: true,
-            onPressed: () {
+            onPressed: () async {
               unawaited(HapticFeedback.lightImpact());
-              manager.hangUp();
+              await manager.hangUp();
             },
           ),
         ],

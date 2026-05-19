@@ -9,6 +9,9 @@ import 'package:tim2tox_dart/service/call_bridge_service.dart';
 import 'package:tim2tox_dart/service/tuicallkit_adapter.dart';
 import 'package:tim2tox_dart/service/tuicallkit_tuicore_integration.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
+import '../adapters/logger_adapter.dart';
+import 'call_codec_profile.dart';
+import 'call_quality_estimator.dart';
 import 'call_state_notifier.dart';
 import 'call_overlay_manager.dart';
 import 'audio_handler.dart';
@@ -53,6 +56,12 @@ class CallServiceManager implements CallOverlayManager {
   bool _callRecordEmitted = false;
   final ValueNotifier<CallUiNotice?> uiNotice = ValueNotifier(null);
   int _nextNoticeId = 0;
+
+  /// Monotonic generation token bumped on every call-end path. Used by
+  /// [_startMediaCapture] to detect that a hang-up landed mid-init and tear
+  /// down any partial capture state instead of leaving the audio/video
+  /// handlers stuck with `_capturing = true`.
+  int _captureGeneration = 0;
 
   /// Active reconnect-window timer. When non-null, the call is currently in
   /// the [CallUIState.reconnecting] state; the timer fires after a grace
@@ -165,6 +174,7 @@ class CallServiceManager implements CallOverlayManager {
         debugPrint(
             '[CallServiceManager] reconnect grace expired, ending call');
         _emitCallRecord('hangup');
+        _endCallCleanup();
         _callState.endCall();
         _cleanupNativeCall();
       }
@@ -189,18 +199,21 @@ class CallServiceManager implements CallOverlayManager {
   Future<void> initialize() async {
     if (_initialized) return;
 
-    _avService = ToxAVService(_chatService.tim2toxFfi);
+    final logger = AppLoggerAdapter();
+    _avService = ToxAVService(_chatService.tim2toxFfi, logger: logger);
     await _avService!.initialize();
 
     _callBridge = CallBridgeService(
       TencentCloudChatSdkPlatform.instance,
       _avService!,
+      logger: logger,
     );
 
     _adapter = await TUICallKitAdapter.initialize(
       TencentCloudChatSdkPlatform.instance,
       _avService!,
       _callBridge!,
+      logger: logger,
     );
     registerToxAVWithTUICore(_adapter!);
     _adapter!.isCallIdle = () => _callState.state == CallUIState.idle;
@@ -210,6 +223,8 @@ class CallServiceManager implements CallOverlayManager {
     _adapter!.onBeforeOutgoingCall = _preflightOutgoingCall;
     _avService!.setCallCallback(_onIncomingCall);
     _avService!.setCallStateCallback(_onCallState);
+    _avService!.setAudioBitrateChangedCallback(_onAudioBitrateChanged);
+    _avService!.setVideoBitrateChangedCallback(_onVideoBitrateChanged);
     _avService!.setAudioReceiveCallback(_audioHandler.onAudioReceived);
     _avService!.setVideoReceiveCallback(_videoHandler.onVideoReceived);
     await _callAudioPlatform.initialize();
@@ -300,6 +315,7 @@ class CallServiceManager implements CallOverlayManager {
         final endReason =
             _callState.state == CallUIState.inCall ? 'hangup' : 'cancel';
         _emitCallRecord(endReason);
+        _endCallCleanup();
         _callState.endCall();
         break;
       default:
@@ -375,6 +391,7 @@ class CallServiceManager implements CallOverlayManager {
             ? 'timeout'
             : 'cancel');
       }
+      _endCallCleanup();
       _callState.endCall();
       _cleanupNativeCall();
       return;
@@ -397,21 +414,116 @@ class CallServiceManager implements CallOverlayManager {
   }
 
   // ---------------------------------------------------------------------------
+  // Call quality (from ToxAV peer-suggested bitrates)
+  // ---------------------------------------------------------------------------
+
+  /// Pure bitrate → CallQuality mapper. Kept as a member field rather than
+  /// a static helper so call lifecycle (reset on end) maps cleanly.
+  final CallQualityEstimator _qualityEstimator = CallQualityEstimator();
+
+  void _onAudioBitrateChanged(int friendNumber, int audioBitRate) {
+    debugPrint(
+        '[CallServiceManager] _onAudioBitrateChanged: friendNumber=$friendNumber, audioBitRate=$audioBitRate');
+    // Bit rate 0 means the peer disabled audio — that's a state change, not
+    // a quality signal. Don't downgrade the indicator on a mute.
+    if (!_qualityEstimator.observeAudioBitrate(audioBitRate)) return;
+    _callState.setCallQuality(_qualityEstimator.currentQuality());
+    _applyPeerSuggestedProfile(audioBitRate: audioBitRate);
+  }
+
+  void _onVideoBitrateChanged(int friendNumber, int videoBitRate) {
+    debugPrint(
+        '[CallServiceManager] _onVideoBitrateChanged: friendNumber=$friendNumber, videoBitRate=$videoBitRate');
+    if (!_qualityEstimator.observeVideoBitrate(videoBitRate)) return;
+    _callState.setCallQuality(_qualityEstimator.currentQuality());
+    _applyPeerSuggestedProfile(videoBitRate: videoBitRate);
+  }
+
+  /// Map a peer-suggested kbit/s value to the nearest [CallCodecProfile]
+  /// tier and, when the tier changed, tell the local encoder + camera
+  /// throttle to follow. This is the "adaptive" half of the spec: PR 2
+  /// wires the callback up; this method translates the signal into
+  /// encoder + capture-side changes.
+  ///
+  /// We only push to the encoder on a *tier change* (not every callback),
+  /// because libtoxav debounces internally and re-setting the same target
+  /// is wasted FFI overhead plus a small risk of confusing the codec
+  /// rate-control loop.
+  void _applyPeerSuggestedProfile({int? audioBitRate, int? videoBitRate}) {
+    final fn = _getActiveFriendNumber();
+    if (fn == null || _avService == null) return;
+
+    final next = audioBitRate != null
+        ? CallCodecProfile.fromAudioBitRate(audioBitRate)
+        : CallCodecProfile.fromVideoBitRate(videoBitRate ?? 0);
+    if (next == null) return;
+    if (next.tier == _activeProfile.tier) return;
+
+    _activeProfile = next;
+    _videoHandler.setCodecProfile(next);
+    // Mirror to libtoxav so our outgoing encoder follows the suggestion.
+    _avService!.setAudioBitRate(fn, next.audioBitRate);
+    if (_callState.mode == CallMode.video) {
+      _avService!.setVideoBitRate(fn, next.videoBitRate);
+    }
+  }
+
+  /// Currently-active profile. Starts at [CallCodecProfile.defaultProfile]
+  /// and is mutated only by [_applyPeerSuggestedProfile].
+  CallCodecProfile _activeProfile = CallCodecProfile.defaultProfile;
+
+  // ---------------------------------------------------------------------------
   // Media capture
   // ---------------------------------------------------------------------------
 
   /// Request permissions and start audio/video capture for an active call.
+  ///
+  /// Race-safe against hang-up: callers fire-and-forget, and an async
+  /// `startCapture` may still be initialising when the user (or peer) ends
+  /// the call. In that case [_captureGeneration] has been bumped via
+  /// [_endCallCleanup]; this method observes the change after each
+  /// `startCapture` and explicitly tears down anything that did start, so
+  /// `AudioHandler._capturing` / `VideoHandler._capturing` cannot get
+  /// stranded as `true` past the call.
   Future<void> _startMediaCapture(int friendNumber) async {
+    final gen = _captureGeneration;
+    final avService = _avService;
+    if (avService == null) return;
     try {
-      if (_avService != null) {
-        _audioHandler.startCapture(friendNumber, _avService!);
+      await _audioHandler.startCapture(friendNumber, avService);
+      if (gen != _captureGeneration) {
+        // Hang-up landed while we were initialising the mic; tear it down.
+        await _audioHandler.stop();
+        return;
       }
-      if (_callState.mode == CallMode.video && _avService != null) {
-        _videoHandler.startCapture(friendNumber, _avService!);
+      if (_callState.mode == CallMode.video) {
+        await _videoHandler.startCapture(friendNumber, avService);
+        if (gen != _captureGeneration) {
+          await _videoHandler.stop();
+        }
       }
     } catch (e) {
       debugPrint('[CallServiceManager] _startMediaCapture error: $e');
+      // Best-effort cleanup if something blew up mid-init.
+      await _audioHandler.stop();
+      await _videoHandler.stop();
     }
+  }
+
+  /// Called from every path that ends an active call (hang-up, reject,
+  /// reconnect grace expiry, peer cancel, peer reject, signaling timeout,
+  /// native CallState transitions to ended). Bumps [_captureGeneration] so
+  /// any in-flight [_startMediaCapture] tears down on completion instead of
+  /// leaving the audio/video handlers half-started.
+  void _endCallCleanup() {
+    _captureGeneration++;
+    // Forget bitrate history so the next call starts at CallQuality.unknown
+    // instead of inheriting the last call's last-seen value.
+    _qualityEstimator.reset();
+    // Reset adaptive-bitrate profile so the next call opens at mid-tier
+    // again instead of stuck at whatever tier the previous call ended on.
+    _activeProfile = CallCodecProfile.defaultProfile;
+    _videoHandler.setCodecProfile(CallCodecProfile.defaultProfile);
   }
 
   Future<bool> _ensurePermissionsForCurrentMode() async {
@@ -457,7 +569,22 @@ class CallServiceManager implements CallOverlayManager {
     );
   }
 
-  Future<void> syncPlatformEffectsForState(CallUIState state) async {
+  /// Single-flight queue tail for [syncPlatformEffectsForState]. Rapid call
+  /// state transitions (e.g. ringing -> inCall within milliseconds) would
+  /// otherwise fire concurrent activate/deactivate platform-channel calls,
+  /// leaving the audio session in an indeterminate state. We chain each new
+  /// sync onto the tail of the previous one so they execute strictly in order.
+  Future<void>? _pendingSync;
+
+  Future<void> syncPlatformEffectsForState(CallUIState state) {
+    final next = (_pendingSync ?? Future<void>.value())
+        .catchError((_) {}) // Don't poison the chain if a prior sync threw.
+        .then((_) => _doSyncPlatformEffectsForState(state));
+    _pendingSync = next;
+    return next;
+  }
+
+  Future<void> _doSyncPlatformEffectsForState(CallUIState state) async {
     if (!_callAudioPlatform.isSupported) {
       return;
     }
@@ -478,6 +605,12 @@ class CallServiceManager implements CallOverlayManager {
     await _callAudioPlatform.selectRoute(routeId);
   }
 
+  /// Most-recently-seen audio route kind. Tracked across `routeChanged`
+  /// events so a Bluetooth-disconnect transition (e.g. AirPods walked out of
+  /// range) can surface a user-visible notice — without firing the notice
+  /// for every user-initiated route switch.
+  CallAudioRouteKind? _lastRouteKind;
+
   void _onAudioPlatformEvent(CallAudioEvent event) {
     switch (event.kind) {
       case CallAudioEventKind.interruptionBegan:
@@ -487,6 +620,25 @@ class CallServiceManager implements CallOverlayManager {
           (l10n) => l10n.callAudioInterrupted,
           offerSettings: false,
         );
+        break;
+      case CallAudioEventKind.routeChanged:
+        // Surface a notice only when the previously-active route was
+        // Bluetooth and the new route is *not* — i.e. the headset went away
+        // unexpectedly, the OS reverted to earpiece/speaker, and the user
+        // should know the call audio moved. User-initiated route switches
+        // (kind A → kind B where neither is Bluetooth, or earpiece →
+        // bluetooth pair-up) stay silent.
+        final newKind = event.state?.selectedRoute?.kind;
+        final previousWasBluetooth =
+            _lastRouteKind == CallAudioRouteKind.bluetooth;
+        final newIsBluetooth = newKind == CallAudioRouteKind.bluetooth;
+        if (previousWasBluetooth && !newIsBluetooth) {
+          _emitLocalizedUiNotice(
+            (l10n) => l10n.callAudioInterrupted,
+            offerSettings: false,
+          );
+        }
+        _lastRouteKind = newKind;
         break;
       default:
         break;
@@ -523,10 +675,13 @@ class CallServiceManager implements CallOverlayManager {
       final fn = _getNativeFriendNumber(inviteID);
       if (fn != null && _avService != null) {
         final isVideo = _callState.mode == CallMode.video;
+        final profile = isVideo
+            ? CallCodecProfile.defaultProfile
+            : CallCodecProfile.defaultProfile.audioOnly();
         await _avService!.answerCall(
           fn,
-          audioBitRate: 48,
-          videoBitRate: isVideo ? 5000 : 0,
+          audioBitRate: profile.audioBitRate,
+          videoBitRate: profile.videoBitRate,
         );
         // Immediately enter call state and start media
         _ringtone.stop();
@@ -545,6 +700,7 @@ class CallServiceManager implements CallOverlayManager {
     if (inviteID == null) return;
 
     _emitCallRecord('reject');
+    _endCallCleanup();
 
     if (_isNativeCall(inviteID)) {
       // Native ToxAV path — reject via toxav_call_control(CANCEL)
@@ -574,6 +730,9 @@ class CallServiceManager implements CallOverlayManager {
         _callState.direction == CallDirection.outgoing) {
       _emitCallRecord('cancel');
     }
+    // Bump generation BEFORE issuing endCall so any in-flight
+    // _startMediaCapture observes the change and tears itself down.
+    _endCallCleanup();
 
     if (_isNativeCall(inviteID)) {
       // Native ToxAV path

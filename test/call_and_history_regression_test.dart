@@ -34,17 +34,17 @@ class FakeCallOverlayManager implements CallOverlayManager {
   );
 
   @override
-  void toggleMute() {}
+  Future<void> toggleMute() async {}
   @override
-  void toggleVideo() {}
+  Future<void> toggleVideo() async {}
   @override
-  void hangUp() {}
+  Future<void> hangUp() async {}
   @override
   Future<void> selectAudioRoute(String routeId) async {}
   @override
-  void acceptCall() {}
+  Future<void> acceptCall() async {}
   @override
-  void rejectCall() {}
+  Future<void> rejectCall() async {}
 }
 
 Widget buildCallOverlayTestApp(CallStateNotifier callState) {
