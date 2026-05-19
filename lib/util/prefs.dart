@@ -4,7 +4,8 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:collection/collection.dart';
 import 'package:cryptography/cryptography.dart';
-import 'package:flutter/services.dart' show MissingPluginException;
+import 'package:flutter/services.dart'
+    show MissingPluginException, PlatformException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crypto/crypto.dart' as crypto;
@@ -91,37 +92,56 @@ class Prefs {
 
   /// Secure storage for IRC channel passwords and account password hashes
   /// (platform Keychain / Keystore / libsecret / DPAPI).
-  static FlutterSecureStorage get _secureStorage => const FlutterSecureStorage();
+  ///
+  /// On macOS we opt into `useDataProtectionKeyChain: false` so the plugin
+  /// uses the file-based keychain backend, which works inside the app
+  /// sandbox without the `keychain-access-groups` entitlement (the
+  /// data-protection keychain requires a real development certificate and
+  /// fails with -34018 / errSecMissingEntitlement on unsigned local builds).
+  static const _macOsOptions = MacOsOptions(useDataProtectionKeyChain: false);
+  static const FlutterSecureStorage _secureStorage =
+      FlutterSecureStorage(mOptions: _macOsOptions);
 
   /// Read a key from secure storage, returning null when the platform channel
   /// is not available (test environment without a mock — flutter_secure_storage
-  /// throws [MissingPluginException]). Other errors propagate.
+  /// throws [MissingPluginException]) or when the keychain refuses the request
+  /// (e.g. sandboxed macOS without the required entitlement; we don't want a
+  /// missing-entitlement to take down quickLogin's auto-resume).
   static Future<String?> _secureRead(String key) async {
     try {
       return await _secureStorage.read(key: key);
     } on MissingPluginException {
+      return null;
+    } on PlatformException {
       return null;
     }
   }
 
   /// Write to secure storage; swallow [MissingPluginException] so tests don't
   /// need a platform-channel mock for code paths that don't specifically test
-  /// secure-storage behavior.
+  /// secure-storage behavior. Also swallow [PlatformException] so a missing
+  /// keychain entitlement degrades to "no persistent secret" rather than
+  /// crashing the app.
   static Future<void> _secureWrite(String key, String value) async {
     try {
       await _secureStorage.write(key: key, value: value);
     } on MissingPluginException {
       // Plugin unavailable (test env without mock). Caller's legacy-prefs
       // fallback is still in place for read paths.
+    } on PlatformException {
+      // Keychain refused (e.g. sandboxed macOS without entitlement).
     }
   }
 
-  /// Delete from secure storage; swallow [MissingPluginException].
+  /// Delete from secure storage; swallow [MissingPluginException] and
+  /// [PlatformException] (keychain entitlement missing).
   static Future<void> _secureDelete(String key) async {
     try {
       await _secureStorage.delete(key: key);
     } on MissingPluginException {
       // Plugin unavailable; nothing to delete in secure storage anyway.
+    } on PlatformException {
+      // Keychain refused.
     }
   }
 
@@ -1227,13 +1247,13 @@ class Prefs {
   static Future<String?> getIrcChannelPassword(String channel) async {
     final key = _ircChannelPasswordKey(channel);
     // Prefer secure storage
-    final fromSecure = await _secureStorage.read(key: key);
+    final fromSecure = await _secureRead(key);
     if (fromSecure != null && fromSecure.isNotEmpty) return fromSecure;
     // Migrate from legacy SharedPreferences
     final p = await _getPrefs();
     final legacy = p.getString(key);
     if (legacy != null) {
-      await _secureStorage.write(key: key, value: legacy);
+      await _secureWrite(key, legacy);
       await p.remove(key);
       return legacy;
     }
@@ -1243,11 +1263,11 @@ class Prefs {
   static Future<void> setIrcChannelPassword(String channel, String? password) async {
     final key = _ircChannelPasswordKey(channel);
     if (password == null || password.isEmpty) {
-      await _secureStorage.delete(key: key);
+      await _secureDelete(key);
       final p = await _getPrefs();
       await p.remove(key);
     } else {
-      await _secureStorage.write(key: key, value: password);
+      await _secureWrite(key, password);
       final p = await _getPrefs();
       await p.remove(key);
     }
@@ -1255,7 +1275,7 @@ class Prefs {
 
   static Future<void> removeIrcChannelPassword(String channel) async {
     final key = _ircChannelPasswordKey(channel);
-    await _secureStorage.delete(key: key);
+    await _secureDelete(key);
     final p = await _getPrefs();
     await p.remove(key);
   }
