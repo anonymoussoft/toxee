@@ -11,11 +11,143 @@ import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import '../../sdk_fake/uikit_data_facade.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/prefs.dart';
+import '../../util/responsive_layout.dart';
 import '../../i18n/app_localizations.dart';
 import '../profile_page.dart';
 
 /// 临时屏蔽 sidebar 的「应用」入口，改为 true 可恢复显示
 const bool _showApplicationsEntry = false;
+
+/// Opens the current user's profile.
+///
+/// Phone/large-phone: pushes a fullscreen `MaterialPageRoute` with a back
+/// action — gives SafeArea, native pop gesture, and avoids keyboard occlusion
+/// on the dialog form fields. Desktop/tablet: routes through `showDialog`
+/// with the existing close-button affordance.
+///
+/// Shared between the desktop `_UserAvatar` tap and the mobile drawer header
+/// tap so both entry points present identically. `nickName` and
+/// `statusMessage` seed the form; `onProfileSaved` and `onAvatarChanged` let
+/// the caller propagate updates back into its own state (e.g. drawer header
+/// avatar refresh, sidebar nickname refresh).
+void showSelfProfile(
+  BuildContext context,
+  FfiChatService service,
+  Stream<bool> connectionStatusStream, {
+  String? nickName,
+  String? statusMessage,
+  Future<void> Function(String nickname, String statusMessage)? onProfileSaved,
+  ValueChanged<String?>? onAvatarChanged,
+}) {
+  final initialOnline = service.isConnected;
+
+  ProfilePage buildProfile() => ProfilePage(
+        userId: service.selfId,
+        nickName: nickName,
+        statusMessage: statusMessage,
+        isEditable: true,
+        online: initialOnline,
+        connectionStatusStream: connectionStatusStream,
+        onSave: (newNickname, newStatusMessage) async {
+          await service.updateSelfProfile(
+            nickname: newNickname,
+            statusMessage: newStatusMessage,
+          );
+          await Prefs.setNickname(newNickname);
+          await Prefs.setStatusMessage(newStatusMessage);
+          if (onProfileSaved != null) {
+            await onProfileSaved(newNickname, newStatusMessage);
+          }
+        },
+        onAvatarChanged: (path) async {
+          if (path != null && path.isNotEmpty) {
+            await FileImage(File(path)).evict();
+            await Prefs.setAvatarPath(path);
+            await service.updateAvatar(path);
+          } else {
+            await Prefs.setAvatarPath(null);
+            await service.updateAvatar(null);
+          }
+          onAvatarChanged?.call(path);
+        },
+      );
+
+  if (ResponsiveLayout.shouldShowBottomNav(context)) {
+    final title =
+        TencentCloudChatLocalizations.of(context)?.profile ?? 'Profile';
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (routeContext) => Scaffold(
+          appBar: AppBar(
+            title: Text(title),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              tooltip:
+                  AppLocalizations.of(routeContext)?.close ?? 'Close',
+              onPressed: () => Navigator.of(routeContext).maybePop(),
+            ),
+          ),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: buildProfile(),
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
+  }
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      final size = MediaQuery.sizeOf(dialogContext);
+      final isWide = size.width > 900;
+      // Wide screens get a dialog wide enough to host the 2-column profile
+      // layout (form + QR card side-by-side); narrow screens keep the
+      // single-column dialog at ~480.
+      final maxW = (size.width - 32).clamp(280.0, isWide ? 880.0 : 500.0);
+      final maxH = (size.height - 100).clamp(400.0, 800.0);
+      return Dialog(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+          child: SizedBox(
+            width: maxW,
+            height: maxH,
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  // Inner content fills the full dialog width so the profile
+                  // layout has room for its 2-column shell; the cap is the
+                  // dialog's own ceiling minus padding, no separate fixed
+                  // 440px clamp.
+                  child: SizedBox(
+                    width: (maxW - 48).clamp(256.0, 840.0),
+                    height: (maxH - 40).clamp(360.0, 760.0),
+                    child: buildProfile(),
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip:
+                        AppLocalizations.of(dialogContext)?.close ?? 'Close',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
 
 Widget buildSidebar({
   required BuildContext context,
@@ -166,104 +298,35 @@ class _UserAvatarState extends State<_UserAvatar> {
     }
   }
 
-  void _showProfileDialog(BuildContext context) {
-    // Debug: Check current connection status
-    final currentStatus = widget.service.isConnected;
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        final size = MediaQuery.sizeOf(dialogContext);
-        final isWide = size.width > 900;
-        // Wide screens get a dialog wide enough to host the 2-column profile
-        // layout (form + QR card side-by-side); narrow screens keep the
-        // single-column dialog at ~480.
-        final maxW = (size.width - 32).clamp(280.0, isWide ? 880.0 : 500.0);
-        final maxH = (size.height - 100).clamp(400.0, 800.0);
-        return Dialog(
-          child: ClipRRect(
-            borderRadius:
-                BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-            child: SizedBox(
-              width: maxW,
-              height: maxH,
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    // Inner content fills the full dialog width so the profile
-                    // layout has room for its 2-column shell; the cap is the
-                    // dialog's own ceiling minus padding, no separate fixed
-                    // 440px clamp.
-                    child: SizedBox(
-                      width: (maxW - 48).clamp(256.0, 840.0),
-                      height: (maxH - 40).clamp(360.0, 760.0),
-                      child: ProfilePage(
-                        userId: widget.service.selfId,
-                        nickName: _nickname,
-                        statusMessage: _statusController.text,
-                        isEditable: true,
-                        online:
-                            currentStatus, // Pass current status as initial value
-                        connectionStatusStream: widget.connectionStatusStream,
-                        onSave: (nickname, statusMessage) async {
-                          await widget.service.updateSelfProfile(
-                            nickname: nickname,
-                            statusMessage: statusMessage,
-                          );
-                          await Prefs.setNickname(nickname);
-                          await Prefs.setStatusMessage(statusMessage);
-                          // Update local state after save
-                          if (mounted) {
-                            setState(() {
-                              _nickname = nickname;
-                              _nickController.text = nickname;
-                              _statusController.text = statusMessage;
-                            });
-                          }
-                        },
-                        onAvatarChanged: (path) async {
-                          if (path != null && path.isNotEmpty) {
-                            await FileImage(File(path)).evict();
-                          }
-                          // Re-check existence on the new path so the avatar
-                          // existence cache stays accurate.
-                          final exists = path != null &&
-                              path.isNotEmpty &&
-                              await File(path).exists();
-                          if (mounted) {
-                            setState(() {
-                              _avatarPath = path;
-                              _avatarFileExists = exists;
-                              _avatarVersion++;
-                            });
-                          }
-                          if (path != null && path.isNotEmpty) {
-                            await Prefs.setAvatarPath(path);
-                            // Update avatar in service (will send to all friends if changed)
-                            await widget.service.updateAvatar(path);
-                          } else {
-                            // Avatar removed
-                            await Prefs.setAvatarPath(null);
-                            await widget.service.updateAvatar(null);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: AppLocalizations.of(context)?.close ?? 'Close',
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
+  void _openProfile(BuildContext context) {
+    showSelfProfile(
+      context,
+      widget.service,
+      widget.connectionStatusStream,
+      nickName: _nickname,
+      statusMessage: _statusController.text,
+      onProfileSaved: (nickname, statusMessage) async {
+        if (mounted) {
+          setState(() {
+            _nickname = nickname;
+            _nickController.text = nickname;
+            _statusController.text = statusMessage;
+          });
+        }
+      },
+      onAvatarChanged: (path) async {
+        // Re-check existence on the new path so the avatar existence cache
+        // stays accurate.
+        final exists = path != null &&
+            path.isNotEmpty &&
+            await File(path).exists();
+        if (mounted) {
+          setState(() {
+            _avatarPath = path;
+            _avatarFileExists = exists;
+            _avatarVersion++;
+          });
+        }
       },
     );
   }
@@ -278,7 +341,7 @@ class _UserAvatarState extends State<_UserAvatar> {
           child: Tooltip(
             message: _nickname ?? '',
             child: InkWell(
-          onTap: () => _showProfileDialog(context),
+          onTap: () => _openProfile(context),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(

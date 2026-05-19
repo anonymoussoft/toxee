@@ -39,6 +39,7 @@ import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart' as c
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart';
 import 'contact/contact_builder_override.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile.dart';
+import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile_body.dart';
 import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import '../i18n/app_localizations.dart';
@@ -55,6 +56,7 @@ import 'package:tencent_cloud_chat_sdk/models/v2_tim_callback.dart';
 import 'package:tencent_cloud_chat_common/data/conversation/tencent_cloud_chat_conversation_data.dart';
 import 'package:tencent_cloud_chat_common/data/contact/tencent_cloud_chat_contact_data.dart';
 import 'package:tencent_cloud_chat_common/data/group_profile/tencent_cloud_chat_group_profile_data.dart';
+import 'group/group_builder_override.dart';
 import 'group/group_member_list_wrapper.dart';
 import 'package:tencent_cloud_chat_common/eventbus/tencent_cloud_chat_eventbus.dart';
 import 'package:tencent_cloud_chat_sdk/models/v2_tim_group_change_info.dart';
@@ -62,7 +64,6 @@ import 'package:tencent_cloud_chat_sdk/enum/group_member_filter_enum.dart';
 import 'package:tencent_cloud_chat_common/router/tencent_cloud_chat_router.dart';
 import 'package:tencent_cloud_chat_common/router/tencent_cloud_chat_route_names.dart';
 import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_user_profile_options.dart';
-import 'package:tencent_cloud_chat_common/cross_platforms_adapter/tencent_cloud_chat_screen_adapter.dart';
 import 'package:tencent_cloud_chat_sticker/tencent_cloud_chat_sticker.dart';
 import 'package:tencent_cloud_chat_sticker/tencent_cloud_chat_sticker_init_data.dart';
 import 'package:tencent_cloud_chat_text_translate/tencent_cloud_chat_text_translate.dart';
@@ -149,6 +150,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _bag = DisposableBag();
   bool _disposed = false;
   ContactBuilderOverrideHandle? _contactBuilderOverride;
+  GroupProfileBuilderOverrideHandle? _groupBuilderOverride;
   late final HomeSessionController _sessionController;
   // Tracks the last computed `shouldShowMasterDetail` so we only schedule the
   // UIKit `setConfigs(forceDesktopLayout: ...)` post-frame callback when the
@@ -262,9 +264,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                   color: colorTheme.contactAddContactFriendInfoStateButtonBackgroundColor,
                 ),
-                padding: EdgeInsets.symmetric(
-                  vertical: TencentCloudChatScreenAdapter.getHeight(10),
-                  horizontal: TencentCloudChatScreenAdapter.getWidth(16),
+                // Toxee-owned widget — use literal symmetric insets rather
+                // than UIKit's screen adapter so this row doesn't reach into
+                // tencent_cloud_chat_common for sizing.
+                padding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 16,
                 ),
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -1926,7 +1931,12 @@ class _MobileDrawerHeader extends StatefulWidget {
 
 class _MobileDrawerHeaderState extends State<_MobileDrawerHeader> {
   String? _nickname;
+  String? _statusMessage;
   String? _avatarPath;
+  // Cached existence check — refreshed in `_loadProfile` so `build()` doesn't
+  // hit the filesystem on every drawer rebuild (each `StreamBuilder<bool>`
+  // tick from `connectionStatusStream` triggers a rebuild here).
+  bool _avatarFileExists = false;
   int _avatarVersion = 0;
   StreamSubscription<String>? _avatarUpdatedSub;
 
@@ -1958,11 +1968,16 @@ class _MobileDrawerHeaderState extends State<_MobileDrawerHeader> {
 
   Future<void> _loadProfile() async {
     final nick = await Prefs.getNickname();
+    final status = await Prefs.getStatusMessage();
     final avatar = await Prefs.getAvatarPath();
+    final exists =
+        avatar != null && avatar.isNotEmpty && await File(avatar).exists();
     if (mounted) {
       setState(() {
         _nickname = nick;
+        _statusMessage = status;
         _avatarPath = avatar;
+        _avatarFileExists = exists;
         _avatarVersion++;
       });
     }
@@ -1979,86 +1994,129 @@ class _MobileDrawerHeaderState extends State<_MobileDrawerHeader> {
         initialData: widget.service.isConnected,
         builder: (context, snapshot) {
           final isConnected = snapshot.data ?? widget.service.isConnected;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                alignment: Alignment.center,
-                clipBehavior: Clip.none,
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: scheme.primary,
-                    child: _avatarPath != null &&
-                            _avatarPath!.isNotEmpty &&
-                            File(_avatarPath!).existsSync()
-                        ? ClipOval(
-                            child: Image.file(
-                              File(_avatarPath!),
-                              key: ValueKey(
-                                  'mobile-drawer-avatar-${_avatarPath!}-$_avatarVersion'),
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : ClipOval(
-                            child: Image.asset(
-                              'images/default_user_icon.png',
-                              package: 'tencent_cloud_chat_common',
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
+          // Material+InkWell so tapping the header opens the profile. The
+          // outer drawer route is dismissed first via `maybePop` so the
+          // profile page replaces the drawer instead of stacking under it.
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () async {
+                // Close the drawer first so the profile route replaces it
+                // cleanly instead of stacking under the drawer. Await the pop
+                // before reading `context` again — otherwise the push lands
+                // before the pop in the navigator queue and the drawer ends
+                // up on top of the profile page.
+                final navigator = Navigator.of(context);
+                await navigator.maybePop();
+                if (!context.mounted) return;
+                showSelfProfile(
+                  context,
+                  widget.service,
+                  widget.connectionStatusStream,
+                  nickName: _nickname,
+                  statusMessage: _statusMessage,
+                  onProfileSaved: (_, __) async {
+                    if (mounted) {
+                      await _loadProfile();
+                    }
+                  },
+                  onAvatarChanged: (_) async {
+                    if (mounted) {
+                      await _loadProfile();
+                    }
+                  },
+                );
+              },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundColor: scheme.primary,
+                            child: _avatarPath != null &&
+                                    _avatarPath!.isNotEmpty &&
+                                    _avatarFileExists
+                                ? ClipOval(
+                                    child: Image.file(
+                                      File(_avatarPath!),
+                                      key: ValueKey(
+                                          'mobile-drawer-avatar-${_avatarPath!}-$_avatarVersion'),
+                                      width: 56,
+                                      height: 56,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : ClipOval(
+                                    child: Image.asset(
+                                      'images/default_user_icon.png',
+                                      package: 'tencent_cloud_chat_common',
+                                      width: 56,
+                                      height: 56,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                          ),
+                          Positioned(
+                            right: -2,
+                            bottom: -2,
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: isConnected
+                                    ? AppThemeConfig.successColor
+                                    : scheme.onSurfaceVariant,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: scheme.surface,
+                                  width: 2,
+                                ),
+                              ),
                             ),
                           ),
-                  ),
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: isConnected
-                            ? AppThemeConfig.successColor
-                            : scheme.onSurfaceVariant,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: scheme.surface,
-                          width: 2,
-                        ),
+                        ],
                       ),
-                    ),
+                      AppSpacing.verticalMd,
+                      if (_nickname != null && _nickname!.isNotEmpty)
+                        Text(
+                          _nickname!,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      AppSpacing.verticalXs,
+                      Text(
+                        isConnected
+                            ? (AppLocalizations.of(context)?.statusOnline ??
+                                'Online')
+                            : (AppLocalizations.of(context)?.statusOffline ??
+                                'Offline'),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: isConnected
+                              ? AppThemeConfig.successColor
+                              : scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              AppSpacing.verticalMd,
-              if (_nickname != null && _nickname!.isNotEmpty)
-                Text(
-                  _nickname!,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: scheme.onSurface,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              AppSpacing.verticalXs,
-              Text(
-                isConnected
-                    ? (AppLocalizations.of(context)?.statusOnline ?? 'Online')
-                    : (AppLocalizations.of(context)?.statusOffline ?? 'Offline'),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: isConnected
-                      ? AppThemeConfig.successColor
-                      : scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
-            ],
+            ),
           );
         },
       ),
