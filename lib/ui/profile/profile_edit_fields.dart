@@ -3,17 +3,22 @@ import 'package:flutter/material.dart';
 import '../../i18n/app_localizations.dart';
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
+import '../../util/responsive_layout.dart';
 
 /// Calculate text length where Chinese characters count as 1, and
 /// letters/numbers count as 0.5.
 double profileTextLength(String text) {
   double length = 0;
   for (int i = 0; i < text.length; i++) {
-    final char = text[i];
-    if (char.codeUnitAt(0) >= 0x4E00 && char.codeUnitAt(0) <= 0x9FFF) {
+    final code = text.codeUnitAt(i);
+    if ((code >= 0x4E00 && code <= 0x9FFF) ||
+        (code >= 0xAC00 && code <= 0xD7AF) ||
+        (code >= 0x3040 && code <= 0x309F) ||
+        (code >= 0x30A0 && code <= 0x30FF) ||
+        (code >= 0x3400 && code <= 0x4DBF) ||
+        (code >= 0xF900 && code <= 0xFAFF) ||
+        (code >= 0xFF00 && code <= 0xFFEF)) {
       length += 1.0;
-    } else if (RegExp(r'[a-zA-Z0-9]').hasMatch(char)) {
-      length += 0.5;
     } else {
       length += 0.5;
     }
@@ -75,7 +80,6 @@ class ProfileEditFields extends StatelessWidget {
             labelText: nicknameLabel,
             errorText: nickOver ? nicknameTooLong : null,
           ),
-          maxLength: 24,
           onChanged: (_) => onAnyFieldChanged(),
         ),
         AppSpacing.verticalMd,
@@ -88,7 +92,6 @@ class ProfileEditFields extends StatelessWidget {
           ),
           minLines: 1,
           maxLines: 3,
-          maxLength: 48,
           onChanged: (_) => onAnyFieldChanged(),
         ),
         AppSpacing.verticalMd,
@@ -395,7 +398,8 @@ class ProfileChatButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.sizeOf(context).width >= 600;
+    final isWide =
+        MediaQuery.sizeOf(context).width >= ResponsiveLayout.mobileBreakpoint;
     final button = FilledButton.icon(
       icon: const Icon(Icons.chat_bubble_outline, size: 18),
       label: Text(label),

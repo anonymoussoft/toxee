@@ -11,7 +11,6 @@ import '../util/app_spacing.dart';
 import '../util/locale_controller.dart';
 import '../util/logger.dart';
 import '../util/prefs.dart';
-import '../util/responsive_layout.dart';
 import 'profile/profile_avatar_picker.dart';
 import 'profile/profile_edit_fields.dart';
 import 'profile/profile_header.dart';
@@ -69,6 +68,8 @@ class _ProfilePageState extends State<ProfilePage> {
   Locale? _lastLocale;
   String? _savedNickName;
   String? _savedStatusMessage;
+  bool _cardTextLoaded = false;
+  Timer? _qrDebounce;
 
   @override
   void initState() {
@@ -111,14 +112,22 @@ class _ProfilePageState extends State<ProfilePage> {
   void _loadCardText() {
     Prefs.getCardText().then((value) {
       if (!mounted) return;
-      if (value != null && value.isNotEmpty) {
-        _cardTextController.text = value;
-      } else {
-        final appL10n = AppLocalizations.of(context);
-        if (appL10n != null) {
-          _cardTextController.text = appL10n.scanQrCodeToAddContact;
+      // Wrap in setState so `_qrInputs()` (which reads `_cardTextController
+      // .text`) picks up the loaded value on the next frame. Without this,
+      // when prefs resolution wins the race against the first `build`/
+      // `didChangeDependencies`, the QR card is generated with an empty
+      // bottomText and only refreshed on a later unrelated rebuild.
+      setState(() {
+        _cardTextLoaded = true;
+        if (value != null && value.isNotEmpty) {
+          _cardTextController.text = value;
+        } else {
+          final appL10n = AppLocalizations.of(context);
+          if (appL10n != null) {
+            _cardTextController.text = appL10n.scanQrCodeToAddContact;
+          }
         }
-      }
+      });
     });
   }
 
@@ -128,13 +137,21 @@ class _ProfilePageState extends State<ProfilePage> {
     final appL10n = AppLocalizations.of(context);
     if (appL10n != null &&
         widget.isEditable &&
+        !_cardTextLoaded &&
         _cardTextController.text.isEmpty) {
       _cardTextController.text = appL10n.scanQrCodeToAddContact;
     }
+    final currentLocale = Localizations.localeOf(context);
+    if (_lastLocale != null &&
+        _lastLocale!.languageCode != currentLocale.languageCode) {
+      _invalidateQrCard();
+    }
+    _lastLocale = currentLocale;
   }
 
   @override
   void dispose() {
+    _qrDebounce?.cancel();
     _nickController.removeListener(_handleEditableFieldChanged);
     _statusController.removeListener(_handleEditableFieldChanged);
     _cardTextController.removeListener(_handleEditableFieldChanged);
@@ -151,7 +168,12 @@ class _ProfilePageState extends State<ProfilePage> {
     final nickChanged = _nickController.text.trim() != (_savedNickName ?? '');
     final statusChanged =
         _statusController.text.trim() != (_savedStatusMessage ?? '');
-    if (nickChanged || statusChanged) _invalidateQrCard();
+    if (nickChanged || statusChanged) {
+      _qrDebounce?.cancel();
+      _qrDebounce = Timer(const Duration(milliseconds: 400), () {
+        if (mounted) _invalidateQrCard();
+      });
+    }
   }
 
   @override
@@ -319,11 +341,6 @@ class _ProfilePageState extends State<ProfilePage> {
       child: ValueListenableBuilder<Locale>(
         valueListenable: AppLocale.locale,
         builder: (context, locale, _) {
-          if (_lastLocale != null &&
-              _lastLocale!.languageCode != locale.languageCode) {
-            _invalidateQrCard();
-          }
-          _lastLocale = locale;
           return TencentCloudChatThemeWidget(
             build: (context, colorTheme, textStyle) => Scaffold(
               backgroundColor: Colors.transparent,
@@ -454,23 +471,21 @@ class _ProfilePageState extends State<ProfilePage> {
       ],
     ];
 
-    final qrSection = ProfileQrSection(
-      qrFuture: qrFuture,
-      versionKey: '${locale.languageCode}_v$_qrCardVersion',
-      isWide: MediaQuery.sizeOf(context).width >=
-          ResponsiveLayout.mobileBreakpoint,
-      primaryColor: colorTheme.primaryColor,
-      onSave: () => _handleSaveQr(
-        primaryColor: colorTheme.primaryColor,
-        textColor: colorTheme.primaryTextColor,
-        locale: locale,
-      ),
-      onCopy: _copyQrImage,
-    );
-
     return ProfileLayout(
       mainColumnChildren: mainColumnChildren,
-      qrSection: qrSection,
+      qrSectionBuilder: (isWide) => ProfileQrSection(
+        qrFuture: qrFuture,
+        versionKey: '${locale.languageCode}_v$_qrCardVersion',
+        isWide: isWide,
+        primaryColor: colorTheme.primaryColor,
+        onSave: () => _handleSaveQr(
+          primaryColor: colorTheme.primaryColor,
+          textColor: colorTheme.primaryTextColor,
+          locale: locale,
+        ),
+        onCopy: _copyQrImage,
+        enableCopy: !(Platform.isAndroid || Platform.isIOS || Platform.isLinux),
+      ),
       fallbackContentWidth: fallbackContentWidth,
     );
   }

@@ -18,6 +18,7 @@ class ProfileQrSection extends StatelessWidget {
     required this.primaryColor,
     required this.onSave,
     required this.onCopy,
+    this.enableCopy = true,
   });
 
   final Future<String> qrFuture;
@@ -26,6 +27,7 @@ class ProfileQrSection extends StatelessWidget {
   final Color primaryColor;
   final VoidCallback onSave;
   final ValueChanged<String> onCopy;
+  final bool enableCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -53,17 +55,18 @@ class ProfileQrSection extends StatelessWidget {
                   child: const Center(child: CircularProgressIndicator()),
                 );
               }
-              if (!snapshot.hasData || snapshot.hasError) {
-                return SizedBox(
-                  height: qrHeight,
-                  width: qrWidth,
-                  child: Center(
-                    child: Text(
-                      appL10n.failedToLoadQr,
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
+              final failedWidget = SizedBox(
+                height: qrHeight,
+                width: qrWidth,
+                child: Center(
+                  child: Text(
+                    appL10n.failedToLoadQr,
+                    style: TextStyle(color: theme.colorScheme.error),
                   ),
-                );
+                ),
+              );
+              if (!snapshot.hasData || snapshot.hasError) {
+                return failedWidget;
               }
               final qrPath = snapshot.data!;
               final outlinedStyle = OutlinedButton.styleFrom(
@@ -95,6 +98,7 @@ class ProfileQrSection extends StatelessWidget {
                         width: qrWidth,
                         height: qrHeight,
                         fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => failedWidget,
                       ),
                     ),
                   ),
@@ -108,13 +112,15 @@ class ProfileQrSection extends StatelessWidget {
                         label: Text(appL10n.saveImage),
                         onPressed: onSave,
                       ),
-                      AppSpacing.horizontalSm,
-                      OutlinedButton.icon(
-                        style: outlinedStyle,
-                        icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: Text(appL10n.copy),
-                        onPressed: () => onCopy(qrPath),
-                      ),
+                      if (enableCopy) ...[
+                        AppSpacing.horizontalSm,
+                        OutlinedButton.icon(
+                          style: outlinedStyle,
+                          icon: const Icon(Icons.copy_rounded, size: 16),
+                          label: Text(appL10n.copy),
+                          onPressed: () => onCopy(qrPath),
+                        ),
+                      ],
                     ],
                   ),
                 ],

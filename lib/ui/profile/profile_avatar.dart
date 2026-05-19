@@ -45,6 +45,15 @@ class ProfileAvatar extends StatelessWidget {
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final cacheDim = (size * dpr).ceil();
 
+    final fallback = Text(
+      displayInitial,
+      style: TextStyle(
+        fontSize: size * 0.36,
+        color: onPrimary,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.5,
+      ),
+    );
     final Widget avatar = Container(
       width: size,
       height: size,
@@ -64,17 +73,10 @@ class ProfileAvatar extends StatelessWidget {
                 fit: BoxFit.cover,
                 cacheWidth: cacheDim,
                 cacheHeight: cacheDim,
+                errorBuilder: (_, __, ___) => fallback,
               ),
             )
-          : Text(
-              displayInitial,
-              style: TextStyle(
-                fontSize: size * 0.36,
-                color: onPrimary,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.5,
-              ),
-            ),
+          : fallback,
     );
 
     final stackChildren = <Widget>[

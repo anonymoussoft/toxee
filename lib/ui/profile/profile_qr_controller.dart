@@ -60,10 +60,7 @@ class QrCardRenderInputs {
       );
 
   static String _colorKey(Color c) {
-    // Use legacy 0..255 ARGB form for the cache key so existing QR caches
-    // stay valid across hot-reloads. `c.value` gives the 32-bit ARGB int.
-    // ignore: deprecated_member_use
-    return c.value.toRadixString(16);
+    return c.toARGB32().toRadixString(16);
   }
 }
 
