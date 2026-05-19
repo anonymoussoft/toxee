@@ -1595,7 +1595,7 @@ packages:
       path: "third_party/tencent_cloud_chat_sdk"
       relative: true
     source: path
-    version: "8.7.7201"
+    version: "8.9.7540+3"
   tencent_cloud_chat_sound_to_text:
     dependency: "direct main"
     description:
