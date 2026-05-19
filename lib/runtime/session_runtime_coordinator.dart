@@ -1,8 +1,5 @@
 import 'dart:async';
 
-import 'package:tencent_cloud_chat_sdk/enum/V2TimAdvancedMsgListener.dart';
-import 'package:tencent_cloud_chat_sdk/models/v2_tim_message.dart';
-import 'package:tencent_cloud_chat_sdk/native_im/adapter/tim_message_manager.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_method_channel.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
@@ -133,71 +130,49 @@ class SessionRuntimeCoordinator {
     }
   }
 
-  /// Installs the binary-replacement history hook against the current
-  /// session's persistence + selfId. Idempotent within a session via
-  /// [_hookInstalled]; reset by [disposeRuntime] so a fresh
-  /// [ensureInitialized] re-installs against the new account.
+  /// Installs the binary-replacement history hook as a standalone, independent
+  /// V2TimAdvancedMsgListener that persists every received/modified message
+  /// exactly once. This listener does NOT wrap or replace any UIKit listener,
+  /// so every other registered listener continues to receive callbacks
+  /// unmolested. (Pre-H1 the coordinator wrapped `currentListeners.first` — a
+  /// race-prone path that silenced any listener registered before the hook
+  /// installed and silently let later listeners persist nothing.)
   ///
-  /// If selfId is not yet known (e.g. invoked before login completes), we
-  /// arm a one-shot listener on [FfiChatService.connectionStatusStream] and
-  /// install when the first connected event with a non-empty selfId arrives.
+  /// M6: installation happens immediately, even if `selfId` is still empty,
+  /// so no binary-replacement event can arrive before persistence coverage is
+  /// in place. When selfId becomes known via the connection event, we call
+  /// [BinaryReplacementHistoryHook.updateSelfId] to plug it in. Idempotent
+  /// within a session via [_hookInstalled]; reset by [disposeRuntime].
   void _installBinaryReplacementHistoryHook() {
     if (_hookInstalled) return;
     try {
+      // Always install immediately — passes a placeholder if selfId is not
+      // yet known. The saveMessage path guards against an empty selfId
+      // already (no isSelf can be resolved), so worst case is a single early
+      // message gets dropped instead of mis-attributed.
       final selfId = service.selfId;
+      BinaryReplacementHistoryHook.installStandalone(
+          service.messageHistoryPersistence, selfId);
+      _hookInstalled = true;
+      AppLogger.debug(
+          '[SessionRuntimeCoordinator] BinaryReplacementHistoryHook installed (standalone, selfId=${selfId.isEmpty ? "<deferred>" : "<set>"})');
+
       if (selfId.isEmpty) {
-        AppLogger.debug(
-            '[SessionRuntimeCoordinator] selfId not available yet, deferring hook install');
+        // Plug in the real selfId as soon as the first connected event with
+        // a non-empty selfId arrives. We don't re-install the listener.
         _pendingHookSelfIdSub?.cancel();
         _pendingHookSelfIdSub = service.connectionStatusStream
             .where((connected) => connected && service.selfId.isNotEmpty)
             .take(1)
             .listen((_) {
-          _setupBinaryReplacementHistoryHook(service.selfId);
+          BinaryReplacementHistoryHook.updateSelfId(service.selfId);
+          AppLogger.debug(
+              '[SessionRuntimeCoordinator] BinaryReplacementHistoryHook selfId updated');
         });
-        return;
       }
-      _setupBinaryReplacementHistoryHook(selfId);
     } catch (e, st) {
       AppLogger.logError(
           '[SessionRuntimeCoordinator] Error installing history hook: $e',
-          e,
-          st);
-    }
-  }
-
-  void _setupBinaryReplacementHistoryHook(String selfId) {
-    if (_hookInstalled) return;
-    try {
-      BinaryReplacementHistoryHook.initialize(
-          service.messageHistoryPersistence, selfId);
-
-      final currentListeners =
-          TIMMessageManager.instance.v2TimAdvancedMsgListenerList;
-      if (currentListeners.isNotEmpty) {
-        final originalListener = currentListeners.first;
-        final wrappedListener =
-            BinaryReplacementHistoryHook.wrapListener(originalListener);
-        TIMMessageManager.instance
-            .removeAdvancedMsgListener(listener: originalListener);
-        TIMMessageManager.instance.addAdvancedMsgListener(wrappedListener);
-        _hookInstalled = true;
-        AppLogger.debug(
-            '[SessionRuntimeCoordinator] BinaryReplacementHistoryHook installed (wrapped existing listener)');
-      } else {
-        final listener = V2TimAdvancedMsgListener(
-          onRecvNewMessage: (V2TimMessage message) {
-            BinaryReplacementHistoryHook.saveMessage(message);
-          },
-        );
-        TIMMessageManager.instance.addAdvancedMsgListener(listener);
-        _hookInstalled = true;
-        AppLogger.debug(
-            '[SessionRuntimeCoordinator] BinaryReplacementHistoryHook installed (new listener)');
-      }
-    } catch (e, st) {
-      AppLogger.logError(
-          '[SessionRuntimeCoordinator] Error setting up history hook: $e',
           e,
           st);
     }

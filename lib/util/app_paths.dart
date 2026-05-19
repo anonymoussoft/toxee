@@ -56,6 +56,15 @@ abstract final class AppPaths {
   }
 
   /// Directory for Tox profile files: `<appSupport>/tim2tox`.
+  ///
+  /// iOS file-protection note (H8 part 2, 2026-05-19 persistence review):
+  /// the tox profile contains the user's long-lived private key. The only
+  /// way to set `NSFileProtectionComplete` / `CompleteUnlessOpen` on it
+  /// without a custom MethodChannel is the platform default — under
+  /// Application Support that is `CompleteUntilFirstUserAuthentication`,
+  /// which is acceptable for first-pass. Promoting the class to
+  /// `.completeUnlessOpen` is deferred until we add a `setFileProtection`
+  /// MethodChannel; see TODO inside `markExcludedFromBackup` below.
   static Future<Directory> get toxProfileDir async {
     final base = await applicationSupportPath;
     return Directory(p.join(base, 'tim2tox'));
@@ -81,7 +90,10 @@ abstract final class AppPaths {
 
   /// Persistent root directory for multi-account tox profiles (outside app dir when possible).
   /// Uses [Prefs.getProfileStorageRoot] if set; otherwise platform default:
-  /// macOS: ~/Library/Application Support/toxee/profiles
+  /// macOS: `<getApplicationSupportDirectory()>/profiles` (path_provider — honours
+  ///   the App Sandbox container when sandboxed, falls back to
+  ///   `~/Library/Application Support/<bundle>` otherwise; H10 from the
+  ///   2026-05-19 persistence review)
   /// Linux: $XDG_DATA_HOME/toxee/profiles or ~/.local/share/toxee/profiles (XDG Base Dir spec)
   /// Windows: %APPDATA%/toxee/profiles
   /// Fallback: app Application Support when custom root not set.
@@ -89,14 +101,19 @@ abstract final class AppPaths {
   /// On Linux, a one-time best-effort migration from the legacy
   /// `~/.config/toxee/profiles` location (used pre-XDG-compliance) is
   /// attempted on first call when the new location is empty.
+  ///
+  /// On macOS, a one-time best-effort migration from the legacy hardcoded
+  /// `~/Library/Application Support/toxee/profiles` location (used before
+  /// path_provider adoption) is attempted on first call when the new
+  /// location is empty.
   static Future<String> getProfileStorageRoot() async {
     final custom = await Prefs.getProfileStorageRoot();
     if (custom != null && custom.isNotEmpty) return custom;
     if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'];
-      if (home != null && home.isNotEmpty) {
-        return p.join(home, 'Library', 'Application Support', 'toxee', 'profiles');
-      }
+      final base = await applicationSupportPath;
+      final root = p.join(base, 'profiles');
+      await _maybeMigrateLegacyMacOsProfileRoot(root);
+      return root;
     }
     if (Platform.isLinux) {
       final dataHome = Platform.environment['XDG_DATA_HOME'];
@@ -168,6 +185,71 @@ abstract final class AppPaths {
     }
   }
 
+  /// One-shot migration: when path_provider-derived macOS profile root is
+  /// empty (or missing) and the legacy hardcoded
+  /// `~/Library/Application Support/toxee/profiles` location exists with
+  /// content, move the entries into the new location. Idempotent — skips
+  /// when the new root already has any entries.
+  ///
+  /// Existed because pre-H10 we built `$HOME/Library/Application Support/toxee/profiles`
+  /// by hand; with path_provider the bundle-id-suffixed Application Support
+  /// directory is used instead, so an in-place rename of the legacy directory
+  /// would not be visible to the new resolver.
+  static Future<void> _maybeMigrateLegacyMacOsProfileRoot(String newRoot) async {
+    try {
+      final home = Platform.environment['HOME'];
+      if (home == null || home.isEmpty) return;
+      final legacy =
+          Directory(p.join(home, 'Library', 'Application Support', 'toxee', 'profiles'));
+      // If path_provider already lands on the legacy path (e.g. unsandboxed
+      // build whose Application Support resolves to the same location), do
+      // not migrate — there is nothing to move.
+      if (p.equals(legacy.path, newRoot)) return;
+      if (!await legacy.exists()) return;
+      final newDir = Directory(newRoot);
+      if (await newDir.exists()) {
+        final entries = await newDir.list().take(1).toList();
+        if (entries.isNotEmpty) return; // already populated
+      }
+      AppLogger.warn(
+          '[AppPaths] Migrating legacy macOS profile root '
+          '${legacy.path} -> $newRoot (H10 path_provider adoption). '
+          'This is a one-time operation.');
+      await Directory(p.dirname(newRoot)).create(recursive: true);
+      if (await newDir.exists()) {
+        await newDir.delete(); // empty placeholder
+      }
+      try {
+        await legacy.rename(newRoot);
+      } on FileSystemException catch (e) {
+        // Cross-filesystem rename can fail; fall back to per-entry copy.
+        AppLogger.warn(
+            '[AppPaths] macOS profile rename() failed ($e); copying entries '
+            'individually.');
+        await newDir.create(recursive: true);
+        await for (final entry in legacy.list()) {
+          final dest = p.join(newRoot, p.basename(entry.path));
+          try {
+            await entry.rename(dest);
+          } on FileSystemException {
+            // Last-resort copy for individual entries across filesystems.
+            if (entry is File) {
+              await entry.copy(dest);
+            } else if (entry is Directory) {
+              AppLogger.warn(
+                  '[AppPaths] Cannot migrate directory ${entry.path} '
+                  'across filesystems automatically. Manual fix: '
+                  '`mv ${entry.path} $dest`');
+            }
+          }
+        }
+      }
+    } catch (e, st) {
+      AppLogger.logError(
+          '[AppPaths] macOS profile migration failed (non-fatal)', e, st);
+    }
+  }
+
   /// Short directory name for one account: p_<first 16 hex chars of toxId>.
   static const int _profileDirPrefixLen = 16;
   static const String _profileDirPrefix = 'p_';
@@ -233,6 +315,15 @@ abstract final class AppPaths {
   }
 
   /// Chat history directory for the given account: `<accountDataRoot>/chat_history`.
+  ///
+  /// iOS file-protection note (H8 part 2, 2026-05-19 persistence review):
+  /// chat history is the user's irreplaceable data and must NOT be marked
+  /// `isExcludedFromBackup` — that would defeat iCloud / iTunes restore.
+  /// File-protection class is currently whatever Application Support's
+  /// default is (`CompleteUntilFirstUserAuthentication`); promoting it to
+  /// `.completeUnlessOpen` or `.complete` is deferred until we add a
+  /// dedicated `setFileProtection` MethodChannel — see TODO in
+  /// `markExcludedFromBackup` below.
   static Future<String> getAccountChatHistoryPath(String toxId) async {
     final root = await getAccountDataRoot(toxId);
     return p.join(root, 'chat_history');
@@ -442,6 +533,15 @@ abstract final class AppPaths {
   /// is idempotent. Errors are logged at debug level and swallowed —
   /// failing to set this attribute should never prevent the app from
   /// running.
+  ///
+  /// TODO(persistence): file-protection class promotion is deferred. We
+  /// currently rely on the Application Support default
+  /// (`CompleteUntilFirstUserAuthentication`). Adding a sibling
+  /// `setFileProtection(path, class)` MethodChannel on top of the existing
+  /// `toxee/ios_backup` channel would let us promote the tox profile and
+  /// chat history directories to `.completeUnlessOpen` (so they remain
+  /// readable while the app is backgrounded but locked after device reboot
+  /// until first unlock). H8 part 2 in the 2026-05-19 persistence review.
   static Future<void> markExcludedFromBackup(String path) async {
     if (!Platform.isIOS) return;
     try {

@@ -45,6 +45,18 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!--
+	     M13 (2026-05-19 review): NSAllowsArbitraryLoads is required by
+	     transitive dependencies that use NSURLSession with arbitrary HTTP
+	     (SDWebImage for HTTP avatar/image URLs, GCDWebServer / HLS reverse
+	     proxy for in-app media). The Tox protocol itself uses BSD sockets
+	     and would not need ATS exceptions; we retain this only for those
+	     SDKs. KNOWN APP STORE SUBMISSION RISK: Apple review may require a
+	     justification or reject blanket `NSAllowsArbitraryLoads`. Before
+	     submission, replace the blanket allow with targeted
+	     <NSExceptionDomains> entries for the actual HTTP hosts you serve
+	     to those SDKs.
+	-->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

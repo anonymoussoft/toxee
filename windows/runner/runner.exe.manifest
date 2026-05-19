@@ -3,6 +3,12 @@
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
       <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <!-- M12 (2026-05-19 review): opt into long-path support. Per-account
+           chat-history JSON paths (`%APPDATA%/toxee/account_data/<prefix>/
+           chat_history/<normalized-id>.json`) can exceed the MAX_PATH 260
+           limit on domain accounts with long roaming-profile paths. The
+           registry key LongPathsEnabled is also required at machine scope. -->
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
     </windowsSettings>
   </application>
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
