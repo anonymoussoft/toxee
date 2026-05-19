@@ -82,15 +82,41 @@ void main(List<String> args) async {
     stderr.writeln('bootstrap_deps: lock file must have version and archive_url');
     exit(1);
   }
+  if (expectedSha256 == null || expectedSha256.isEmpty) {
+    stderr.writeln('bootstrap_deps: lock file `${lockFile.path}` missing required `sha256` field. '
+        'Compute via `shasum -a 256 <archive>` and commit.');
+    exit(1);
+  }
 
   // 2) Vendor SDK
   final sdkDir = Directory('$repoRoot/third_party/tencent_cloud_chat_sdk');
   final stateFile = File('$repoRoot/tool/vendor_state.json');
   final currentState = _readVendorState(stateFile);
+
+  // Compute current patches digest up front: if patches changed since last apply,
+  // we must re-vendor (patches mutate the SDK in-place — no clean "un-apply").
+  final patchesDir = Directory('${tim2toxDir.path}/patches/tencent_cloud_chat_sdk/$version');
+  final seriesFile = File('${patchesDir.path}/series');
+  List<String> patchNames = const [];
+  String? patchesSha256;
+  if (tim2toxDir.existsSync() && seriesFile.existsSync()) {
+    patchNames = seriesFile.readAsLinesSync()
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && !s.startsWith('#'))
+        .toList();
+    patchesSha256 = _computePatchesSha256(seriesFile, patchNames, patchesDir);
+  }
+  final storedPatchesSha256 = currentState['patches_sha256'];
+  final patchesChanged = patchesSha256 != null &&
+      storedPatchesSha256 != null &&
+      storedPatchesSha256.isNotEmpty &&
+      storedPatchesSha256 != patchesSha256;
+
   final needVendor = force ||
       !sdkDir.existsSync() ||
       currentState['version'] != version ||
-      (expectedSha256 != null && expectedSha256.isNotEmpty && currentState['sha256'] != expectedSha256);
+      currentState['sha256'] != expectedSha256 ||
+      patchesChanged;
 
   if (needVendor) {
     if (sdkDir.existsSync()) sdkDir.deleteSync(recursive: true);
@@ -100,15 +126,10 @@ void main(List<String> args) async {
       final archivePath = '${tempDir.path}/sdk.tar.gz';
       stdout.writeln('Downloading tencent_cloud_chat_sdk $version...');
       await _download(archiveUrl, archivePath);
-      String? actualSha256;
-      if (expectedSha256 != null && expectedSha256.isNotEmpty) {
-        actualSha256 = await _sha256File(archivePath);
-        if (actualSha256 != expectedSha256) {
-          stderr.writeln('bootstrap_deps: SHA-256 mismatch (got $actualSha256, expected $expectedSha256)');
-          exit(1);
-        }
-      } else {
-        actualSha256 = await _sha256File(archivePath);
+      final actualSha256 = await _sha256File(archivePath);
+      if (actualSha256 != expectedSha256) {
+        stderr.writeln('bootstrap_deps: SHA-256 mismatch (got $actualSha256, expected $expectedSha256)');
+        exit(1);
       }
       await _extractTarGz(archivePath, tempDir.path);
       // Pub tarball extracts to a single top-level dir (e.g. package/ or tencent_cloud_chat_sdk-8.7.7201/)
@@ -153,14 +174,19 @@ void main(List<String> args) async {
   // 3) Apply SDK patch series via tim2tox tool (patches live in tim2tox repo: patches/tencent_cloud_chat_sdk/<version>/)
   final stateMap = stateFile.existsSync() ? (jsonDecode(stateFile.readAsStringSync()) as Map<String, dynamic>) : <String, dynamic>{};
   const appliedKey = 'patches_applied';
-  final seriesFile = File('${tim2toxDir.path}/patches/tencent_cloud_chat_sdk/$version/series');
-  final bool shouldApplySdkPatches = stateMap[appliedKey] != true &&
+  const patchesShaKey = 'patches_sha256';
+  // If we re-vendored, patches must be re-applied regardless of stored flag.
+  if (needVendor) {
+    stateMap.remove(appliedKey);
+    stateMap.remove(patchesShaKey);
+  }
+  final bool shouldApplySdkPatches = (stateMap[appliedKey] != true ||
+          (patchesSha256 != null && stateMap[patchesShaKey] != patchesSha256)) &&
       tim2toxDir.existsSync() &&
       seriesFile.existsSync();
   if (shouldApplySdkPatches) {
-    final lines = seriesFile.readAsLinesSync().map((s) => s.trim()).where((s) => s.isNotEmpty && !s.startsWith('#')).toList();
-    if (lines.isNotEmpty) {
-      stdout.writeln('Applying tencent_cloud_chat_sdk patches from tim2tox (${lines.length} patch(es))...');
+    if (patchNames.isNotEmpty) {
+      stdout.writeln('Applying tencent_cloud_chat_sdk patches from tim2tox (${patchNames.length} patch(es))...');
       // Run tim2tox's apply_sdk_patches.dart directly (no "dart run") so it does not depend on package_config
       final scriptPath = File('${tim2toxDir.path}/tool/apply_sdk_patches.dart');
       if (!scriptPath.existsSync()) {
@@ -173,6 +199,9 @@ void main(List<String> args) async {
         exit(patchCode);
       }
       stateMap[appliedKey] = true;
+      if (patchesSha256 != null) {
+        stateMap[patchesShaKey] = patchesSha256;
+      }
       stateFile.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(stateMap));
     }
   }
@@ -206,12 +235,69 @@ void main(List<String> args) async {
 
 int _offlineCheck(String repoRoot) {
   final lockFile = File('$repoRoot/third_party/tim2tox/tool/tencent_cloud_chat_sdk.lock.json');
-  if (!lockFile.existsSync()) return 1;
+  if (!lockFile.existsSync()) {
+    stderr.writeln('bootstrap_deps: offline-check: lock file missing');
+    return 1;
+  }
   final sdkDir = Directory('$repoRoot/third_party/tencent_cloud_chat_sdk');
   final tim2tox = Directory('$repoRoot/third_party/tim2tox');
   final uikit = Directory('$repoRoot/third_party/chat-uikit-flutter');
-  if (!tim2tox.existsSync() || !uikit.existsSync()) return 1;
-  if (!sdkDir.existsSync()) return 1;
+  if (!tim2tox.existsSync() || !uikit.existsSync()) {
+    stderr.writeln('bootstrap_deps: offline-check: submodule directory missing');
+    return 1;
+  }
+  if (!sdkDir.existsSync()) {
+    stderr.writeln('bootstrap_deps: offline-check: third_party/tencent_cloud_chat_sdk missing');
+    return 1;
+  }
+  // Verify vendor_state.json matches the lock's version + sha256.
+  final stateFile = File('$repoRoot/tool/vendor_state.json');
+  if (!stateFile.existsSync()) {
+    stderr.writeln('bootstrap_deps: offline-check: tool/vendor_state.json missing');
+    return 1;
+  }
+  Map<String, dynamic> lock;
+  Map<String, dynamic> state;
+  try {
+    lock = jsonDecode(lockFile.readAsStringSync()) as Map<String, dynamic>;
+    state = jsonDecode(stateFile.readAsStringSync()) as Map<String, dynamic>;
+  } catch (e) {
+    stderr.writeln('bootstrap_deps: offline-check: failed to parse lock/state json: $e');
+    return 1;
+  }
+  final lockVersion = lock['version']?.toString() ?? '';
+  final lockSha = lock['sha256']?.toString() ?? '';
+  if (lockVersion.isEmpty || lockSha.isEmpty) {
+    stderr.writeln('bootstrap_deps: offline-check: lock file missing version or sha256');
+    return 1;
+  }
+  if (state['version']?.toString() != lockVersion) {
+    stderr.writeln('bootstrap_deps: offline-check: vendor_state version mismatch '
+        '(state=${state['version']}, lock=$lockVersion)');
+    return 1;
+  }
+  if (state['sha256']?.toString() != lockSha) {
+    stderr.writeln('bootstrap_deps: offline-check: vendor_state sha256 does not match lock');
+    return 1;
+  }
+  // If a patches_sha256 is stored, verify it matches the current patches series content.
+  final storedPatchesSha = state['patches_sha256']?.toString() ?? '';
+  if (storedPatchesSha.isNotEmpty) {
+    final patchesDir = Directory('${tim2tox.path}/patches/tencent_cloud_chat_sdk/$lockVersion');
+    final seriesFile = File('${patchesDir.path}/series');
+    if (seriesFile.existsSync()) {
+      final names = seriesFile.readAsLinesSync()
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty && !s.startsWith('#'))
+          .toList();
+      final computed = _computePatchesSha256(seriesFile, names, patchesDir);
+      if (computed != storedPatchesSha) {
+        stderr.writeln('bootstrap_deps: offline-check: patches_sha256 in vendor_state does not match '
+            'current patches content (re-run `dart tool/bootstrap_deps.dart`)');
+        return 1;
+      }
+    }
+  }
   return 0;
 }
 
@@ -222,6 +308,7 @@ Map<String, String> _readVendorState(File f) {
     return {
       'version': m['version']?.toString() ?? '',
       'sha256': m['sha256']?.toString() ?? '',
+      'patches_sha256': m['patches_sha256']?.toString() ?? '',
     };
   } catch (_) {
     return {};
@@ -299,6 +386,60 @@ Future<String> _sha256File(String path) async {
   }
 
   final r = await Process.run('shasum', ['-a', '256', path], runInShell: false);
+  if (r.exitCode != 0) {
+    throw Exception('sha256 tool failed: ${r.stderr}');
+  }
+  return (r.stdout as String).split(' ').first.trim();
+}
+
+String _computePatchesSha256(File seriesFile, List<String> patchNames, Directory patchesDir) {
+  final tempFile = File('${Directory.systemTemp.createTempSync('toxee_patches_').path}/concat.bin');
+  try {
+    final sink = tempFile.openSync(mode: FileMode.write);
+    try {
+      sink.writeFromSync(seriesFile.readAsBytesSync());
+      for (final name in patchNames) {
+        final f = File('${patchesDir.path}/$name');
+        if (f.existsSync()) {
+          sink.writeFromSync(f.readAsBytesSync());
+        }
+      }
+    } finally {
+      sink.closeSync();
+    }
+    return _sha256FileSync(tempFile.path);
+  } finally {
+    try {
+      tempFile.parent.deleteSync(recursive: true);
+    } catch (_) {}
+  }
+}
+
+String _sha256FileSync(String path) {
+  if (Platform.isWindows) {
+    final r = Process.runSync('certutil', ['-hashfile', path, 'SHA256'], runInShell: false);
+    if (r.exitCode != 0) {
+      throw Exception('certutil failed: ${r.stderr}');
+    }
+    final lines = (r.stdout as String)
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => RegExp(r'^[A-Fa-f0-9 ]+$').hasMatch(line) && line.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) {
+      throw Exception('certutil output did not contain a SHA-256 hash');
+    }
+    return lines.first.replaceAll(' ', '').toLowerCase();
+  }
+  try {
+    final r = Process.runSync('sha256sum', [path], runInShell: false);
+    if (r.exitCode == 0) {
+      return (r.stdout as String).split(' ').first.trim();
+    }
+  } on ProcessException {
+    // Fall through to shasum on platforms like macOS where sha256sum is absent.
+  }
+  final r = Process.runSync('shasum', ['-a', '256', path], runInShell: false);
   if (r.exitCode != 0) {
     throw Exception('sha256 tool failed: ${r.stderr}');
   }

@@ -29,17 +29,51 @@ fi
 
 mkdir -p "$PATCHES_DIR"
 cd "$SDK_DIR"
-# Generate patch from working tree (and staged) vs HEAD. If not a git repo, we could use diff of dir.
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  git diff HEAD -- . > "$PATCHES_DIR/0001-local.patch" || true
-  if [ ! -s "$PATCHES_DIR/0001-local.patch" ]; then
-    rm -f "$PATCHES_DIR/0001-local.patch"
-    echo "No local changes in SDK dir; no patch written."
-    exit 0
-  fi
-else
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "SDK dir is not a git repo; cannot generate patch. Copy patches manually into $PATCHES_DIR" >&2
   exit 1
 fi
-echo "0001-local.patch" > "$PATCHES_DIR/series"
-echo "Wrote $PATCHES_DIR/0001-local.patch and series."
+
+SERIES_FILE="$PATCHES_DIR/series"
+if [ ! -f "$SERIES_FILE" ]; then
+  echo "No existing series file at $PATCHES_DIR/series. Add at least one patch filename to series before refresh." >&2
+  exit 1
+fi
+
+# Read existing series, filtering blanks and comment lines.
+SERIES_ENTRIES=()
+while IFS= read -r line || [ -n "$line" ]; do
+  trimmed="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  if [ -z "$trimmed" ]; then
+    continue
+  fi
+  case "$trimmed" in
+    \#*) continue ;;
+  esac
+  SERIES_ENTRIES+=("$trimmed")
+done < "$SERIES_FILE"
+
+if [ "${#SERIES_ENTRIES[@]}" -eq 0 ]; then
+  echo "No existing series file at $PATCHES_DIR/series. Add at least one patch filename to series before refresh." >&2
+  exit 1
+fi
+
+if [ "${#SERIES_ENTRIES[@]}" -gt 1 ]; then
+  echo "refresh_sdk_patch.sh does not yet support regenerating a multi-patch series. Use 'git format-patch baseline..HEAD -o $PATCHES_DIR' manually after committing each logical change." >&2
+  exit 1
+fi
+
+PATCH_NAME="${SERIES_ENTRIES[0]}"
+# Prefer the 'baseline' ref planted by apply_sdk_patches.dart; fall back to HEAD.
+if git rev-parse --verify baseline >/dev/null 2>&1; then
+  DIFF_BASE="baseline"
+else
+  DIFF_BASE="HEAD"
+fi
+git diff "$DIFF_BASE" -- . > "$PATCHES_DIR/$PATCH_NAME" || true
+if [ ! -s "$PATCHES_DIR/$PATCH_NAME" ]; then
+  rm -f "$PATCHES_DIR/$PATCH_NAME"
+  echo "No local changes in SDK dir; no patch written."
+  exit 0
+fi
+echo "Wrote $PATCHES_DIR/$PATCH_NAME (diff base: $DIFF_BASE)."

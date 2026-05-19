@@ -1,0 +1,39 @@
+name: Bootstrap Fresh
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  bootstrap-fresh:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+
+      - name: Bootstrap dependencies (force re-vendor)
+        run: dart run tool/bootstrap_deps.dart --force
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Flutter analyze
+        run: flutter analyze lib tool --no-fatal-warnings --no-fatal-infos
+
+      - name: Offline check round-trip
+        run: dart run tool/bootstrap_deps.dart --offline-check-only
