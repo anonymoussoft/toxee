@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tim2tox_dart/interfaces/extended_preferences_service.dart';
 import 'package:tim2tox_dart/ffi/tim2tox_ffi.dart';
 
+import '../util/prefs/scoped_key.dart';
+
 /// Adapter that implements ExtendedPreferencesService using SharedPreferences.
 ///
 /// When [accountPrefix] is provided (recommended), keys are scoped as `${key}_${accountPrefix}`
@@ -52,12 +54,14 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
   }
 
   /// Prefix key with account prefix (matching Prefs._scopedKey format) or instance_id fallback.
-  /// Account-scoped: `${key}_${accountPrefix}` — matches UI Prefs pattern
+  /// Account-scoped: `${key}_${accountPrefix}` — matches UI Prefs pattern, formatted
+  ///   via the shared [scopedPrefsKey] helper (X2 in
+  ///   `local-storage-review-2026-05-18.md`).
   /// Instance-scoped (legacy): `instance_${id}_${key}` — only when no accountPrefix
   String _prefixKey(String key) {
     // Prefer account-scoped keys (consistent with UI Prefs)
     if (_accountPrefix != null && _accountPrefix!.isNotEmpty) {
-      return '${key}_$_accountPrefix';
+      return scopedPrefsKey(key, _accountPrefix);
     }
     // Legacy: instance-scoped keys
     final instanceId = _effectiveInstanceId;

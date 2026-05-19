@@ -12,6 +12,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'logger.dart';
 import 'tox_utils.dart';
 import '../models/account_summary.dart';
+import 'prefs/scoped_key.dart';
 
 part 'prefs/window_prefs.dart';
 part 'prefs/security_prefs.dart';
@@ -168,10 +169,15 @@ class Prefs {
   }
 
   /// Storage key for pinned/conversation list scoped by account (avoids loading other account's data).
+  ///
+  /// Truncates the full toxId to its 16-char prefix and delegates the actual
+  /// `'${key}_${prefix}'` formatting to the shared [scopedPrefsKey] helper —
+  /// historically this and [SharedPreferencesAdapter._prefixKey] had two
+  /// independent implementations (X2 in `local-storage-review-2026-05-18.md`).
   static String _scopedKey(String baseKey, String? toxId) {
-    if (toxId == null || toxId.isEmpty) return baseKey;
+    if (toxId == null || toxId.isEmpty) return scopedPrefsKey(baseKey, null);
     final prefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
-    return '${baseKey}_$prefix';
+    return scopedPrefsKey(baseKey, prefix);
   }
 
   static Future<String?> getCurrentAccountToxId() async {
