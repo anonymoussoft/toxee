@@ -311,7 +311,16 @@ extension _HomePageBootstrap on _HomePageState {
     });
     _bag.add(() => _groupProfileDataSub?.cancel());
 
-    conv_pkg.TencentCloudChatConversationManager.config.setConfigs(useDesktopMode: true);
+    // Initial useDesktopMode is derived from the current breakpoint so phones
+    // don't briefly render the two-column layout before the post-frame
+    // `forceDesktopLayout` reconciliation in `build()` flips it back.
+    // TODO(responsive): sync with breakpoint changes — `build()` already calls
+    // `setConfigs(forceDesktopLayout: ...)` on threshold crossings; this only
+    // sets the boot-time default.
+    final bootUseDesktopMode =
+        ResponsiveLayout.shouldShowMasterDetail(context);
+    conv_pkg.TencentCloudChatConversationManager.config
+        .setConfigs(useDesktopMode: bootUseDesktopMode);
 
     msg_pkg.TencentCloudChatMessageManager.config.setConfigs(
       showSelfAvatar: createDefaultValue(true),
@@ -805,6 +814,12 @@ extension _HomePageBootstrap on _HomePageState {
       groupId = payload.substring('group_'.length);
     } else if (payload.startsWith('c2c_')) {
       peerId = payload.substring('c2c_'.length);
+    } else if (payload.startsWith('missed_call:')) {
+      // Tox calls are 1:1 only, so a missed_call payload always maps to a c2c
+      // conversation with the caller. There's no dedicated call-records view —
+      // call records are persisted as messages in that c2c chat, so opening
+      // the conversation lands the user on the missed-call entry.
+      peerId = payload.substring('missed_call:'.length);
     } else {
       AppLogger.warn(
           '[HomePage] Notification payload has unknown prefix: $payload');

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -88,6 +87,7 @@ import 'home/home_widgets.dart';
 import '../util/irc_app_manager.dart';
 import 'applications/irc_channel_dialog.dart';
 import '../util/responsive_layout.dart';
+import '../call/permission_helper.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation_tatal_unread_count.dart';
 import 'widgets/app_page_route.dart';
 import 'widgets/app_snackbar.dart';
@@ -95,7 +95,6 @@ import 'package:window_manager/window_manager.dart';
 import '../notifications/notification_message_listener.dart';
 import '../notifications/notification_service.dart';
 
-part 'home_page_persistence.dart';
 part 'home_page_plugins.dart';
 part 'home_page_bootstrap.dart';
 
@@ -173,6 +172,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // UIKit `setConfigs(forceDesktopLayout: ...)` post-frame callback when the
   // breakpoint actually crosses, instead of on every rebuild.
   bool? _lastShouldShowMasterDetail;
+  // True while the contact-profile route is on screen. Drives `_onTapContactItem`
+  // to decide whether a contact tap means "open profile" (false) vs "Send
+  // Message from inside profile" (true). Replaces the old `Navigator.canPop()`
+  // heuristic which mis-fired whenever any other route (search, settings push)
+  // happened to be on the stack.
+  bool _inContactProfileContext = false;
 
   @override
   void initState() {
@@ -192,7 +197,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // setLocale in every `build()`. Listener fires only on value change.
     AppLocale.locale.addListener(_handleAppLocaleChanged);
     _bag.add(() => AppLocale.locale.removeListener(_handleAppLocaleChanged));
-    // Register conversation right-click handler — deferred to next frame so
+    // Register conversation secondary-tap / long-press handlers — deferred to
+    // next frame so
     // UIKit's conversation event handlers singleton is wired up first (the
     // `setEventHandlers(onTapConversationItem: ...)` call lives in
     // `home_page_bootstrap.dart::_buildHomePage`, which runs during build).
@@ -203,6 +209,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             .uiEventHandlers
             .setEventHandlers(
           onSecondaryTapConversationItem: ({
+            required V2TimConversation conversation,
+            required Offset position,
+          }) async {
+            if (!mounted) return false;
+            await _showConversationContextMenu(conversation, position);
+            return true;
+          },
+          onLongPressConversationItem: ({
             required V2TimConversation conversation,
             required Offset position,
           }) async {
@@ -223,6 +237,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 required V2TimConversation conversation,
                 required Offset position,
               }) async => false,
+              onLongPressConversationItem: ({
+                required V2TimConversation conversation,
+                required Offset position,
+              }) async => false,
             );
           } catch (e) {
             AppLogger.warn(
@@ -231,11 +249,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         });
       } catch (e, st) {
         AppLogger.logError(
-          '[HomePage] Failed to register onSecondaryTapConversationItem',
+          '[HomePage] Failed to register conversation context-menu handlers',
           e,
           st,
         );
       }
+      unawaited(_maybePrewarmCallPermissions());
     });
   }
 
@@ -372,11 +391,63 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // Save tox profile when app goes to background to reduce data loss on kill/crash
+    // Save tox profile when the app actually goes to background. We used to
+    // include `AppLifecycleState.inactive` here, but that fires for every
+    // system permission popup / control-center pull / call interruption — far
+    // too often for a disk write. Stick to `paused` and `detached`.
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
       widget.service.saveToxProfileNow();
+    }
+    // Best-effort resume kick: if the app thawed back to foreground and Tox is
+    // still offline, re-add the currently selected bootstrap node to nudge the
+    // DHT back toward a live peer set. This is intentionally conservative —
+    // full mobile background reliability still needs the bigger foreground-
+    // service / PushKit architecture.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshBootstrapOnResume());
+    }
+  }
+
+  Future<void> _maybePrewarmCallPermissions() async {
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
+    try {
+      final alreadyPrewarmed = await Prefs.getCallPermissionsPrewarmed();
+      if (alreadyPrewarmed) return;
+      await CallPermissionHelper.prewarmCallPermissions();
+      await Prefs.setCallPermissionsPrewarmed(true);
+    } catch (e, st) {
+      AppLogger.logError(
+        '[HomePage] Failed to prewarm call permissions (non-fatal)',
+        e,
+        st,
+      );
+    }
+  }
+
+  Future<void> _refreshBootstrapOnResume() async {
+    try {
+      if (widget.service.isConnected) return;
+      final node = await Prefs.getCurrentBootstrapNode();
+      if (node == null) return;
+      final added = await widget.service.addBootstrapNode(
+        node.host,
+        node.port,
+        node.pubkey,
+      );
+      AppLogger.debug(
+        '[HomePage] resume bootstrap refresh attempted '
+        '(host=${node.host}, success=$added)',
+      );
+    } catch (e, st) {
+      AppLogger.logError(
+        '[HomePage] Resume bootstrap refresh failed (non-fatal)',
+        e,
+        st,
+      );
     }
   }
 
@@ -417,6 +488,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     _appsSub?.cancel();
     _appsSub = null;
+
+    // Defensive: _initAfterSessionReady() registers a cleanup callback on
+    // `_bag` asynchronously. If dispose() races ahead of that registration,
+    // DisposableBag.add() throws (it does not silently drop). Cancel the
+    // timer explicitly here so the lifecycle is correct even if the bag
+    // never received the cleanup callback.
+    _noConnectionBannerTimer?.cancel();
+    _noConnectionBannerTimer = null;
 
     _bag.dispose();
     super.dispose();
@@ -704,23 +783,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         UikitDataFacade.contactEventHandlers = TencentCloudChatContactEventHandlers(
           uiEventHandlers: TencentCloudChatContactUIEventHandlers(
             onTapContactItem: ({String? userID, String? groupID}) async {
-              // Handle navigation from contact list and profile page "Send Message" button
+              // Handle navigation from contact list and profile page "Send Message" button.
               if (userID != null) {
-                // Check if we're already in a profile page (Navigator can pop)
-                // If yes, this is a "Send Message" click, so navigate to chat
-                // If no, this is a contact list click, so show profile
-                final canPop = Navigator.of(context).canPop();
-                if (canPop) {
-                  // We're in a profile page, close it and navigate to chat
+                // Explicit state field replaces the old `Navigator.canPop()`
+                // heuristic: the latter mis-fired whenever any other route
+                // (search, settings push, etc.) happened to be on the stack
+                // and would pop the wrong page on a contact-list tap.
+                if (_inContactProfileContext) {
+                  // We're inside a profile page — this is "Send Message".
+                  // Close the profile, switch to chats tab, open 1:1 chat.
                   Navigator.of(context).pop();
-                  // Switch to chats tab and open 1:1 chat
                   setState(() {
                     _index = 0;
+                    _inContactProfileContext = false;
                   });
                   _selectConversation(peerId: userID);
                   return true; // Handled, prevent default navigation
                 } else {
-                  // We're in contact list, show profile page on the right side
+                  // Contact list tap → show profile on the right side.
                   _showUserProfileOnRight(context, userID);
                   return true; // Handled, prevent default navigation
                 }
@@ -780,16 +860,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               });
             }
 
+            // Intercept Android back only when we're truly at the root of the
+            // navigator stack AND on a non-Chats tab (so back returns to
+            // Chats), OR on the Chats tab with no pushed routes (so we can
+            // implement double-back-to-exit). When a route is pushed (UIKit
+            // chat-detail on phone, search overlay, profile page), let the
+            // normal pop happen — the old unconditional `canPop: false` was
+            // snapping users back to the Chats tab and breaking UIKit's
+            // internal navigation stack.
+            //
+            // `Navigator.canPop()` is re-evaluated every `build()`; pushes
+            // and pops on the root navigator trigger an ancestor rebuild
+            // (`Route.didChangeNext` / `didChangePrevious`), so this value
+            // stays in sync with the live stack.
+            final rootNavigatorCanPop = Navigator.of(context).canPop();
             Widget content = PopScope(
-              canPop: false,
+              canPop: rootNavigatorCanPop,
               onPopInvokedWithResult: (didPop, result) {
                 if (didPop) return;
-                // If not on the Chats tab, go back to Chats
+                // At the root of the navigator stack: handle tab/exit logic.
                 if (_index != 0) {
                   setState(() { _index = 0; });
                   return;
                 }
-                // On Chats tab: double-press back to exit
+                // On Chats tab at root: double-press back to exit.
                 final now = DateTime.now();
                 if (_lastBackPressTime != null &&
                     now.difference(_lastBackPressTime!) < const Duration(seconds: 2)) {
@@ -800,7 +894,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 AppSnackBar.show(_scaffoldMessengerContext ?? context, AppLocalizations.of(context)!.pressBackAgainToExit);
               },
               child: Scaffold(
-              drawer: useBottomNav ? _buildMobileDrawer() : null,
+              // Drawer removed: there was no AppBar and no `openDrawer()`
+              // call site, so it was unreachable. Bottom nav covers all
+              // entries on phone.
               body: SafeArea(
                 child: Stack(
                 children: [
@@ -1000,65 +1096,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget? _buildMobileDrawer() {
-    final l10n = AppLocalizations.of(context)!;
-    final scheme = Theme.of(context).colorScheme;
-    return Drawer(
-      // 280 — Material Drawer guidance for phones; close to the spec width.
-      width: 280,
-      elevation: 0,
-      backgroundColor: scheme.surface,
-      // Default Material Drawer shape (top-right + bottom-right rounded
-      // trailing edge) is fine for mobile — let Material handle it.
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _MobileDrawerHeader(
-              service: widget.service,
-              connectionStatusStream: widget.service.connectionStatusStream,
-            ),
-            Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
-            const SizedBox(height: AppSpacing.sm),
-            _MobileDrawerItem(
-              selected: _index == 0,
-              icon: Icons.chat_bubble_outline,
-              selectedIcon: Icons.chat_bubble,
-              label: l10n.chats,
-              showUnreadBadge: true,
-              onTap: () {
-                setState(() => _index = 0);
-                Navigator.of(context).pop();
-              },
-            ),
-            _MobileDrawerItem(
-              selected: _index == 1,
-              icon: Icons.contacts_outlined,
-              selectedIcon: Icons.contacts,
-              label: l10n.contacts,
-              onTap: () {
-                setState(() => _index = 1);
-                Navigator.of(context).pop();
-              },
-            ),
-            const Spacer(),
-            _MobileDrawerItem(
-              selected: _index == 3,
-              icon: Icons.settings_outlined,
-              selectedIcon: Icons.settings,
-              label: l10n.settings,
-              onTap: () {
-                setState(() => _index = 3);
-                Navigator.of(context).pop();
-              },
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget? _buildBottomNavigationBar() {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
@@ -1242,13 +1279,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     },
                   ),
                   Positioned(
-                    top: AppSpacing.lg,
+                    // Offset below the UIKit AppBar so the FAB doesn't sit on
+                    // top of the title. `kToolbarHeight` (56) + a small gap
+                    // mirrors the inset Material uses for action buttons; on
+                    // tablet the button lives in the sidebar pane which has
+                    // its own header above it, so the offset still clears.
+                    top: kToolbarHeight + AppSpacing.sm,
                     right: AppSpacing.xl,
-                    // Right-edge SafeArea only — guards Dynamic Island /
-                    // right rounded corners on phones in landscape.
+                    // Top + right SafeArea so the button clears the status
+                    // bar / Dynamic Island and right rounded corners on
+                    // phones in landscape.
                     child: SafeArea(
                       left: false,
-                      top: false,
                       bottom: false,
                       child: NewEntryButton(
                         onAddFriend: _showAddFriendDialog,
@@ -1443,13 +1485,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  /// Show user profile page - uses router which handles desktop/mobile modes
+  /// Show user profile page - uses router which handles desktop/mobile modes.
+  ///
+  /// Sets `_inContactProfileContext = true` while the profile route is on
+  /// screen so `_onTapContactItem` can distinguish a Send Message tap from
+  /// inside the profile from a contact-list tap on the underlying tab.
+  /// The flag is cleared after the route returns; `_onTapContactItem` also
+  /// clears it on the Send-Message path (it pops the profile itself).
   void _showUserProfileOnRight(BuildContext context, String userID) {
-    TencentCloudChatRouter().navigateTo(
+    _inContactProfileContext = true;
+    final future = TencentCloudChatRouter().navigateTo(
       context: context,
       routeName: TencentCloudChatRouteNames.userProfile,
       options: TencentCloudChatUserProfileOptions(userID: userID),
     );
+    // navigateTo returns dynamic; coerce to Future so we can clear the flag
+    // when the user dismisses the profile via normal back navigation.
+    if (future is Future) {
+      unawaited(future.whenComplete(() {
+        if (mounted) {
+          _inContactProfileContext = false;
+        }
+      }));
+    }
   }
 
   void _selectConversation({String? peerId, String? groupId}) {
@@ -1934,388 +1992,4 @@ class _CloseWindowIntent extends Intent {
 
 class _OpenSearchIntent extends Intent {
   const _OpenSearchIntent();
-}
-
-/// Top section of the mobile drawer — avatar + nickname + connection status.
-///
-/// Mirrors the desktop sidebar's `_UserAvatar` pattern but laid out
-/// vertically with `AppSpacing.lg` padding for a touch-first feel.
-class _MobileDrawerHeader extends StatefulWidget {
-  const _MobileDrawerHeader({
-    required this.service,
-    required this.connectionStatusStream,
-  });
-
-  final FfiChatService service;
-  final Stream<bool> connectionStatusStream;
-
-  @override
-  State<_MobileDrawerHeader> createState() => _MobileDrawerHeaderState();
-}
-
-class _MobileDrawerHeaderState extends State<_MobileDrawerHeader> {
-  String? _nickname;
-  String? _statusMessage;
-  String? _avatarPath;
-  // Cached existence check — refreshed in `_loadProfile` so `build()` doesn't
-  // hit the filesystem on every drawer rebuild (each `StreamBuilder<bool>`
-  // tick from `connectionStatusStream` triggers a rebuild here).
-  bool _avatarFileExists = false;
-  int _avatarVersion = 0;
-  StreamSubscription<String>? _avatarUpdatedSub;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProfile();
-    _avatarUpdatedSub = widget.service.avatarUpdated.listen((updatedUserId) {
-      final selfId = widget.service.selfId;
-      if (selfId.isEmpty) return;
-      final normalizedSelf =
-          selfId.length > 64 ? selfId.substring(0, 64) : selfId;
-      final normalizedUpdated = updatedUserId.length > 64
-          ? updatedUserId.substring(0, 64)
-          : updatedUserId;
-      if (updatedUserId == selfId ||
-          updatedUserId == normalizedSelf ||
-          normalizedUpdated == normalizedSelf) {
-        _loadProfile();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _avatarUpdatedSub?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _loadProfile() async {
-    final nick = await Prefs.getNickname();
-    final status = await Prefs.getStatusMessage();
-    final avatar = await Prefs.getAvatarPath();
-    final exists =
-        avatar != null && avatar.isNotEmpty && await File(avatar).exists();
-    if (mounted) {
-      setState(() {
-        _nickname = nick;
-        _statusMessage = status;
-        _avatarPath = avatar;
-        _avatarFileExists = exists;
-        _avatarVersion++;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: StreamBuilder<bool>(
-        stream: widget.connectionStatusStream,
-        initialData: widget.service.isConnected,
-        builder: (context, snapshot) {
-          final isConnected = snapshot.data ?? widget.service.isConnected;
-          // Material+InkWell so tapping the header opens the profile. The
-          // outer drawer route is dismissed first via `maybePop` so the
-          // profile page replaces the drawer instead of stacking under it.
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () async {
-                // Close the drawer first so the profile route replaces it
-                // cleanly instead of stacking under the drawer. Await the pop
-                // before reading `context` again — otherwise the push lands
-                // before the pop in the navigator queue and the drawer ends
-                // up on top of the profile page.
-                final navigator = Navigator.of(context);
-                await navigator.maybePop();
-                if (!context.mounted) return;
-                showSelfProfile(
-                  context,
-                  widget.service,
-                  widget.connectionStatusStream,
-                  nickName: _nickname,
-                  statusMessage: _statusMessage,
-                  onProfileSaved: (_, __) async {
-                    if (mounted) {
-                      await _loadProfile();
-                    }
-                  },
-                  onAvatarChanged: (_) async {
-                    if (mounted) {
-                      await _loadProfile();
-                    }
-                  },
-                );
-              },
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 56),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Stack(
-                        alignment: Alignment.center,
-                        clipBehavior: Clip.none,
-                        children: [
-                          CircleAvatar(
-                            radius: 28,
-                            backgroundColor: scheme.primary,
-                            child: _avatarPath != null &&
-                                    _avatarPath!.isNotEmpty &&
-                                    _avatarFileExists
-                                ? ClipOval(
-                                    child: Image.file(
-                                      File(_avatarPath!),
-                                      key: ValueKey(
-                                          'mobile-drawer-avatar-${_avatarPath!}-$_avatarVersion'),
-                                      width: 56,
-                                      height: 56,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  )
-                                : ClipOval(
-                                    child: Image.asset(
-                                      'images/default_user_icon.png',
-                                      package: 'tencent_cloud_chat_common',
-                                      width: 56,
-                                      height: 56,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                          ),
-                          Positioned(
-                            right: -2,
-                            bottom: -2,
-                            child: Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: isConnected
-                                    ? AppThemeConfig.successColor
-                                    : scheme.onSurfaceVariant,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: scheme.surface,
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      AppSpacing.verticalMd,
-                      if (_nickname != null && _nickname!.isNotEmpty)
-                        Text(
-                          _nickname!,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: scheme.onSurface,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      AppSpacing.verticalXs,
-                      Text(
-                        isConnected
-                            ? (AppLocalizations.of(context)?.statusOnline ??
-                                'Online')
-                            : (AppLocalizations.of(context)?.statusOffline ??
-                                'Offline'),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: isConnected
-                              ? AppThemeConfig.successColor
-                              : scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Mobile drawer nav row — 56px tap target, icon-left + label-right,
-/// 3px primary accent on the left edge when selected (mirrors the
-/// desktop sidebar's selection treatment for visual continuity).
-class _MobileDrawerItem extends StatelessWidget {
-  const _MobileDrawerItem({
-    required this.selected,
-    required this.icon,
-    required this.selectedIcon,
-    required this.label,
-    required this.onTap,
-    this.showUnreadBadge = false,
-  });
-
-  final bool selected;
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
-  final VoidCallback onTap;
-  final bool showUnreadBadge;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
-    final bg = selected
-        ? scheme.primary.withValues(alpha: 0.10)
-        : Colors.transparent;
-    return _HomePressableScale(
-      pressedScale: 0.98,
-      child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 56),
-          decoration: BoxDecoration(
-            color: bg,
-            border: Border(
-              left: BorderSide(
-                color: selected ? scheme.primary : Colors.transparent,
-                width: 3,
-              ),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.md,
-          ),
-          child: Row(
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Icon(selected ? selectedIcon : icon, size: 24, color: color),
-                  if (showUnreadBadge)
-                    Positioned(
-                      top: -5,
-                      right: -6,
-                      child: UnconstrainedBox(
-                        child: TencentCloudChatConversationTotalUnreadCount(
-                          builder: (BuildContext _, int totalUnreadCount) {
-                            if (totalUnreadCount == 0) {
-                              return const SizedBox.shrink();
-                            }
-                            final displayText = totalUnreadCount > 99
-                                ? '99+'
-                                : '$totalUnreadCount';
-                            final isLargeText = displayText.length > 2;
-                            return UnconstrainedBox(
-                              child: Container(
-                                constraints: const BoxConstraints(minWidth: 16),
-                                height: 16,
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: isLargeText ? 5 : 4),
-                                decoration: BoxDecoration(
-                                  color: AppThemeConfig.errorColor,
-                                  borderRadius: BorderRadius.circular(
-                                      AppThemeConfig.badgeBorderRadius),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    displayText,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: scheme.onError,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.0,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              AppSpacing.horizontalLg,
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: color,
-                    fontWeight:
-                        selected ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      ),
-    );
-  }
-}
-
-/// Subtle scale-down on press for tappable rows in home_page.
-/// Scales to [pressedScale] (default 0.97) on pointer-down and back to 1.0
-/// over 120ms. Respects `MediaQuery.disableAnimations`.
-class _HomePressableScale extends StatefulWidget {
-  const _HomePressableScale({
-    required this.child,
-    this.pressedScale = 0.97,
-    this.duration = const Duration(milliseconds: 120),
-  });
-
-  final Widget child;
-  final double pressedScale;
-  final Duration duration;
-
-  @override
-  State<_HomePressableScale> createState() => _HomePressableScaleState();
-}
-
-class _HomePressableScaleState extends State<_HomePressableScale> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (_pressed == value) return;
-    setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) {
-      return widget.child;
-    }
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => _setPressed(true),
-      onPointerUp: (_) => _setPressed(false),
-      onPointerCancel: (_) => _setPressed(false),
-      child: AnimatedScale(
-        scale: _pressed ? widget.pressedScale : 1.0,
-        duration: widget.duration,
-        curve: Curves.easeOut,
-        child: widget.child,
-      ),
-    );
-  }
 }

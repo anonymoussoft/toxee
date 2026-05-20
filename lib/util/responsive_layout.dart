@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 /// Responsive layout utility class
@@ -26,29 +29,51 @@ class ResponsiveLayout {
   /// menu rows). 28pt matches the standard macOS title-bar inset.
   static const double macTitleBarReservedHeight = 28.0;
 
+  // Device-class checks (isMobile/isLargePhone/isTablet) use `shortestSide`
+  // so phone-landscape stays "phone" and foldables/tablets behave by hardware
+  // class, not orientation. `isDesktop` is OS-platform driven (with a width
+  // fallback for web) so a small MacBook window (e.g. 1280x800, shortestSide
+  // 800) still classifies as desktop. The phone/tablet checks exclude desktop
+  // platforms so the tiers stay mutually exclusive even though
+  // `responsiveValue` checks `isDesktop` first.
+  // Layout-capacity checks (shouldShow*) below use `size.width` because they
+  // care about available width.
+
+  /// True when running on a desktop OS. Web is excluded because Flutter web
+  /// running on a desktop browser still relies on window width for layout.
+  static bool _isDesktopPlatform() {
+    if (kIsWeb) return false; // avoid touching Platform.* on web
+    return Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+  }
+
   /// Check if current screen is mobile size
   static bool isMobile(BuildContext context) {
-    return MediaQuery.of(context).size.width < mobileBreakpoint;
+    if (_isDesktopPlatform()) return false;
+    return MediaQuery.of(context).size.shortestSide < mobileBreakpoint;
   }
 
   /// Check if current screen is a "large phone" (landscape phones, small
   /// foldables, 7" tablets) — wider than mobile but still bottom-nav driven.
   static bool isLargePhone(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    return width >= mobileBreakpoint && width < largePhoneBreakpoint;
+    if (_isDesktopPlatform()) return false;
+    final shortest = MediaQuery.of(context).size.shortestSide;
+    return shortest >= mobileBreakpoint && shortest < largePhoneBreakpoint;
   }
 
   /// Check if current screen is tablet size
   static bool isTablet(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    return width >= mobileBreakpoint && width < tabletBreakpoint;
+    if (_isDesktopPlatform()) return false;
+    final shortest = MediaQuery.of(context).size.shortestSide;
+    return shortest >= mobileBreakpoint && shortest < tabletBreakpoint;
   }
 
-  /// Check if current screen is desktop size.
-  /// Strict `> tabletBreakpoint` so iPad Pro 12.9 portrait (exactly 1024
-  /// wide) stays in the tablet tier and gets tablet treatment.
+  /// Desktop classification: true when the OS is a desktop OS, or (on web)
+  /// when the window is at least `tabletBreakpoint` wide. Uses width (not
+  /// shortestSide) for the web fallback so a wide-but-short browser window
+  /// still gets desktop layout.
   static bool isDesktop(BuildContext context) {
-    return MediaQuery.of(context).size.width > tabletBreakpoint;
+    if (_isDesktopPlatform()) return true;
+    return MediaQuery.of(context).size.width >= tabletBreakpoint;
   }
 
   /// True when the device is a tablet held in portrait orientation.
@@ -154,26 +179,22 @@ class ResponsiveLayout {
   }
 
   /// Get responsive sidebar width
-  /// Mobile: 0 (uses Drawer instead of permanent sidebar)
-  /// Tablet: 80 (compact icon sidebar)
-  /// Desktop: 100 (icon + label sidebar)
+  /// Mobile / large-phone (bottom-nav tier): 0 (uses Drawer instead of a
+  /// permanent sidebar). Tablet: 80 (compact icon sidebar). Desktop: 100
+  /// (icon + label sidebar).
+  // Sidebar visibility and bottom-nav visibility are controlled by the same
+  // check (`shouldShowBottomNav`) so the two never disagree (e.g. landscape
+  // large-phones used to get a sidebar AND a bottom nav).
   static double responsiveSidebarWidth(BuildContext context) {
-    return responsiveValue<double>(
-      context,
-      mobile: 0.0, // No sidebar on mobile, uses Drawer
-      tablet: 80.0,
-      desktop: 100.0,
-    );
+    if (shouldShowBottomNav(context)) return 0.0;
+    return isDesktop(context) ? 100.0 : 80.0;
   }
 
-  /// Get responsive bottom navigation bar height
+  /// Get responsive bottom navigation bar height.
+  // Mirror of `responsiveSidebarWidth`: one source of truth for which nav UI
+  // is showing — `shouldShowBottomNav`.
   static double responsiveBottomNavHeight(BuildContext context) {
-    return responsiveValue<double>(
-      context,
-      mobile: 56.0, // Standard bottom nav height
-      tablet: 0.0, // No bottom nav on tablet/desktop
-      desktop: 0.0,
-    );
+    return shouldShowBottomNav(context) ? 56.0 : 0.0;
   }
 
   /// Check if should show bottom navigation.
