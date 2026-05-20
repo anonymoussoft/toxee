@@ -240,6 +240,36 @@ class AppLocalizationsZh extends AppLocalizations {
   String get createFailed => '创建群聊失败';
 
   @override
+  String get joinQueued => '当前离线 — 入群申请将在重新连接后发送';
+
+  @override
+  String get offlineBanner => '当前离线 — 群组操作将在重新连接后排队处理。';
+
+  @override
+  String get groupType => '群组类型';
+
+  @override
+  String get publicGroup => '公开';
+
+  @override
+  String get privateGroup => '私密';
+
+  @override
+  String get publicGroupHint => '公开群 — 在 DHT 上可被发现，知道群 ID 的人均可加入。';
+
+  @override
+  String get privateGroupHint => '私密群 — 仅限邀请加入，不在 DHT 上公告。';
+
+  @override
+  String get conferenceHint => '传统会议群 — 旧协议，没有角色或持久化。';
+
+  @override
+  String get searchHintBody => '搜索联系人、群组和消息';
+
+  @override
+  String get noResultsFoundHint => '试试更短的关键词或检查拼写';
+
+  @override
   String get createdGroupId => '新群组 ID';
 
   @override
@@ -1484,6 +1514,26 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get done => '完成';
+
+  @override
+  String get runtimeForegroundTitle => 'Toxee 正在运行';
+
+  @override
+  String get runtimeForegroundBody => '保持连接，以便接收消息和通话。';
+
+  @override
+  String get runtimeForegroundSettingsLabel => '通知设置';
+
+  @override
+  String get runtimeForegroundCallTitle => '通话中';
+
+  @override
+  String get runtimeForegroundCallBody => 'Toxee 正在保持通话连接。';
+
+  @override
+  String runtimeForegroundCallBodyWithCaller(String name) {
+    return '与 $name 通话中';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -1720,6 +1770,36 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get createFailed => '创建群聊失败';
+
+  @override
+  String get joinQueued => '当前离线 — 入群申请将在重新连接后发送';
+
+  @override
+  String get offlineBanner => '当前离线 — 群组操作将在重新连接后排队处理。';
+
+  @override
+  String get groupType => '群组类型';
+
+  @override
+  String get publicGroup => '公开';
+
+  @override
+  String get privateGroup => '私密';
+
+  @override
+  String get publicGroupHint => '公开群 — 在 DHT 上可被发现，知道群 ID 的人均可加入。';
+
+  @override
+  String get privateGroupHint => '私密群 — 仅限邀请加入，不在 DHT 上公告。';
+
+  @override
+  String get conferenceHint => '传统会议群 — 旧协议，没有角色或持久化。';
+
+  @override
+  String get searchHintBody => '搜索联系人、群组和消息';
+
+  @override
+  String get noResultsFoundHint => '试试更短的关键词或检查拼写';
 
   @override
   String get createdGroupId => '新群组 ID';
@@ -2737,6 +2817,26 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String deleteConversationBody(String name) {
     return '将从聊天列表中移除“$name”。聊天记录仍保留在本地。';
   }
+
+  @override
+  String get runtimeForegroundTitle => 'Toxee 正在运行';
+
+  @override
+  String get runtimeForegroundBody => '保持连接，以便接收消息和通话。';
+
+  @override
+  String get runtimeForegroundSettingsLabel => '通知设置';
+
+  @override
+  String get runtimeForegroundCallTitle => '通话中';
+
+  @override
+  String get runtimeForegroundCallBody => 'Toxee 正在保持通话连接。';
+
+  @override
+  String runtimeForegroundCallBodyWithCaller(String name) {
+    return '与 $name 通话中';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -2973,6 +3073,36 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get createFailed => '建立群聊失敗';
+
+  @override
+  String get joinQueued => '目前離線 — 入群申請將在重新連線後發送';
+
+  @override
+  String get offlineBanner => '目前離線 — 群組操作將在重新連線後排隊處理。';
+
+  @override
+  String get groupType => '群組類型';
+
+  @override
+  String get publicGroup => '公開';
+
+  @override
+  String get privateGroup => '私密';
+
+  @override
+  String get publicGroupHint => '公開群 — 在 DHT 上可被發現，知道群 ID 的人均可加入。';
+
+  @override
+  String get privateGroupHint => '私密群 — 僅限邀請加入，不在 DHT 上公告。';
+
+  @override
+  String get conferenceHint => '傳統會議群 — 舊協定，沒有角色或持久化。';
+
+  @override
+  String get searchHintBody => '搜尋聯絡人、群組和訊息';
+
+  @override
+  String get noResultsFoundHint => '試試更短的關鍵字或檢查拼寫';
 
   @override
   String get createdGroupId => '新群組 ID';
@@ -3989,5 +4119,25 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String deleteConversationBody(String name) {
     return '將從聊天清單中移除「$name」。聊天記錄仍保留在本機。';
+  }
+
+  @override
+  String get runtimeForegroundTitle => 'Toxee 正在執行';
+
+  @override
+  String get runtimeForegroundBody => '保持連線，以便接收訊息和通話。';
+
+  @override
+  String get runtimeForegroundSettingsLabel => '通知設定';
+
+  @override
+  String get runtimeForegroundCallTitle => '通話中';
+
+  @override
+  String get runtimeForegroundCallBody => 'Toxee 正在維持通話連線。';
+
+  @override
+  String runtimeForegroundCallBodyWithCaller(String name) {
+    return '與 $name 通話中';
   }
 }

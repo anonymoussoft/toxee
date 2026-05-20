@@ -93,6 +93,16 @@
   "createAction": "إنشاء مجموعة",
   "createSuccess": "تم إنشاء المجموعة",
   "createFailed": "فشل إنشاء المجموعة",
+  "joinQueued": "غير متصل — سيتم إرسال طلب الانضمام عند إعادة الاتصال",
+  "offlineBanner": "غير متصل — سيتم وضع عمليات المجموعة في قائمة الانتظار ومعالجتها عند إعادة الاتصال.",
+  "groupType": "نوع المجموعة",
+  "publicGroup": "عام",
+  "privateGroup": "خاص",
+  "publicGroupHint": "مجموعة عامة — قابلة للاكتشاف على DHT ويمكن لأي شخص لديه معرف المحادثة الانضمام إليها.",
+  "privateGroupHint": "مجموعة خاصة — بالدعوة فقط، غير معلنة على DHT.",
+  "conferenceHint": "مؤتمر قديم — بروتوكول قديم، بدون أدوار أو استمرارية.",
+  "searchHintBody": "ابحث عن جهات الاتصال والمجموعات والرسائل",
+  "noResultsFoundHint": "جرّب كلمة مفتاحية أقصر أو تحقق من الإملاء",
   "createdGroupId": "معرف المجموعة الجديدة",
   "copyId": "نسخ المعرف",
   "copied": "تم النسخ إلى الحافظة",
@@ -786,6 +796,17 @@
   },
   "searchResultConversationSemantics": "{name}، محادثة",
   "@searchResultConversationSemantics": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "runtimeForegroundTitle": "Toxee قيد التشغيل",
+  "runtimeForegroundBody": "البقاء متصلاً لاستقبال الرسائل والمكالمات.",
+  "runtimeForegroundSettingsLabel": "إعدادات الإشعارات",
+  "runtimeForegroundCallTitle": "مكالمة جارية",
+  "runtimeForegroundCallBody": "يحافظ Toxee على اتصال مكالمتك.",
+  "runtimeForegroundCallBodyWithCaller": "مكالمة مع {name}",
+  "@runtimeForegroundCallBodyWithCaller": {
     "placeholders": {
       "name": {"type": "String"}
     }

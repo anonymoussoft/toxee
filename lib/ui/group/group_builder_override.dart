@@ -514,10 +514,24 @@ class _ToxeeGroupProfileContentState
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(tL10n.setGroupName),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLines: null,
+          // `TextField.scrollPadding` only nudges the field's own internal
+          // cursor scroll — it does NOT move the AlertDialog out from under
+          // the soft keyboard. The dialog itself must be padded by the
+          // bottom view-insets. Apply `EdgeInsets.only(bottom: viewInsets)`
+          // on the SingleChildScrollView so the content (and the action
+          // buttons below, which AlertDialog lays out from the content's
+          // measured size) sit above the keyboard on small phones. Cap
+          // maxLines so very long names don't push the buttons off-screen.
+          content: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(dialogContext).bottom,
+            ),
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: 3,
+              minLines: 1,
+            ),
           ),
           actions: <Widget>[
             TextButton(

@@ -61,6 +61,15 @@ class _CustomSearchState extends State<CustomSearch> {
     return value.toLowerCase().contains(keyword.toLowerCase());
   }
 
+  /// Truncate long IDs (64-char group IDs, 76-char Tox IDs) for display in
+  /// `ListTile.subtitle`, where single-line ellipsis would just cut the tail
+  /// and hide the suffix entirely. The full ID is still reachable via the
+  /// detail page; this is purely a display compaction.
+  static String _truncateIdForDisplay(String id) {
+    if (id.length <= 20) return id;
+    return '${id.substring(0, 8)}…${id.substring(id.length - 8)}';
+  }
+
   // Delegate to shared utilities in SearchUtils.
   static Widget _avatarWidget(String? url, Widget defaultChild) => SearchUtils.avatarWidget(url, defaultChild);
   static Widget _buildHighlightedText(String text, String keyword, TextStyle baseStyle, {bool isDark = false}) =>
@@ -457,6 +466,9 @@ class _CustomSearchState extends State<CustomSearch> {
                 child: TextField(
                   controller: _searchController,
                   autofocus: true,
+                  // iOS keyboard shows a "Search" return key instead of the
+                  // default "Return" — matches the action this field triggers.
+                  textInputAction: TextInputAction.search,
                   textAlignVertical: TextAlignVertical.center,
                   style: Theme.of(context).textTheme.bodyLarge,
                   decoration: InputDecoration(
@@ -528,8 +540,7 @@ class _CustomSearchState extends State<CustomSearch> {
       return EmptyStateWidget(
         icon: Icons.search,
         title: l10n.enterKeywordToSearch,
-        // TODO(l10n): key=searchHintBody
-        subtitle: 'Search contacts, groups, and messages',
+        subtitle: l10n.searchHintBody,
       );
     }
 
@@ -546,16 +557,19 @@ class _CustomSearchState extends State<CustomSearch> {
             child: EmptyStateWidget(
               icon: Icons.search_off,
               title: l10n.noResultsFound,
-              // TODO(l10n): key=noResultsFoundHint
-              subtitle: 'Try a shorter keyword or check spelling',
+              subtitle: l10n.noResultsFoundHint,
             ),
           ),
         ],
       );
     }
 
+    // Removed `shrinkWrap: true`: this ListView is returned directly from
+    // `_buildBody` into `Scaffold.body` (via SafeArea), so it already gets
+    // bounded height from the Scaffold. shrinkWrap defeats lazy item building
+    // and re-layouts the entire list on every keystroke — visibly janky on
+    // low-end Android with many results.
     return ListView(
-      shrinkWrap: true,
       children: [
         if (_errorMessage != null) _buildErrorBanner(l10n),
         if (_isGlobalSearch && (hasContacts || hasGroups || hasMessages))
@@ -585,7 +599,7 @@ class _CustomSearchState extends State<CustomSearch> {
               child: ListTile(
                 leading: _avatarWidget(faceUrl, const Icon(Icons.person)),
                 title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
-                subtitle: Text('${l10n.idLabel} $uid'),
+                subtitle: Text('${l10n.idLabel} ${_truncateIdForDisplay(uid)}'),
                 onTap: () => _navigateToMessage(userID: uid, groupID: null),
               ),
             );
@@ -602,7 +616,8 @@ class _CustomSearchState extends State<CustomSearch> {
               child: ListTile(
                 leading: _avatarWidget(e.faceUrl, const Icon(Icons.group)),
                 title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
-                subtitle: Text('${l10n.idLabel} ${e.groupID}'),
+                subtitle:
+                    Text('${l10n.idLabel} ${_truncateIdForDisplay(e.groupID)}'),
                 onTap: () => _navigateToMessage(userID: null, groupID: e.groupID),
               ),
             );
@@ -659,7 +674,7 @@ class _CustomSearchState extends State<CustomSearch> {
               child: ListTile(
                 leading: _avatarWidget(c.faceUrl, const Icon(Icons.chat_bubble_outline)),
                 title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
-                subtitle: Text('${l10n.idLabel} $id'),
+                subtitle: Text('${l10n.idLabel} ${_truncateIdForDisplay(id)}'),
                 onTap: () => _navigateToMessage(userID: c.userID, groupID: c.groupID),
               ),
             );

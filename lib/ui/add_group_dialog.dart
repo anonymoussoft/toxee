@@ -212,10 +212,22 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
         child: Focus(
           autofocus: true,
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: _dialogMaxWidth(context)),
+            // Width cap as before. The height cap prevents the two-card stack
+            // from overflowing on iPhone SE-class viewports while leaving
+            // tablet/desktop sizes unaffected (their content is shorter than
+            // 85% of the available height).
+            constraints: BoxConstraints(
+              maxWidth: _dialogMaxWidth(context),
+              maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+            ),
             child: Material(
               color: Colors.transparent,
               child: SingleChildScrollView(
+                // Push bottom padding above the soft keyboard so Submit and
+                // create-card actions stay reachable on small phones.
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.xl),
                   child: Column(
@@ -286,6 +298,12 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
               TextFormField(
                 controller: _groupIdController,
                 textAlignVertical: TextAlignVertical.center,
+                // Group IDs are 64-char hex strings — disable iOS autocorrect
+                // and capitalization so the soft keyboard does not mangle them.
+                keyboardType: TextInputType.visiblePassword,
+                autocorrect: false,
+                enableSuggestions: false,
+                textCapitalization: TextCapitalization.none,
                 decoration: InputDecoration(
                   labelText: _localeText(context, 'groupId',
                       fallback: 'Group ID'),
@@ -420,23 +438,35 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
               // because dart_compat_group.cpp mapped the string "group" → 1
               // (Private). Now we surface Public/Private as separate options
               // and pass the unambiguous type string to the FFI layer.
+              // Wrap each segment label in FittedBox so the three options
+              // (Public / Private / Conference) scale down on narrow phones
+              // (<360pt) instead of overflowing the SegmentedButton.
               SegmentedButton<String>(
                 segments: [
                   ButtonSegment(
                     value: 'group',
-                    label: Text(_localeText(context, 'publicGroup',
-                        fallback: 'Public')),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(_localeText(context, 'publicGroup',
+                          fallback: 'Public')),
+                    ),
                     icon: const Icon(Icons.public),
                   ),
                   ButtonSegment(
                     value: 'privateGroup',
-                    label: Text(_localeText(context, 'privateGroup',
-                        fallback: 'Private')),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(_localeText(context, 'privateGroup',
+                          fallback: 'Private')),
+                    ),
                     icon: const Icon(Icons.lock),
                   ),
                   ButtonSegment(
                     value: 'conference',
-                    label: Text(AppLocalizations.of(context)!.conference),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(AppLocalizations.of(context)!.conference),
+                    ),
                     icon: const Icon(Icons.forum),
                   ),
                 ],
@@ -633,6 +663,22 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
         return appL10n.copied;
       case 'paste':
         return appL10n.paste;
+      case 'publicGroup':
+        return appL10n.publicGroup;
+      case 'privateGroup':
+        return appL10n.privateGroup;
+      case 'publicGroupHint':
+        return appL10n.publicGroupHint;
+      case 'privateGroupHint':
+        return appL10n.privateGroupHint;
+      case 'conferenceHint':
+        return appL10n.conferenceHint;
+      case 'groupType':
+        return appL10n.groupType;
+      case 'joinQueued':
+        return appL10n.joinQueued;
+      case 'offlineBanner':
+        return appL10n.offlineBanner;
       case 'sending':
         return fallback;
     }

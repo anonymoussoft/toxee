@@ -93,6 +93,16 @@
   "createAction": "建立群聊",
   "createSuccess": "群聊已建立",
   "createFailed": "建立群聊失敗",
+  "joinQueued": "目前離線 — 入群申請將在重新連線後發送",
+  "offlineBanner": "目前離線 — 群組操作將在重新連線後排隊處理。",
+  "groupType": "群組類型",
+  "publicGroup": "公開",
+  "privateGroup": "私密",
+  "publicGroupHint": "公開群 — 在 DHT 上可被發現，知道群 ID 的人均可加入。",
+  "privateGroupHint": "私密群 — 僅限邀請加入，不在 DHT 上公告。",
+  "conferenceHint": "傳統會議群 — 舊協定，沒有角色或持久化。",
+  "searchHintBody": "搜尋聯絡人、群組和訊息",
+  "noResultsFoundHint": "試試更短的關鍵字或檢查拼寫",
   "createdGroupId": "新群組 ID",
   "copyId": "複製 ID",
   "copied": "已複製到剪貼板",
@@ -752,5 +762,16 @@
   "unpinConversation": "取消置頂",
   "markConversationAsRead": "標為已讀",
   "deleteConversationTitle": "刪除會話？",
-  "deleteConversationBody": "將從聊天清單中移除「{name}」。聊天記錄仍保留在本機。"
+  "deleteConversationBody": "將從聊天清單中移除「{name}」。聊天記錄仍保留在本機。",
+  "runtimeForegroundTitle": "Toxee 正在執行",
+  "runtimeForegroundBody": "保持連線，以便接收訊息和通話。",
+  "runtimeForegroundSettingsLabel": "通知設定",
+  "runtimeForegroundCallTitle": "通話中",
+  "runtimeForegroundCallBody": "Toxee 正在維持通話連線。",
+  "runtimeForegroundCallBodyWithCaller": "與 {name} 通話中",
+  "@runtimeForegroundCallBodyWithCaller": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  }
 }

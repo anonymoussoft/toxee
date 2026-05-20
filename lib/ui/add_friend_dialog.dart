@@ -291,9 +291,16 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                   // SingleChildScrollView lets the form scroll when the keyboard
                   // pushes content up on small screens — without it, the bottom
                   // (counter, action row) would be clipped on iPhone SE-class
-                  // viewports.
+                  // viewports. Adding viewInsets.bottom to the bottom padding
+                  // keeps Submit + counter reachable when the keyboard is up.
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.xl,
+                      AppSpacing.xl,
+                      AppSpacing.xl +
+                          MediaQuery.viewInsetsOf(context).bottom,
+                    ),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -336,6 +343,12 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                             controller: _idController,
                             textAlignVertical: TextAlignVertical.center,
                             autofocus: true,
+                            // Tox IDs are 64/76-char hex strings — iOS would
+                            // otherwise try to autocorrect/capitalize them.
+                            keyboardType: TextInputType.visiblePassword,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            textCapitalization: TextCapitalization.none,
                             decoration: InputDecoration(
                               labelText: _localeText(context, 'friendUserID',
                                   fallback: 'Friend Tox ID'),
@@ -371,6 +384,9 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                           TextFormField(
                             controller: _messageController,
                             textAlignVertical: TextAlignVertical.center,
+                            // Free-form prose: keep autocorrect on, but
+                            // sentence-case for normal English-style writing.
+                            textCapitalization: TextCapitalization.sentences,
                             decoration: InputDecoration(
                               labelText: _localeText(context, 'requestMessage',
                                   fallback: 'Request Message'),

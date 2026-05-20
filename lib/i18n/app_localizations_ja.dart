@@ -240,6 +240,36 @@ class AppLocalizationsJa extends AppLocalizations {
   String get createFailed => 'グループの作成に失敗しました';
 
   @override
+  String get joinQueued => 'オフライン — 再接続時に参加リクエストを送信します';
+
+  @override
+  String get offlineBanner => 'オフライン — グループ操作はキューに追加され、再接続時に処理されます。';
+
+  @override
+  String get groupType => 'グループの種類';
+
+  @override
+  String get publicGroup => '公開';
+
+  @override
+  String get privateGroup => 'プライベート';
+
+  @override
+  String get publicGroupHint => '公開グループ — DHT で検出可能で、チャット ID を知っている人なら誰でも参加できます。';
+
+  @override
+  String get privateGroupHint => 'プライベートグループ — 招待制で、DHT には公開されません。';
+
+  @override
+  String get conferenceHint => 'レガシーカンファレンス — 古いプロトコル、ロールや永続化はありません。';
+
+  @override
+  String get searchHintBody => '連絡先、グループ、メッセージを検索';
+
+  @override
+  String get noResultsFoundHint => 'より短いキーワードを試すか、スペルを確認してください';
+
+  @override
   String get createdGroupId => '新しいグループID';
 
   @override
@@ -1484,4 +1514,24 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get done => 'Done';
+
+  @override
+  String get runtimeForegroundTitle => 'Toxee は実行中です';
+
+  @override
+  String get runtimeForegroundBody => 'メッセージや通話を受信できるよう接続を維持しています。';
+
+  @override
+  String get runtimeForegroundSettingsLabel => '通知設定';
+
+  @override
+  String get runtimeForegroundCallTitle => '通話中';
+
+  @override
+  String get runtimeForegroundCallBody => 'Toxee が通話の接続を維持しています。';
+
+  @override
+  String runtimeForegroundCallBodyWithCaller(String name) {
+    return '$name と通話中';
+  }
 }

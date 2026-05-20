@@ -240,6 +240,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get createFailed => 'Failed to create group';
 
   @override
+  String get joinQueued => 'Offline — join request will be sent when you reconnect';
+
+  @override
+  String get offlineBanner => 'Offline — group operations will be queued and processed when you reconnect.';
+
+  @override
+  String get groupType => 'Group Type';
+
+  @override
+  String get publicGroup => 'Public';
+
+  @override
+  String get privateGroup => 'Private';
+
+  @override
+  String get publicGroupHint => 'Public group — discoverable on the DHT and joinable by anyone with the chat ID.';
+
+  @override
+  String get privateGroupHint => 'Private group — invitation-only, not announced on the DHT.';
+
+  @override
+  String get conferenceHint => 'Legacy conference — older protocol, no roles or persistence.';
+
+  @override
+  String get searchHintBody => 'Search contacts, groups, and messages';
+
+  @override
+  String get noResultsFoundHint => 'Try a shorter keyword or check spelling';
+
+  @override
   String get createdGroupId => 'New Group ID';
 
   @override
@@ -1484,4 +1514,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get done => 'Done';
+
+  @override
+  String get runtimeForegroundTitle => 'Toxee is running';
+
+  @override
+  String get runtimeForegroundBody => 'Staying connected so you can receive messages and calls.';
+
+  @override
+  String get runtimeForegroundSettingsLabel => 'Notification settings';
+
+  @override
+  String get runtimeForegroundCallTitle => 'Call in progress';
+
+  @override
+  String get runtimeForegroundCallBody => 'Toxee is keeping your call connected.';
+
+  @override
+  String runtimeForegroundCallBodyWithCaller(String name) {
+    return 'Call with $name';
+  }
 }

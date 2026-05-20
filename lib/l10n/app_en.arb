@@ -109,6 +109,46 @@
   "createAction": "Create Group",
   "createSuccess": "Group created",
   "createFailed": "Failed to create group",
+  "joinQueued": "Offline — join request will be sent when you reconnect",
+  "@joinQueued": {
+    "description": "Banner / snackbar message shown when a group join request was queued because the device is offline"
+  },
+  "offlineBanner": "Offline — group operations will be queued and processed when you reconnect.",
+  "@offlineBanner": {
+    "description": "Inline banner inside Add/Create Group dialog when not connected"
+  },
+  "groupType": "Group Type",
+  "@groupType": {
+    "description": "Label above the Public/Private/Conference segmented selector"
+  },
+  "publicGroup": "Public",
+  "@publicGroup": {
+    "description": "Segmented-button label for a Tox public group (DHT-announced)"
+  },
+  "privateGroup": "Private",
+  "@privateGroup": {
+    "description": "Segmented-button label for a Tox private group (invitation-only)"
+  },
+  "publicGroupHint": "Public group — discoverable on the DHT and joinable by anyone with the chat ID.",
+  "@publicGroupHint": {
+    "description": "Description shown below the segmented selector when Public is chosen"
+  },
+  "privateGroupHint": "Private group — invitation-only, not announced on the DHT.",
+  "@privateGroupHint": {
+    "description": "Description shown below the segmented selector when Private is chosen"
+  },
+  "conferenceHint": "Legacy conference — older protocol, no roles or persistence.",
+  "@conferenceHint": {
+    "description": "Description shown below the segmented selector when Conference is chosen"
+  },
+  "searchHintBody": "Search contacts, groups, and messages",
+  "@searchHintBody": {
+    "description": "Empty-state subtitle on the search screen before any keyword is entered"
+  },
+  "noResultsFoundHint": "Try a shorter keyword or check spelling",
+  "@noResultsFoundHint": {
+    "description": "Empty-state subtitle on the search screen when the keyword returned no matches"
+  },
   "createdGroupId": "New Group ID",
   "copyId": "Copy ID",
   "copied": "Copied to clipboard",
@@ -1523,5 +1563,32 @@
     "description": "Settings section header for device-pairing"
   },
   "done": "Done",
-  "@done": {}
+  "@done": {},
+  "runtimeForegroundTitle": "Toxee is running",
+  "@runtimeForegroundTitle": {
+    "description": "Title of the persistent Android foreground-service notification while the app is in the background keeping Tox polling alive."
+  },
+  "runtimeForegroundBody": "Staying connected so you can receive messages and calls.",
+  "@runtimeForegroundBody": {
+    "description": "Body of the persistent Android foreground-service notification (dataSync mode)."
+  },
+  "runtimeForegroundSettingsLabel": "Notification settings",
+  "@runtimeForegroundSettingsLabel": {
+    "description": "Action button on the persistent foreground-service notification that opens system notification settings."
+  },
+  "runtimeForegroundCallTitle": "Call in progress",
+  "@runtimeForegroundCallTitle": {
+    "description": "Title of the elevated foreground-service notification shown while a Toxee call is in progress."
+  },
+  "runtimeForegroundCallBody": "Toxee is keeping your call connected.",
+  "@runtimeForegroundCallBody": {
+    "description": "Body of the elevated foreground-service notification shown while a Toxee call is in progress."
+  },
+  "runtimeForegroundCallBodyWithCaller": "Call with {name}",
+  "@runtimeForegroundCallBodyWithCaller": {
+    "description": "Title variant of the in-call foreground notification including the remote caller's name.",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  }
 }

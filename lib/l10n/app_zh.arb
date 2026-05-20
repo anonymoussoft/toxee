@@ -93,6 +93,16 @@
   "createAction": "创建群聊",
   "createSuccess": "群聊已创建",
   "createFailed": "创建群聊失败",
+  "joinQueued": "当前离线 — 入群申请将在重新连接后发送",
+  "offlineBanner": "当前离线 — 群组操作将在重新连接后排队处理。",
+  "groupType": "群组类型",
+  "publicGroup": "公开",
+  "privateGroup": "私密",
+  "publicGroupHint": "公开群 — 在 DHT 上可被发现，知道群 ID 的人均可加入。",
+  "privateGroupHint": "私密群 — 仅限邀请加入，不在 DHT 上公告。",
+  "conferenceHint": "传统会议群 — 旧协议，没有角色或持久化。",
+  "searchHintBody": "搜索联系人、群组和消息",
+  "noResultsFoundHint": "试试更短的关键词或检查拼写",
   "createdGroupId": "新群组 ID",
   "copyId": "复制 ID",
   "copied": "已复制到剪切板",
@@ -626,5 +636,16 @@
   "pairThisAccountToAnotherDevice": "将此账号配对到另一台设备",
   "pairWithAnotherDevice": "与已有此账号的另一台设备配对",
   "devicesSectionTitle": "设备",
-  "done": "完成"
+  "done": "完成",
+  "runtimeForegroundTitle": "Toxee 正在运行",
+  "runtimeForegroundBody": "保持连接，以便接收消息和通话。",
+  "runtimeForegroundSettingsLabel": "通知设置",
+  "runtimeForegroundCallTitle": "通话中",
+  "runtimeForegroundCallBody": "Toxee 正在保持通话连接。",
+  "runtimeForegroundCallBodyWithCaller": "与 {name} 通话中",
+  "@runtimeForegroundCallBodyWithCaller": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  }
 }

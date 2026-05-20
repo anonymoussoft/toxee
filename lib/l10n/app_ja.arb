@@ -93,6 +93,16 @@
   "createAction": "グループを作成",
   "createSuccess": "グループを作成しました",
   "createFailed": "グループの作成に失敗しました",
+  "joinQueued": "オフライン — 再接続時に参加リクエストを送信します",
+  "offlineBanner": "オフライン — グループ操作はキューに追加され、再接続時に処理されます。",
+  "groupType": "グループの種類",
+  "publicGroup": "公開",
+  "privateGroup": "プライベート",
+  "publicGroupHint": "公開グループ — DHT で検出可能で、チャット ID を知っている人なら誰でも参加できます。",
+  "privateGroupHint": "プライベートグループ — 招待制で、DHT には公開されません。",
+  "conferenceHint": "レガシーカンファレンス — 古いプロトコル、ロールや永続化はありません。",
+  "searchHintBody": "連絡先、グループ、メッセージを検索",
+  "noResultsFoundHint": "より短いキーワードを試すか、スペルを確認してください",
   "createdGroupId": "新しいグループID",
   "copyId": "IDをコピー",
   "copied": "クリップボードにコピーしました",
@@ -728,5 +738,16 @@
   "callQualityMedium": "接続普通",
   "callQualityPoor": "接続不良",
   "callQualityUnknown": "—",
-  "callQualityLabel": "通話品質"
+  "callQualityLabel": "通話品質",
+  "runtimeForegroundTitle": "Toxee は実行中です",
+  "runtimeForegroundBody": "メッセージや通話を受信できるよう接続を維持しています。",
+  "runtimeForegroundSettingsLabel": "通知設定",
+  "runtimeForegroundCallTitle": "通話中",
+  "runtimeForegroundCallBody": "Toxee が通話の接続を維持しています。",
+  "runtimeForegroundCallBodyWithCaller": "{name} と通話中",
+  "@runtimeForegroundCallBodyWithCaller": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  }
 }

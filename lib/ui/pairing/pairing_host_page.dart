@@ -264,7 +264,20 @@ class _PairingHostPageState extends State<PairingHostPage> {
       );
     }
 
+    // QR size adapts to viewport width on small phones (e.g. iPhone SE at
+    // 320pt would otherwise crop the fixed 260pt plate after padding). Clamp
+    // between a scan-legible floor (180) and the original aesthetic ceiling
+    // (260). AppSpacing.lg accounts for outer padding on both sides + the
+    // _QrPlate's own internal padding on both sides.
+    final qrSize = (MediaQuery.sizeOf(context).width - AppSpacing.lg * 4)
+        .clamp(180.0, 260.0);
     return SingleChildScrollView(
+      // Pad above the keyboard so the SAS / confirm buttons stay reachable
+      // when the soft keyboard is active (e.g. if a screen reader gesture or
+      // future input opens it on this page).
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewInsetsOf(context).bottom,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -274,7 +287,7 @@ class _PairingHostPageState extends State<PairingHostPage> {
             textAlign: TextAlign.center,
           ),
           AppSpacing.verticalXl,
-          Center(child: _QrPlate(url: _qrUrl!)),
+          Center(child: _QrPlate(url: _qrUrl!, size: qrSize)),
           AppSpacing.verticalXl,
           if (_sas != null) ...[
             _SasBlock(
@@ -306,8 +319,12 @@ class _PairingHostPageState extends State<PairingHostPage> {
 
 /// White QR plate with rounded corners and a subtle accent dot in the center.
 class _QrPlate extends StatelessWidget {
-  const _QrPlate({required this.url});
+  const _QrPlate({required this.url, this.size = 260});
   final String url;
+
+  /// Edge length of the QR image. Defaults to the original 260pt; callers on
+  /// narrow viewports clamp this down to keep the plate inside available width.
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +342,7 @@ class _QrPlate extends StatelessWidget {
           QrImageView(
             data: url,
             version: QrVersions.auto,
-            size: 260,
+            size: size,
             gapless: true,
             backgroundColor: _kQrPlateBackground,
             errorCorrectionLevel: QrErrorCorrectLevel.H,

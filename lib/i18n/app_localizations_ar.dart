@@ -240,6 +240,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get createFailed => 'فشل إنشاء المجموعة';
 
   @override
+  String get joinQueued => 'غير متصل — سيتم إرسال طلب الانضمام عند إعادة الاتصال';
+
+  @override
+  String get offlineBanner => 'غير متصل — سيتم وضع عمليات المجموعة في قائمة الانتظار ومعالجتها عند إعادة الاتصال.';
+
+  @override
+  String get groupType => 'نوع المجموعة';
+
+  @override
+  String get publicGroup => 'عام';
+
+  @override
+  String get privateGroup => 'خاص';
+
+  @override
+  String get publicGroupHint => 'مجموعة عامة — قابلة للاكتشاف على DHT ويمكن لأي شخص لديه معرف المحادثة الانضمام إليها.';
+
+  @override
+  String get privateGroupHint => 'مجموعة خاصة — بالدعوة فقط، غير معلنة على DHT.';
+
+  @override
+  String get conferenceHint => 'مؤتمر قديم — بروتوكول قديم، بدون أدوار أو استمرارية.';
+
+  @override
+  String get searchHintBody => 'ابحث عن جهات الاتصال والمجموعات والرسائل';
+
+  @override
+  String get noResultsFoundHint => 'جرّب كلمة مفتاحية أقصر أو تحقق من الإملاء';
+
+  @override
   String get createdGroupId => 'معرف المجموعة الجديدة';
 
   @override
@@ -1484,4 +1514,24 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get done => 'Done';
+
+  @override
+  String get runtimeForegroundTitle => 'Toxee قيد التشغيل';
+
+  @override
+  String get runtimeForegroundBody => 'البقاء متصلاً لاستقبال الرسائل والمكالمات.';
+
+  @override
+  String get runtimeForegroundSettingsLabel => 'إعدادات الإشعارات';
+
+  @override
+  String get runtimeForegroundCallTitle => 'مكالمة جارية';
+
+  @override
+  String get runtimeForegroundCallBody => 'يحافظ Toxee على اتصال مكالمتك.';
+
+  @override
+  String runtimeForegroundCallBodyWithCaller(String name) {
+    return 'مكالمة مع $name';
+  }
 }

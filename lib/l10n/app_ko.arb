@@ -93,6 +93,16 @@
   "createAction": "그룹 만들기",
   "createSuccess": "그룹을 만들었습니다",
   "createFailed": "그룹 만들기에 실패했습니다",
+  "joinQueued": "오프라인 — 다시 연결되면 참가 요청을 보냅니다",
+  "offlineBanner": "오프라인 — 그룹 작업은 다시 연결되면 대기열에서 처리됩니다.",
+  "groupType": "그룹 유형",
+  "publicGroup": "공개",
+  "privateGroup": "비공개",
+  "publicGroupHint": "공개 그룹 — DHT에서 검색 가능하며 채팅 ID를 아는 누구나 참가할 수 있습니다.",
+  "privateGroupHint": "비공개 그룹 — 초대 전용이며 DHT에 공지되지 않습니다.",
+  "conferenceHint": "레거시 컨퍼런스 — 오래된 프로토콜, 역할이나 지속성 없음.",
+  "searchHintBody": "연락처, 그룹, 메시지 검색",
+  "noResultsFoundHint": "더 짧은 키워드를 시도하거나 철자를 확인하세요",
   "createdGroupId": "새 그룹 ID",
   "copyId": "ID 복사",
   "copied": "클립보드에 복사했습니다",
@@ -728,5 +738,16 @@
   "callQualityMedium": "연결 보통",
   "callQualityPoor": "연결 불량",
   "callQualityUnknown": "—",
-  "callQualityLabel": "통화 품질"
+  "callQualityLabel": "통화 품질",
+  "runtimeForegroundTitle": "Toxee 실행 중",
+  "runtimeForegroundBody": "메시지와 통화를 받을 수 있도록 연결을 유지합니다.",
+  "runtimeForegroundSettingsLabel": "알림 설정",
+  "runtimeForegroundCallTitle": "통화 중",
+  "runtimeForegroundCallBody": "Toxee가 통화 연결을 유지하고 있습니다.",
+  "runtimeForegroundCallBodyWithCaller": "{name}님과 통화 중",
+  "@runtimeForegroundCallBodyWithCaller": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  }
 }

@@ -553,6 +553,66 @@ abstract class AppLocalizations {
   /// **'Failed to create group'**
   String get createFailed;
 
+  /// Banner / snackbar message shown when a group join request was queued because the device is offline
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — join request will be sent when you reconnect'**
+  String get joinQueued;
+
+  /// Inline banner inside Add/Create Group dialog when not connected
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — group operations will be queued and processed when you reconnect.'**
+  String get offlineBanner;
+
+  /// Label above the Public/Private/Conference segmented selector
+  ///
+  /// In en, this message translates to:
+  /// **'Group Type'**
+  String get groupType;
+
+  /// Segmented-button label for a Tox public group (DHT-announced)
+  ///
+  /// In en, this message translates to:
+  /// **'Public'**
+  String get publicGroup;
+
+  /// Segmented-button label for a Tox private group (invitation-only)
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get privateGroup;
+
+  /// Description shown below the segmented selector when Public is chosen
+  ///
+  /// In en, this message translates to:
+  /// **'Public group — discoverable on the DHT and joinable by anyone with the chat ID.'**
+  String get publicGroupHint;
+
+  /// Description shown below the segmented selector when Private is chosen
+  ///
+  /// In en, this message translates to:
+  /// **'Private group — invitation-only, not announced on the DHT.'**
+  String get privateGroupHint;
+
+  /// Description shown below the segmented selector when Conference is chosen
+  ///
+  /// In en, this message translates to:
+  /// **'Legacy conference — older protocol, no roles or persistence.'**
+  String get conferenceHint;
+
+  /// Empty-state subtitle on the search screen before any keyword is entered
+  ///
+  /// In en, this message translates to:
+  /// **'Search contacts, groups, and messages'**
+  String get searchHintBody;
+
+  /// Empty-state subtitle on the search screen when the keyword returned no matches
+  ///
+  /// In en, this message translates to:
+  /// **'Try a shorter keyword or check spelling'**
+  String get noResultsFoundHint;
+
   /// No description provided for @createdGroupId.
   ///
   /// In en, this message translates to:
@@ -2832,6 +2892,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Done'**
   String get done;
+
+  /// Title of the persistent Android foreground-service notification while the app is in the background keeping Tox polling alive.
+  ///
+  /// In en, this message translates to:
+  /// **'Toxee is running'**
+  String get runtimeForegroundTitle;
+
+  /// Body of the persistent Android foreground-service notification (dataSync mode).
+  ///
+  /// In en, this message translates to:
+  /// **'Staying connected so you can receive messages and calls.'**
+  String get runtimeForegroundBody;
+
+  /// Action button on the persistent foreground-service notification that opens system notification settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification settings'**
+  String get runtimeForegroundSettingsLabel;
+
+  /// Title of the elevated foreground-service notification shown while a Toxee call is in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Call in progress'**
+  String get runtimeForegroundCallTitle;
+
+  /// Body of the elevated foreground-service notification shown while a Toxee call is in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Toxee is keeping your call connected.'**
+  String get runtimeForegroundCallBody;
+
+  /// Title variant of the in-call foreground notification including the remote caller's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Call with {name}'**
+  String runtimeForegroundCallBodyWithCaller(String name);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
