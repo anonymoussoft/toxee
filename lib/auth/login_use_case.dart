@@ -81,36 +81,54 @@ class LoginUseCase {
       final avatarForAccount = account != null ? (account['avatarPath'] ?? '') : '';
       // Use toxIdForLogin (existing account key) so we update the list entry instead of
       // being treated as a new account; service.selfId may differ in format (e.g. 76 vs 64 chars).
+      // Skip the lastLoginTime bump here; the caller is responsible for
+      // calling Prefs.touchAccountLoginTime() once AppBootstrapCoordinator.boot
+      // has actually succeeded — otherwise a failed boot would still surface
+      // this account as "recently logged in" in the picker.
       await Prefs.addAccount(
         toxId: toxIdForLogin,
         nickname: nickname,
         statusMessage: statusMessage,
         avatarPath: avatarForAccount.isNotEmpty ? avatarForAccount : null,
+        updateLastLogin: false,
       );
 
       return LoginSuccess(service: service);
     }
 
-    // Legacy account without toxId
+    // Legacy account without toxId. The per-account preferences adapter is
+    // constructed without a prefix and gets the 16-char Tox-ID prefix injected
+    // via `setAccountPrefix` once `service.login()` resolves selfId, so manual
+    // bootstrap-node settings actually take effect on this code path —
+    // `BootstrapNodesAdapter` only implements the three-field BootstrapService
+    // API and the legacy path otherwise loses `bootstrap_node_mode` plumbing.
     final prefs = await SharedPreferences.getInstance();
-    final service = FfiChatService(
-      preferencesService: SharedPreferencesAdapter(prefs),
+    final legacyPrefsAdapter = SharedPreferencesAdapter(prefs);
+    final legacyService = FfiChatService(
+      preferencesService: legacyPrefsAdapter,
       loggerService: AppLoggerAdapter(),
       bootstrapService: BootstrapNodesAdapter(prefs),
     );
-    await service.init();
-    await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-    final toxId = service.selfId;
+    await legacyService.init();
+    await legacyService.login(
+        userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
+    final toxId = legacyService.selfId;
+    legacyPrefsAdapter.setAccountPrefix(
+        toxId.substring(0, toxId.length >= 16 ? 16 : toxId.length));
     await Prefs.setNickname(nickname);
     await Prefs.setStatusMessage(statusMessage);
     await Prefs.setCurrentAccountToxId(toxId);
+    // Same rationale as above — defer lastLoginTime until the caller has
+    // booted the full app coordinator successfully.
     await Prefs.addAccount(
       toxId: toxId,
       nickname: nickname,
       statusMessage: statusMessage,
+      updateLastLogin: false,
     );
-    await service.updateSelfProfile(nickname: nickname, statusMessage: statusMessage);
+    await legacyService.updateSelfProfile(
+        nickname: nickname, statusMessage: statusMessage);
     // Caller (e.g. login page) must call AppBootstrapCoordinator.boot(service) before navigating to HomePage
-    return LoginSuccess(service: service);
+    return LoginSuccess(service: legacyService);
   }
 }

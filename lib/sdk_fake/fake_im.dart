@@ -704,7 +704,7 @@ class FakeIM {
       final hist = ffi.getHistory(f.userId);
       for (final h in hist) {
         final msg = FakeMessage(
-          msgID: '${h.timestamp.millisecondsSinceEpoch}_${h.fromUserId}',
+          msgID: h.msgID ?? '${h.timestamp.millisecondsSinceEpoch}_${h.fromUserId}',
           conversationID: 'c2c_${f.userId}',
           fromUser: h.fromUserId,
           text: h.text,
@@ -722,7 +722,7 @@ class FakeIM {
       final hist = ffi.getHistory(gid);
       for (final h in hist) {
         final msg = FakeMessage(
-          msgID: '${h.timestamp.millisecondsSinceEpoch}_${h.fromUserId}',
+          msgID: h.msgID ?? '${h.timestamp.millisecondsSinceEpoch}_${h.fromUserId}',
           conversationID: 'group_$gid',
           fromUser: h.fromUserId,
           text: h.text,

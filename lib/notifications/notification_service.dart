@@ -463,6 +463,17 @@ class NotificationService {
     }
   }
 
+  /// Clear all per-session inbox state and any pending OS-level banners so a
+  /// subsequent account does not inherit the prior account's grouped lines or
+  /// notification-id mapping. Safe to call before [init] (the maps are empty);
+  /// platform-channel `cancelAll` is a no-op when uninitialized.
+  Future<void> resetSessionState() async {
+    _grouped.clear();
+    _conversationIdHashCache.clear();
+    _conversationCounter = 0;
+    await cancelAll();
+  }
+
   String _clampBody(String preview) {
     final trimmed = preview.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (trimmed.length <= _maxBodyChars) return trimmed;

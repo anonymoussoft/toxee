@@ -153,6 +153,7 @@ class AccountService {
     FfiChatService? service;
     String? profileFile;
     bool profileWasDecrypted = false;
+    bool initSucceeded = false;
     final accountPrefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
     final migrPrefs = await SharedPreferences.getInstance();
 
@@ -223,10 +224,23 @@ class AccountService {
       }
 
       await Prefs.setCurrentAccountToxId(toxId);
+      initSucceeded = true;
       return service;
     } catch (e) {
       await service?.dispose();
-      if (profileWasDecrypted &&
+      await Prefs.setCurrentAccountToxId(previousAccount);
+      if (password != null && password.isNotEmpty) {
+        SessionPasswordStore.clear(toxId);
+      }
+      rethrow;
+    } finally {
+      // Re-encrypt the on-disk profile if we decrypted it but didn't succeed.
+      // try/finally (vs catch-rethrow) guarantees this runs even on a future
+      // early-return path that bypasses the catch. On the success path the
+      // session owns the running profile and the file is re-encrypted later
+      // by teardownCurrentSession, so we skip it here.
+      if (!initSucceeded &&
+          profileWasDecrypted &&
           profileFile != null &&
           password != null &&
           password.isNotEmpty) {
@@ -243,11 +257,6 @@ class AccountService {
           );
         }
       }
-      await Prefs.setCurrentAccountToxId(previousAccount);
-      if (password != null && password.isNotEmpty) {
-        SessionPasswordStore.clear(toxId);
-      }
-      rethrow;
     }
   }
 
@@ -497,16 +506,19 @@ class AccountService {
     required FfiChatService service,
     required String toxId,
   }) async {
-    // 1. Teardown without re-encrypting (we're deleting the profile)
-    await teardownCurrentSession(
-        service: service, reEncryptProfile: false);
-
-    // 2. Clear service-level data
+    // 1. Clear service-level data BEFORE teardown — once teardown disposes
+    // the service, account-level cleanup (SQLite, file locks) can no longer
+    // run. Order matters: must be called on a still-live service.
     try {
       await service.clearAllAccountData();
-    } catch (_) {
-      // Service already disposed, ignore
+    } catch (e, st) {
+      AppLogger.logError(
+          '[AccountService] clearAllAccountData before teardown failed', e, st);
     }
+
+    // 2. Teardown without re-encrypting (we're deleting the profile)
+    await teardownCurrentSession(
+        service: service, reEncryptProfile: false);
 
     // 3-5. Clear prefs (includes scoped keys + password hash)
     await Prefs.clearAccountData(toxId);
@@ -619,6 +631,13 @@ class AccountService {
     } catch (e) {
       AppLogger.warn(
           '[AccountService] failed to clean UIKit failed-message prefs: $e');
+    }
+
+    // Clear current account ID if we just deleted the active account, so a
+    // subsequent cold start does not try to load this profile.
+    final current = await Prefs.getCurrentAccountToxId();
+    if (current == toxId) {
+      await Prefs.setCurrentAccountToxId(null);
     }
   }
 }

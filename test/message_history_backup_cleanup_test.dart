@@ -76,7 +76,7 @@ void main() {
       final jsonFiles = entries.where((n) => n.endsWith('.json')).toList();
       expect(jsonFiles.length, 1);
 
-      persistence.dispose();
+      await persistence.dispose();
     });
   });
 }

@@ -59,11 +59,13 @@ bool compareToxIds(String id1, String id2) {
   final n1 = normalizeToxId(id1).trim();
   final n2 = normalizeToxId(id2).trim();
   if (n1 == n2) return true;
-  // Allow prefix match so 16-char profile prefix matches full 64-char public key (same account)
-  if (n1.length >= 16 && n2.length >= 16) {
-    final longer = n1.length >= n2.length ? n1 : n2;
-    final shorter = n1.length < n2.length ? n1 : n2;
-    return longer.length >= 64 && longer.startsWith(shorter);
+  // Allow prefix match strictly for the legacy 16-char profile-prefix vs
+  // full 64-char public key case. Any wider prefix window risks collapsing
+  // two distinct accounts that happen to share a leading run of hex.
+  final longer = n1.length >= n2.length ? n1 : n2;
+  final shorter = n1.length < n2.length ? n1 : n2;
+  if (shorter.length == 16 && longer.length >= 64) {
+    return longer.startsWith(shorter);
   }
   return false;
 }

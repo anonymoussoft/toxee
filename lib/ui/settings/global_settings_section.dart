@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
@@ -23,11 +25,18 @@ class GlobalSettingsSection extends StatefulWidget {
     super.key,
     required this.colorTheme,
     this.toxId,
+    this.onDownloadsConfigChanged,
   });
 
   final dynamic colorTheme;
   /// When non-null, show notification sound setting (per-account).
   final String? toxId;
+  /// Optional hook the host can use to notify the running FfiChatService when
+  /// the downloads directory or auto-download size limit changes. The service
+  /// reads Prefs on-demand for each file transfer so this is currently
+  /// advisory (e.g. for refresh/log surfaces), but the contract lets future
+  /// callers push a value down without re-plumbing this widget.
+  final VoidCallback? onDownloadsConfigChanged;
 
   @override
   State<GlobalSettingsSection> createState() => _GlobalSettingsSectionState();
@@ -125,6 +134,7 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
       }
       if (selectedDirectory != null && selectedDirectory.isNotEmpty) {
         await Prefs.setDownloadsDirectory(selectedDirectory);
+        widget.onDownloadsConfigChanged?.call();
         if (mounted) setState(() => _downloadsDirectoryController.text = selectedDirectory!);
       }
     } catch (e) {
@@ -151,6 +161,7 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
     final limit = int.tryParse(text);
     if (limit != null && limit > 0 && limit <= 10000) {
       await Prefs.setAutoDownloadSizeLimit(limit);
+      widget.onDownloadsConfigChanged?.call();
       if (mounted) setState(() {});
     }
   }
@@ -222,7 +233,7 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                         showSelectedIcon: false,
                         onSelectionChanged: (Set<ThemeMode> selection) {
                           final chosen = selection.first;
-                          AppTheme.set(chosen);
+                          unawaited(AppTheme.set(chosen));
                           // For 'system', pick the resolved platform
                           // brightness so the UIKit layer matches the live
                           // appearance; otherwise mirror the explicit choice.

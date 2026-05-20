@@ -59,6 +59,10 @@ class FakeChatDataProvider implements ChatDataProvider {
 
   StreamSubscription? _convSub;
   StreamSubscription? _unreadSub;
+  StreamSubscription? _messageSub;
+  StreamSubscription? _friendDeletedSub;
+  StreamSubscription? _groupDeletedSub;
+  V2TimConversationListener? _sdkConvListener;
   FfiChatService?
       _ffiService; // Reference to FfiChatService for getting last message timestamps
   Timer? _convFlushTimer;
@@ -131,7 +135,7 @@ class FakeChatDataProvider implements ChatDataProvider {
           // Also remove from UIKit's conversation list to ensure UI updates
           // This is important because buildConversationList only adds/updates, it doesn't remove
           UikitDataFacade.removeConversation([c.conversationID]);
-          print(
+          AppLogger.debug(
               '[FakeChatDataProvider] Removed quit group conversation ${c.conversationID} from UIKit conversation list via FakeConversation event');
           return; // Skip adding this conversation
         }
@@ -166,7 +170,7 @@ class FakeChatDataProvider implements ChatDataProvider {
     });
 
     // Listen for new messages to update conversation lastMessage
-    FakeUIKit.instance.eventBusInstance
+    _messageSub = FakeUIKit.instance.eventBusInstance
         .on<FakeMessage>(FakeIM.topicMessage)
         .listen((msg) async {
       // R-3 / U-1 / U-2: never let raw control-signal payloads
@@ -329,7 +333,7 @@ class FakeChatDataProvider implements ChatDataProvider {
     });
 
     // Listen for friend deletion events
-    FakeUIKit.instance.eventBusInstance
+    _friendDeletedSub = FakeUIKit.instance.eventBusInstance
         .on<FakeFriendDeleted>(FakeIM.topicFriendDeleted)
         .listen((event) {
       // Remove conversation from map and mark as SDK-deleted to prevent re-add by FakeIM refresh
@@ -341,12 +345,12 @@ class FakeChatDataProvider implements ChatDataProvider {
       // Also remove from UIKit's conversation list to ensure UI updates.
       // buildConversationList only adds/updates; it doesn't remove, so we need explicit removal.
       UikitDataFacade.removeConversation([convId]);
-      print(
+      AppLogger.debug(
           '[FakeChatDataProvider] Removed conversation $convId from UIKit conversation list via FakeFriendDeleted event');
     });
 
     // Listen for group deletion events
-    FakeUIKit.instance.eventBusInstance
+    _groupDeletedSub = FakeUIKit.instance.eventBusInstance
         .on<FakeGroupDeleted>(FakeIM.topicGroupDeleted)
         .listen((event) {
       // Remove conversation from map and mark as SDK-deleted to prevent re-add by FakeIM refresh
@@ -358,7 +362,7 @@ class FakeChatDataProvider implements ChatDataProvider {
       // Also remove from UIKit's conversation list to ensure UI updates
       // buildConversationList only adds/updates, it doesn't remove, so we need to explicitly remove
       UikitDataFacade.removeConversation([convId]);
-      print(
+      AppLogger.debug(
           '[FakeChatDataProvider] Removed conversation $convId from UIKit conversation list via FakeGroupDeleted event');
     });
 
@@ -367,40 +371,40 @@ class FakeChatDataProvider implements ChatDataProvider {
     // Deferred slightly to ensure SDK is fully initialized.
     Future.delayed(const Duration(milliseconds: 500), () {
       try {
+        final listener = V2TimConversationListener(
+          onConversationChanged: (List<V2TimConversation> conversationList) {
+            for (final conv in conversationList) {
+              if (_convMap.containsKey(conv.conversationID)) {
+                _convMap[conv.conversationID] = conv;
+              }
+            }
+            _scheduleConvListEmit();
+          },
+          onConversationDeleted: (List<String> conversationIDList) {
+            for (final convId in conversationIDList) {
+              _convMap.remove(convId);
+              _sdkDeletedConvIds.add(convId);
+              AppLogger.debug(
+                  '[FakeChatDataProvider] Removed conversation $convId from _convMap via onConversationDeleted');
+            }
+            _scheduleConvListEmit();
+          },
+        );
+        _sdkConvListener = listener;
         TencentCloudChat.instance.chatSDKInstance.manager
             .getConversationManager()
-            .addConversationListener(
-              listener: V2TimConversationListener(
-                onConversationChanged:
-                    (List<V2TimConversation> conversationList) {
-                  for (final conv in conversationList) {
-                    if (_convMap.containsKey(conv.conversationID)) {
-                      _convMap[conv.conversationID] = conv;
-                    }
-                  }
-                  _scheduleConvListEmit();
-                },
-                onConversationDeleted: (List<String> conversationIDList) {
-                  for (final convId in conversationIDList) {
-                    _convMap.remove(convId);
-                    _sdkDeletedConvIds.add(convId);
-                    print(
-                        '[FakeChatDataProvider] Removed conversation $convId from _convMap via onConversationDeleted');
-                  }
-                  _scheduleConvListEmit();
-                },
-              ),
-            );
-        print(
+            .addConversationListener(listener: listener);
+        AppLogger.debug(
             '[FakeChatDataProvider] Registered onConversationDeleted listener');
       } catch (e) {
-        print(
+        AppLogger.debug(
             '[FakeChatDataProvider] Failed to register conversation listener: $e');
       }
     });
   }
 
   void _updateTotalUnreadCount(List<V2TimConversation> conversations) {
+    if (_unreadCtrl.isClosed) return;
     // Calculate total unread count from conversation list
     int total = 0;
     for (final conv in conversations) {
@@ -412,6 +416,7 @@ class FakeChatDataProvider implements ChatDataProvider {
 
   /// Emit current _convMap to conversationStream (and unread). Used after debounce.
   void _emitConvList() {
+    if (_convCtrl.isClosed) return;
     final updatedList = _convMap.values.toList();
     updatedList.sort((a, b) {
       final aPinned = a.isPinned ?? false;
@@ -429,9 +434,11 @@ class FakeChatDataProvider implements ChatDataProvider {
   /// (e.g. 11 FakeConversation events per 5s refresh) into one stream emission and one
   /// buildConversationList log instead of 11.
   void _scheduleConvListEmit() {
+    if (_convCtrl.isClosed) return;
     _convFlushTimer?.cancel();
     _convFlushTimer = Timer(_convFlushDelay, () {
       _convFlushTimer = null;
+      if (_convCtrl.isClosed) return;
       _emitConvList();
     });
   }
@@ -837,6 +844,21 @@ class FakeChatDataProvider implements ChatDataProvider {
     _convFlushTimer = null;
     _convSub?.cancel();
     _unreadSub?.cancel();
+    _messageSub?.cancel();
+    _friendDeletedSub?.cancel();
+    _groupDeletedSub?.cancel();
+    final listener = _sdkConvListener;
+    if (listener != null) {
+      try {
+        TencentCloudChat.instance.chatSDKInstance.manager
+            .getConversationManager()
+            .removeConversationListener(listener: listener);
+      } catch (e) {
+        AppLogger.debug(
+            '[FakeChatDataProvider] removeConversationListener threw on dispose: $e');
+      }
+      _sdkConvListener = null;
+    }
     _convCtrl.close();
     _unreadCtrl.close();
   }

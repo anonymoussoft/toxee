@@ -34,9 +34,13 @@ class RingtonePlayer {
     if (!_playing) return;
     try {
       await _player.stop();
-      _playing = false;
     } catch (e) {
       AppLogger.warn('[RingtonePlayer] stop failed: $e');
+    } finally {
+      // Clear the flag unconditionally so a transient platform failure can't
+      // strand the player in "stuck playing" state, which would silently
+      // suppress every subsequent start().
+      _playing = false;
     }
   }
 

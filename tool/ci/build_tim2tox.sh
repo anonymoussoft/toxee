@@ -6,6 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tool/ci/common.sh
 source "$SCRIPT_DIR/common.sh"
 
+# Pinned SHA-256 of the libsodium 1.0.20 release tarball
+# (https://github.com/jedisct1/libsodium/releases/tag/1.0.20-RELEASE).
+# Treat any mismatch as a hard failure — libsodium is the crypto floor,
+# silent CDN poisoning here breaks message confidentiality (F6).
+LIBSODIUM_1_0_20_SHA256="ebb65ef6ca439333c2bb41a0c1990587288da07f6c7fd07cb3a18cc18d30ce19"
+
 TARGET=""
 MODE="release"
 WINDOWS_ARCH="${TIM2TOX_WINDOWS_ARCH:-x64}" # x64|arm64
@@ -180,6 +186,29 @@ download_file_once() {
   fi
 }
 
+verify_sha256() {
+  local path="$1"
+  local expected="$2"
+  local label="${3:-$(basename "$path")}"
+  local actual=""
+
+  [[ -f "$path" ]] || ci_die "$label: file missing for sha256 verification: $path"
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$path" | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "$path" | awk '{print $1}')"
+  else
+    ci_die "$label: no sha256sum/shasum available to verify $path"
+  fi
+
+  if [[ "$actual" != "$expected" ]]; then
+    # Remove the poisoned file so a retry doesn't keep re-failing on cached bytes.
+    rm -f "$path"
+    ci_die "$label: sha256 mismatch (got $actual, expected $expected). File removed; re-run to re-download."
+  fi
+}
+
 prepare_android_libsodium_prefix() {
   local abi="$1"
   local ndk_path="$2"
@@ -218,6 +247,7 @@ prepare_android_libsodium_prefix() {
   download_file_once \
     "https://github.com/jedisct1/libsodium/releases/download/1.0.20-RELEASE/libsodium-1.0.20.tar.gz" \
     "$archive"
+  verify_sha256 "$archive" "$LIBSODIUM_1_0_20_SHA256" "libsodium-1.0.20 (android-$abi)"
 
   rm -rf "$src_root"
   mkdir -p "$src_root"
@@ -346,6 +376,7 @@ prepare_ios_libsodium_prefix() {
   download_file_once \
     "https://github.com/jedisct1/libsodium/releases/download/1.0.20-RELEASE/libsodium-1.0.20.tar.gz" \
     "$archive"
+  verify_sha256 "$archive" "$LIBSODIUM_1_0_20_SHA256" "libsodium-1.0.20 (ios-arm64)"
 
   rm -rf "$src_root"
   mkdir -p "$src_root"

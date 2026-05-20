@@ -87,6 +87,13 @@ class BootstrapNodesService {
   static const String _apiUrl = 'https://nodes.tox.chat/json';
   static const Duration _fetchTimeout = Duration(seconds: 8);
 
+  /// Tox DHT public keys are 64 hex chars (32 bytes). Reject malformed
+  /// publicKey fields from the remote node list — they would only ever
+  /// produce a bootstrap failure at best, and at worst could be a vector
+  /// for a downgrade injection.
+  static final RegExp _pubKeyPattern = RegExp(r'^[0-9A-Fa-f]{64}$');
+  static bool _isValidPubKey(String pubKey) => _pubKeyPattern.hasMatch(pubKey);
+
   /// True iff the most recent [fetchNodes] call returned the hardcoded
   /// fallback list (because the HTTP fetch failed or returned no nodes).
   /// The UI can read this to surface a "showing offline node list" hint
@@ -108,7 +115,24 @@ class BootstrapNodesService {
           lastFetchUsedFallback = true;
           return _getFallbackNodes();
         }
-        final nodes = nodesJson.map((n) => BootstrapNode.fromJson(n as Map<String, dynamic>)).toList();
+        final rawNodes = nodesJson
+            .map((n) => BootstrapNode.fromJson(n as Map<String, dynamic>))
+            .toList();
+        final nodes =
+            rawNodes.where((n) => _isValidPubKey(n.publicKey)).toList();
+        final dropped = rawNodes.length - nodes.length;
+        if (dropped > 0) {
+          AppLogger.warn(
+            '[BootstrapNodesService] fetchNodes: dropped $dropped node(s) with invalid public_key',
+          );
+        }
+        if (nodes.isEmpty) {
+          AppLogger.warn(
+            '[BootstrapNodesService] fetchNodes: no nodes survived publicKey validation, using fallback',
+          );
+          lastFetchUsedFallback = true;
+          return _getFallbackNodes();
+        }
         lastFetchUsedFallback = false;
         return nodes;
       }

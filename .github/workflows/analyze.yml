@@ -23,8 +23,15 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Flutter analyze
+      - name: Flutter analyze (hard gate)
         run: flutter analyze lib tool --no-fatal-warnings --no-fatal-infos
+
+      # Advisory pass: surfaces lint warnings/infos (e.g. prefer_final_locals)
+      # without failing CI. Output is informational only — see F12 in the
+      # 2026-05-20 batch-6 review for the path toward making this fatal.
+      - name: Flutter analyze (advisory, warnings + infos)
+        continue-on-error: true
+        run: flutter analyze lib tool
 
       - name: Complexity guard
         run: dart run tool/check_complexity.dart

@@ -106,6 +106,10 @@ class StartupSessionUseCase {
       onStepChanged(StartupStep.loggingIn);
       await AppBootstrapCoordinator.boot(currentService);
 
+      try {
+        await Prefs.touchAccountLoginTime(currentService.selfId);
+      } catch (_) {}
+
       onStepChanged(StartupStep.connecting);
 
       if (currentService.isConnected) {

@@ -59,7 +59,18 @@ if [ "${#SERIES_ENTRIES[@]}" -eq 0 ]; then
 fi
 
 if [ "${#SERIES_ENTRIES[@]}" -gt 1 ]; then
-  echo "refresh_sdk_patch.sh does not yet support regenerating a multi-patch series. Use 'git format-patch baseline..HEAD -o $PATCHES_DIR' manually after committing each logical change." >&2
+  {
+    echo "refresh_sdk_patch.sh: multi-patch series detected (${#SERIES_ENTRIES[@]} entries); refusing to overwrite."
+    echo ""
+    echo "Regenerate manually:"
+    echo "  cd $SDK_DIR"
+    echo "  # 1) commit each logical change on top of the 'baseline' ref"
+    echo "  git format-patch baseline..HEAD -o \"$PATCHES_DIR\""
+    echo "  # 2) update the series file to list each generated patch in apply order:"
+    echo "  ls \"$PATCHES_DIR\"/*.patch | xargs -n1 basename > \"$PATCHES_DIR/series\""
+    echo "  # 3) re-bootstrap so vendor_state.patches_sha256 is refreshed:"
+    echo "  (cd \"$ROOT\" && dart run tool/bootstrap_deps.dart --force)"
+  } >&2
   exit 1
 fi
 

@@ -1,0 +1,19 @@
+name: Submodule Verify
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  verify-submodule-pointers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify submodule pointers reachable on remotes
+        run: bash tool/verify_submodule_remote.sh

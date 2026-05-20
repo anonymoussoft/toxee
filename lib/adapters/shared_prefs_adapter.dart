@@ -18,7 +18,7 @@ import '../util/prefs/scoped_key.dart';
 class SharedPreferencesAdapter implements ExtendedPreferencesService {
   final SharedPreferences _prefs;
   int? _instanceId;
-  final String? _accountPrefix;
+  String? _accountPrefix;
 
   // Keys
   static const _kGroups = 'groups_list';
@@ -53,6 +53,16 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
   SharedPreferencesAdapter(this._prefs, {int? instanceId, String? accountPrefix})
       : _instanceId = instanceId,
         _accountPrefix = accountPrefix;
+
+  /// Set the account prefix post-construction. Used by login flows that can't
+  /// know the toxId until after `service.login()` resolves selfId (legacy
+  /// account path). Subsequent reads/writes use the account-scoped pattern.
+  /// If [_accountPrefix] was already set, this is a no-op (legacy migration
+  /// only happens once per process via existing _prefixKey logic).
+  void setAccountPrefix(String prefix) {
+    if (_accountPrefix != null && _accountPrefix!.isNotEmpty) return;
+    _accountPrefix = prefix;
+  }
 
   /// Get instance ID (lazy, gets from FFI if not set)
   int? get _effectiveInstanceId {
@@ -155,6 +165,8 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
     if (prefix == null || prefix.isEmpty) {
       // No way to identify which keys belong to "this account"; refuse rather
       // than wipe the entire SharedPreferences store.
+      AppLogger.warn(
+          '[SharedPrefsAdapter] refused clear() — no accountPrefix; would wipe global keys');
       return;
     }
     final suffix = '_$prefix';

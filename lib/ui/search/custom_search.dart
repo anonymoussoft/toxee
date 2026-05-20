@@ -70,6 +70,9 @@ class _CustomSearchState extends State<CustomSearch> {
   static const int _historySearchPageSize = 200;
   /// Max messages to load per conversation so that older history can be searched.
   static const int _maxHistoryMessagesPerConversation = 2000;
+  /// Tighter cap for global search across many conversations: 5 pages × 200 = 1000
+  /// per conversation, keeping peak memory bounded when scanning every chat.
+  static const int _maxHistoryMessagesPerConversationGlobal = 1000;
 
   /// Search message content: in-memory first, then paginated persisted history so that older messages are included.
   /// Returns result items for conversations that have at least one message whose text/summary contains [keyword] (case-insensitive).
@@ -93,10 +96,11 @@ class _CustomSearchState extends State<CustomSearch> {
       List<V2TimMessage> list = UikitDataFacade.getMessageList(key: key);
       // Build full list: in-memory (newest) + paginated history (older). Message order is newest-first.
       List<V2TimMessage> allMessages = List<V2TimMessage>.from(list);
+      bool foundMatchEarly = false;
       if (c.userID != null || c.groupID != null) {
         try {
           String? lastMsgID = allMessages.isEmpty ? null : allMessages.last.msgID;
-          while (allMessages.length < _maxHistoryMessagesPerConversation) {
+          while (allMessages.length < _maxHistoryMessagesPerConversationGlobal) {
             final res = await messageSDK.getHistoryMessageList(
               userID: c.userID,
               groupID: c.groupID,
@@ -105,6 +109,13 @@ class _CustomSearchState extends State<CustomSearch> {
             );
             if (res.messageList.isEmpty) break;
             allMessages.addAll(res.messageList);
+            // Early-break once this conversation has at least one match: we
+            // only need to know it has hits to surface it in results — we
+            // don't need to scan its entire history.
+            if (res.messageList.any(messageMatches)) {
+              foundMatchEarly = true;
+              break;
+            }
             if (res.isFinished) break;
             lastMsgID = res.messageList.last.msgID;
           }
@@ -114,6 +125,9 @@ class _CustomSearchState extends State<CustomSearch> {
         }
       }
       final matching = allMessages.where(messageMatches).toList();
+      // Mark unused-but-meaningful: foundMatchEarly is informational; keep the
+      // variable to make the optimization intent visible to future readers.
+      assert(!foundMatchEarly || matching.isNotEmpty);
       if (matching.isNotEmpty) {
         result.add(TencentCloudChatSearchResultItemData(
           showName: TencentCloudChatUtils.checkString(c.showName) ?? c.conversationID,

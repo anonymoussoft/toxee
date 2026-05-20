@@ -20,6 +20,19 @@ part 'prefs/security_prefs.dart';
 part 'prefs/account_prefs.dart';
 part 'prefs/chat_prefs.dart';
 
+/// Length-invariant XOR-accumulation equality. Used only for password-hash
+/// comparison to defeat timing side channels — never short-circuits on a
+/// mismatched byte. Returns false up-front on length mismatch (length is
+/// not the secret).
+bool _constantTimeEquals(String a, String b) {
+  if (a.length != b.length) return false;
+  var x = 0;
+  for (var i = 0; i < a.length; i++) {
+    x |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+  }
+  return x == 0;
+}
+
 /// Static facade for app preferences. New code should prefer repository instances
 /// ([PrefsImpl] or [prefs_interfaces.dart] interfaces) for testability and bounded context.
 /// See [PrefsImpl.global] and [prefs_interfaces.dart] for migration.
@@ -1509,6 +1522,7 @@ class Prefs {
     bool? autoAcceptFriends,
     bool? autoAcceptGroupInvites,
     bool? notificationSoundEnabled,
+    bool updateLastLogin = true,
   }) async {
     if (toxId.isEmpty) {
       throw ArgumentError('toxId cannot be empty');
@@ -1530,7 +1544,9 @@ class Prefs {
     if (existingIndex >= 0) {
       // Update existing account
       account = accounts[existingIndex];
-      account['lastLoginTime'] = DateTime.now().toIso8601String();
+      if (updateLastLogin) {
+        account['lastLoginTime'] = DateTime.now().toIso8601String();
+      }
       // Update nickname if provided (allows nickname changes)
       if (nickname != null && nickname.isNotEmpty) {
         account['nickname'] = nickname;
@@ -1560,7 +1576,7 @@ class Prefs {
         'toxId': toxId,
         'nickname': nickname ?? '',
         'statusMessage': statusMessage ?? '',
-        'lastLoginTime': DateTime.now().toIso8601String(),
+        if (updateLastLogin) 'lastLoginTime': DateTime.now().toIso8601String(),
       };
       if (avatarPath != null && avatarPath.isNotEmpty) {
         account['avatarPath'] = avatarPath;
@@ -1587,6 +1603,41 @@ class Prefs {
       }
       accounts.add(account);
     }
+    await setAccountList(accounts);
+  }
+
+  /// Update `lastLoginTime` for an existing account to now. No-op when the
+  /// account is not in the list. Separated from [addAccount] so callers can
+  /// defer the timestamp bump until after a full boot succeeds, instead of
+  /// marking an account as "recently logged in" while a later init step
+  /// (e.g. AppBootstrapCoordinator.boot) may still throw.
+  static Future<void> touchAccountLoginTime(String toxId) async {
+    if (toxId.isEmpty) return;
+    final normalized = toxId.trim();
+    if (normalized.isEmpty) return;
+    final accounts = await getAccountList();
+    // Fuzzy match — mirrors [getAccountByToxId] so callers can pass any of
+    // the formats that flow through the system (76-char service.selfId,
+    // 64-char toxIdForLogin, 16-char prefix) and still hit the same row.
+    int index = accounts.indexWhere((acc) => (acc['toxId']?.trim() ?? '') == normalized);
+    if (index < 0) {
+      final lowered = normalized.toLowerCase();
+      index = accounts.indexWhere(
+          (acc) => (acc['toxId']?.trim() ?? '').toLowerCase() == lowered);
+    }
+    if (index < 0 && normalized.length >= 64) {
+      final prefix = normalized.substring(0, 64);
+      index = accounts.indexWhere((acc) {
+        final accToxId = acc['toxId']?.trim() ?? '';
+        return accToxId.length >= 64 && accToxId.substring(0, 64) == prefix;
+      });
+    }
+    if (index < 0) {
+      index = accounts.indexWhere(
+          (acc) => compareToxIds(acc['toxId']?.trim() ?? '', normalized));
+    }
+    if (index < 0) return;
+    accounts[index]['lastLoginTime'] = DateTime.now().toIso8601String();
     await setAccountList(accounts);
   }
 
@@ -1808,7 +1859,7 @@ class Prefs {
       final hashBytes = await secretKey.extractBytes();
       final expected = base64Encode(hashBytes);
       final actual = storedHash.substring(_kPbkdf2Prefix.length);
-      return actual == expected;
+      return _constantTimeEquals(actual, expected);
     }
 
     // Legacy SHA256 (salted or unsalted) — migrate on success.

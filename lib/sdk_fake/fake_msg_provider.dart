@@ -47,6 +47,10 @@ class FakeChatMessageProvider implements ChatMessageProvider {
   final Map<String, _HistoryReloadEntry> _historyReloadGuards = {};
   static const int _historyReloadTtlMs = 3000;
   StreamSubscription? _sub;
+  StreamSubscription? _progressUpdatesSub;
+  StreamSubscription? _sendProgressSub;
+  StreamSubscription? _fileRequestsSub;
+  StreamSubscription? _avatarUpdatedSub;
   String? _cachedSelfAvatarPath; // Cache self avatar path to avoid async calls
   final Map<String, String?> _cachedFriendAvatars = {}; // Cache friend avatar paths
   // Track file receive progress: msgID -> (received, total, path)
@@ -85,11 +89,11 @@ class FakeChatMessageProvider implements ChatMessageProvider {
     // Listen to file transfer progress updates from FfiChatService
     final ffi = FakeUIKit.instance.im?.ffi;
     if (ffi != null) {
-      ffi.progressUpdates.listen(_onFileProgress);
+      _progressUpdatesSub = ffi.progressUpdates.listen(_onFileProgress);
       // P1-22: also fan out send-side progress into a public stream that
       // higher layers can subscribe to. Keeps the integration additive
       // until a real onSendMessageProgress bridge is wired up.
-      ffi.progressUpdates.listen((p) {
+      _sendProgressSub = ffi.progressUpdates.listen((p) {
         if (p.isSend) {
           if (!_sendProgressCtrl.isClosed) {
             _sendProgressCtrl.add((
@@ -109,7 +113,7 @@ class FakeChatMessageProvider implements ChatMessageProvider {
       // confirmation) should replace this.
       // TODO(P1-5): replace with user-driven accept UI; this auto-accepts
       // all incoming large files to unblock receivers.
-      ffi.fileRequests.listen((req) async {
+      _fileRequestsSub = ffi.fileRequests.listen((req) async {
         try {
           AppLogger.log(
               '[FakeMessageProvider] P1-5 auto-accept large file: peer=${req.peerId}, fileNumber=${req.fileNumber}, size=${req.fileSize}, name=${req.fileName}');
@@ -121,7 +125,7 @@ class FakeChatMessageProvider implements ChatMessageProvider {
       });
       // When a friend's avatar is received and saved, invalidate our in-memory cache
       // and re-emit the stream for their conversation so message bubbles update immediately.
-      ffi.avatarUpdated.listen((uid) async {
+      _avatarUpdatedSub = ffi.avatarUpdated.listen((uid) async {
         _cachedFriendAvatars.remove(uid);
         final newPath = await Prefs.getFriendAvatarPath(uid);
         _cachedFriendAvatars[uid] = newPath ?? '';
@@ -514,6 +518,10 @@ class FakeChatMessageProvider implements ChatMessageProvider {
 
   void dispose() {
     _sub?.cancel();
+    _progressUpdatesSub?.cancel();
+    _sendProgressSub?.cancel();
+    _fileRequestsSub?.cancel();
+    _avatarUpdatedSub?.cancel();
     for (final c in _ctrls.values) {
       c.close();
     }
@@ -523,6 +531,8 @@ class FakeChatMessageProvider implements ChatMessageProvider {
     _cachedSelfAvatarPath = null;
     _cachedFriendAvatars.clear();
     _fileProgress.clear();
+    _failedMsgIDsCache = null;
+    _failedCacheDirty = true;
     // P1-22: close the additive send-progress stream so subscribers
     // unsubscribe cleanly during logout.
     if (!_sendProgressCtrl.isClosed) {

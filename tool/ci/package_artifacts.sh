@@ -280,13 +280,35 @@ package_macos() {
 
   release_version="$(resolve_release_version)"
   pkg_path="$DIST_DIR/toxee-$release_version-Darwin-$PACKAGE_ARCH.pkg"
+  local unsigned_pkg_path="$pkg_path"
+  local installer_identity="${MACOS_DEVELOPER_ID_INSTALLER_CERT:-}"
+  if [[ -n "$installer_identity" ]]; then
+    unsigned_pkg_path="$DIST_DIR/.toxee-$release_version-Darwin-$PACKAGE_ARCH.unsigned.pkg"
+  fi
+
   pkgbuild \
     --identifier "com.toxee.app" \
     --version "$release_version" \
     --install-location "/Applications" \
     --component "$app_bundle" \
-    "$pkg_path"
-  ci_log "Created macOS PKG: $pkg_path"
+    "$unsigned_pkg_path"
+
+  if [[ -n "$installer_identity" ]]; then
+    if command -v productsign >/dev/null 2>&1; then
+      productsign --sign "$installer_identity" "$unsigned_pkg_path" "$pkg_path"
+      rm -f "$unsigned_pkg_path"
+      write_note "Signed macOS PKG with Developer ID Installer certificate."
+      ci_log "Created signed macOS PKG: $pkg_path"
+    else
+      ci_warn "productsign not available; shipping unsigned PKG."
+      mv "$unsigned_pkg_path" "$pkg_path"
+      ci_log "Created macOS PKG (unsigned, productsign missing): $pkg_path"
+    fi
+    # TODO(F9): notarytool submit / staple — requires MACOS_NOTARIZATION_* secrets.
+  else
+    ci_warn "MACOS_DEVELOPER_ID_INSTALLER_CERT not set — macOS PKG is unsigned and Gatekeeper will warn."
+    ci_log "Created macOS PKG (unsigned): $pkg_path"
+  fi
 }
 
 package_android() {

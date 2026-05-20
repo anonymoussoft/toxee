@@ -7,8 +7,12 @@ import '../util/platform_utils.dart';
 import '../util/prefs.dart';
 
 class _WindowStateListener with WindowListener {
+  bool _closing = false;
+
   @override
   void onWindowClose() async {
+    if (_closing) return;
+    _closing = true;
     try {
       final bounds = await windowManager.getBounds();
       await Prefs.setWindowBounds(bounds);
@@ -47,11 +51,19 @@ class DesktopShellBootstrap {
 
     final savedBounds = await Prefs.getWindowBounds();
     final savedMaximized = await Prefs.getWindowMaximized();
+    // Defensive bounds-on-screen check: window_manager does not expose a
+    // multi-display API, so we reject obviously-off-screen origins (e.g.
+    // the user unplugged the secondary monitor between sessions) and fall
+    // back to the centered default rather than restoring an invisible window.
     final validBounds = savedBounds != null &&
         savedBounds.width >= minSize.width &&
         savedBounds.height >= minSize.height &&
         savedBounds.width <= 4096 &&
-        savedBounds.height <= 4096;
+        savedBounds.height <= 4096 &&
+        savedBounds.left > -savedBounds.width + 100 &&
+        savedBounds.top > -100 &&
+        savedBounds.left < 10000 &&
+        savedBounds.top < 10000;
 
     windowManager.addListener(_WindowStateListener());
     await windowManager.setPreventClose(true);

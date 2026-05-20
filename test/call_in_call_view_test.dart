@@ -33,6 +33,9 @@ class FakeInCallManager implements InCallManager {
   Future<void> toggleVideo() async {}
 
   @override
+  Future<void> toggleSpeaker() async {}
+
+  @override
   Future<void> hangUp() async {}
 
   @override

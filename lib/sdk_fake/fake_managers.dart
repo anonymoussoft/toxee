@@ -455,6 +455,7 @@ class FakeConversationManager {
     // Force a refresh now so the UI updates instead of waiting for the
     // next 5s poll cycle.
     await FakeUIKit.instance.im?.refreshConversations();
+    FakeUIKit.instance.messageProvider?.clearMessageBuffer(conversationID);
     AppLogger.debug(
         '[FakeConversationManager] deleteConversation: DONE - conversationID=$conversationID');
   }

@@ -74,7 +74,7 @@ void main() {
       try {
         await persistence.flushPendingSaves();
       } catch (_) {}
-      persistence.dispose();
+      await persistence.dispose();
       try {
         await tempDir.delete(recursive: true);
       } catch (_) {}

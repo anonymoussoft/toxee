@@ -7,6 +7,7 @@ import '../ui/login_page.dart';
 import '../ui/widgets/app_page_route.dart';
 import '../i18n/app_localizations.dart';
 import 'account_service.dart';
+import 'app_bootstrap_coordinator.dart';
 import 'prefs.dart';
 import 'tox_utils.dart';
 
@@ -57,22 +58,33 @@ class AccountSwitcher {
         nickname: targetAccount.nickname,
         statusMessage: targetAccount.statusMessage,
         password: password,
+        startPolling: false,
       );
 
-      // 4. Only now update lastLoginTime (after successful init)
+      // 4. Refresh stored profile fields, but defer the lastLoginTime bump
+      // until boot succeeds — otherwise a failed boot would still surface
+      // this account as "recently logged in".
       await Prefs.addAccount(
         toxId: targetToxId,
         nickname: targetAccount.nickname,
         statusMessage: targetAccount.statusMessage,
+        updateLastLogin: false,
       );
 
-      // 5. Verify toxId
+      // 5. Boot the app coordinator (installs platform, starts polling, etc.)
+      // before navigating, then stamp lastLoginTime.
+      await AppBootstrapCoordinator.boot(newService);
+      try {
+        await Prefs.touchAccountLoginTime(newService.selfId);
+      } catch (_) {}
+
+      // 6. Verify toxId
       final actualToxId = newService.selfId;
       if (!compareToxIds(actualToxId, targetToxId)) {
         // Log warning but continue
       }
 
-      // 6. Navigate to HomePage
+      // 7. Navigate to HomePage
       if (context.mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           AppPageRoute(page: HomePage(service: newService)),

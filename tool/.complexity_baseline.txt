@@ -1,0 +1,40 @@
+# Files exempt from complexity guard (warn-only).
+# Threshold: > 500 LOC. Aim to shrink this list, not grow it.
+# Generated baseline as of 2026-05-20 review (Batch 6, F11). New files must
+# stay <= 500 LOC; existing entries may stay until they are split.
+lib/adapters/shared_prefs_adapter.dart
+lib/call/call_service_manager.dart
+lib/call/call_ui_components.dart
+lib/call/video_handler.dart
+lib/i18n/app_localizations.dart
+lib/i18n/app_localizations_ar.dart
+lib/i18n/app_localizations_en.dart
+lib/i18n/app_localizations_ja.dart
+lib/i18n/app_localizations_ko.dart
+lib/i18n/app_localizations_zh.dart
+lib/main.dart
+lib/notifications/notification_service.dart
+lib/sdk_fake/fake_im.dart
+lib/sdk_fake/fake_managers.dart
+lib/sdk_fake/fake_msg_provider.dart
+lib/sdk_fake/fake_msg_provider_file_progress.dart
+lib/sdk_fake/fake_msg_provider_mapping.dart
+lib/sdk_fake/fake_msg_provider_routing.dart
+lib/sdk_fake/fake_provider.dart
+lib/ui/add_friend_dialog.dart
+lib/ui/add_group_dialog.dart
+lib/ui/applications/applications_page.dart
+lib/ui/group/group_builder_override.dart
+lib/ui/home_page.dart
+lib/ui/home_page_bootstrap.dart
+lib/ui/login_page.dart
+lib/ui/profile_page.dart
+lib/ui/search/custom_search.dart
+lib/ui/search/search_chat_history_window.dart
+lib/ui/settings/bootstrap_settings_section.dart
+lib/ui/settings/global_settings_section.dart
+lib/ui/settings/settings_page.dart
+lib/ui/settings/sidebar.dart
+lib/util/account_service.dart
+lib/util/app_paths.dart
+lib/util/prefs.dart

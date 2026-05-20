@@ -22,6 +22,21 @@ cd "$ROOT"
 
 PREFIX="verify_submodule_remote:"
 
+# Explicit bypass for environments that can't tolerate the network probe
+# (e.g. workflow steps before checkout completes). CI itself MUST run the
+# full check via a dedicated workflow — see .github/workflows/submodule_verify.yml.
+if [ "${TOXEE_HOOK_CI_BYPASS:-}" = "1" ]; then
+  echo "$PREFIX TOXEE_HOOK_CI_BYPASS=1 — skipping remote reachability check."
+  exit 0
+fi
+if [ "${CI:-}" = "true" ]; then
+  echo "$PREFIX CI=true detected (informational) — running full check anyway."
+fi
+
+# Bound remote calls so a hung DNS / SSH handshake can't wedge the push.
+export GIT_TERMINAL_PROMPT=0
+GIT_NET_OPTS=(-c "http.timeout=15" -c "core.sshCommand=ssh -o ConnectTimeout=10 -o BatchMode=yes")
+
 if [ ! -f .gitmodules ]; then
   echo "$PREFIX no .gitmodules — nothing to verify."
   exit 0
@@ -109,7 +124,7 @@ while IFS=$'\t' read -r name sub_path sub_url_cfg; do
   CHECKED=$((CHECKED + 1))
 
   # Step 1: cheap ls-remote check (SHA at tip of some ref).
-  if git ls-remote "$url" 2>/dev/null | grep -F -q "$sha"; then
+  if git "${GIT_NET_OPTS[@]}" ls-remote "$url" 2>/dev/null | grep -F -q "$sha"; then
     continue
   fi
 
@@ -117,7 +132,7 @@ while IFS=$'\t' read -r name sub_path sub_url_cfg; do
   # Only possible if the submodule dir is initialised.
   if [ -d "$sub_path/.git" ] || [ -f "$sub_path/.git" ]; then
     tmp_ref="refs/_remotes/_check/$sha"
-    if git -C "$sub_path" fetch --quiet origin "$sha:$tmp_ref" 2>/dev/null; then
+    if git "${GIT_NET_OPTS[@]}" -C "$sub_path" fetch --quiet origin "$sha:$tmp_ref" 2>/dev/null; then
       git -C "$sub_path" update-ref -d "$tmp_ref" 2>/dev/null || true
       continue
     fi

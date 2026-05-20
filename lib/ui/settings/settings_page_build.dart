@@ -478,6 +478,13 @@ extension _SettingsPageBuild on _SettingsPageState {
       wrap(1, GlobalSettingsSection(
         colorTheme: colorTheme,
         toxId: widget.service.selfId,
+        onDownloadsConfigChanged: () {
+          // FfiChatService re-reads Prefs.getDownloadsDirectory() on every
+          // file save (see _getDownloadsDirectory in ffi_chat_service.dart),
+          // so no cached state needs invalidation; the hook is wired so a
+          // future cached-config implementation can act on it.
+          AppLogger.debug('[Settings] downloads config changed');
+        },
       )),
       AppSpacing.verticalMd,
       wrap(2, BootstrapSettingsSection(

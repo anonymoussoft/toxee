@@ -196,7 +196,7 @@ void main() {
           reason: 'message msgid_$i missing from disk',
         );
       }
-      persistence.dispose();
+      await persistence.dispose();
     });
 
     test('flushPendingSaves forces an immediate write', () async {
@@ -216,7 +216,7 @@ void main() {
       final loaded = await _readFromDisk(persistence, id);
       expect(loaded.length, 1);
       expect(loaded.first.text, 'urgent');
-      persistence.dispose();
+      await persistence.dispose();
     });
   });
 }

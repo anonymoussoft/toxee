@@ -73,34 +73,31 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
     
     // Listen to user join/part events
     _userJoinPartSub = widget.service.ircUserJoinPartStream.listen((event) {
-      if (mounted) {
-        setState(() {
-          final users = _channelUsers[event.channel] ?? [];
-          if (event.joined) {
-            if (!users.contains(event.nickname)) {
-              users.add(event.nickname);
-            }
-          } else {
-            users.remove(event.nickname);
+      if (!mounted) return;
+      setState(() {
+        final users = _channelUsers[event.channel] ?? [];
+        if (event.joined) {
+          if (!users.contains(event.nickname)) {
+            users.add(event.nickname);
           }
-          _channelUsers[event.channel] = users;
-        });
-        
-        // Show notification
-        final appL10n = AppLocalizations.of(context)!;
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                event.joined 
-                  ? '${event.nickname} joined ${event.channel}'
-                  : '${event.nickname} left ${event.channel}',
-              ),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+        } else {
+          users.remove(event.nickname);
         }
-      }
+        _channelUsers[event.channel] = users;
+      });
+
+      // Re-check after setState — the widget may have been deactivated.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            event.joined
+              ? '${event.nickname} joined ${event.channel}'
+              : '${event.nickname} left ${event.channel}',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     });
   }
 

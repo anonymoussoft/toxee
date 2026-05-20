@@ -91,18 +91,21 @@ class _PairingHostPageState extends State<PairingHostPage> {
           }
           // Export to a temp file, read back, delete. Reuses the audited
           // export path so the byte layout matches what the receiving
-          // device's importAccountData() expects.
+          // device's importAccountData() expects. The temp file holds a
+          // plaintext profile for no-password accounts — guarantee deletion
+          // via try/finally, and on delete failure overwrite the bytes with
+          // zeros before retrying so a stranded file is not a usable
+          // identity blob.
           final tmp = await _tempExportPath(widget.toxId);
           await AccountExportService.exportAccountData(
             toxId: widget.toxId,
             filePath: tmp,
           );
-          final bytes = await File(tmp).readAsBytes();
+          Uint8List bytes;
           try {
-            await File(tmp).delete();
-          } catch (e) {
-            AppLogger.warn(
-                '[PairingHostPage] failed to delete temp export file $tmp: $e');
+            bytes = await File(tmp).readAsBytes();
+          } finally {
+            await _zeroFillAndDelete(tmp);
           }
           return bytes;
         },
@@ -158,6 +161,35 @@ class _PairingHostPageState extends State<PairingHostPage> {
         return l10n.pairingNetworkError(message);
       case HostFailureReason.protocolError:
         return l10n.pairingProtocolError(message);
+    }
+  }
+
+  /// Best-effort secure cleanup for the plaintext temp export. Try delete
+  /// first (cheapest), and on failure overwrite the file contents with zeros
+  /// before a second delete attempt — so a stranded file at minimum no
+  /// longer contains a usable Tox identity blob.
+  static Future<void> _zeroFillAndDelete(String path) async {
+    final file = File(path);
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+      return;
+    } catch (e) {
+      AppLogger.warn(
+          '[PairingHostPage] initial delete of temp export failed for $path: $e');
+    }
+    try {
+      if (await file.exists()) {
+        final len = await file.length();
+        if (len > 0) {
+          await file.writeAsBytes(Uint8List(len), flush: true);
+        }
+        await file.delete();
+      }
+    } catch (e) {
+      AppLogger.warn(
+          '[PairingHostPage] zero-fill+delete of temp export failed for $path: $e');
     }
   }
 

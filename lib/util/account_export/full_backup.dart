@@ -23,6 +23,12 @@ import '../logger.dart';
 import '../prefs.dart';
 import 'tox_file_io.dart';
 
+/// Current full-backup metadata schema version. Bump when the on-disk
+/// `metadata.json` layout or scoped-prefs key set changes in a
+/// non-backward-compatible way. Backups without `formatVersion` are treated
+/// as v1 for legacy compatibility (older toxee builds shipped without it).
+const int _kBackupFormatVersion = 1;
+
 /// Export a comprehensive .zip backup containing:
 /// - `tox_profile.tox` (the Tox identity/profile, optionally encrypted)
 /// - `chat_history/` (all JSON chat history files)
@@ -159,8 +165,11 @@ Future<String> exportFullBackup({
       }
     }
 
-    // Also include account info
+    // Also include account info. `formatVersion` lets a future schema bump
+    // detect and refuse incompatible backups instead of silently importing
+    // mis-shaped scoped prefs.
     final metadata = <String, dynamic>{
+      'formatVersion': _kBackupFormatVersion,
       'toxId': normalizedToxId,
       'nickname': nickname,
       'statusMessage': account?['statusMessage'] ?? '',
@@ -301,6 +310,21 @@ Future<Map<String, dynamic>> importFullBackup({
   if (metadataFile != null) {
     final metadataJson = utf8.decode(metadataFile.content as List<int>);
     metadata = json.decode(metadataJson) as Map<String, dynamic>;
+    // Refuse backups produced by a newer toxee schema. Missing field is
+    // treated as v1 (legacy backups predating the version field).
+    final rawVersion = metadata['formatVersion'];
+    final version = rawVersion is int
+        ? rawVersion
+        : int.tryParse(rawVersion?.toString() ?? '') ?? 1;
+    if (version > _kBackupFormatVersion) {
+      AppLogger.warn(
+        '[full_backup] import refused: backup formatVersion=$version exceeds supported=$_kBackupFormatVersion',
+      );
+      throw Exception(
+        'Backup format version $version is newer than this app supports '
+        '($_kBackupFormatVersion). Upgrade the app to import this backup.',
+      );
+    }
     toxId = metadata['toxId'] as String?;
     nickname = metadata['nickname'] as String? ?? '';
   }

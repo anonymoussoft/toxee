@@ -14,7 +14,9 @@ class CallWakePolicy {
   const CallWakePolicy._();
 
   static bool shouldKeepScreenAwake(CallUIState state) =>
-      state == CallUIState.ringing || state == CallUIState.inCall;
+      state == CallUIState.ringing ||
+      state == CallUIState.inCall ||
+      state == CallUIState.reconnecting;
 }
 
 class CallEffectsListener extends StatefulWidget {

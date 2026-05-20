@@ -4,6 +4,7 @@ import 'dart:io';
 import '../notifications/notification_service.dart';
 import '../util/account_reconciliation.dart';
 import '../util/app_paths.dart';
+import '../util/lan_bootstrap_service.dart';
 import '../util/logger.dart';
 import 'app_bootstrap_result.dart';
 import 'app_runtime_bootstrap.dart';
@@ -27,6 +28,18 @@ class AppBootstrap {
     // directories left behind by a partially-completed import (A2). Safe
     // to run on every cold start; no-op when nothing is orphaned.
     await AccountReconciliation.reconcileOrphanedProfiles();
+    // If the previous run crashed while the LAN bootstrap service was active,
+    // the running-flag plus pre-LAN snapshot may still be on disk while no
+    // native instance exists. Restore the prior bootstrap node and clear the
+    // stale flag so the user is not stuck pointing at a dead LAN address.
+    try {
+      await LanBootstrapServiceManager.instance.recoverFromCrashedSession();
+    } catch (e, st) {
+      AppLogger.logError(
+          '[AppBootstrap] LAN bootstrap crash recovery failed; continuing',
+          e,
+          st);
+    }
     await AppRuntimeBootstrap.initialize();
     await DesktopShellBootstrap.initializeIfNeeded();
     // OS-level notifications. Lazy-safe — the service no-ops on unsupported

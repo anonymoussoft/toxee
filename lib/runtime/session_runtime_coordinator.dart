@@ -10,6 +10,7 @@ import '../adapters/conversation_manager_adapter.dart';
 import '../adapters/event_bus_adapter.dart';
 import '../notifications/badge_service.dart';
 import '../notifications/notification_message_listener.dart';
+import '../notifications/notification_service.dart';
 import '../sdk_fake/fake_uikit_core.dart';
 import '../sdk_fake/uikit_data_facade.dart';
 import '../util/logger.dart';
@@ -44,6 +45,13 @@ class SessionRuntimeCoordinator {
   /// re-initializes the runtime for the new session.
   Future<void> ensureInitialized() async {
     if (_state == SessionRuntimeState.started) return;
+    if (_state == SessionRuntimeState.starting) {
+      final inFlight = _initializing;
+      if (inFlight != null) {
+        await inFlight;
+      }
+      return;
+    }
     final inFlight = _initializing;
     if (inFlight != null) {
       await inFlight;
@@ -54,9 +62,14 @@ class SessionRuntimeCoordinator {
       AppLogger.debug('[SessionRuntimeCoordinator] Re-initializing after teardown');
     }
 
-    _state = SessionRuntimeState.starting;
+    // Claim the critical section: assign _initializing BEFORE flipping
+    // _state to starting. Concurrent observers then see either
+    // notStarted/disposed (proceed) or starting + non-null _initializing
+    // (join in-flight) — never starting + null _initializing, even if a
+    // future refactor inserts an await between these two assignments.
     final completer = Completer<void>();
     _initializing = completer.future;
+    _state = SessionRuntimeState.starting;
 
     try {
       if (!FakeUIKit.instance.isStarted) {
@@ -141,6 +154,11 @@ class SessionRuntimeCoordinator {
     // swap below so removeAdvancedMsgListener still hits the live platform.
     // disposeAndReset is a no-op when no singleton was constructed.
     await NotificationMessageListener.disposeAndReset();
+
+    // Clear OS-level banners AND in-process inbox bookkeeping before the next
+    // account boots, so a new account doesn't inherit grouped lines or the
+    // previous account's conversationId→notificationId hash map.
+    await NotificationService.instance.resetSessionState();
 
     FakeUIKit.instance.dispose();
 

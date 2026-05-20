@@ -366,6 +366,11 @@ class _LoginPageState extends State<LoginPage> {
         if (!mounted) return;
         _service = service;
         await AppBootstrapCoordinator.boot(service);
+        // Boot succeeded — only now mark this account as "recently logged in"
+        // so a failed boot earlier doesn't leave a misleading timestamp.
+        try {
+          await Prefs.touchAccountLoginTime(service.selfId);
+        } catch (_) {}
         if (!mounted) return;
         unawaited(HapticFeedback.lightImpact());
         Navigator.of(context).pushReplacement(

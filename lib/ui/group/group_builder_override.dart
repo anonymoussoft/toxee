@@ -14,6 +14,7 @@ import 'package:tencent_cloud_chat_common/widgets/dialog/tencent_cloud_chat_dial
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_group_profile.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
 
+import '../../sdk_fake/fake_uikit_core.dart';
 import '../../util/app_paths.dart';
 import '../../util/logger.dart';
 import '../../util/prefs.dart';
@@ -650,11 +651,30 @@ class _ToxeeGroupProfileDeleteButtonState
   }
 
   Future<void> _onClearChatHistory() async {
+    final groupID = widget.groupInfo.groupID;
     final res = await TencentCloudChat.instance.chatSDKInstance.groupSDK
-        .clearGroupHistoryMessage(groupID: widget.groupInfo.groupID);
+        .clearGroupHistoryMessage(groupID: groupID);
     if (res.code == 0) {
       TencentCloudChat.instance.dataInstance.messageData
-          .clearMessageList(groupID: widget.groupInfo.groupID);
+          .clearMessageList(groupID: groupID);
+      // The binary-replacement path above clears in-memory view caches and
+      // C++ state, but the Platform path owns the persisted JSON. Wipe history
+      // directly without going through deleteConversation, which would also
+      // strip the pinned flag — clearing history must not unpin the group.
+      try {
+        final ffi = FakeUIKit.instance.im?.ffi;
+        if (ffi != null) {
+          await ffi.clearGroupHistory(groupID);
+        }
+        FakeUIKit.instance.messageProvider
+            ?.clearMessageBuffer('group_$groupID');
+        await FakeUIKit.instance.im?.refreshConversations();
+      } catch (e, st) {
+        AppLogger.logError(
+            '[GroupProfile] _onClearChatHistory: persistence cleanup failed',
+            e,
+            st);
+      }
     }
   }
 
@@ -679,17 +699,40 @@ class _ToxeeGroupProfileDeleteButtonState
   }
 
   Future<void> _handleQuitGroup() async {
+    final gid = widget.groupInfo.groupID;
     late V2TimCallback result;
     if (quitGroup == true) {
       result = await TencentCloudChat.instance.chatSDKInstance.groupSDK
-          .quitGroup(groupID: widget.groupInfo.groupID);
+          .quitGroup(groupID: gid);
     } else {
       result = await TencentCloudChat.instance.chatSDKInstance.groupSDK
-          .dismissGroup(groupID: widget.groupInfo.groupID);
+          .dismissGroup(groupID: gid);
     }
 
-    if (result.code == 0 && mounted) {
-      unawaited(Navigator.of(context).maybePop());
+    if (result.code == 0) {
+      // The binary-replacement / C++ quit path eventually emits
+      // groupQuitNotification → Tim2ToxSdkPlatform → addQuitGroup, but that
+      // callback can be missed on offline restart or if the Platform isn't
+      // installed yet. Eagerly mark the group as quit and clean local state
+      // so the conversation list doesn't keep a "ghost group" entry.
+      try {
+        await Prefs.addQuitGroup(gid);
+      } catch (e, st) {
+        AppLogger.logError(
+            '[GroupProfile] _handleQuitGroup: addQuitGroup failed', e, st);
+      }
+      try {
+        await FakeUIKit.instance.conversationManager
+            ?.deleteConversation('group_$gid');
+      } catch (e, st) {
+        AppLogger.logError(
+            '[GroupProfile] _handleQuitGroup: deleteConversation failed',
+            e,
+            st);
+      }
+      if (mounted) {
+        unawaited(Navigator.of(context).maybePop());
+      }
     }
   }
 

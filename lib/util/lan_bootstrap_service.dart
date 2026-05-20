@@ -76,9 +76,13 @@ class LanBootstrapServiceManager {
   /// [_startLocalBootstrapServiceImpl], and leak the first native handle.
   bool _starting = false;
 
-  /// Virtual/container interface name prefixes to filter out
+  /// Virtual/container interface name prefixes to filter out.
+  /// Also covers VPN tunnels (tun*/tap*/utun*/wg*) — LAN bootstrap should
+  /// advertise a real LAN address, not a VPN endpoint reachable from anywhere
+  /// the VPN tunnels reach.
   static const _virtualInterfacePrefixes = [
     'docker', 'veth', 'br-', 'virbr', 'vbox', 'vmnet',
+    'tun', 'tap', 'utun', 'wg',
   ];
 
   static bool _isVirtualInterface(String name) {
@@ -366,5 +370,36 @@ class LanBootstrapServiceManager {
   /// Check if bootstrap service is running
   bool isBootstrapServiceRunning() {
     return _bootstrapInstanceHandle != null;
+  }
+
+  /// Crash-recovery hook. If a previous run set the LAN-bootstrap-running
+  /// flag but this process has no live instance (because the previous process
+  /// crashed between `start` and `stop`), restore the saved pre-LAN bootstrap
+  /// node and clear the stale flags. Safe to call on every cold start.
+  Future<void> recoverFromCrashedSession() async {
+    if (_bootstrapInstanceHandle != null) return; // service is alive now
+    final wasRunning = await Prefs.getLanBootstrapServiceRunning();
+    if (!wasRunning) return;
+    AppLogger.warn(
+      '[LanBootstrapService] Detected stale LAN-running flag with no live instance — recovering',
+    );
+    final priorNode = await Prefs.getPreLanBootstrapNode();
+    if (priorNode != null) {
+      try {
+        await Prefs.setCurrentBootstrapNode(
+          priorNode.host,
+          priorNode.port,
+          priorNode.pubkey,
+        );
+      } catch (e, st) {
+        AppLogger.logError(
+          '[LanBootstrapService] recovery: failed to restore pre-LAN node',
+          e,
+          st,
+        );
+      }
+      await Prefs.clearPreLanBootstrapNode();
+    }
+    await Prefs.setLanBootstrapServiceRunning(false);
   }
 }

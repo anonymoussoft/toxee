@@ -6,19 +6,33 @@ extension _HomePageBootstrap on _HomePageState {
     if (!mounted) return;
     AppLogger.debug('[HomePage] HYBRID MODE: Binary replacement + Platform interface');
 
-    TimSdkInitializer.ensureInitialized().then((_) {
-      // BinaryReplacementHistoryHook is now installed inside
-      // SessionRuntimeCoordinator.ensureInitialized() — same atomic init
-      // block as the platform — to close the platform-installed-but-hook-
-      // not-installed window. Don't re-install here.
-      if (!mounted) return;
-      TencentCloudChat.instance.chatSDKInstance.groupSDK.initGroupListener();
-      AppLogger.debug('[HomePage] Registered UIKit group listener for GroupTipsEvent dispatch');
-      TencentCloudChat.instance.chatSDKInstance.contactSDK.initFriendListener();
-      AppLogger.debug('[HomePage] Registered UIKit friendship listener for friend event dispatch');
-    }).catchError((e, stackTrace) {
+    try {
+      await TimSdkInitializer.ensureInitialized();
+    } catch (e, stackTrace) {
       AppLogger.logError('[HomePage] Failed to initialize TIMManager SDK: $e', e, stackTrace);
-    });
+      // Unstick UIKit's splash so the user isn't staring at a blank initializing
+      // screen, then surface a visible error so they know to restart. Skipping
+      // the rest of init keeps us from registering listeners on a half-built SDK.
+      UikitDataFacade.updateInitializedStatus(true);
+      UikitDataFacade.updateLoginStatus(true);
+      _initErrorMessage = 'Chat SDK initialization failed: $e';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final msg = _initErrorMessage;
+        if (msg == null) return;
+        _showErrorSnackBar(msg);
+      });
+      return;
+    }
+    // BinaryReplacementHistoryHook is now installed inside
+    // SessionRuntimeCoordinator.ensureInitialized() — same atomic init
+    // block as the platform — to close the platform-installed-but-hook-
+    // not-installed window. Don't re-install here.
+    if (!mounted) return;
+    TencentCloudChat.instance.chatSDKInstance.groupSDK.initGroupListener();
+    AppLogger.debug('[HomePage] Registered UIKit group listener for GroupTipsEvent dispatch');
+    TencentCloudChat.instance.chatSDKInstance.contactSDK.initFriendListener();
+    AppLogger.debug('[HomePage] Registered UIKit friendship listener for friend event dispatch');
 
     // Wire send-failure toast on the SDK callbacks trigger. The handler is
     // idempotent against multiple registrations (we deregister on dispose via
@@ -555,15 +569,19 @@ extension _HomePageBootstrap on _HomePageState {
 
     final provider = ChatDataProviderRegistry.provider;
     if (provider != null) {
-      provider.getInitialConversations().then((list) {
+      unawaited(provider.getInitialConversations().then((list) {
         UikitDataFacade.buildConversationList(list, 'external_init');
-      });
-      provider.conversationStream.listen((list) {
+      }).catchError((e, st) {
+        AppLogger.logError('[HomePage] getInitialConversations failed', e, st);
+      }));
+      _convProviderSub = provider.conversationStream.listen((list) {
         UikitDataFacade.buildConversationList(list, 'external_stream');
       });
-      provider.totalUnreadStream.listen((total) {
+      _bag.add(() => _convProviderSub?.cancel());
+      _unreadProviderSub = provider.totalUnreadStream.listen((total) {
         UikitDataFacade.setTotalUnreadCount(total);
       });
+      _bag.add(() => _unreadProviderSub?.cancel());
     } else {
       TencentCloudChatConversationController.instance.init();
     }

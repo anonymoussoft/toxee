@@ -140,6 +140,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   StreamSubscription<TencentCloudChatConversationData<dynamic>>? _conversationDataSub;
   StreamSubscription<TencentCloudChatContactData<dynamic>>? _contactDataSub;
   StreamSubscription<TencentCloudChatGroupProfileData<dynamic>>? _groupProfileDataSub;
+  StreamSubscription<List<V2TimConversation>>? _convProviderSub;
+  StreamSubscription<int>? _unreadProviderSub;
   // Track last membersChange event time per groupID to prevent loops
   final Map<String, DateTime> _lastMembersChangeTime = {};
   static const Duration _minMembersChangeInterval = Duration(seconds: 2);
@@ -165,6 +167,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _disposed = false;
   ContactBuilderOverrideHandle? _contactBuilderOverride;
   GroupProfileBuilderOverrideHandle? _groupBuilderOverride;
+  String? _initErrorMessage;
   late final HomeSessionController _sessionController;
   // Tracks the last computed `shouldShowMasterDetail` so we only schedule the
   // UIKit `setConfigs(forceDesktopLayout: ...)` post-frame callback when the

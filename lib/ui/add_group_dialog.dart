@@ -308,6 +308,22 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                     return _localeText(context, 'enterGroupId',
                         fallback: 'Please enter group ID');
                   }
+                  // Group/conference IDs are hex strings. Public group chat
+                  // IDs are 64 hex chars; conferences and other types vary
+                  // but are still ASCII hex. Reject obvious mistakes (e.g.
+                  // pasted Tox-ID with URL prefix, free-form text) before
+                  // the C++ side surfaces a raw error string.
+                  final hexRegex = RegExp(r'^[0-9A-Fa-f]+$');
+                  if (!hexRegex.hasMatch(trimmed)) {
+                    return _localeText(context, 'invalidHex',
+                        fallback: 'Only hexadecimal characters are allowed');
+                  }
+                  // Tox CONFERENCE_ID_SIZE is 32 bytes = 64 hex chars, same as
+                  // public group chat_id. Anything else is malformed.
+                  if (trimmed.length != 64) {
+                    return _localeText(context, 'invalidLength',
+                        fallback: 'ID must be exactly 64 hexadecimal characters');
+                  }
                   return null;
                 },
               ),
@@ -583,6 +599,10 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
         return appL10n.groupId;
       case 'enterGroupId':
         return appL10n.enterGroupId;
+      case 'invalidHex':
+        return appL10n.invalidCharacters;
+      case 'invalidLength':
+        return appL10n.invalidLength;
       case 'requestMessage':
         return appL10n.requestMessage;
       case 'groupAlias':

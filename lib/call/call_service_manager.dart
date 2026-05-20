@@ -169,6 +169,11 @@ class CallServiceManager implements CallOverlayManager {
       return;
     }
     _callState.setState(CallUIState.reconnecting);
+    // Drop bitrate samples so the transport-down dip doesn't pin the indicator
+    // at poor after recovery, and so _applyPeerSuggestedProfile won't latch a
+    // floor-tier profile based on stale-during-blackout samples.
+    _qualityEstimator.reset();
+    _callState.setCallQuality(CallQuality.unknown);
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(_reconnectGrace, () {
       if (_callState.state == CallUIState.reconnecting) {
@@ -279,7 +284,8 @@ class CallServiceManager implements CallOverlayManager {
     }
   }
 
-  void _onCallStateChanged(String inviteID, CallState state) async {
+  void _onCallStateChanged(String inviteID, CallState state,
+      {String? endReason}) async {
     switch (state) {
       case CallState.ringing:
         final callInfo = _callBridge!.getCallInfo(inviteID);
@@ -312,10 +318,12 @@ class CallServiceManager implements CallOverlayManager {
         _ringtone.stop();
         _audioHandler.stop();
         _videoHandler.stop();
-        // Emit call record before clearing state
-        final endReason =
-            _callState.state == CallUIState.inCall ? 'hangup' : 'cancel';
-        _emitCallRecord(endReason);
+        // Prefer the bridge-supplied endReason (reject/hangup/timeout/cancel).
+        // Fall back to the pre-Fix-Y heuristic when the bridge omits it so
+        // legacy code paths keep producing a sensible record.
+        final resolvedEndReason = endReason ??
+            (_callState.state == CallUIState.inCall ? 'hangup' : 'cancel');
+        _emitCallRecord(resolvedEndReason);
         _endCallCleanup();
         _callState.endCall();
         break;
@@ -425,6 +433,10 @@ class CallServiceManager implements CallOverlayManager {
   void _onAudioBitrateChanged(int friendNumber, int audioBitRate) {
     debugPrint(
         '[CallServiceManager] _onAudioBitrateChanged: friendNumber=$friendNumber, audioBitRate=$audioBitRate');
+    // While reconnecting the transport is mid-recovery; peer-suggested values
+    // here reflect the dip, not steady state. Skip estimator + profile entirely
+    // so reset()/clearReconnecting() recovery isn't polluted by dirty samples.
+    if (_callState.state == CallUIState.reconnecting) return;
     // Bit rate 0 means the peer disabled audio — that's a state change, not
     // a quality signal. Don't downgrade the indicator on a mute.
     if (!_qualityEstimator.observeAudioBitrate(audioBitRate)) return;
@@ -435,6 +447,7 @@ class CallServiceManager implements CallOverlayManager {
   void _onVideoBitrateChanged(int friendNumber, int videoBitRate) {
     debugPrint(
         '[CallServiceManager] _onVideoBitrateChanged: friendNumber=$friendNumber, videoBitRate=$videoBitRate');
+    if (_callState.state == CallUIState.reconnecting) return;
     if (!_qualityEstimator.observeVideoBitrate(videoBitRate)) return;
     _callState.setCallQuality(_qualityEstimator.currentQuality());
     _applyPeerSuggestedProfile(videoBitRate: videoBitRate);
@@ -594,11 +607,13 @@ class CallServiceManager implements CallOverlayManager {
       return;
     }
 
-    if (state == CallUIState.ringing || state == CallUIState.inCall) {
-      await _callAudioPlatform.activateSession(
-        preferSpeaker:
-            state == CallUIState.ringing || _callState.mode == CallMode.video,
-      );
+    if (state == CallUIState.ringing ||
+        state == CallUIState.inCall ||
+        state == CallUIState.reconnecting) {
+      final preferSpeaker = state == CallUIState.reconnecting
+          ? _callState.isSpeakerOn
+          : state == CallUIState.ringing || _callState.mode == CallMode.video;
+      await _callAudioPlatform.activateSession(preferSpeaker: preferSpeaker);
       return;
     }
 
@@ -777,6 +792,18 @@ class CallServiceManager implements CallOverlayManager {
         await _avService?.muteAudio(
             callInfo!.friendNumber!, _callState.isMuted);
       }
+    }
+  }
+
+  @override
+  Future<void> toggleSpeaker() async {
+    _callState.toggleSpeaker();
+    if (!_callAudioPlatform.isSupported) return;
+    final preferSpeaker = _callState.isSpeakerOn;
+    try {
+      await _callAudioPlatform.activateSession(preferSpeaker: preferSpeaker);
+    } catch (e) {
+      AppLogger.warn('[CallServiceManager] toggleSpeaker activateSession failed: $e');
     }
   }
 

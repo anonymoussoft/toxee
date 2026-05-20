@@ -118,7 +118,18 @@ void main(List<String> args) async {
       currentState['sha256'] != expectedSha256 ||
       patchesChanged;
 
+  // Hold off writing stateFile until both vendor and patch-apply have succeeded —
+  // a half-written state lets `--offline-check-only` falsely pass an un-patched SDK
+  // (see doc/reviews/2026-05-20-batch-6-findings.md F1/F2).
+  String? vendoredSha256;
   if (needVendor) {
+    // Invalidate any prior state immediately so a crash mid-vendor cannot leave
+    // offline-check matching the previous successful run against the new SDK.
+    if (stateFile.existsSync()) {
+      try {
+        stateFile.deleteSync();
+      } catch (_) {}
+    }
     if (sdkDir.existsSync()) sdkDir.deleteSync(recursive: true);
     sdkDir.createSync(recursive: true);
     final tempDir = Directory.systemTemp.createTempSync('toxee_sdk_');
@@ -162,23 +173,22 @@ void main(List<String> args) async {
       if (Platform.isWindows) {
         _normalizeSdkLineEndings(sdkDir);
       }
-      stateFile.writeAsStringSync(jsonEncode({
-        'version': version,
-        'sha256': actualSha256,
-      }));
+      vendoredSha256 = actualSha256;
     } finally {
       tempDir.deleteSync(recursive: true);
     }
   }
 
   // 3) Apply SDK patch series via tim2tox tool (patches live in tim2tox repo: patches/tencent_cloud_chat_sdk/<version>/)
-  final stateMap = stateFile.existsSync() ? (jsonDecode(stateFile.readAsStringSync()) as Map<String, dynamic>) : <String, dynamic>{};
+  // Carry forward prior state only if we didn't re-vendor; otherwise build a fresh map.
+  final stateMap = (needVendor || !stateFile.existsSync())
+      ? <String, dynamic>{}
+      : (jsonDecode(stateFile.readAsStringSync()) as Map<String, dynamic>);
   const appliedKey = 'patches_applied';
   const patchesShaKey = 'patches_sha256';
-  // If we re-vendored, patches must be re-applied regardless of stored flag.
   if (needVendor) {
-    stateMap.remove(appliedKey);
-    stateMap.remove(patchesShaKey);
+    stateMap['version'] = version;
+    stateMap['sha256'] = vendoredSha256;
   }
   final bool shouldApplySdkPatches = (stateMap[appliedKey] != true ||
           (patchesSha256 != null && stateMap[patchesShaKey] != patchesSha256)) &&
@@ -195,6 +205,14 @@ void main(List<String> args) async {
       }
       final patchCode = await _run(repoRoot, 'dart', [scriptPath.path, '--sdk-dir=${sdkDir.path}'], workingDirectory: tim2toxDir.path);
       if (patchCode != 0) {
+        // Mark state as partial so offline-check cannot mistake an un-patched SDK
+        // for a clean ready-to-use install.
+        _writeStateAtomic(stateFile, <String, dynamic>{
+          if (stateMap['version'] != null) 'version': stateMap['version'],
+          if (stateMap['sha256'] != null) 'sha256': stateMap['sha256'],
+          'partial': true,
+          'reason': 'apply_sdk_patches failed (exit $patchCode)',
+        });
         stderr.writeln('bootstrap_deps: tim2tox apply_sdk_patches failed (exit $patchCode)');
         exit(patchCode);
       }
@@ -202,8 +220,13 @@ void main(List<String> args) async {
       if (patchesSha256 != null) {
         stateMap[patchesShaKey] = patchesSha256;
       }
-      stateFile.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(stateMap));
     }
+  }
+  // Single authoritative state write after both vendor + patch succeed.
+  if (needVendor || shouldApplySdkPatches) {
+    stateMap.remove('partial');
+    stateMap.remove('reason');
+    _writeStateAtomic(stateFile, stateMap);
   }
 
   // 4) Generate pubspec_overrides.yaml so all local deps resolve under third_party/
@@ -238,6 +261,13 @@ void main(List<String> args) async {
   }
 
   stdout.writeln('Bootstrap complete.');
+}
+
+void _writeStateAtomic(File stateFile, Map<String, dynamic> contents) {
+  final tmp = File('${stateFile.path}.tmp');
+  tmp.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(contents));
+  // Atomic on POSIX; on Windows, File.rename overwrites silently (which is what we want).
+  tmp.renameSync(stateFile.path);
 }
 
 int _offlineCheck(String repoRoot) {
@@ -287,16 +317,30 @@ int _offlineCheck(String repoRoot) {
     stderr.writeln('bootstrap_deps: offline-check: vendor_state sha256 does not match lock');
     return 1;
   }
-  // If a patches_sha256 is stored, verify it matches the current patches series content.
+  if (state['partial'] == true) {
+    stderr.writeln('bootstrap_deps: offline-check: vendor_state is marked partial '
+        '(${state['reason'] ?? "unknown"}); re-run `dart tool/bootstrap_deps.dart --force`.');
+    return 1;
+  }
+  // Patches series sanity: if a series file exists, the lock must record patches_sha256
+  // and it must match current content. Empty/missing patches_sha256 with a present
+  // series file means a previous bootstrap predates patches sha tracking — treat as
+  // integrity-suspect rather than silently passing.
+  final patchesDir = Directory('${tim2tox.path}/patches/tencent_cloud_chat_sdk/$lockVersion');
+  final seriesFile = File('${patchesDir.path}/series');
   final storedPatchesSha = state['patches_sha256']?.toString() ?? '';
-  if (storedPatchesSha.isNotEmpty) {
-    final patchesDir = Directory('${tim2tox.path}/patches/tencent_cloud_chat_sdk/$lockVersion');
-    final seriesFile = File('${patchesDir.path}/series');
-    if (seriesFile.existsSync()) {
-      final names = seriesFile.readAsLinesSync()
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty && !s.startsWith('#'))
-          .toList();
+  if (seriesFile.existsSync()) {
+    final names = seriesFile.readAsLinesSync()
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && !s.startsWith('#'))
+        .toList();
+    if (names.isNotEmpty) {
+      if (storedPatchesSha.isEmpty) {
+        stderr.writeln('bootstrap_deps: offline-check: vendor_state.patches_sha256 missing '
+            'but patches series exists with ${names.length} patch(es); re-run '
+            '`dart tool/bootstrap_deps.dart` to record the digest.');
+        return 1;
+      }
       final computed = _computePatchesSha256(seriesFile, names, patchesDir);
       if (computed != storedPatchesSha) {
         stderr.writeln('bootstrap_deps: offline-check: patches_sha256 in vendor_state does not match '
