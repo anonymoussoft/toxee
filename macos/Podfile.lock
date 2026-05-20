@@ -1,4 +1,6 @@
 PODS:
+  - app_badge_plus (1.2.10):
+    - FlutterMacOS
   - audioplayers_darwin (0.0.1):
     - FlutterMacOS
   - camera_macos (0.0.1):
@@ -13,6 +15,8 @@ PODS:
   - file_picker (0.0.1):
     - FlutterMacOS
   - file_selector_macos (0.0.1):
+    - FlutterMacOS
+  - flutter_local_notifications (0.0.1):
     - FlutterMacOS
   - flutter_pcm_sound (0.0.1):
     - FlutterMacOS
@@ -61,6 +65,7 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
+  - app_badge_plus (from `Flutter/ephemeral/.symlinks/plugins/app_badge_plus/macos`)
   - audioplayers_darwin (from `Flutter/ephemeral/.symlinks/plugins/audioplayers_darwin/macos`)
   - camera_macos (from `Flutter/ephemeral/.symlinks/plugins/camera_macos/macos`)
   - desktop_drop_for_t (from `Flutter/ephemeral/.symlinks/plugins/desktop_drop_for_t/macos`)
@@ -68,6 +73,7 @@ DEPENDENCIES:
   - fc_native_video_thumbnail (from `Flutter/ephemeral/.symlinks/plugins/fc_native_video_thumbnail/darwin`)
   - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
+  - flutter_local_notifications (from `Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos`)
   - flutter_pcm_sound (from `Flutter/ephemeral/.symlinks/plugins/flutter_pcm_sound/macos`)
   - flutter_secure_storage_macos (from `Flutter/ephemeral/.symlinks/plugins/flutter_secure_storage_macos/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
@@ -94,6 +100,8 @@ SPEC REPOS:
     - TXIMSDK_Plus_Mac
 
 EXTERNAL SOURCES:
+  app_badge_plus:
+    :path: Flutter/ephemeral/.symlinks/plugins/app_badge_plus/macos
   audioplayers_darwin:
     :path: Flutter/ephemeral/.symlinks/plugins/audioplayers_darwin/macos
   camera_macos:
@@ -108,6 +116,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/file_picker/macos
   file_selector_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos
+  flutter_local_notifications:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos
   flutter_pcm_sound:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_pcm_sound/macos
   flutter_secure_storage_macos:
@@ -148,6 +158,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/window_manager/macos
 
 SPEC CHECKSUMS:
+  app_badge_plus: 1cbd6aeb632b8ce23b6241f46594fa1aa54764e7
   audioplayers_darwin: 761f2948df701d05b5db603220c384fb55720012
   camera_macos: 9fd766915a6c236c8b3fd902f7ccd215636cd07a
   desktop_drop_for_t: aa1875ba372c6bf28c8343506800a68b33121f67
@@ -155,6 +166,7 @@ SPEC CHECKSUMS:
   fc_native_video_thumbnail: b511cec81fad66be9b28dd54b9adb39d40fcd6cc
   file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
   file_selector_macos: 6280b52b459ae6c590af5d78fc35c7267a3c4b31
+  flutter_local_notifications: 7e5a17a1dbc00d83dc10d43c2c4c05f2ceed233c
   flutter_pcm_sound: 66c15658e17150e5578b5fc1bcd7db97b2644711
   flutter_secure_storage_macos: 7f45e30f838cf2659862a4e4e3ee1c347c2b3b54
   FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24
