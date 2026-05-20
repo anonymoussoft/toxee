@@ -9,7 +9,14 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -24,6 +31,15 @@ class CallAudioChannel(
     private var preferredRouteId: String? = null
     private var receiverRegistered = false
     private var audioSessionActive = false
+    private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    private var incomingRingtone: Ringtone? = null
+
+    // Pre-API-28 fallback for looping the incoming ringtone: Ringtone.isLooping
+    // is only available on API 28+, so on older devices the ringtone would
+    // play once and stop. MediaPlayer.setLooping(true) works on every supported
+    // API level. Held as a field so stopIncomingRingtone() can release it.
+    private var ringtoneMediaPlayer: MediaPlayer? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         val type =
@@ -95,6 +111,13 @@ class CallAudioChannel(
                 val routeId = call.argument<String>("routeId")
                 setRoute(routeId)
                 result.success(makeState())
+            }
+
+            "playIncomingRingtone" -> result.success(playIncomingRingtone())
+
+            "stopIncomingRingtone" -> {
+                stopIncomingRingtone()
+                result.success(null)
             }
 
             else -> result.notImplemented()
@@ -200,6 +223,92 @@ class CallAudioChannel(
         emit("routeChanged")
     }
 
+    private fun playIncomingRingtone(): Boolean {
+        stopIncomingRingtone()
+        return when (audioManager.ringerMode) {
+            AudioManager.RINGER_MODE_SILENT -> true
+            AudioManager.RINGER_MODE_VIBRATE -> {
+                startIncomingVibration()
+                true
+            }
+            else -> {
+                val uri =
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                        ?: return false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val ringtone =
+                        RingtoneManager.getRingtone(context, uri) ?: return false
+                    ringtone.isLooping = true
+                    @Suppress("DEPRECATION")
+                    ringtone.streamType = AudioManager.STREAM_RING
+                    ringtone.play()
+                    incomingRingtone = ringtone
+                    true
+                } else {
+                    // Pre-P fallback: Ringtone.isLooping doesn't exist, so use
+                    // MediaPlayer with setLooping(true) instead.
+                    val player = runCatching {
+                        MediaPlayer().apply {
+                            @Suppress("DEPRECATION")
+                            setAudioStreamType(AudioManager.STREAM_RING)
+                            setDataSource(context, uri)
+                            isLooping = true
+                            prepare()
+                            start()
+                        }
+                    }.getOrNull()
+                    if (player != null) {
+                        ringtoneMediaPlayer = player
+                        true
+                    } else {
+                        // Best-effort degradation: if MediaPlayer can't open
+                        // the URI (some OEM ROMs ship URIs only Ringtone can
+                        // resolve), fall back to a single-shot Ringtone so
+                        // the user still gets *some* audio for the call.
+                        val ringtone =
+                            RingtoneManager.getRingtone(context, uri)
+                        if (ringtone != null) {
+                            @Suppress("DEPRECATION")
+                            ringtone.streamType = AudioManager.STREAM_RING
+                            ringtone.play()
+                            incomingRingtone = ringtone
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopIncomingRingtone() {
+        runCatching { incomingRingtone?.stop() }
+        incomingRingtone = null
+        // Pre-P fallback path: release the MediaPlayer so we don't leak the
+        // audio focus / decoder when the call ends, errors out, or is rejected.
+        ringtoneMediaPlayer?.let { mp ->
+            runCatching {
+                if (mp.isPlaying) mp.stop()
+            }
+            runCatching { mp.release() }
+        }
+        ringtoneMediaPlayer = null
+        vibrator?.cancel()
+    }
+
+    private fun startIncomingVibration() {
+        val vib = vibrator ?: return
+        if (!vib.hasVibrator()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vib.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 700, 350), 0))
+        } else {
+            @Suppress("DEPRECATION")
+            vib.vibrate(longArrayOf(0, 700, 350), 0)
+        }
+    }
+
     private fun applyPreferredRoute() {
         when (preferredRouteId) {
             "speaker" -> routeToSpeaker()
@@ -264,18 +373,33 @@ class CallAudioChannel(
     }
 
     fun dispose() {
+        stopIncomingRingtone()
         unregisterReceivers()
         abandonAudioFocus()
     }
 
+    /**
+     * Must be called on the main thread — EventSink.success() requires @UiThread
+     * per the Flutter engine contract (it forwards to platform-channel messaging
+     * that mutates JNI-bound state owned by the platform thread). We defensively
+     * hop to the main thread if a future caller invokes from a worker (e.g. an
+     * AudioDeviceCallback variant that doesn't post via the main looper).
+     */
     private fun emit(type: String) {
         val sink = eventSink ?: return
-        sink.success(
-            mapOf(
-                "type" to type,
-                "state" to makeState(),
-            ),
+        val payload = mapOf(
+            "type" to type,
+            "state" to makeState(),
         )
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            sink.success(payload)
+        } else {
+            mainHandler.post {
+                // Re-read the field on the main thread — onCancel may have
+                // nulled it out between the post and the dispatch.
+                eventSink?.success(payload)
+            }
+        }
     }
 
     private fun makeState(): Map<String, Any?> {

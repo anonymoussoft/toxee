@@ -75,4 +75,9 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // androidx.core: NotificationCompat used by ToxPollingService for the
+    // persistent foreground-service notification. Pulled in transitively by
+    // flutter_local_notifications already, but declared explicitly so the
+    // dependency isn't load-bearing on a plugin's version pin.
+    implementation("androidx.core:core-ktx:1.13.1")
 }

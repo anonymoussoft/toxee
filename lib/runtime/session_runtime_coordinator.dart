@@ -8,12 +8,14 @@ import 'package:tim2tox_dart/utils/binary_replacement_history_hook.dart';
 
 import '../adapters/conversation_manager_adapter.dart';
 import '../adapters/event_bus_adapter.dart';
+import '../call/bg_refresh_bridge.dart';
 import '../notifications/badge_service.dart';
 import '../notifications/notification_message_listener.dart';
 import '../notifications/notification_service.dart';
 import '../sdk_fake/fake_uikit_core.dart';
 import '../sdk_fake/uikit_data_facade.dart';
 import '../util/logger.dart';
+import 'runtime_foreground_service.dart';
 
 enum SessionRuntimeState { notStarted, starting, started, disposed }
 
@@ -146,6 +148,13 @@ class SessionRuntimeCoordinator {
     _pendingHookSelfIdSub = null;
     _hookInstalled = false;
 
+    // Clear the iOS BG-refresh callback so a refresh window granted AFTER
+    // logout doesn't wake a disposed `FfiChatService` (the closure captured a
+    // strong reference to the previous session's service in
+    // `AppBootstrapCoordinator._wireIosBgRefresh`). The next login re-installs
+    // the handler via `AppBootstrapCoordinator.boot()`. No-op on non-iOS.
+    BgRefreshBridge.instance.onRefresh = null;
+
     // Drop the badge subscription before FakeUIKit.dispose() closes the
     // event bus — otherwise the cancel races with a closed StreamController.
     await BadgeService.instance.dispose();
@@ -167,6 +176,12 @@ class SessionRuntimeCoordinator {
       platform.dispose();
       TencentCloudChatSdkPlatform.instance = MethodChannelTencentCloudChatSdk();
     }
+
+    // Tear the Android foreground service down last. There is no point
+    // keeping the persistent notification (and the OS reservation that comes
+    // with it) once polling is gone. No-op on non-Android. Failures are
+    // logged inside the wrapper — never fatal.
+    await RuntimeForegroundService.instance.stop();
   }
 
   /// Installs the binary-replacement history hook as a standalone, independent

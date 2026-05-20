@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
                      android:maxSdkVersion="28"/>
     <!-- Android 13+ requires runtime POST_NOTIFICATIONS permission for any
@@ -17,6 +18,26 @@
          requests this on-demand from the plugin's Android impl, but the
          manifest entry is mandatory. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Explicit INTERNET permission. Normally implied by Flutter's manifest
+         merge, but declared here so the requirement is visible and won't
+         silently break if the merge order changes. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Foreground service permissions for ToxPollingService. The service
+         keeps the Flutter engine and tox polling loop alive while the app is
+         in the background. FOREGROUND_SERVICE is required on Android 9+ for
+         any foreground service; FOREGROUND_SERVICE_DATA_SYNC and
+         FOREGROUND_SERVICE_PHONE_CALL are the granular subtype permissions
+         introduced in Android 14, each matching a value declared on the
+         <service android:foregroundServiceType=...> below. Holding only
+         FOREGROUND_SERVICE without the right subtype causes
+         ForegroundServiceTypeException on API 34+. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
+    <!-- Needed to launch full-screen incoming-call UI from a notification when
+         the device is locked. Without it Android 14+ silently downgrades the
+         full-screen intent to a heads-up. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <application
         android:label="Toxee"
         android:name="${applicationName}"
@@ -46,6 +67,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- ToxPollingService: persistent foreground service that keeps the
+             Flutter engine alive so FfiChatService.startPolling() continues to
+             drain tox events while the app is backgrounded. The combined
+             foregroundServiceType lets the service transition between the
+             dataSync (default) and phoneCall (active call) modes at runtime
+             without re-registering. exported=false because the service is
+             driven exclusively from in-process Dart code via
+             RuntimeForegroundChannel. -->
+        <service
+            android:name=".ToxPollingService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|phoneCall" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
