@@ -65,7 +65,8 @@ jobs:
             pkg-config \
             libsodium-dev \
             libopus-dev \
-            libvpx-dev
+            libvpx-dev \
+            libsqlite3-dev
 
       - name: Install macOS native dependencies
         if: runner.os == 'macOS'

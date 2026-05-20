@@ -54,7 +54,8 @@ jobs:
             pkg-config \
             libsodium-dev \
             libopus-dev \
-            libvpx-dev
+            libvpx-dev \
+            libsqlite3-dev
 
       - name: Bootstrap dependencies
         run: dart run tool/bootstrap_deps.dart

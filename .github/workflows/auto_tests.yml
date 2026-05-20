@@ -45,6 +45,9 @@ jobs:
           cache: true
 
       - name: Install Linux native dependencies
+        # libsqlite3-dev: V2TIMCommunityManagerImpl links sqlite3 on non-Windows
+        # builds; without it libtim2tox_ffi.so dies at dlopen with "undefined
+        # symbol: sqlite3_open".
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -54,7 +57,8 @@ jobs:
             pkg-config \
             libsodium-dev \
             libopus-dev \
-            libvpx-dev
+            libvpx-dev \
+            libsqlite3-dev
 
       - name: Bootstrap dependencies
         run: dart run tool/bootstrap_deps.dart

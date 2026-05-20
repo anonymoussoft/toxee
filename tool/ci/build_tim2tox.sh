@@ -269,7 +269,8 @@ build_android_ffi_for_abi() {
     -DTIM2TOX_DEP_PREFIX="$prefix" \
     -DCMAKE_FIND_ROOT_PATH="$prefix;$sysroot" \
     -DCMAKE_C_FLAGS="-Wno-error=format" \
-    -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format -DTIM2TOX_DISABLE_SQLITE=1" \
+    -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-copy -Wno-error=format" \
+    -DTIM2TOX_DISABLE_SQLITE=ON \
     "${configure_args[@]}"
 
   cmake --build "$build_dir" --config Release --target tim2tox_ffi --parallel "$(ci_cpu_count)"
@@ -392,9 +393,10 @@ build_ios_ffi_dylib() {
     -DCMAKE_PREFIX_PATH="$prefix" \
     -DTIM2TOX_DEP_PREFIX="$prefix" \
     -DCMAKE_C_FLAGS="-miphoneos-version-min=13.0 -arch arm64 -Wno-error=format" \
-    -DCMAKE_CXX_FLAGS="-miphoneos-version-min=13.0 -arch arm64 -Wno-error=deprecated-copy -Wno-error=format -DTIM2TOX_DISABLE_SQLITE=1" \
+    -DCMAKE_CXX_FLAGS="-miphoneos-version-min=13.0 -arch arm64 -Wno-error=deprecated-copy -Wno-error=format" \
     -DCMAKE_EXE_LINKER_FLAGS="-miphoneos-version-min=13.0 -arch arm64" \
     -DCMAKE_SHARED_LINKER_FLAGS="-miphoneos-version-min=13.0 -arch arm64" \
+    -DTIM2TOX_DISABLE_SQLITE=ON \
     "${configure_args[@]}"
 
   cmake --build "$build_dir" --config Release --target tim2tox_ffi --parallel "$(ci_cpu_count)"

@@ -68,10 +68,18 @@ jobs:
       - name: Set up Flutter (manual ARM)
         if: matrix.target.flutter_setup == 'manual'
         run: |
-          # Pin to FLUTTER_VERSION tag (matches the subosito action path) so
-          # both arches compile against the same SDK. `stable` HEAD drifts.
-          git clone --depth 1 --branch "${FLUTTER_VERSION}" \
+          # Clone the stable channel (so origin/stable resolves for `flutter
+          # --version`'s `git describe`), then fetch + checkout the pinned
+          # version tag. `git clone --branch <tag>` lands in detached HEAD
+          # without an upstream remote ref, which breaks the Flutter CLI's
+          # engine-version detection with "Not a valid object name origin/master".
+          git clone --depth 1 --branch stable \
             https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          (
+            cd "$RUNNER_TEMP/flutter"
+            git fetch --depth 1 origin "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
+            git checkout "${FLUTTER_VERSION}"
+          )
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/flutter/bin/flutter" config --no-analytics
           "$RUNNER_TEMP/flutter/bin/flutter" precache --linux
@@ -87,6 +95,7 @@ jobs:
             cmake
             libgtk-3-dev
             libsodium-dev
+            libsqlite3-dev
             libgstreamer1.0-dev
             libgstreamer-plugins-base1.0-dev
             libsecret-1-dev
@@ -161,12 +170,14 @@ jobs:
             package_arch: AMD64
             vcpkg_triplet: x64-windows
             cmake_arch: x64
+            msvc_arch: amd64
             tim2tox_windows_arch: x64
             flutter_setup: action
           - runner: windows-11-arm
             package_arch: ARM64
             vcpkg_triplet: arm64-windows
             cmake_arch: ARM64
+            msvc_arch: arm64
             tim2tox_windows_arch: arm64
             flutter_setup: manual
 
@@ -192,10 +203,17 @@ jobs:
         if: matrix.target.flutter_setup == 'manual'
         shell: pwsh
         run: |
-          # Pin to FLUTTER_VERSION tag (matches the subosito action path) so
-          # both arches compile against the same SDK. `stable` HEAD drifts.
-          git clone --depth 1 --branch "$env:FLUTTER_VERSION" `
+          # Clone the stable channel (so origin/stable resolves for `flutter
+          # --version`'s `git describe`), then fetch + checkout the pinned
+          # version tag. `git clone --branch <tag>` lands in detached HEAD
+          # without an upstream remote ref, which breaks the Flutter CLI's
+          # engine-version detection with "Not a valid object name origin/master".
+          git clone --depth 1 --branch stable `
             https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          Push-Location "$env:RUNNER_TEMP\flutter"
+          git fetch --depth 1 origin "refs/tags/$($env:FLUTTER_VERSION):refs/tags/$($env:FLUTTER_VERSION)"
+          git checkout $env:FLUTTER_VERSION
+          Pop-Location
           "$env:RUNNER_TEMP\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" config --no-analytics
           & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" precache --windows
@@ -274,6 +292,15 @@ jobs:
 
       - name: Install Flutter packages
         run: flutter pub get
+
+      # CMake's "Visual Studio 17 2022" generator on the windows-2025 /
+      # windows-11-arm images needs `vswhere`-discoverable VS state. The
+      # ilammy/msvc-dev-cmd action sets INCLUDE/LIB/PATH/VSINSTALLDIR via
+      # vcvarsall.bat so cmake's `project()` can find the toolchain.
+      - name: Set up MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.target.msvc_arch }}
 
       - name: Build Tim2Tox native library
         env:
@@ -453,9 +480,15 @@ jobs:
         run: flutter pub get
 
       - name: Install CocoaPods
+        # The committed Podfile.lock pins TXIMSDK_Plus_iOS_XCFramework to the
+        # older Tencent SDK; whenever third_party/tim2tox bumps the SDK version
+        # the lock goes stale and `pod install` rejects the resolution. Delete
+        # the lock so CocoaPods regenerates it from the current Podfile + the
+        # vendored SDK, and pull the latest spec repo while we're at it.
         run: |
           cd ios
-          pod install
+          rm -f Podfile.lock
+          pod install --repo-update
 
       - name: Prepare iOS signing
         env:
