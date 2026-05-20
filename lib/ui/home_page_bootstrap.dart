@@ -744,7 +744,11 @@ extension _HomePageBootstrap on _HomePageState {
     }
 
     final listEmpty = UikitDataFacade.conversationList.isEmpty;
-    _selectConversation(peerId: peerId, groupId: groupId);
+    // Use _openChat (not _selectConversation) so the home shell also flips
+    // to the Chats tab (_index = 0). Without this, tapping a notification
+    // while on Settings/Contacts sets currentConversation but the user
+    // still sees the previous tab and the tap looks dead.
+    _openChat(peerId: peerId, groupId: groupId);
 
     if (!listEmpty) return;
     // Cold-start path: list hadn't loaded yet, so the call above only set a
@@ -769,7 +773,7 @@ extension _HomePageBootstrap on _HomePageState {
       if (UikitDataFacade.conversationList.isEmpty) return;
       cleanup();
       if (!mounted) return;
-      _selectConversation(peerId: peerId, groupId: groupId);
+      _openChat(peerId: peerId, groupId: groupId);
     });
     timeout = Timer(const Duration(seconds: 2), () {
       if (sub == null) return;

@@ -11,6 +11,7 @@ import '../sdk_fake/fake_uikit_core.dart';
 import '../sdk_fake/uikit_data_facade.dart';
 import '../util/logger.dart';
 import '../util/prefs.dart';
+import '../util/tox_utils.dart';
 import 'notification_service.dart';
 
 /// Hooks the V2TimAdvancedMsgListener path and posts an OS-level notification
@@ -183,7 +184,10 @@ class NotificationMessageListener {
     // because some control-signal paths land with isSelf unset.
     if (message.isSelf ?? false) return true;
     final sender = message.sender ?? '';
-    if (sender.isNotEmpty && sender == _service.selfId) return true;
+    if (sender.isNotEmpty &&
+        normalizeToxId(sender) == normalizeToxId(_service.selfId)) {
+      return true;
+    }
 
     // Skip control-signal text messages that bubble up as plain text but
     // shouldn't trigger a notification (revoke / face / custom / location).
@@ -250,9 +254,13 @@ class NotificationMessageListener {
     return 'New message';
   }
 
-  /// Returns `c2c_<userID>` or `group_<groupID>` to match the rest of the
-  /// app's conversation identifier scheme. Returns null when we can't
-  /// determine either.
+  /// Returns `c2c_<publicKey>` or `group_<groupID>` to match the rest of the
+  /// app's conversation identifier scheme. The Tox ID is normalized to its
+  /// 64-char public-key form (`normalizeToxId`) because `FakeConversation`
+  /// entries are built with the normalized key — if the SDK happens to
+  /// deliver a 76-char full Tox address here, the raw form would miss both
+  /// the conversation-lookup and the active-conversation/mute checks.
+  /// Returns null when we can't determine either.
   String? _resolveConversationId(V2TimMessage message) {
     final groupId = message.groupID;
     if (groupId != null && groupId.isNotEmpty) {
@@ -260,11 +268,11 @@ class NotificationMessageListener {
     }
     final userId = message.userID;
     if (userId != null && userId.isNotEmpty) {
-      return 'c2c_$userId';
+      return 'c2c_${normalizeToxId(userId)}';
     }
     final sender = message.sender;
     if (sender != null && sender.isNotEmpty) {
-      return 'c2c_$sender';
+      return 'c2c_${normalizeToxId(sender)}';
     }
     return null;
   }
