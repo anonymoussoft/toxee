@@ -392,6 +392,8 @@ class FakeIM {
       getUnreadOf: ffi.getUnreadOf,
       mergeLocalFriendsAsOffline: false,
       emitGroupType: true,
+      getGroupActivityMs: (gid) =>
+          ffi.lastMessages[gid]?.timestamp.millisecondsSinceEpoch,
     );
     for (final conv in convs) {
       bus.emit(topicConversation, conv);

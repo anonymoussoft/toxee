@@ -202,6 +202,11 @@ class _ToxeeGroupProfileContentState
   String groupName = "";
   String displayGroupID = "";
   String? chatId;
+  // Set when `dispose()` runs so the chat-ID retry loop (1+2+3+5+8 = 19 s of
+  // cumulative delay) can short-circuit. Without this, every group-profile
+  // close used to keep firing FFI lookups for up to 19 seconds against a
+  // dead widget.
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -209,6 +214,12 @@ class _ToxeeGroupProfileContentState
     displayGroupID = widget.groupInfo.groupID;
     groupName = widget.groupInfo.groupName ?? widget.groupInfo.groupID;
     _loadGroupNameAndID();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   Future<void> _loadGroupNameAndID() async {
@@ -291,6 +302,7 @@ class _ToxeeGroupProfileContentState
     ];
 
     for (int attempt = 0; attempt < maxRetries; attempt++) {
+      if (_disposed) return;
       try {
         final retrievedChatId =
             (ffiService as dynamic).getGroupChatId(widget.groupInfo.groupID);
@@ -308,6 +320,7 @@ class _ToxeeGroupProfileContentState
                 ? retryDelays[attempt]
                 : retryDelay;
             await Future.delayed(delay);
+            if (_disposed) return;
           }
         }
       } catch (e) {
@@ -321,6 +334,7 @@ class _ToxeeGroupProfileContentState
               ? retryDelays[attempt]
               : retryDelay;
           await Future.delayed(delay);
+          if (_disposed) return;
         }
       }
     }

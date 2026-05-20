@@ -58,6 +58,7 @@ Future<List<FakeConversation>> buildConversationsFromFriends({
   required int Function(String id) getUnreadOf,
   bool mergeLocalFriendsAsOffline = false,
   bool emitGroupType = false,
+  int? Function(String groupId)? getGroupActivityMs,
 }) async {
   // ---- C2C: build the normalized friend map ----
   final friendMap = <String, ConvBuilderFriend>{};
@@ -136,11 +137,21 @@ Future<List<FakeConversation>> buildConversationsFromFriends({
     ]);
     return (name: res[0] as String, avatar: res[1] as String?);
   }));
+  // Activity timestamps for groups: previously hard-coded to 0 in the
+  // sort, which pinned every group below every C2C in activity mode
+  // regardless of recency. Now sourced from the caller-provided lookup
+  // (typically `_ffi.lastMessages[gid]?.timestamp`).
+  final activityByGroupId = <String, int>{};
   for (int i = 0; i < emitGroups.length; i++) {
     final gid = emitGroups[i];
     final groupPinnedKey = 'group_${normalizeToxId(gid)}';
+    final convId = 'group_$gid';
+    if (getGroupActivityMs != null) {
+      final ms = getGroupActivityMs(gid);
+      if (ms != null) activityByGroupId[convId] = ms;
+    }
     list.add(FakeConversation(
-      conversationID: 'group_$gid',
+      conversationID: convId,
       title: groupMeta[i].name,
       faceUrl: groupMeta[i].avatar,
       unreadCount: getUnreadOf(gid),
@@ -152,7 +163,7 @@ Future<List<FakeConversation>> buildConversationsFromFriends({
     ));
   }
 
-  // ---- Sort: pinned first, then by mode (activity-by-c2c-timestamp or title).
+  // ---- Sort: pinned first, then by mode (activity timestamp or title).
   list.sort((a, b) {
     final aPinned = a.isPinned ? 0 : 1;
     final bPinned = b.isPinned ? 0 : 1;
@@ -160,10 +171,10 @@ Future<List<FakeConversation>> buildConversationsFromFriends({
     if (sortingMode == 'activity') {
       final aMs = a.conversationID.startsWith('c2c_')
           ? (activityByC2cId[a.conversationID]?.millisecondsSinceEpoch ?? 0)
-          : 0;
+          : (activityByGroupId[a.conversationID] ?? 0);
       final bMs = b.conversationID.startsWith('c2c_')
           ? (activityByC2cId[b.conversationID]?.millisecondsSinceEpoch ?? 0)
-          : 0;
+          : (activityByGroupId[b.conversationID] ?? 0);
       final cmp = bMs.compareTo(aMs);
       if (cmp != 0) return cmp;
     }
@@ -263,6 +274,8 @@ class FakeConversationManager {
       mergeLocalFriendsAsOffline: true,
       // Sync read path historically did not set groupType — preserve that.
       emitGroupType: false,
+      getGroupActivityMs: (gid) =>
+          _ffi.lastMessages[gid]?.timestamp.millisecondsSinceEpoch,
     );
     AppLogger.log(
         '[FakeConversationManager] getConversationList: END - Returning ${list.length} conversations (${list.where((c) => !c.isGroup).length} C2C, ${list.where((c) => c.isGroup).length} groups), sort=$sortingMode');

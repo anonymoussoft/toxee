@@ -307,16 +307,41 @@ class Prefs {
     await p.setStringList(key, groups.toList());
   }
 
+  // Serialize R-M-W on the quit-groups set so a Dart-side `quitGroup` racing
+  // against the C++ groupQuitNotification cleanup (or two concurrent quits)
+  // cannot lose a write — both would otherwise read the same snapshot and the
+  // second `setQuitGroups` would overwrite the first.
+  static Future<void> _quitGroupsRmw(
+      void Function(Set<String> set) mutate) async {
+    final prev = _quitGroupsRmwTail;
+    final completer = Completer<void>();
+    _quitGroupsRmwTail = completer.future;
+    try {
+      await prev;
+    } catch (_) {
+      // Predecessor's failure must not block our turn.
+    }
+    try {
+      final current = await getQuitGroups();
+      mutate(current);
+      await setQuitGroups(current);
+    } finally {
+      completer.complete();
+      // Allow the tail to GC once everyone past us has completed.
+      if (identical(_quitGroupsRmwTail, completer.future)) {
+        _quitGroupsRmwTail = Future<void>.value();
+      }
+    }
+  }
+
+  static Future<void> _quitGroupsRmwTail = Future<void>.value();
+
   static Future<void> addQuitGroup(String groupId) async {
-    final quitGroups = await getQuitGroups();
-    quitGroups.add(groupId);
-    await setQuitGroups(quitGroups);
+    await _quitGroupsRmw((set) => set.add(groupId));
   }
 
   static Future<void> removeQuitGroup(String groupId) async {
-    final quitGroups = await getQuitGroups();
-    quitGroups.remove(groupId);
-    await setQuitGroups(quitGroups);
+    await _quitGroupsRmw((set) => set.remove(groupId));
   }
 
   static Future<String?> getNickname() async {

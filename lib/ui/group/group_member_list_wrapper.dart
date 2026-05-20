@@ -111,6 +111,7 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
     }
 
     _isRefreshing = true;
+    bool succeeded = false;
     try {
       // Call data layer directly to get fresh data from native
       // (bypass GroupMemberListDebouncer to avoid stale cached data)
@@ -149,8 +150,24 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
         _isLoading = false;
         _hasLoaded = true; // Mark as loaded to prevent reloads
       });
+      succeeded = true;
+    } catch (e, st) {
+      // A thrown FFI/native error used to leave _isLoading true forever
+      // because only _isRefreshing was reset in the finally. Surface the
+      // failure to the empty-state path instead of an infinite shimmer.
+      AppLogger.logError(
+          '[GroupMemberListWrapper] member fetch failed for $groupID', e, st);
     } finally {
       _isRefreshing = false;
+      // On any non-success exit (exception or early return because the
+      // widget was reused for a different group while in flight) we still
+      // need to drop the loading shimmer so the UI can render the empty
+      // state or the next group's content.
+      if (!succeeded && mounted && groupID == widget.groupInfo.groupID) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
