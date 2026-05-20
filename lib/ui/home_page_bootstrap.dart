@@ -84,9 +84,41 @@ extension _HomePageBootstrap on _HomePageState {
 
     AppLogger.debug('[HomePage] initState: Calling _ensureStickerPluginRegistered');
     _ensureStickerPluginRegistered();
+    // P1-C3: if the user is still offline 30s after the home page comes up
+    // — meaning the startup 20s connection wait already elapsed without us
+    // hearing back from the DHT — surface a banner so they know something
+    // is wrong instead of staring at an indefinite "Connecting…" state.
+    // The timer is cancelled the moment we get conn:success, and re-armed
+    // on every offline transition so a transient network blip after
+    // initial success doesn't pop the banner.
+    void scheduleNoConnectionBanner() {
+      _noConnectionBannerTimer?.cancel();
+      _noConnectionBannerTimer =
+          Timer(const Duration(seconds: 30), () {
+        if (!mounted) return;
+        if (widget.service.isConnected) return;
+        final usedFallback = BootstrapNodesService.lastFetchUsedFallback;
+        _showSnackBar(
+          usedFallback
+              ? 'Cannot reach the DHT. Using fallback bootstrap nodes — your network may be blocking UDP, or the nodes are down.'
+              : 'Cannot reach the DHT after 30s. Check your network connection.',
+        );
+      });
+    }
+    scheduleNoConnectionBanner();
+    _bag.add(() {
+      _noConnectionBannerTimer?.cancel();
+      _noConnectionBannerTimer = null;
+    });
     _connectionStatusSub = widget.service.connectionStatusStream.listen((connected) async {
       AppLogger.log('[HomePage] Connection status changed: connected=$connected, selfId=${widget.service.selfId}');
       unawaited(_updateTray());
+      if (!connected) {
+        scheduleNoConnectionBanner();
+      } else {
+        _noConnectionBannerTimer?.cancel();
+        _noConnectionBannerTimer = null;
+      }
       if (connected) {
         final selfId = widget.service.selfId;
         AppLogger.debug('[HomePage] Connection established: Checking plugin registration - _stickerPluginRegistered=$_stickerPluginRegistered, selfId=$selfId, isEmpty=${selfId.isEmpty}');
@@ -669,6 +701,29 @@ extension _HomePageBootstrap on _HomePageState {
       UikitDataFacade.buildApplicationList(mapped, "home");
       UikitDataFacade.setApplicationUnreadCount(mapped);
       _pendingFriendApps = List<V2TimFriendApplication>.from(mapped);
+      // P1-D3: fire an OS-level notification for any application userID we
+      // have not yet notified about in this session. Auto-accept users won't
+      // see the banner because we silently accept below before the user
+      // would have time to read it — that's acceptable; the snackbar at
+      // accept-time covers them.
+      if (!_autoAcceptFriends) {
+        for (final app in mapped) {
+          final uid = app.userID;
+          if (uid.isEmpty) continue;
+          if (_notifiedFriendReqUserIds.contains(uid)) continue;
+          _notifiedFriendReqUserIds.add(uid);
+          unawaited(NotificationService.instance.showFriendRequestNotification(
+            senderId: uid,
+            senderName: uid.length > 16 ? '${uid.substring(0, 16)}…' : uid,
+            requestMessage: app.addWording ?? '',
+          ));
+        }
+      }
+      // If applications were withdrawn / accepted / rejected on this device
+      // before we recorded them, prune the dedup set so a fresh request from
+      // the same peer can re-notify later in the session.
+      final currentIds = mapped.map((a) => a.userID).toSet();
+      _notifiedFriendReqUserIds.removeWhere((id) => !currentIds.contains(id));
       if (_autoAcceptFriends && mapped.isNotEmpty) {
         _acceptFriendApplications(mapped).catchError((e, st) {
           AppLogger.logError('[HomePage] auto-accept friend applications failed', e, st);

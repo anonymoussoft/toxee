@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_state_widget.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tencent_cloud_chat_common/builders/tencent_cloud_chat_common_builders.dart';
@@ -10,6 +13,10 @@ import 'package:tencent_cloud_chat_common/widgets/avatar/tencent_cloud_chat_avat
 import 'package:tencent_cloud_chat_common/widgets/dialog/tencent_cloud_chat_dialog.dart';
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_group_profile.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
+
+import '../../util/app_paths.dart';
+import '../../util/logger.dart';
+import '../../util/prefs.dart';
 
 /// Capture+install+restore for toxee's group-profile builder overrides.
 ///
@@ -64,16 +71,115 @@ class GroupProfileBuilderOverrideHandle {
   }
 }
 
-/// Group profile avatar — display only. The upstream widget pushes
-/// `ChooseGroupAvatar` (a Tencent server-side preset grid) on tap, which is
-/// meaningless against Tox conferences. `faceUrl` is sourced from
-/// `Prefs.getGroupAvatar` by the converter, so the rendered avatar still
-/// reflects per-account local customization; we just don't expose the
-/// preset-picker tap action here.
-class _ToxeeGroupProfileAvatar extends StatelessWidget {
+/// Group profile avatar. The upstream `ChooseGroupAvatar` flow shows a grid
+/// of Tencent server-hosted preset URLs, which is meaningless against Tox
+/// conferences. We instead let any group member (the user) pick a local
+/// image file; the chosen path is written to `Prefs.setGroupAvatar` and the
+/// fake provider stack picks it up via `Prefs.getGroupAvatar` on the next
+/// conversation/profile render, so the new avatar is visible app-wide.
+///
+/// This is per-account + per-device — Tox conferences have no shared
+/// avatar concept, so customization stays purely local.
+class _ToxeeGroupProfileAvatar extends StatefulWidget {
   final V2TimGroupInfo groupInfo;
 
   const _ToxeeGroupProfileAvatar({required this.groupInfo});
+
+  @override
+  State<_ToxeeGroupProfileAvatar> createState() =>
+      _ToxeeGroupProfileAvatarState();
+}
+
+class _ToxeeGroupProfileAvatarState extends State<_ToxeeGroupProfileAvatar> {
+  late String _faceUrl;
+  int _version = 0; // cache-buster forces avatar rebuild after a swap
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _faceUrl = widget.groupInfo.faceUrl ?? '';
+    // Resolve the override path (if any) on first build so the dialog
+    // reflects the same picture seen elsewhere in the app. Falls back to
+    // whatever the upstream `groupInfo.faceUrl` already had.
+    unawaited(_loadOverride());
+  }
+
+  Future<void> _loadOverride() async {
+    try {
+      final stored = await Prefs.getGroupAvatar(widget.groupInfo.groupID);
+      if (!mounted) return;
+      if (stored != null && stored.isNotEmpty && stored != _faceUrl) {
+        setState(() => _faceUrl = stored);
+      }
+    } catch (e) {
+      AppLogger.warn('[GroupAvatar] load override failed: $e');
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final result =
+          await FilePicker.platform.pickFiles(type: FileType.image);
+      final pickedPath = result?.files.single.path;
+      if (pickedPath == null) return; // user cancelled
+
+      // Stage the file inside the per-account avatars directory so it
+      // survives across app launches and is wiped on account removal,
+      // matching the self/friend avatar layout from
+      // `pickAndPersistAvatar`.
+      final currentToxId = await Prefs.getCurrentAccountToxId();
+      final avatarsDirPath =
+          (currentToxId != null && currentToxId.isNotEmpty)
+              ? await AppPaths.getAccountAvatarsPath(currentToxId)
+              : (await AppPaths.avatars).path;
+      final avatarsDir = Directory(avatarsDirPath);
+      if (!await avatarsDir.exists()) {
+        await avatarsDir.create(recursive: true);
+      }
+      final ext = p.extension(pickedPath);
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'group_${widget.groupInfo.groupID}_$ts$ext';
+      final destPath = p.join(avatarsDirPath, fileName);
+
+      // Best-effort cleanup of older group_<id>_* files so they don't pile
+      // up on disk every time the user re-picks. Tolerates locked files.
+      try {
+        final prefix = 'group_${widget.groupInfo.groupID}_';
+        await for (final entity in avatarsDir.list()) {
+          if (entity is File && p.basename(entity.path).startsWith(prefix)) {
+            try {
+              await entity.delete();
+            } catch (e) {
+              AppLogger.warn(
+                  '[GroupAvatar] delete stale ${entity.path} failed: $e');
+            }
+          }
+        }
+      } catch (e) {
+        AppLogger.warn('[GroupAvatar] stale cleanup scan failed: $e');
+      }
+
+      await File(pickedPath).copy(destPath);
+      await Prefs.setGroupAvatar(widget.groupInfo.groupID, destPath);
+
+      if (!mounted) return;
+      setState(() {
+        _faceUrl = destPath;
+        _version++;
+      });
+    } catch (e, st) {
+      AppLogger.logError('[GroupAvatar] pick failed', e, st);
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('Failed to update avatar: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,12 +187,59 @@ class _ToxeeGroupProfileAvatar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        TencentCloudChatCommonBuilders.getCommonAvatarBuilder(
-          scene: TencentCloudChatAvatarScene.groupProfile,
-          imageList: [groupInfo.faceUrl ?? ''],
-          width: 94,
-          height: 94,
-          borderRadius: 48,
+        // GestureDetector outside the avatar builder so the entire 94×94
+        // circle is tappable, not just any nested hit-test region inside
+        // the upstream `getCommonAvatarBuilder` widget tree.
+        GestureDetector(
+          onTap: _pickAvatar,
+          child: Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              // `getCommonAvatarBuilder` returns a widget without exposing
+              // a `key` slot, so we wrap it in a KeyedSubtree to force a
+              // rebuild whenever `_version` bumps after a re-pick. Without
+              // this, callers caching by image bytes can show stale art.
+              KeyedSubtree(
+                key: ValueKey(
+                    'group_avatar_${widget.groupInfo.groupID}_$_version'),
+                child: TencentCloudChatCommonBuilders.getCommonAvatarBuilder(
+                  scene: TencentCloudChatAvatarScene.groupProfile,
+                  imageList: [_faceUrl],
+                  width: 94,
+                  height: 94,
+                  borderRadius: 48,
+                ),
+              ),
+              // Small camera badge to hint that the avatar is tappable;
+              // without it the area looks purely decorative.
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.surface,
+                    width: 2,
+                  ),
+                ),
+                child: _saving
+                    ? const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.camera_alt_outlined,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+              ),
+            ],
+          ),
         ),
       ],
     );

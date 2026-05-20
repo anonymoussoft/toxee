@@ -77,6 +77,7 @@ import 'applications/applications_page.dart';
 import 'home/home_utils.dart';
 import '../util/app_theme_config.dart';
 import '../util/app_tray.dart';
+import '../util/bootstrap_nodes.dart';
 import '../util/lan_bootstrap_service.dart';
 import '../util/send_failure_notifier.dart';
 import '../util/platform_utils.dart';
@@ -118,6 +119,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _autoAcceptFriends = false;
   bool _autoAcceptGroupInvites = false;
   List<V2TimFriendApplication> _pendingFriendApps = [];
+  // P1-D3: tracks which friend-request userIDs we have already fired a
+  // system notification for in this session. Without this, every poll cycle
+  // that re-emits the same pending application list would re-banner.
+  // Cleared in dispose; survives only the in-memory session.
+  final Set<String> _notifiedFriendReqUserIds = <String>{};
   bool _stickerPluginRegistered = false;
   // Set the instant we enqueue a sticker-plugin postFrame callback, so back-
   // to-back rebuilds before the callback fires don't queue duplicates.
@@ -127,6 +133,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   StreamSubscription? _msgSub;
   StreamSubscription? _progressUpdatesSub;
   StreamSubscription<bool>? _connectionStatusSub;
+  // P1-C3: timer that fires a banner if we stay offline 30s after a
+  // disconnect (or never connect on cold start). Cancelled on
+  // conn:success.
+  Timer? _noConnectionBannerTimer;
   StreamSubscription<TencentCloudChatConversationData<dynamic>>? _conversationDataSub;
   StreamSubscription<TencentCloudChatContactData<dynamic>>? _contactDataSub;
   StreamSubscription<TencentCloudChatGroupProfileData<dynamic>>? _groupProfileDataSub;

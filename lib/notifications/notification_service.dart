@@ -43,6 +43,13 @@ class NotificationService {
   static const String _androidChannelDescription =
       'Notifications for new incoming messages from your tox contacts.';
 
+  // Separate Android notification channel for friend-add applications so the
+  // user can mute / tweak importance independently of normal-message banners.
+  static const String _androidFriendReqChannelId = 'toxee_friend_requests';
+  static const String _androidFriendReqChannelName = 'Friend requests';
+  static const String _androidFriendReqChannelDescription =
+      'Notifications when someone sends you a friend request.';
+
   /// Body truncation cap — keep tight to avoid OS-level ellipsis on Android
   /// (Material You collapses long lines on the lock screen) and macOS Big
   /// Sur-era banners that hard-truncate around 100 chars.
@@ -144,8 +151,8 @@ class NotificationService {
             '[NotificationService] getNotificationAppLaunchDetails failed: $e');
       }
 
-      // Android: create the channel up front so the user can manage it from
-      // system settings even before the first notification fires.
+      // Android: create the channels up front so the user can manage them
+      // from system settings even before the first notification fires.
       if (Platform.isAndroid) {
         final androidImpl = _plugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
@@ -155,6 +162,14 @@ class NotificationService {
               _androidChannelId,
               _androidChannelName,
               description: _androidChannelDescription,
+              importance: Importance.high,
+            ),
+          );
+          await androidImpl.createNotificationChannel(
+            const AndroidNotificationChannel(
+              _androidFriendReqChannelId,
+              _androidFriendReqChannelName,
+              description: _androidFriendReqChannelDescription,
               importance: Importance.high,
             ),
           );
@@ -346,6 +361,77 @@ class NotificationService {
       // visible without spamming error on every message.
       AppLogger.warn(
           '[NotificationService] showMessageNotification failed for conv=$conversationId: $e');
+      AppLogger.debug('[NotificationService] stack: $st');
+    }
+  }
+
+  /// Post a notification for an incoming friend-add request.
+  ///
+  /// The tap payload uses the `friend_req:<userId>` form so the existing
+  /// route handler can dispatch to a "new friend" / "contacts" landing
+  /// page distinct from a chat conversation.
+  ///
+  /// Best-effort like [showMessageNotification]: failures are logged and
+  /// swallowed.
+  Future<void> showFriendRequestNotification({
+    required String senderId,
+    required String senderName,
+    required String requestMessage,
+  }) async {
+    if (!_initialized) {
+      await init();
+    }
+    if (!_initialized || !_platformSupported) return;
+
+    if (Platform.isAndroid) {
+      await _ensureAndroidPermission();
+      if (_androidPermissionGranted == false) {
+        AppLogger.debug(
+            '[NotificationService] Android notifications denied; skipping friend req notify for $senderId');
+        return;
+      }
+    }
+
+    try {
+      final clampedBody = _clampBody(
+          requestMessage.isEmpty ? '(no message)' : requestMessage);
+
+      final id = _idFor('friend_req:$senderId');
+
+      final androidDetails = AndroidNotificationDetails(
+        _androidFriendReqChannelId,
+        _androidFriendReqChannelName,
+        channelDescription: _androidFriendReqChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        category: AndroidNotificationCategory.social,
+        groupKey: 'toxee.friend_requests',
+      );
+      const darwinDetails = DarwinNotificationDetails(
+        threadIdentifier: 'toxee.friend_requests',
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+      const linuxDetails = LinuxNotificationDetails(
+        category: LinuxNotificationCategory.imReceived,
+      );
+
+      await _plugin.show(
+        id,
+        senderName.isEmpty ? 'New friend request' : 'Friend request: $senderName',
+        clampedBody,
+        NotificationDetails(
+          android: androidDetails,
+          iOS: darwinDetails,
+          macOS: darwinDetails,
+          linux: linuxDetails,
+        ),
+        payload: 'friend_req:$senderId',
+      );
+    } catch (e, st) {
+      AppLogger.warn(
+          '[NotificationService] showFriendRequestNotification failed for $senderId: $e');
       AppLogger.debug('[NotificationService] stack: $st');
     }
   }
