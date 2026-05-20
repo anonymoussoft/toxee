@@ -9,6 +9,7 @@ import 'package:tim2tox_dart/utils/binary_replacement_history_hook.dart';
 import '../adapters/conversation_manager_adapter.dart';
 import '../adapters/event_bus_adapter.dart';
 import '../notifications/badge_service.dart';
+import '../notifications/notification_message_listener.dart';
 import '../sdk_fake/fake_uikit_core.dart';
 import '../sdk_fake/uikit_data_facade.dart';
 import '../util/logger.dart';
@@ -135,6 +136,11 @@ class SessionRuntimeCoordinator {
     // Drop the badge subscription before FakeUIKit.dispose() closes the
     // event bus — otherwise the cancel races with a closed StreamController.
     await BadgeService.instance.dispose();
+
+    // Detach the notification message listener BEFORE the Tim2Tox platform
+    // swap below so removeAdvancedMsgListener still hits the live platform.
+    // disposeAndReset is a no-op when no singleton was constructed.
+    await NotificationMessageListener.disposeAndReset();
 
     FakeUIKit.instance.dispose();
 

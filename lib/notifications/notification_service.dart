@@ -56,6 +56,14 @@ class NotificationService {
   bool _initialized = false;
   bool _initializing = false;
 
+  /// Cached Android POST_NOTIFICATIONS decision for the session. `null` =
+  /// not yet asked; `true` = granted (either already enabled or the user
+  /// just said yes); `false` = the user denied. We never re-prompt within
+  /// a session — Material Design says ask once at a contextual moment, and
+  /// hammering the user on every message is exactly the anti-pattern. On
+  /// non-Android platforms this stays `null` and is never consulted.
+  bool? _androidPermissionGranted;
+
   // Per-conversation message accumulator for inbox-style grouping. Cleared
   // when the user opens the conversation (callers tell us via
   // [clearConversationGroup]) or when the system reports the notification
@@ -151,6 +159,15 @@ class NotificationService {
             ),
           );
         }
+        // Android 13+ (API 33) requires the POST_NOTIFICATIONS runtime
+        // permission. On older Android versions the OS auto-grants and
+        // [requestNotificationsPermission] is a no-op. We still call
+        // [_ensureAndroidPermission] (which fast-paths via
+        // [areNotificationsEnabled]) so the cached state is populated
+        // before the first message arrives.
+        if (_androidApiLevelAtLeast(33)) {
+          await _ensureAndroidPermission();
+        }
       }
 
       // iOS / macOS: ask for alert + badge + sound. The plugin returns
@@ -231,6 +248,22 @@ class NotificationService {
       await init();
     }
     if (!_initialized || !_platformSupported) return;
+
+    // Android 13+ permission gate. If init() ran before the permission was
+    // decided (or the user is on a platform where the channel exists but
+    // notifications are blocked from system settings), the cached result
+    // tells us to bail before queueing a no-op platform call. The contextual
+    // prompt fires here for the first message — exactly the moment a banner
+    // would otherwise be useful.
+    if (Platform.isAndroid) {
+      await _ensureAndroidPermission();
+      if (_androidPermissionGranted == false) {
+        AppLogger.debug(
+            '[NotificationService] Android notifications denied; skipping notify for conv=$conversationId');
+        return;
+      }
+    }
+
     try {
       // Body cap. Keep word boundary if we can — avoid breaking mid-grapheme
       // by clamping on the rune-level codepoints, then trimming trailing
@@ -370,6 +403,80 @@ class NotificationService {
     _onSelectController.add(payload);
   }
 
+  /// Lazily asks the user for Android POST_NOTIFICATIONS permission, caching
+  /// the answer in [_androidPermissionGranted] so we only prompt once per
+  /// session. Returns immediately on non-Android platforms.
+  ///
+  /// Fast-paths via [areNotificationsEnabled]: if the user already has
+  /// notifications turned on (the common case after a relaunch on Android
+  /// 13+ where they previously granted, or any pre-Android-13 install
+  /// where the OS auto-grants) we skip the popup entirely.
+  Future<void> _ensureAndroidPermission() async {
+    if (!Platform.isAndroid) return;
+    if (_androidPermissionGranted != null) return;
+
+    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImpl == null) {
+      // Plugin didn't expose the Android impl — treat as granted to avoid
+      // disabling notifications on an environment where we can't even ask.
+      _androidPermissionGranted = true;
+      return;
+    }
+    try {
+      final alreadyEnabled = await androidImpl.areNotificationsEnabled();
+      if (alreadyEnabled == true) {
+        _androidPermissionGranted = true;
+        AppLogger.info(
+            '[NotificationService] Android notifications already enabled');
+        return;
+      }
+      // alreadyEnabled is false or null — ask. The plugin returns true if
+      // granted, false if denied, null on platforms / API levels where the
+      // request is a no-op (treat null as granted — pre-Android-13).
+      final granted = await androidImpl.requestNotificationsPermission();
+      _androidPermissionGranted = granted ?? true;
+      if (_androidPermissionGranted == true) {
+        AppLogger.info(
+            '[NotificationService] Android POST_NOTIFICATIONS granted');
+      } else {
+        AppLogger.warn(
+            '[NotificationService] Android POST_NOTIFICATIONS denied — notifications will be silently dropped this session');
+      }
+    } catch (e, st) {
+      // Don't poison the channel on a transient platform-side failure —
+      // treat as granted so the user still has a chance of getting banners.
+      AppLogger.logError(
+          '[NotificationService] _ensureAndroidPermission failed', e, st);
+      _androidPermissionGranted = true;
+    }
+  }
+
+  /// Best-effort Android API level check. Parses [Platform.operatingSystemVersion]
+  /// for the leading integer — on Android the string is of the form
+  /// `"<release> <kernel>"` (e.g. `"13 5.10.81-android13-..."`). When the
+  /// parse fails we conservatively return true so the permission gate still
+  /// runs — the plugin's [requestNotificationsPermission] is itself a no-op
+  /// on pre-Android-13, so an unnecessary call costs nothing.
+  bool _androidApiLevelAtLeast(int minApi) {
+    if (!Platform.isAndroid) return false;
+    try {
+      final version = Platform.operatingSystemVersion;
+      // The first whitespace-delimited token is the release version on
+      // Android (e.g. "13"). Map release -> API level using the well-known
+      // mapping for release >= 11 (API 30) which is the floor we ship to.
+      final match = RegExp(r'^\s*(\d+)').firstMatch(version);
+      final release = int.tryParse(match?.group(1) ?? '');
+      if (release == null) return true; // Unknown — let the plugin decide.
+      // Release -> API: 11->30, 12->31/32, 13->33, 14->34, 15->35.
+      // Conservative floor: release N corresponds to API >= 30 + (N - 11).
+      final estimatedApi = 30 + (release - 11);
+      return estimatedApi >= minApi;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only / shutdown hook. Cancels the broadcast controller.
   @visibleForTesting
   Future<void> disposeForTest() async {
@@ -377,5 +484,6 @@ class NotificationService {
     _grouped.clear();
     _conversationIdHashCache.clear();
     _initialized = false;
+    _androidPermissionGranted = null;
   }
 }

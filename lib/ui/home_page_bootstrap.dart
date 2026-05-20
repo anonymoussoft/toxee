@@ -137,6 +137,8 @@ extension _HomePageBootstrap on _HomePageState {
                   _messageWidgetKeyCounter++;
                   _messageWidgetKeys[conversationID] = UniqueKey();
                 });
+                unawaited(NotificationService.instance
+                    .clearConversationGroup(conversationID));
               }
             });
           }
@@ -555,10 +557,7 @@ extension _HomePageBootstrap on _HomePageState {
               .forService(widget.service)
               .register(
             onConversationTapped: (payload) {
-              // TODO(toxee): wire tap-to-route. For now we just stash the
-              // payload so the user's tap doesn't get lost on cold start.
-              AppLogger.info(
-                  '[HomePage] Notification tapped, payload=$payload (routing not yet implemented)');
+              _routeToNotificationPayload(payload);
             },
           ));
         }
@@ -714,6 +713,70 @@ extension _HomePageBootstrap on _HomePageState {
     _groupBuilderOverride = GroupProfileBuilderOverrideHandle.capture();
     _bag.add(() => _groupBuilderOverride?.restore());
     _groupBuilderOverride!.installOverrides();
+  }
+
+  /// Routes a notification payload (`c2c_<toxId>` or `group_<groupId>`) to the
+  /// matching conversation using the same plumbing the conversation-list tap
+  /// uses (`_selectConversation` → `UikitDataFacade.currentConversation`).
+  ///
+  /// Cold-start safety: when the tap fires before the conversation list has
+  /// loaded (replayed launch payload), `_selectConversation` constructs a stub
+  /// V2TimConversation so the chat view can open immediately. We additionally
+  /// schedule a single retry once the list populates so the conversation gets
+  /// rebound to the real entry (proper showName, lastMessage, unreadCount).
+  void _routeToNotificationPayload(String payload) {
+    if (!mounted) return;
+    String? peerId;
+    String? groupId;
+    if (payload.startsWith('group_')) {
+      groupId = payload.substring('group_'.length);
+    } else if (payload.startsWith('c2c_')) {
+      peerId = payload.substring('c2c_'.length);
+    } else {
+      AppLogger.warn(
+          '[HomePage] Notification payload has unknown prefix: $payload');
+      return;
+    }
+    if ((peerId == null || peerId.isEmpty) &&
+        (groupId == null || groupId.isEmpty)) {
+      AppLogger.warn('[HomePage] Notification payload empty after strip: $payload');
+      return;
+    }
+
+    final listEmpty = UikitDataFacade.conversationList.isEmpty;
+    _selectConversation(peerId: peerId, groupId: groupId);
+
+    if (!listEmpty) return;
+    // Cold-start path: list hadn't loaded yet, so the call above only set a
+    // stub conversation. Wait for the list to populate (one shot, capped at
+    // 2s) and re-select so the chat view picks up the real entry.
+    StreamSubscription<TencentCloudChatConversationData<dynamic>>? sub;
+    Timer? timeout;
+    void cleanup() {
+      sub?.cancel();
+      sub = null;
+      timeout?.cancel();
+      timeout = null;
+    }
+    sub = TencentCloudChat.instance.eventBusInstance
+        .on<TencentCloudChatConversationData<dynamic>>(
+            "TencentCloudChatConversationData")
+        ?.listen((data) {
+      if (data.currentUpdatedFields !=
+          TencentCloudChatConversationDataKeys.conversationList) {
+        return;
+      }
+      if (UikitDataFacade.conversationList.isEmpty) return;
+      cleanup();
+      if (!mounted) return;
+      _selectConversation(peerId: peerId, groupId: groupId);
+    });
+    timeout = Timer(const Duration(seconds: 2), () {
+      if (sub == null) return;
+      cleanup();
+      AppLogger.debug(
+          '[HomePage] Notification routing: conversation list still empty after 2s, keeping stub for payload=$payload');
+    });
   }
 }
 

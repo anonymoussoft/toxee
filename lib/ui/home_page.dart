@@ -92,6 +92,7 @@ import 'widgets/app_page_route.dart';
 import 'widgets/app_snackbar.dart';
 import 'package:window_manager/window_manager.dart';
 import '../notifications/notification_message_listener.dart';
+import '../notifications/notification_service.dart';
 
 part 'home_page_persistence.dart';
 part 'home_page_plugins.dart';

@@ -101,12 +101,53 @@ class NotificationMessageListener {
     }
   }
 
-  /// Cancel the tap subscription if any. The SDK-level listener stays
-  /// registered for the rest of the session — there's no clean per-listener
-  /// removal that's safe to drive from HomePage dispose without races.
+  /// Tears down the listener completely:
+  ///   - cancels the notification-tap subscription
+  ///   - removes the SDK-level [V2TimAdvancedMsgListener] so a new session
+  ///     bound to a different [FfiChatService] doesn't double-listen
+  ///   - clears the singleton + `_registered` flag so the next
+  ///     [forService] call constructs a fresh listener
+  ///
+  /// Wrapped in try/catch on the SDK removal because the platform may
+  /// already be torn down by the time we get here (e.g. logout dispose order
+  /// has the Tim2Tox platform swap happen alongside this teardown).
+  ///
+  /// Most callers should use [disposeAndReset] instead — it deals with the
+  /// "singleton was never created" case without forcing them to null-check.
   Future<void> dispose() async {
     await _onTapSub?.cancel();
     _onTapSub = null;
+
+    final listener = _listener;
+    if (listener != null) {
+      try {
+        await TencentImSDKPlugin.v2TIMManager
+            .getMessageManager()
+            .removeAdvancedMsgListener(listener: listener);
+      } catch (e) {
+        AppLogger.debug(
+            '[NotificationMessageListener] removeAdvancedMsgListener failed (platform likely torn down): $e');
+      }
+    }
+    _listener = null;
+    _registered = false;
+    if (identical(_instance, this)) {
+      _instance = null;
+    }
+  }
+
+  /// Disposes the current singleton (if any) and clears the static slot so
+  /// the next [forService] call constructs a fresh listener bound to the
+  /// new session's [FfiChatService]. Safe to call when no singleton has
+  /// been created yet — it becomes a no-op.
+  ///
+  /// Strict superset of [resetForTest]: that one only clears the static
+  /// slot for unit tests that never registered with the SDK, this one also
+  /// removes the SDK listener and cancels subscriptions.
+  static Future<void> disposeAndReset() async {
+    final s = _instance;
+    _instance = null;
+    await s?.dispose();
   }
 
   void _onRecvNewMessage(V2TimMessage message) {
