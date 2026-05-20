@@ -74,20 +74,21 @@ jobs:
           # stable yields "fatal: Not a valid object name origin/master".
           # Strategy: clone stable (so origin/stable + branch tracking config
           # exist), additionally fetch master into refs/remotes/origin/master,
-          # then fetch + checkout the pinned version tag. Use `git -C` instead
-          # of a subshell — a `(cd ...; ...)` subshell here was mysteriously
-          # propagating exit code 1 to the parent even though every command
-          # inside succeeded.
+          # then create a stable branch at the pinned version tag (avoids
+          # detached HEAD, which makes Flutter's CLI unhappy).
           FLUTTER_DIR="$RUNNER_TEMP/flutter"
           git clone --depth 1 --branch stable \
             https://github.com/flutter/flutter.git "$FLUTTER_DIR"
           git -C "$FLUTTER_DIR" fetch --depth 1 origin master:refs/remotes/origin/master
           git -C "$FLUTTER_DIR" fetch --depth 1 origin "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
-          git -C "$FLUTTER_DIR" -c advice.detachedHead=false checkout "${FLUTTER_VERSION}"
+          git -C "$FLUTTER_DIR" -c advice.detachedHead=false checkout -B stable "${FLUTTER_VERSION}"
           echo "$FLUTTER_DIR/bin" >> "$GITHUB_PATH"
-          "$FLUTTER_DIR/bin/flutter" config --no-analytics
-          "$FLUTTER_DIR/bin/flutter" precache --linux
-          "$FLUTTER_DIR/bin/flutter" --version
+          # Surface stderr from flutter so silent failures are diagnosable.
+          # `--version` runs first to trigger the first-time Dart SDK download
+          # before any other command needs it.
+          "$FLUTTER_DIR/bin/flutter" --version 2>&1
+          "$FLUTTER_DIR/bin/flutter" config --no-analytics 2>&1
+          "$FLUTTER_DIR/bin/flutter" precache --linux 2>&1
 
       - name: Install Linux dependencies
         # ports.ubuntu.com is occasionally flaky from the ARM runners; retry
@@ -170,7 +171,10 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - runner: windows-2025
+          # Flutter 3.29's `flutter build windows` hardcodes `-G "Visual
+          # Studio 17 2022"`; the windows-2025 image ships VS 18 only and
+          # cmake fails configure. windows-2022 still has VS 2022 (VS 17).
+          - runner: windows-2022
             package_arch: AMD64
             vcpkg_triplet: x64-windows
             cmake_arch: x64
@@ -212,17 +216,19 @@ jobs:
           # stable yields "fatal: Not a valid object name origin/master".
           # Strategy: clone stable (so origin/stable + branch tracking config
           # exist), additionally fetch master into refs/remotes/origin/master,
-          # then fetch + checkout the pinned version tag.
+          # then create a stable branch at the pinned version tag (avoids
+          # detached HEAD, which makes Flutter's CLI report "Unable to
+          # determine engine version").
           $FlutterDir = "$env:RUNNER_TEMP\flutter"
           git clone --depth 1 --branch stable `
             https://github.com/flutter/flutter.git $FlutterDir
           git -C $FlutterDir fetch --depth 1 origin master:refs/remotes/origin/master
           git -C $FlutterDir fetch --depth 1 origin "refs/tags/$($env:FLUTTER_VERSION):refs/tags/$($env:FLUTTER_VERSION)"
-          git -C $FlutterDir -c advice.detachedHead=false checkout $env:FLUTTER_VERSION
+          git -C $FlutterDir -c advice.detachedHead=false checkout -B stable $env:FLUTTER_VERSION
           "$FlutterDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$FlutterDir\bin\flutter.bat" --version
           & "$FlutterDir\bin\flutter.bat" config --no-analytics
           & "$FlutterDir\bin\flutter.bat" precache --windows
-          & "$FlutterDir\bin\flutter.bat" --version
 
       - name: Install vcpkg and native dependencies
         shell: pwsh
