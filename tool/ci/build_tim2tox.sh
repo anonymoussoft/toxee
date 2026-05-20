@@ -481,6 +481,23 @@ build_desktop_target() {
           vcpkg_triplet="x64-windows"
           ;;
       esac
+      # Pick a generator that actually exists on this runner. The windows-2025
+      # image now ships Visual Studio 18 (next-gen) rather than VS 17 2022, so
+      # hardcoding `-G "Visual Studio 17 2022"` fails with "could not find any
+      # instance of Visual Studio." Preference order: env override > Ninja
+      # (cross-version, no -A needed since arch comes from vcvars) > VS 18 >
+      # VS 17.
+      local -a generator_args=()
+      if [[ -n "${TIM2TOX_CMAKE_GENERATOR:-}" ]]; then
+        generator_args=(-G "$TIM2TOX_CMAKE_GENERATOR")
+      elif command -v ninja >/dev/null 2>&1; then
+        generator_args=(-G "Ninja")
+      elif [[ -d "/c/Program Files/Microsoft Visual Studio/18" ]]; then
+        generator_args=(-G "Visual Studio 18" -A "$vs_arch")
+      else
+        generator_args=(-G "Visual Studio 17 2022" -A "$vs_arch")
+      fi
+
       if [[ -n "${VCPKG_ROOT:-}" ]]; then
         local vcpkg_root_win toolchain_file
         vcpkg_root_win="$(ci_windows_path "$VCPKG_ROOT")"
@@ -492,11 +509,11 @@ build_desktop_target() {
         # Git Bash (MSYS) typically exposes it under /c/WINDOWS/...
         export PATH="/c/WINDOWS/System32/WindowsPowerShell/v1.0:$PATH"
         VCPKG_ROOT="$vcpkg_root_win" cmake -S "$source_dir_win" -B "$build_dir_win" \
-          -G "Visual Studio 17 2022" -A "$vs_arch" \
+          "${generator_args[@]}" \
           -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
           "${configure_args[@]}"
       else
-        cmake -S "$source_dir_win" -B "$build_dir_win" -G "Visual Studio 17 2022" -A "$vs_arch" "${configure_args[@]}"
+        cmake -S "$source_dir_win" -B "$build_dir_win" "${generator_args[@]}" "${configure_args[@]}"
       fi
       ;;
     *)

@@ -68,15 +68,17 @@ jobs:
       - name: Set up Flutter (manual ARM)
         if: matrix.target.flutter_setup == 'manual'
         run: |
-          # Clone the stable channel (so origin/stable resolves for `flutter
-          # --version`'s `git describe`), then fetch + checkout the pinned
-          # version tag. `git clone --branch <tag>` lands in detached HEAD
-          # without an upstream remote ref, which breaks the Flutter CLI's
-          # engine-version detection with "Not a valid object name origin/master".
+          # Flutter's CLI hardcodes `git rev-parse origin/master` paths during
+          # engine-version detection regardless of channel, so cloning only
+          # stable yields "fatal: Not a valid object name origin/master".
+          # Strategy: clone stable (so origin/stable + branch tracking config
+          # exist), additionally fetch master into refs/remotes/origin/master,
+          # then fetch + checkout the pinned version tag.
           git clone --depth 1 --branch stable \
             https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           (
             cd "$RUNNER_TEMP/flutter"
+            git fetch --depth 1 origin master:refs/remotes/origin/master
             git fetch --depth 1 origin "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
             git checkout "${FLUTTER_VERSION}"
           )
@@ -203,14 +205,16 @@ jobs:
         if: matrix.target.flutter_setup == 'manual'
         shell: pwsh
         run: |
-          # Clone the stable channel (so origin/stable resolves for `flutter
-          # --version`'s `git describe`), then fetch + checkout the pinned
-          # version tag. `git clone --branch <tag>` lands in detached HEAD
-          # without an upstream remote ref, which breaks the Flutter CLI's
-          # engine-version detection with "Not a valid object name origin/master".
+          # Flutter's CLI hardcodes `git rev-parse origin/master` paths during
+          # engine-version detection regardless of channel, so cloning only
+          # stable yields "fatal: Not a valid object name origin/master".
+          # Strategy: clone stable (so origin/stable + branch tracking config
+          # exist), additionally fetch master into refs/remotes/origin/master,
+          # then fetch + checkout the pinned version tag.
           git clone --depth 1 --branch stable `
             https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
           Push-Location "$env:RUNNER_TEMP\flutter"
+          git fetch --depth 1 origin master:refs/remotes/origin/master
           git fetch --depth 1 origin "refs/tags/$($env:FLUTTER_VERSION):refs/tags/$($env:FLUTTER_VERSION)"
           git checkout $env:FLUTTER_VERSION
           Pop-Location
