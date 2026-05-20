@@ -101,6 +101,10 @@ class InCallView extends StatelessWidget {
     final avatarRadius = (shortSide * 0.12).clamp(36.0, 80.0);
     final avatarFontSize = avatarRadius * 0.8;
 
+    // Back-button handling: the outer PopScope in `call_overlay.dart` owns
+    // the back gesture for every call-state surface (single source of truth)
+    // and routes back into minimize() for inCall + reconnecting. Hang-up
+    // remains an explicit user action via the call_end button in the dock.
     return CallSceneShell(
       topBar: CallTopStatusBar(
         key: const ValueKey('call-top-bar'),

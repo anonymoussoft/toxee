@@ -38,6 +38,8 @@ class FakeCallOverlayManager implements CallOverlayManager {
   @override
   Future<void> toggleVideo() async {}
   @override
+  Future<void> toggleSpeaker() async {}
+  @override
   Future<void> hangUp() async {}
   @override
   Future<void> selectAudioRoute(String routeId) async {}

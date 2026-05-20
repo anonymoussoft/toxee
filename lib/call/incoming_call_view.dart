@@ -30,6 +30,9 @@ class IncomingCallView extends StatelessWidget {
     final avatarFontSize = avatarRadius * 0.8;
     final callTypeSubtitle = isVideo ? l10n.callVideoCall : l10n.callAudioCall;
 
+    // Back-button handling: the outer PopScope in `call_overlay.dart` owns
+    // the back gesture for every call-state surface (single source of truth),
+    // and swallows back on incoming ringing so accept/reject stays explicit.
     return RingingCallScene(
       userId: callState.remoteUserID,
       name: name,

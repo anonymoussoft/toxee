@@ -29,10 +29,13 @@ class CallOverlay extends StatelessWidget {
       builder: (context, _) {
         if (callState.state == CallUIState.idle) return child;
 
-        // Minimized: show floating widget, child is fully interactive
+        // Minimized: show floating widget, child is fully interactive.
+        // Include `reconnecting` so a transient transport drop during an
+        // active call doesn't kick the user out of PiP back to full-screen.
         if (callState.isMinimized &&
             (callState.state == CallUIState.ringing ||
-             callState.state == CallUIState.inCall)) {
+             callState.state == CallUIState.inCall ||
+             callState.state == CallUIState.reconnecting)) {
           return Stack(
             children: [
               child,
@@ -46,38 +49,66 @@ class CallOverlay extends StatelessWidget {
           );
         }
 
-        // Full-screen call views
-        return Stack(
-          children: [
-            child,
-            _CallOverlayHost(
-              child: _NoUnderlineScope(
-                // Asymmetric in/out timing matches Flutter's recommended
-                // pattern: a slightly slower entrance feels deliberate while a
-                // snappier exit keeps the next view from feeling stuck. The
-                // explicit FadeTransition replaces the implicit cross-fade.
-                child: Builder(
-                  builder: (innerCtx) {
-                    final reduceMotion =
-                        MediaQuery.maybeDisableAnimationsOf(innerCtx) == true;
-                    return AnimatedSwitcher(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 220),
-                      reverseDuration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 150),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (child, animation) =>
-                          FadeTransition(opacity: animation, child: child),
-                      child: _buildCallView(),
-                    );
-                  },
+        // Full-screen call views. Wrap in PopScope so the Android system back
+        // button doesn't pop the underlying app navigator while the call UI
+        // is still on screen — that would leave the user looking at the call
+        // surface but unable to return to whatever route they came from. We
+        // route the back gesture into minimize when possible (in-call), and
+        // swallow it otherwise so destructive end-call actions stay explicit.
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            // Best-effort: collapse to PiP for in-call / ringing states so
+            // the user can still navigate underneath. For the ended toast
+            // we don't minimize — it auto-clears in ~2s.
+            final s = callState.state;
+            // For ringing-incoming, swallow back so accept/reject stays an
+            // explicit user choice. For ringing-outgoing, inCall, and
+            // reconnecting (transient transport hiccup mid-call), collapse to
+            // PiP so the user can still navigate underneath.
+            if (s == CallUIState.ringing &&
+                callState.direction == CallDirection.incoming) {
+              return;
+            }
+            if (s == CallUIState.inCall ||
+                s == CallUIState.ringing ||
+                s == CallUIState.reconnecting) {
+              callState.minimize();
+            }
+          },
+          child: Stack(
+            children: [
+              child,
+              _CallOverlayHost(
+                child: _NoUnderlineScope(
+                  // Asymmetric in/out timing matches Flutter's recommended
+                  // pattern: a slightly slower entrance feels deliberate while a
+                  // snappier exit keeps the next view from feeling stuck. The
+                  // explicit FadeTransition replaces the implicit cross-fade.
+                  child: Builder(
+                    builder: (innerCtx) {
+                      final reduceMotion =
+                          MediaQuery.maybeDisableAnimationsOf(innerCtx) == true;
+                      return AnimatedSwitcher(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 220),
+                        reverseDuration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 150),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, animation) =>
+                            FadeTransition(opacity: animation, child: child),
+                        child: _buildCallView(),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -89,6 +120,12 @@ class CallOverlay extends StatelessWidget {
         return callState.direction == CallDirection.incoming
             ? IncomingCallView(key: const ValueKey('incoming'), callState: callState, manager: manager)
             : OutgoingCallView(key: const ValueKey('outgoing'), callState: callState, manager: manager);
+      // Reconnecting is a transient state during an active call (transport
+      // dropped, grace timer counting down). Surface the same in-call UI so
+      // the user keeps their controls and any reconnect banner the view
+      // renders — falling through to SizedBox.shrink would yank the call UI
+      // mid-call and looks like the app crashed.
+      case CallUIState.reconnecting:
       case CallUIState.inCall:
         return InCallView(key: const ValueKey('inCall'), callState: callState, manager: manager);
       case CallUIState.ended:

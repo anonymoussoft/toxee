@@ -36,9 +36,17 @@ class CallPermissionHelper {
   }
 
   /// Request microphone permission (for audio calls).
+  ///
+  /// Checks current status first to avoid re-prompting when the user has
+  /// already granted (no-op fast path) or permanently denied (re-requesting
+  /// would silently no-op on iOS / Android 11+, so the caller should send the
+  /// user to system settings instead).
   static Future<bool> requestAudioPermission() async {
     if (!shouldRequestRuntimePermission()) return true;
     try {
+      final current = await Permission.microphone.status;
+      if (current.isGranted) return true;
+      if (current.isPermanentlyDenied || current.isRestricted) return false;
       final status = await Permission.microphone.request();
       return status.isGranted;
     } on MissingPluginException {
@@ -48,9 +56,14 @@ class CallPermissionHelper {
   }
 
   /// Request camera permission (for video calls).
+  ///
+  /// Same status-first pattern as [requestAudioPermission].
   static Future<bool> requestVideoPermission() async {
     if (!shouldRequestRuntimePermission()) return true;
     try {
+      final current = await Permission.camera.status;
+      if (current.isGranted) return true;
+      if (current.isPermanentlyDenied || current.isRestricted) return false;
       final status = await Permission.camera.request();
       return status.isGranted;
     } on MissingPluginException {
@@ -149,5 +162,26 @@ class CallPermissionHelper {
   static Future<bool> requestPermissionsForCall({required bool isVideo}) async {
     final result = await requestPermissionsForCallDetailed(isVideo: isVideo);
     return result.granted;
+  }
+
+  static Future<void> prewarmCallPermissions() async {
+    if (!shouldRequestRuntimePermission()) return;
+    try {
+      final micStatus = await Permission.microphone.status;
+      if (!micStatus.isGranted &&
+          !micStatus.isPermanentlyDenied &&
+          !micStatus.isRestricted) {
+        await Permission.microphone.request();
+      }
+
+      final camStatus = await Permission.camera.status;
+      if (!camStatus.isGranted &&
+          !camStatus.isPermanentlyDenied &&
+          !camStatus.isRestricted) {
+        await Permission.camera.request();
+      }
+    } on MissingPluginException {
+      // Some desktop/test builds may not register permission_handler plugins.
+    }
   }
 }

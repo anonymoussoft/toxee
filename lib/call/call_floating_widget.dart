@@ -147,6 +147,22 @@ class _CallFloatingWidgetState extends State<CallFloatingWidget>
     final clampedX = _position.dx.clamp(minX, safeMaxX);
     final clampedY = _position.dy.clamp(minY, safeMaxY);
 
+    // On rotation / screen-size change, the stored position can fall outside
+    // the new viewport. Re-clamp and persist back so subsequent drags use the
+    // corrected anchor, and so the persistent floatingPosition stored on the
+    // call state stays valid for the next time the PiP is shown.
+    if (clampedX != _position.dx || clampedY != _position.dy) {
+      final corrected = Offset(clampedX, clampedY);
+      _position = corrected;
+      // Defer state-notifier writes to after this build pass — mutating a
+      // ListenableBuilder dependency during build would trigger a re-entrant
+      // build / "setState during build" assertion.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.callState.updateFloatingPosition(corrected);
+      });
+    }
+
     return Positioned(
       left: clampedX,
       top: clampedY,

@@ -76,6 +76,23 @@ class FakeUIKit {
   FakeIM? get im => _im;
 
   /// Insert a call record custom message into the chat conversation.
+  ///
+  /// Recognized `endReason` values and their mapping to UIKit's CallingMessage
+  /// `actionType` (UIKit only parses 1/2/4/5 — anything else regresses to
+  /// "outgoing call invite"):
+  ///   - 'hangup'        -> 1 (call ended normally, with duration)
+  ///   - 'network_error' -> 1 (call ended because the transport / reconnect
+  ///                           grace expired; treated like a hangup so UIKit
+  ///                           renders "abnormal end" with duration rather
+  ///                           than a call invite)
+  ///   - 'cancel'        -> 2 (caller cancelled before callee picked up)
+  ///   - 'reject'        -> 4 (callee rejected)
+  ///   - 'timeout'       -> 5 (no answer)
+  /// Any other / unknown value falls through to actionType 1 — but the inner
+  /// signaling `cmd` and `call_end` are only set to the "ended" shape for
+  /// reasons listed in `isEnded` below, so unknown reasons still render as an
+  /// invite. Extend `isEnded` when adding a new "call ran and then died"
+  /// reason.
   void _insertCallRecord(
     FfiChatService service,
     String remoteUserID,
@@ -104,23 +121,31 @@ class FakeUIKit {
       case 'timeout':
         actionType = 5;
         break;
+      case 'network_error':
+        // Call ended due to transport / reconnect grace expiring — same shape
+        // as a normal hangup so UIKit shows "call ended" instead of an invite.
+        actionType = 1;
+        break;
       default: // 'hangup'
         actionType = 1;
         break;
     }
+
+    // Reasons that mean "the call ran and then ended" — these produce a
+    // 'hangup' cmd and a `call_end` duration so UIKit renders an ended-call
+    // bubble. Anything else is treated as a fresh invite by the inner JSON.
+    final isEnded = endReason == 'hangup' || endReason == 'network_error';
 
     // Build inner signaling JSON (matches CallingMessage._fromJSON expectations)
     final signalingData = <String, dynamic>{
       'businessID': 'av_call',
       'call_type': isVideo ? 2 : 1,
       'data': {
-        'cmd': endReason == 'hangup'
-            ? 'hangup'
-            : (isVideo ? 'videoCall' : 'audioCall'),
+        'cmd': isEnded ? 'hangup' : (isVideo ? 'videoCall' : 'audioCall'),
         'inviter': callerID,
       },
     };
-    if (endReason == 'hangup' && durationSeconds > 0) {
+    if (isEnded && durationSeconds > 0) {
       signalingData['call_end'] = durationSeconds;
     }
 

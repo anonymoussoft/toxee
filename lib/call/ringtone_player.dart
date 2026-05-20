@@ -2,20 +2,40 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../util/logger.dart';
 
 /// Plays a ringtone (generated tone) when there is an incoming call. Stops when call is accepted/rejected.
 class RingtonePlayer {
+  static const MethodChannel _callAudioChannel =
+      MethodChannel('toxee/call_audio');
+
   final AudioPlayer _player = AudioPlayer();
   String? _tempWavPath;
   bool _playing = false;
+  bool _usingNativeAndroidRingtone = false;
 
   /// Start playing ringtone in loop (incoming call).
   Future<void> start() async {
     if (_playing) return;
     try {
+      if (Platform.isAndroid) {
+        try {
+          final handled = await _callAudioChannel
+                  .invokeMethod<bool>('playIncomingRingtone') ??
+              false;
+          if (handled) {
+            _usingNativeAndroidRingtone = true;
+            _playing = true;
+            return;
+          }
+        } on MissingPluginException {
+          // Fall through to the pure-Dart fallback in tests or unsupported
+          // host environments.
+        }
+      }
       _tempWavPath ??= await _createRingtoneWav();
       if (_tempWavPath == null) return;
       await _player.setReleaseMode(ReleaseMode.loop);
@@ -30,16 +50,29 @@ class RingtonePlayer {
   }
 
   /// Stop ringtone.
+  ///
+  /// State (`_usingNativeAndroidRingtone`, `_playing`) is always cleared via
+  /// the outer `finally`, so a transient platform failure can never strand the
+  /// player in "stuck playing" state — which would silently suppress every
+  /// subsequent `start()` call (guarded by `if (_playing) return`). Calling
+  /// `stop()` twice is a safe no-op thanks to the leading `_playing` check.
   Future<void> stop() async {
     if (!_playing) return;
     try {
-      await _player.stop();
+      if (_usingNativeAndroidRingtone) {
+        try {
+          await _callAudioChannel.invokeMethod<void>('stopIncomingRingtone');
+        } on MissingPluginException {
+          // Plugin absent (tests / unsupported hosts). State is still cleared
+          // in the outer `finally` below.
+        }
+      } else {
+        await _player.stop();
+      }
     } catch (e) {
       AppLogger.warn('[RingtonePlayer] stop failed: $e');
     } finally {
-      // Clear the flag unconditionally so a transient platform failure can't
-      // strand the player in "stuck playing" state, which would silently
-      // suppress every subsequent start().
+      _usingNativeAndroidRingtone = false;
       _playing = false;
     }
   }

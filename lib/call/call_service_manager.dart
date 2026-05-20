@@ -17,10 +17,15 @@ import 'call_state_notifier.dart';
 import 'call_overlay_manager.dart';
 import 'audio_handler.dart';
 import 'call_audio_platform.dart';
+import 'callkit_bridge.dart';
 import 'video_handler.dart';
 import 'ringtone_player.dart';
 import 'permission_helper.dart';
 import 'call_ui_notice.dart';
+import '../i18n/app_localizations.dart';
+import '../notifications/notification_service.dart';
+import '../runtime/runtime_foreground_service.dart';
+import '../util/locale_controller.dart';
 import '../util/prefs.dart';
 import '../util/tox_utils.dart';
 
@@ -42,6 +47,24 @@ class CallServiceManager implements CallOverlayManager {
   final VideoHandler _videoHandler = VideoHandler();
   final RingtonePlayer _ringtone = RingtonePlayer();
   StreamSubscription<CallAudioEvent>? _audioPlatformSub;
+
+  /// CallKit bridge (iOS only; no-op on every other platform). Surfaces the
+  /// system call UI for ringing/in-call states so calls work on the lock
+  /// screen and through CarPlay / AirPods controls.
+  ///
+  /// Tracked-but-aware: a CallKit-driven "answer"/"end"/"mute" tap is
+  /// forwarded back through `_callKitSub` and drives the same `acceptCall` /
+  /// `hangUp` / `toggleMute` paths the in-app UI uses, so we keep one source
+  /// of truth for call state.
+  final CallKitBridge _callKit = CallKitBridge.instance;
+  StreamSubscription<CallKitAction>? _callKitSub;
+
+  /// `callId` last reported to CallKit per Tox inviteID. Whenever we report
+  /// an incoming/outgoing call to CallKit, we use the Tox inviteID directly
+  /// as the Dart-side identifier and store it here so subsequent
+  /// `reportCallConnected` / `reportCallEnded` find the same record.
+  /// Cleared on call end.
+  String? _activeCallKitId;
   bool _initialized = false;
 
   /// Maps native inviteID → friendNumber for active native ToxAV calls.
@@ -49,7 +72,12 @@ class CallServiceManager implements CallOverlayManager {
 
   /// Called when a call ends, to insert a call record into the chat.
   /// Parameters: (remoteUserID, isVideo, isOutgoing, durationSeconds, endReason)
-  /// endReason: 'hangup' | 'cancel' | 'reject' | 'timeout'
+  /// endReason: 'hangup' | 'cancel' | 'reject' | 'timeout' | 'network_error'
+  ///
+  /// 'network_error' is used when the reconnect grace period expires — the
+  /// call was connected and then irrecoverably dropped by the transport.
+  /// Consumers that don't know the value treat it as a generic end (see
+  /// `lib/sdk_fake/fake_uikit_core.dart` — defaults to actionType=hangup).
   void Function(String remoteUserID, bool isVideo, bool isOutgoing,
       int durationSeconds, String endReason)? onCallRecordNeeded;
 
@@ -108,6 +136,60 @@ class CallServiceManager implements CallOverlayManager {
   // Call record helper
   // ---------------------------------------------------------------------------
 
+  /// Whether the Android foreground service has been elevated to phoneCall
+  /// mode for the currently-active call. Tracked so back-to-back
+  /// enterCall/endCall transitions don't fire spurious restore events and
+  /// so an out-of-order end (e.g. ended before we ever entered inCall on
+  /// the signaling path) doesn't leave the service stuck in phoneCall mode.
+  bool _foregroundElevated = false;
+
+  /// Elevate the Android foreground service to `phoneCall` mode for the
+  /// duration of the active call. Idempotent. Localized via the user's
+  /// currently-selected locale (no [BuildContext] needed at this layer).
+  void _elevateForegroundForCall() {
+    if (_foregroundElevated) return;
+    _foregroundElevated = true;
+    try {
+      final l10n = lookupAppLocalizations(AppLocale.locale.value);
+      final callerName = _callState.remoteNickname ??
+          _callState.remoteUserID ??
+          '';
+      final body = callerName.isEmpty
+          ? l10n.runtimeForegroundCallBody
+          : l10n.runtimeForegroundCallBodyWithCaller(callerName);
+      unawaited(
+        RuntimeForegroundService.instance.elevateToCall(
+          title: l10n.runtimeForegroundCallTitle,
+          body: body,
+          settingsLabel: l10n.runtimeForegroundSettingsLabel,
+        ),
+      );
+    } catch (e, st) {
+      AppLogger.warn(
+          '[CallServiceManager] _elevateForegroundForCall failed: $e\n$st');
+    }
+  }
+
+  /// Restore the Android foreground service to dataSync mode at end-of-call.
+  /// Idempotent — only fires if we previously elevated.
+  void _restoreForegroundAfterCall() {
+    if (!_foregroundElevated) return;
+    _foregroundElevated = false;
+    try {
+      final l10n = lookupAppLocalizations(AppLocale.locale.value);
+      unawaited(
+        RuntimeForegroundService.instance.restoreFromCall(
+          title: l10n.runtimeForegroundTitle,
+          body: l10n.runtimeForegroundBody,
+          settingsLabel: l10n.runtimeForegroundSettingsLabel,
+        ),
+      );
+    } catch (e, st) {
+      AppLogger.warn(
+          '[CallServiceManager] _restoreForegroundAfterCall failed: $e\n$st');
+    }
+  }
+
   /// Emit a call record before call state is cleared.
   void _emitCallRecord(String endReason) {
     if (_callRecordEmitted) return; // Prevent duplicate records per call
@@ -119,6 +201,25 @@ class CallServiceManager implements CallOverlayManager {
     final durationSeconds = _callState.callDuration.inSeconds;
     onCallRecordNeeded?.call(
         remoteUserID, isVideo, isOutgoing, durationSeconds, endReason);
+  }
+
+  /// Fire-and-forget OS-level missed-call notification. Reads peer info from
+  /// the current call state, so call this *before* `_callState.endCall()`
+  /// (which clears `remoteUserID` / `remoteNickname`). Safe to call when the
+  /// notification service isn't initialised — the service itself no-ops on
+  /// unsupported platforms and self-initialises on first use.
+  void _emitMissedCallNotification() {
+    final peerId = _callState.remoteUserID;
+    if (peerId == null || peerId.isEmpty) return;
+    final displayName = _callState.remoteNickname ?? peerId;
+    final wasVideo = _callState.mode == CallMode.video;
+    unawaited(
+      NotificationService.instance.showMissedCallNotification(
+        peerId: peerId,
+        displayName: displayName,
+        wasVideo: wasVideo,
+      ),
+    );
   }
 
   /// Resolve nickname for a given userID from local cache.
@@ -179,9 +280,23 @@ class CallServiceManager implements CallOverlayManager {
       if (_callState.state == CallUIState.reconnecting) {
         debugPrint(
             '[CallServiceManager] reconnect grace expired, ending call');
-        _emitCallRecord('hangup');
+        // 'network_error' rather than 'hangup' — the call was dropped by the
+        // transport, not user-terminated. Surfacing this distinctly lets the
+        // UI / history layer label the record accurately.
+        //
+        // We intentionally do NOT fire a missed-call notification here:
+        // reconnect grace expiry means the user was already on a connected
+        // call that dropped, so the call UI was on screen the entire time
+        // (or in PiP) and they saw the drop. A "missed call" notification
+        // would be misleading — they didn't miss anything; their call ended
+        // unexpectedly. Surfacing the drop only via the call record is the
+        // less-noisy, more accurate signal. (A distinct "call dropped" OS
+        // notification could be added later if telemetry shows users want it.)
+        _emitCallRecord('network_error');
+        unawaited(_callKitReportEnded('network_error'));
         _endCallCleanup();
         _callState.endCall();
+        _restoreForegroundAfterCall();
         _cleanupNativeCall();
       }
       _reconnectTimer = null;
@@ -237,7 +352,98 @@ class CallServiceManager implements CallOverlayManager {
     _audioPlatformSub?.cancel();
     _audioPlatformSub = _callAudioPlatform.events.listen(_onAudioPlatformEvent);
 
+    _callKitSub?.cancel();
+    _callKitSub = _callKit.userActions.listen(_onCallKitAction);
+
     _initialized = true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // CallKit bridge helpers (iOS only; no-op elsewhere)
+  // ---------------------------------------------------------------------------
+
+  /// Forward a CallKit system-UI action (Answer / End / Mute) to the same
+  /// code paths the in-app UI uses, so call state stays single-sourced.
+  ///
+  /// `callId` is the Tox invite ID; we ignore actions whose callId doesn't
+  /// match the currently-active call (covers stale callbacks fired after we
+  /// already locally ended). Empty callId means CallKit was reset — tear
+  /// down whatever's live.
+  void _onCallKitAction(CallKitAction action) {
+    debugPrint('[CallServiceManager] CallKit action: $action');
+    final activeId = _callState.inviteID;
+    if (action.callId.isEmpty) {
+      if (activeId != null) unawaited(hangUp());
+      return;
+    }
+    if (activeId != null && action.callId != activeId) {
+      debugPrint(
+          '[CallServiceManager] CallKit action for stale callId ${action.callId}; ignoring');
+      return;
+    }
+    switch (action.kind) {
+      case CallKitActionKind.answer:
+        unawaited(acceptCall());
+        break;
+      case CallKitActionKind.end:
+        // If we're ringing as the callee, treat CallKit "End" as a reject so
+        // the record reflects the user's intent. Otherwise it's a hang-up.
+        if (_callState.state == CallUIState.ringing &&
+            _callState.direction == CallDirection.incoming) {
+          unawaited(rejectCall());
+        } else {
+          unawaited(hangUp());
+        }
+        break;
+      case CallKitActionKind.mute:
+        final requested = action.muted ?? !_callState.isMuted;
+        if (requested != _callState.isMuted) {
+          unawaited(toggleMute());
+        }
+        break;
+      case CallKitActionKind.start:
+      case CallKitActionKind.unknown:
+        break;
+    }
+  }
+
+  /// Report an incoming or outgoing call to CallKit so the system call UI
+  /// shows up. iOS-only; no-op elsewhere. `_activeCallKitId` tracks the
+  /// session id so subsequent connected/ended reports find the same record.
+  Future<void> _callKitReportRinging({
+    required String callId,
+    required String displayName,
+    required bool hasVideo,
+    required bool incoming,
+  }) async {
+    if (!_callKit.isSupported) return;
+    _activeCallKitId = callId;
+    if (incoming) {
+      await _callKit.reportIncomingCall(
+        callId: callId,
+        displayName: displayName,
+        hasVideo: hasVideo,
+      );
+    } else {
+      await _callKit.reportOutgoingCall(
+        callId: callId,
+        displayName: displayName,
+        hasVideo: hasVideo,
+      );
+    }
+  }
+
+  Future<void> _callKitReportConnected() async {
+    final id = _activeCallKitId;
+    if (id == null || !_callKit.isSupported) return;
+    await _callKit.reportCallConnected(callId: id);
+  }
+
+  Future<void> _callKitReportEnded(String reason) async {
+    final id = _activeCallKitId;
+    if (id == null || !_callKit.isSupported) return;
+    _activeCallKitId = null;
+    await _callKit.reportCallEnded(callId: id, reason: reason);
   }
 
   // ---------------------------------------------------------------------------
@@ -258,6 +464,14 @@ class CallServiceManager implements CallOverlayManager {
       remoteUserID: userID,
       remoteNickname: nickname,
     );
+    // Surface in the iOS system call UI so the user can see / interact with
+    // the outgoing call from the lock screen / AirPods. No-op off-iOS.
+    unawaited(_callKitReportRinging(
+      callId: inviteID,
+      displayName: nickname ?? userID,
+      hasVideo: type == TYPE_VIDEO,
+      incoming: false,
+    ));
     debugPrint(
         '[CallServiceManager] _onOutgoingCallInitiated: after startRinging, state=${_callState.state}');
 
@@ -292,21 +506,28 @@ class CallServiceManager implements CallOverlayManager {
         if (callInfo != null) {
           final nickname = await _resolveNickname(callInfo.inviter);
           _callRecordEmitted = false;
+          final isVideo = callInfo.data.contains('"video":true');
           _callState.startRinging(
-            mode: callInfo.data.contains('"video":true')
-                ? CallMode.video
-                : CallMode.audio,
+            mode: isVideo ? CallMode.video : CallMode.audio,
             direction: CallDirection.incoming,
             inviteID: inviteID,
             remoteUserID: callInfo.inviter,
             remoteNickname: nickname,
           );
+          unawaited(_callKitReportRinging(
+            callId: inviteID,
+            displayName: nickname ?? callInfo.inviter,
+            hasVideo: isVideo,
+            incoming: true,
+          ));
           _ringtone.start(); // incoming call ringtone
         }
         break;
       case CallState.inCall:
         _ringtone.stop();
         _callState.enterCall();
+        unawaited(_callKitReportConnected());
+        _elevateForegroundForCall();
         final callInfoInCall = _callBridge!.getCallInfo(inviteID);
         if (callInfoInCall?.friendNumber != null && _avService != null) {
           final fn = callInfoInCall!.friendNumber!;
@@ -323,9 +544,21 @@ class CallServiceManager implements CallOverlayManager {
         // legacy code paths keep producing a sensible record.
         final resolvedEndReason = endReason ??
             (_callState.state == CallUIState.inCall ? 'hangup' : 'cancel');
+        // Missed-call OS banner: an incoming ring that ended without us
+        // entering inCall is a missed call from the user's perspective.
+        // ('reject' means the user explicitly rejected — don't re-notify on
+        // that path; the user is already aware.)
+        final wasIncomingRing = _callState.state == CallUIState.ringing &&
+            _callState.direction == CallDirection.incoming &&
+            resolvedEndReason != 'reject';
         _emitCallRecord(resolvedEndReason);
+        if (wasIncomingRing) {
+          _emitMissedCallNotification();
+        }
+        unawaited(_callKitReportEnded(resolvedEndReason));
         _endCallCleanup();
         _callState.endCall();
+        _restoreForegroundAfterCall();
         break;
       default:
         break;
@@ -369,6 +602,12 @@ class CallServiceManager implements CallOverlayManager {
       remoteUserID: remoteUserID,
       remoteNickname: nickname,
     );
+    unawaited(_callKitReportRinging(
+      callId: inviteID,
+      displayName: nickname ?? remoteUserID,
+      hasVideo: videoEnabled,
+      incoming: true,
+    ));
     _ringtone.start();
   }
 
@@ -391,17 +630,29 @@ class CallServiceManager implements CallOverlayManager {
       _videoHandler.stop();
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
+      String nativeEndReason = 'hangup';
       // Emit call record before clearing state
       if (_callState.state == CallUIState.inCall ||
           _callState.state == CallUIState.reconnecting) {
+        nativeEndReason = 'remote_hangup';
         _emitCallRecord('hangup');
       } else if (_callState.state == CallUIState.ringing) {
-        _emitCallRecord(_callState.direction == CallDirection.outgoing
-            ? 'timeout'
-            : 'cancel');
+        final wasIncoming = _callState.direction == CallDirection.incoming;
+        nativeEndReason = wasIncoming ? 'cancel' : 'timeout';
+        _emitCallRecord(nativeEndReason);
+        // Incoming ring ended without local accept → that's a missed call
+        // from the user's perspective. Fire an OS-level banner so they can
+        // see it even if the app is in the background. Outgoing 'timeout'
+        // is the caller's own ring-out, which the caller already saw, so we
+        // don't notify there.
+        if (wasIncoming) {
+          _emitMissedCallNotification();
+        }
       }
+      unawaited(_callKitReportEnded(nativeEndReason));
       _endCallCleanup();
       _callState.endCall();
+      _restoreForegroundAfterCall();
       _cleanupNativeCall();
       return;
     }
@@ -414,6 +665,8 @@ class CallServiceManager implements CallOverlayManager {
       if (_callState.state == CallUIState.ringing) {
         _ringtone.stop();
         _callState.enterCall();
+        unawaited(_callKitReportConnected());
+        _elevateForegroundForCall();
         _startMediaCapture(friendNumber);
       } else if (_callState.state == CallUIState.reconnecting) {
         // Media is flowing again — recover from reconnecting state.
@@ -706,6 +959,8 @@ class CallServiceManager implements CallOverlayManager {
         // Immediately enter call state and start media
         _ringtone.stop();
         _callState.enterCall();
+        unawaited(_callKitReportConnected());
+        _elevateForegroundForCall();
         _startMediaCapture(fn);
       }
     } else {
@@ -720,6 +975,7 @@ class CallServiceManager implements CallOverlayManager {
     if (inviteID == null) return;
 
     _emitCallRecord('reject');
+    unawaited(_callKitReportEnded('reject'));
     _endCallCleanup();
 
     if (_isNativeCall(inviteID)) {
@@ -730,11 +986,13 @@ class CallServiceManager implements CallOverlayManager {
       }
       _ringtone.stop();
       _callState.endCall();
+      _restoreForegroundAfterCall();
       _cleanupNativeCall();
     } else {
       await _callBridge?.rejectInvitation(inviteID);
       _ringtone.stop();
       _callState.endCall();
+      _restoreForegroundAfterCall();
     }
   }
 
@@ -743,13 +1001,27 @@ class CallServiceManager implements CallOverlayManager {
     final inviteID = _callState.inviteID;
     if (inviteID == null) return;
 
-    // Emit call record before clearing state
-    if (_callState.state == CallUIState.inCall) {
+    // Always cancel any pending reconnect timer — the user explicitly hung up,
+    // so the grace-period recovery is moot. Without this the timer can fire
+    // later, emit a stale 'network_error' record and re-trigger cleanup on an
+    // already-ended call.
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+
+    // Emit call record before clearing state. `reconnecting` is treated like
+    // `inCall` here — the call was connected from the user's perspective and
+    // they're choosing to end it during the transient drop, not cancel an
+    // unanswered ring.
+    String hangUpReason = 'hangup';
+    if (_callState.state == CallUIState.inCall ||
+        _callState.state == CallUIState.reconnecting) {
       _emitCallRecord('hangup');
     } else if (_callState.state == CallUIState.ringing &&
         _callState.direction == CallDirection.outgoing) {
+      hangUpReason = 'cancel';
       _emitCallRecord('cancel');
     }
+    unawaited(_callKitReportEnded(hangUpReason));
     // Bump generation BEFORE issuing endCall so any in-flight
     // _startMediaCapture observes the change and tears itself down.
     _endCallCleanup();
@@ -763,6 +1035,7 @@ class CallServiceManager implements CallOverlayManager {
       _audioHandler.stop();
       _videoHandler.stop();
       _callState.endCall();
+      _restoreForegroundAfterCall();
       _cleanupNativeCall();
     } else {
       await _callBridge?.endCall(inviteID);
@@ -770,6 +1043,7 @@ class CallServiceManager implements CallOverlayManager {
       _audioHandler.stop();
       _videoHandler.stop();
       _callState.endCall();
+      _restoreForegroundAfterCall();
     }
   }
 
@@ -859,6 +1133,8 @@ class CallServiceManager implements CallOverlayManager {
     _reconnectTimer = null;
     uiNotice.dispose();
     _audioPlatformSub?.cancel();
+    _callKitSub?.cancel();
+    _callKitSub = null;
     unawaited(_callAudioPlatform.dispose());
     _nativeCallFriendNumbers.clear();
     _avService?.shutdown();
