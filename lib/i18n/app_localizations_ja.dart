@@ -762,6 +762,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nodeTestFailed => 'ノードテスト失敗';
 
   @override
+  String get nodeTestUnavailableBeforeLogin => 'ログイン前はテストできません';
+
+  @override
+  String get failedToStartBootstrapService => 'ブートストラップサービスの起動に失敗しました';
+
+  @override
   String get invalidNodeInfo => '有効なノード情報（ホスト、ポート、公開鍵）を入力してください';
 
   @override

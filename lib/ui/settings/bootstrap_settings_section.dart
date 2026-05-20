@@ -201,19 +201,19 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
           _currentBootstrapNode!.pubkey,
         );
       } else {
-        // TCP probe fallback when service is not available (login settings)
-        final result = await LanBootstrapServiceManager.probeBootstrapService(
-          _currentBootstrapNode!.host,
-          _currentBootstrapNode!.port,
-        );
-        success = result != null && result.isAvailable;
+        // Pre-login (login settings): no FFI session yet, and a raw TCP probe
+        // to a UDP Tox port lies — drop the result rather than show a fake
+        // green/red. The real check happens at first bootstrap.
+        success = false;
       }
       final latency = DateTime.now().difference(start).inMilliseconds;
       if (mounted) {
         setState(() {
           _testingCurrentNode = false;
-          _nodeTestResult = success ? 'success' : 'failed';
-          _nodeLatency = success ? latency : null;
+          _nodeTestResult = widget.service != null
+              ? (success ? 'success' : 'failed')
+              : null;
+          _nodeLatency = (widget.service != null && success) ? latency : null;
         });
       }
     } catch (_) {
@@ -265,9 +265,24 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
       if (widget.service != null) {
         success = await widget.service!.addBootstrapNode(host, port, pubkey);
       } else {
-        // TCP probe fallback when service is not available (login settings)
-        final result = await LanBootstrapServiceManager.probeBootstrapService(host, port);
-        success = result != null && result.isAvailable;
+        // Pre-login (login settings): no FFI session yet. A TCP probe to a
+        // UDP Tox port misleads users into "tested OK"; mark as not tested
+        // and let the first bootstrap on the running service decide.
+        if (mounted) {
+          setState(() {
+            _testingManualNode = false;
+            _manualNodeTestResult = null;
+            _manualNodeLatency = null;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context)!.nodeTestUnavailableBeforeLogin,
+              ),
+            ),
+          );
+        }
+        return;
       }
       final latency = DateTime.now().difference(start).inMilliseconds;
       if (mounted) {
@@ -326,6 +341,20 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
     if (port == null || port <= 0 || port > 65535) return;
     try {
       await Prefs.setCurrentBootstrapNode(host, port, pubkey);
+      // Apply to the live FfiChatService when we have one — without this the
+      // change only takes effect on the next cold start, which is surprising
+      // because the snackbar reports the switch as successful.
+      if (widget.service != null) {
+        try {
+          await widget.service!.addBootstrapNode(host, port, pubkey);
+        } catch (e, st) {
+          AppLogger.logError(
+            '[BootstrapSettingsSection] failed to apply manual node to live service',
+            e,
+            st,
+          );
+        }
+      }
       await _loadCurrentBootstrapNode();
       if (mounted) {
         setState(() => _manualInputExpanded = false);
@@ -362,33 +391,102 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
       return;
     }
     await Prefs.setLanBootstrapPort(port);
-    final success = await LanBootstrapServiceManager.instance.startLocalBootstrapService(port);
-    if (mounted) {
-      await _loadLanBootstrapServiceState();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? AppLocalizations.of(context)!.serviceRunning
-                // TODO(l10n): key=failedToStartBootstrapService
-                : 'Failed to start bootstrap service',
-          ),
-          backgroundColor: success
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.error,
-        ),
+
+    // Snapshot the auto/manual node that's active right now so _stop can
+    // restore it later. Do this BEFORE start so a failed start still leaves
+    // the snapshot intact (next stop will roll back to the original node).
+    final priorNode = await Prefs.getCurrentBootstrapNode();
+    if (priorNode != null &&
+        await Prefs.getPreLanBootstrapNode() == null) {
+      await Prefs.setPreLanBootstrapNode(
+        priorNode.host,
+        priorNode.port,
+        priorNode.pubkey,
       );
     }
+
+    final success = await LanBootstrapServiceManager.instance.startLocalBootstrapService(port);
+    if (success) {
+      // Propagate the LAN node into prefs + live user FfiChatService so the
+      // user's Tox handle actually bootstraps off the local service. Without
+      // this, the LAN service runs but the user account still tries the prior
+      // (auto/manual) public node — which is the very thing LAN mode was
+      // meant to replace (e.g. offline networks).
+      final info = await LanBootstrapServiceManager.instance.getBootstrapServiceInfo();
+      if (info != null) {
+        await Prefs.setCurrentBootstrapNode(info.ip, info.port, info.pubkey);
+        if (widget.service != null) {
+          try {
+            await widget.service!.addBootstrapNode(info.ip, info.port, info.pubkey);
+          } catch (e, st) {
+            AppLogger.logError(
+              '[BootstrapSettingsSection] failed to apply LAN node to live service',
+              e,
+              st,
+            );
+          }
+        }
+      }
+    }
+
+    if (!mounted) return;
+    // Capture context-dependent handles up-front so the awaits below don't
+    // strand them; lints treat `mounted` after multiple awaits as stale.
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    await _loadLanBootstrapServiceState();
+    await _loadCurrentBootstrapNode();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? l10n.serviceRunning : l10n.failedToStartBootstrapService,
+        ),
+        backgroundColor: success ? theme.colorScheme.primary : theme.colorScheme.error,
+      ),
+    );
   }
 
   Future<void> _stopLanBootstrapService() async {
     await LanBootstrapServiceManager.instance.stopLocalBootstrapService();
-    if (mounted) {
-      await _loadLanBootstrapServiceState();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.serviceStopped)),
+
+    // Restore the auto/manual node that was active before LAN started, so the
+    // user's Tox handle doesn't keep targeting the now-dead LAN address.
+    final priorNode = await Prefs.getPreLanBootstrapNode();
+    if (priorNode != null) {
+      await Prefs.setCurrentBootstrapNode(
+        priorNode.host,
+        priorNode.port,
+        priorNode.pubkey,
       );
+      if (widget.service != null) {
+        try {
+          await widget.service!.addBootstrapNode(
+            priorNode.host,
+            priorNode.port,
+            priorNode.pubkey,
+          );
+        } catch (e, st) {
+          AppLogger.logError(
+            '[BootstrapSettingsSection] failed to restore prior node after LAN stop',
+            e,
+            st,
+          );
+        }
+      }
+      await Prefs.clearPreLanBootstrapNode();
     }
+
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    await _loadLanBootstrapServiceState();
+    await _loadCurrentBootstrapNode();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.serviceStopped)),
+    );
   }
 
   bool _isValidPubkey(String pubkey) {
@@ -460,7 +558,14 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
             AppSpacing.verticalSm,
             Divider(height: 1, color: outlineVariant),
             AppSpacing.verticalSm,
-            if (_bootstrapNodeMode == 'manual' || _currentBootstrapNode != null) ...[
+            // In LAN mode the "current node" card is suppressed: while the
+            // LAN service is running, current_bootstrap_* points at the local
+            // server (see [_startLanBootstrapService]) and the dedicated LAN
+            // status panel already surfaces it. Showing the generic card on
+            // top would duplicate the info and, when the LAN service is NOT
+            // running, expose a stale auto/manual node + an irrelevant test.
+            if (_bootstrapNodeMode != 'lan' &&
+                (_bootstrapNodeMode == 'manual' || _currentBootstrapNode != null)) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -851,6 +956,11 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                                     onPressed: hasService
                                         ? _setManualNodeAsCurrent
                                         : () async {
+                                            // Pre-capture context-dependent
+                                            // handles so use across the prefs
+                                            // awaits is not flagged.
+                                            final messenger = ScaffoldMessenger.of(context);
+                                            final scheme = Theme.of(context).colorScheme;
                                             final host = _manualHostController.text.trim();
                                             final portText = _manualPortController.text.trim();
                                             final pubkey = _manualPubkeyController.text.trim();
@@ -858,38 +968,34 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                                                 portText.isEmpty ||
                                                 pubkey.isEmpty ||
                                                 !_isValidPubkey(pubkey)) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
+                                              messenger.showSnackBar(
                                                 SnackBar(
                                                   content: Text(l10n.invalidNodeInfo),
-                                                  backgroundColor:
-                                                      Theme.of(context).colorScheme.error,
+                                                  backgroundColor: scheme.error,
                                                 ),
                                               );
                                               return;
                                             }
                                             final port = int.tryParse(portText);
                                             if (port == null || port <= 0 || port > 65535) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
+                                              messenger.showSnackBar(
                                                 SnackBar(
                                                   content: Text(l10n.invalidNodeInfo),
-                                                  backgroundColor:
-                                                      Theme.of(context).colorScheme.error,
+                                                  backgroundColor: scheme.error,
                                                 ),
                                               );
                                               return;
                                             }
                                             await Prefs.setCurrentBootstrapNode(host, port, pubkey);
                                             await _loadCurrentBootstrapNode();
-                                            if (mounted) {
-                                              setState(() => _manualInputExpanded = false);
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(l10n.nodeSetSuccess),
-                                                  backgroundColor:
-                                                      Theme.of(context).colorScheme.primary,
-                                                ),
-                                              );
-                                            }
+                                            if (!mounted) return;
+                                            setState(() => _manualInputExpanded = false);
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                content: Text(l10n.nodeSetSuccess),
+                                                backgroundColor: scheme.primary,
+                                              ),
+                                            );
                                           },
                                   ),
                                 ),

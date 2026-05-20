@@ -14,7 +14,27 @@ class PrefsBootstrap {
   static Future<AppBootstrapUpgradeRequired?> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     await Prefs.initialize(prefs);
+    // The LAN bootstrap service is purely in-process state; if we crashed
+    // mid-session, the persisted "running" flag would lie to the UI and the
+    // current_bootstrap_* keys would still point at a dead LAN address.
+    // Reset both so first init() lands the user on a reachable public node.
+    final wasRunning = await Prefs.getLanBootstrapServiceRunning();
     await Prefs.setLanBootstrapServiceRunning(false);
+    if (wasRunning) {
+      final priorNode = await Prefs.getPreLanBootstrapNode();
+      if (priorNode != null) {
+        await Prefs.setCurrentBootstrapNode(
+          priorNode.host,
+          priorNode.port,
+          priorNode.pubkey,
+        );
+        await Prefs.clearPreLanBootstrapNode();
+        AppLogger.log(
+          '[PrefsBootstrap] LAN service was running at last shutdown — restored '
+          'pre-LAN bootstrap node ${priorNode.host}:${priorNode.port}',
+        );
+      }
+    }
     try {
       await PrefsUpgrader.run(prefs);
     } on PrefsStorageNewerThanAppException catch (e) {

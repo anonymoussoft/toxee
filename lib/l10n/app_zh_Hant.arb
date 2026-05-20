@@ -236,6 +236,8 @@
   "setAsCurrentNode": "設置為當前節點",
   "nodeTestSuccess": "節點測試成功",
   "nodeTestFailed": "節點測試失敗",
+  "nodeTestUnavailableBeforeLogin": "登入前無法測試節點",
+  "failedToStartBootstrapService": "啟動引導服務失敗",
   "invalidNodeInfo": "請輸入有效的節點信息（主機、端口和公鑰）",
   "nodeSetSuccess": "已設為目前節點",
   "bootstrapNodeMode": "Bootstrap 節點模式",

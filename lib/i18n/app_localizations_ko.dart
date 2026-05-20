@@ -762,6 +762,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get nodeTestFailed => '노드 테스트 실패';
 
   @override
+  String get nodeTestUnavailableBeforeLogin => '로그인 전에는 테스트할 수 없습니다';
+
+  @override
+  String get failedToStartBootstrapService => '부트스트랩 서비스 시작에 실패했습니다';
+
+  @override
   String get invalidNodeInfo => '유효한 노드 정보(호스트, 포트, 공개 키)를 입력하세요';
 
   @override

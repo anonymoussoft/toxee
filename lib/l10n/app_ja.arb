@@ -236,6 +236,8 @@
   "setAsCurrentNode": "現在のノードとして設定",
   "nodeTestSuccess": "ノードテスト成功",
   "nodeTestFailed": "ノードテスト失敗",
+  "nodeTestUnavailableBeforeLogin": "ログイン前はテストできません",
+  "failedToStartBootstrapService": "ブートストラップサービスの起動に失敗しました",
   "invalidNodeInfo": "有効なノード情報（ホスト、ポート、公開鍵）を入力してください",
   "nodeSetSuccess": "ノードが現在のノードとして正常に設定されました",
   "bootstrapNodeMode": "Bootstrapノードモード",

@@ -236,6 +236,8 @@
   "setAsCurrentNode": "현재 노드로 설정",
   "nodeTestSuccess": "노드 테스트 성공",
   "nodeTestFailed": "노드 테스트 실패",
+  "nodeTestUnavailableBeforeLogin": "로그인 전에는 테스트할 수 없습니다",
+  "failedToStartBootstrapService": "부트스트랩 서비스 시작에 실패했습니다",
   "invalidNodeInfo": "유효한 노드 정보(호스트, 포트, 공개 키)를 입력하세요",
   "nodeSetSuccess": "노드가 현재 노드로 성공적으로 설정되었습니다",
   "bootstrapNodeMode": "Bootstrap 노드 모드",

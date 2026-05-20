@@ -667,6 +667,14 @@
   "@nodeTestFailed": {
     "description": "Message shown when node test fails"
   },
+  "nodeTestUnavailableBeforeLogin": "Test unavailable before login",
+  "@nodeTestUnavailableBeforeLogin": {
+    "description": "Message shown when node test cannot run before login (no live FFI session)"
+  },
+  "failedToStartBootstrapService": "Failed to start bootstrap service",
+  "@failedToStartBootstrapService": {
+    "description": "Snackbar text shown when starting the local LAN bootstrap service fails"
+  },
   "invalidNodeInfo": "Please enter valid node information (host, port, and public key)",
   "@invalidNodeInfo": {
     "description": "Error message when node information is invalid"

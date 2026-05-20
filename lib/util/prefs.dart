@@ -47,6 +47,13 @@ class Prefs {
   static const _kBootstrapNodeMode = 'bootstrap_node_mode'; // 'manual', 'auto', or 'lan'
   static const _kLanBootstrapPort = 'lan_bootstrap_port'; // Local bootstrap service port
   static const _kLanBootstrapServiceRunning = 'lan_bootstrap_service_running'; // Service running status
+  // Snapshot of the auto/manual node taken when LAN mode is engaged, so we can
+  // restore it when the LAN service is stopped. Without this, stopping the
+  // local LAN node leaves current_bootstrap_* still pointing at the no-longer-
+  // running LAN address and the user's Tox handle has no reachable bootstrap.
+  static const _kPreLanBootstrapHost = 'pre_lan_bootstrap_host';
+  static const _kPreLanBootstrapPort = 'pre_lan_bootstrap_port';
+  static const _kPreLanBootstrapPubkey = 'pre_lan_bootstrap_pubkey';
   static const _kAutoAcceptFriends = 'auto_accept_friends';
   static const _kAutoAcceptGroupInvites = 'auto_accept_group_invites';
   static const _kAutoLogin = 'auto_login';
@@ -602,6 +609,34 @@ class Prefs {
   static Future<void> setLanBootstrapServiceRunning(bool running) async {
     final p = await _getPrefs();
     await p.setBool(_kLanBootstrapServiceRunning, running);
+  }
+
+  /// Snapshot of the bootstrap node that was active before LAN mode took over.
+  /// Used by LAN start/stop to restore the prior auto/manual node when the
+  /// local service is stopped.
+  static Future<({String host, int port, String pubkey})?> getPreLanBootstrapNode() async {
+    final p = await _getPrefs();
+    final host = p.getString(_kPreLanBootstrapHost);
+    final port = p.getInt(_kPreLanBootstrapPort);
+    final pubkey = p.getString(_kPreLanBootstrapPubkey);
+    if (host != null && port != null && pubkey != null) {
+      return (host: host, port: port, pubkey: pubkey);
+    }
+    return null;
+  }
+
+  static Future<void> setPreLanBootstrapNode(String host, int port, String pubkey) async {
+    final p = await _getPrefs();
+    await p.setString(_kPreLanBootstrapHost, host);
+    await p.setInt(_kPreLanBootstrapPort, port);
+    await p.setString(_kPreLanBootstrapPubkey, pubkey);
+  }
+
+  static Future<void> clearPreLanBootstrapNode() async {
+    final p = await _getPrefs();
+    await p.remove(_kPreLanBootstrapHost);
+    await p.remove(_kPreLanBootstrapPort);
+    await p.remove(_kPreLanBootstrapPubkey);
   }
 
   /// Get auto-accept friends setting for a specific account.

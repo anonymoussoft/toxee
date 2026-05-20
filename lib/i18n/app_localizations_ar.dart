@@ -762,6 +762,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get nodeTestFailed => 'فشل اختبار العقدة';
 
   @override
+  String get nodeTestUnavailableBeforeLogin => 'لا يمكن اختبار العقدة قبل تسجيل الدخول';
+
+  @override
+  String get failedToStartBootstrapService => 'فشل بدء خدمة الإقلاع';
+
+  @override
   String get invalidNodeInfo => 'يرجى إدخال معلومات عقدة صالحة (الخادم والمنفذ والمفتاح العام)';
 
   @override

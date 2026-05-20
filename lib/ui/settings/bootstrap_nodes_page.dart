@@ -5,7 +5,6 @@ import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/bootstrap_nodes.dart';
-import '../../util/lan_bootstrap_service.dart';
 import '../../util/platform_utils.dart';
 import '../../util/prefs.dart';
 import '../../util/responsive_layout.dart';
@@ -62,6 +61,12 @@ class _BootstrapNodesPageState extends State<BootstrapNodesPage> {
   }
 
   Future<void> _testNode(BootstrapNode node) async {
+    // Capture all l10n strings before any async gap so the catch block
+    // doesn't need to re-fetch from a potentially-disposed context.
+    final appL10n = AppLocalizations.of(context)!;
+    final successLabel = appL10n.success;
+    final failedLabel = appL10n.failed;
+    final unavailableLabel = appL10n.nodeTestUnavailableBeforeLogin;
     setState(() {
       _testingNodes[node.publicKey] = true;
       _testResults[node.publicKey] = null;
@@ -78,24 +83,23 @@ class _BootstrapNodesPageState extends State<BootstrapNodesPage> {
           node.publicKey,
         );
       } else {
-        // TCP probe fallback when service is not available (login settings)
-        final result = await LanBootstrapServiceManager.probeBootstrapService(
-          node.ipv4,
-          node.port,
-        );
-        success = result != null && result.isAvailable;
+        // Pre-login: no FFI session yet. TCP probe to a UDP Tox port lies,
+        // so surface "test unavailable" rather than a misleading green check.
+        setState(() {
+          _testResults[node.publicKey] = unavailableLabel;
+          _nodeLatencies[node.publicKey] = null;
+          _nodeTestSuccess[node.publicKey] = false;
+        });
+        return;
       }
       final endTime = DateTime.now();
       final latency = endTime.difference(startTime).inMilliseconds;
-      
-      final appL10n = AppLocalizations.of(context)!;
       setState(() {
-        _testResults[node.publicKey] = success ? appL10n.success : appL10n.failed;
+        _testResults[node.publicKey] = success ? successLabel : failedLabel;
         _nodeLatencies[node.publicKey] = success ? latency : null;
         _nodeTestSuccess[node.publicKey] = success;
       });
     } catch (e) {
-      final appL10n = AppLocalizations.of(context)!;
       setState(() {
         _testResults[node.publicKey] = appL10n.error(e.toString());
         _nodeLatencies[node.publicKey] = null;
@@ -156,15 +160,33 @@ class _BootstrapNodesPageState extends State<BootstrapNodesPage> {
     if (confirmed != true) return;
     if (!mounted) return;
 
+    // Capture context-dependent values once before any further async gap so
+    // the snackbar / navigator paths below don't read context after disposal.
+    final errorColor = Theme.of(context).colorScheme.error;
+
     if (widget.service != null) {
-      // Full flow with service: add bootstrap node and re-login
-      showDialog(
+      // Capture a NavigatorState before the async gap. `Navigator.of(context)`
+      // after an `await` can throw if the widget was popped from underneath
+      // (back-gesture during the bootstrap call), which would otherwise leave
+      // the modal-barrier progress dialog orphaned.
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      final messenger = ScaffoldMessenger.of(context);
+      bool dialogShown = false;
+      unawaited(showDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (context) => const Center(
           child: CircularProgressIndicator(),
         ),
-      );
+      ));
+      dialogShown = true;
+
+      void dismissDialog() {
+        if (dialogShown) {
+          dialogShown = false;
+          if (rootNavigator.canPop()) rootNavigator.pop();
+        }
+      }
 
       try {
         final success = await widget.service!.addBootstrapNode(
@@ -172,67 +194,61 @@ class _BootstrapNodesPageState extends State<BootstrapNodesPage> {
           node.port,
           node.publicKey,
         );
+        // Persist the selection so the next cold start hits the same node
+        // (this used to depend on a re-login side-effect, which corrupted the
+        // session identity).
+        await Prefs.setCurrentBootstrapNode(
+          node.ipv4,
+          node.port,
+          node.publicKey,
+        );
+
+        dismissDialog();
 
         if (!success) {
-          if (mounted) {
-            Navigator.of(context).pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(appL10n.nodeSwitchFailed('Failed to add bootstrap node')),
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
-            );
-          }
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(appL10n.nodeSwitchFailed('Failed to add bootstrap node')),
+              backgroundColor: errorColor,
+            ),
+          );
           return;
         }
 
-        await widget.service!.login(userId: 'toxee', userSig: 'dummy_sig');
-
-        if (mounted) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(appL10n.nodeSwitched)),
-          );
-          widget.onNodeSelected?.call();
-          await Future.delayed(const Duration(milliseconds: 100));
-          Navigator.pop(context);
-        }
+        messenger.showSnackBar(SnackBar(content: Text(appL10n.nodeSwitched)));
+        widget.onNodeSelected?.call();
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (rootNavigator.canPop()) rootNavigator.pop();
       } catch (e) {
-        if (mounted) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(appL10n.nodeSwitchFailed(e.toString())),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
+        dismissDialog();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(appL10n.nodeSwitchFailed(e.toString())),
+            backgroundColor: errorColor,
+          ),
+        );
       }
     } else {
       // Prefs-only save when service is not available (login settings)
+      final navigator = Navigator.of(context);
+      final messenger = ScaffoldMessenger.of(context);
       try {
         await Prefs.setCurrentBootstrapNode(
           node.ipv4,
           node.port,
           node.publicKey,
         );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(appL10n.nodeSwitched)),
-          );
-          widget.onNodeSelected?.call();
-          await Future.delayed(const Duration(milliseconds: 100));
-          Navigator.pop(context);
-        }
+        messenger.showSnackBar(SnackBar(content: Text(appL10n.nodeSwitched)));
+        widget.onNodeSelected?.call();
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (navigator.canPop()) navigator.pop();
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(appL10n.nodeSwitchFailed(e.toString())),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(appL10n.nodeSwitchFailed(e.toString())),
+            backgroundColor: errorColor,
+          ),
+        );
       }
     }
   }

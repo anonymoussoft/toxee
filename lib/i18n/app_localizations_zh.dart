@@ -762,6 +762,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get nodeTestFailed => '节点测试失败';
 
   @override
+  String get nodeTestUnavailableBeforeLogin => '登录前无法测试节点';
+
+  @override
+  String get failedToStartBootstrapService => '启动引导服务失败';
+
+  @override
   String get invalidNodeInfo => '请输入有效的节点信息（主机、端口和公钥）';
 
   @override
@@ -2238,6 +2244,12 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get nodeTestFailed => '节点测试失败';
 
   @override
+  String get nodeTestUnavailableBeforeLogin => '登录前无法测试节点';
+
+  @override
+  String get failedToStartBootstrapService => '启动引导服务失败';
+
+  @override
   String get invalidNodeInfo => '请输入有效的节点信息（主机、端口和公钥）';
 
   @override
@@ -3483,6 +3495,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get nodeTestFailed => '節點測試失敗';
+
+  @override
+  String get nodeTestUnavailableBeforeLogin => '登入前無法測試節點';
+
+  @override
+  String get failedToStartBootstrapService => '啟動引導服務失敗';
 
   @override
   String get invalidNodeInfo => '請輸入有效的節點信息（主機、端口和公鑰）';

@@ -236,6 +236,8 @@
   "setAsCurrentNode": "تعيين كعقدة حالية",
   "nodeTestSuccess": "نجح اختبار العقدة",
   "nodeTestFailed": "فشل اختبار العقدة",
+  "nodeTestUnavailableBeforeLogin": "لا يمكن اختبار العقدة قبل تسجيل الدخول",
+  "failedToStartBootstrapService": "فشل بدء خدمة الإقلاع",
   "invalidNodeInfo": "يرجى إدخال معلومات عقدة صالحة (الخادم والمنفذ والمفتاح العام)",
   "nodeSetSuccess": "تم تعيين العقدة كعقدة حالية بنجاح",
   "bootstrapNodeMode": "وضع عقدة Bootstrap",

@@ -1525,6 +1525,18 @@ abstract class AppLocalizations {
   /// **'Node test failed'**
   String get nodeTestFailed;
 
+  /// Message shown when node test cannot run before login (no live FFI session)
+  ///
+  /// In en, this message translates to:
+  /// **'Test unavailable before login'**
+  String get nodeTestUnavailableBeforeLogin;
+
+  /// Snackbar text shown when starting the local LAN bootstrap service fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to start bootstrap service'**
+  String get failedToStartBootstrapService;
+
   /// Error message when node information is invalid
   ///
   /// In en, this message translates to:

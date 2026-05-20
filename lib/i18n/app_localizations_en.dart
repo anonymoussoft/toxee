@@ -762,6 +762,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nodeTestFailed => 'Node test failed';
 
   @override
+  String get nodeTestUnavailableBeforeLogin => 'Test unavailable before login';
+
+  @override
+  String get failedToStartBootstrapService => 'Failed to start bootstrap service';
+
+  @override
   String get invalidNodeInfo => 'Please enter valid node information (host, port, and public key)';
 
   @override

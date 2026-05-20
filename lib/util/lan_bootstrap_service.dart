@@ -70,6 +70,12 @@ class LanBootstrapServiceManager {
   int? _bootstrapServicePort;
   String? _bootstrapServicePubkey;
 
+  /// Guards against concurrent invocations of [startLocalBootstrapService].
+  /// Without this flag, two near-simultaneous taps could both pass the
+  /// `_bootstrapInstanceHandle == null` check, race into
+  /// [_startLocalBootstrapServiceImpl], and leak the first native handle.
+  bool _starting = false;
+
   /// Virtual/container interface name prefixes to filter out
   static const _virtualInterfacePrefixes = [
     'docker', 'veth', 'br-', 'virbr', 'vbox', 'vmnet',
@@ -158,34 +164,6 @@ class LanBootstrapServiceManager {
     }
   }
 
-  /// Probe a single IP for bootstrap service
-  static Future<LanBootstrapService?> probeBootstrapService(
-    String ip,
-    int port,
-  ) async {
-    try {
-      // Try to connect to the port
-      final socket = await Socket.connect(
-        ip,
-        port,
-        timeout: const Duration(seconds: 2),
-      ).timeout(const Duration(seconds: 2));
-      
-      // If connection succeeds, assume service exists
-      // Note: We can't easily get the public key without proper Tox protocol
-      // For now, we'll just check if the port is open
-      await socket.close();
-      
-      return LanBootstrapService(
-        ip: ip,
-        port: port,
-        isAvailable: true,
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
   /// Start local bootstrap service. Desktop only; startup is limited to 30 seconds.
   Future<bool> startLocalBootstrapService(int port) async {
     if (!PlatformUtils.isDesktop) {
@@ -196,6 +174,11 @@ class LanBootstrapServiceManager {
       AppLogger.log('[LanBootstrapService] Bootstrap service already running');
       return true;
     }
+    if (_starting) {
+      AppLogger.log('[LanBootstrapService] Bootstrap service start already in progress');
+      return false;
+    }
+    _starting = true;
 
     try {
       final result = await _startLocalBootstrapServiceImpl(port)
@@ -211,6 +194,8 @@ class LanBootstrapServiceManager {
       AppLogger.logError('Failed to start bootstrap service', e, stackTrace);
       await stopLocalBootstrapService();
       return false;
+    } finally {
+      _starting = false;
     }
   }
 
@@ -232,6 +217,13 @@ class LanBootstrapServiceManager {
     if (!await profileDirFile.exists()) {
       await profileDirFile.create(recursive: true);
     }
+
+    // Capture the user account's current FFI instance so we can restore it
+    // when we're done switching to the bootstrap-service instance. Without
+    // this, every subsequent SDK call that goes through the binary-replacement
+    // path (history, friend ops, profile updates) would silently target the
+    // bootstrap instance instead of the user's Tox handle.
+    final previousInstance = ffi.getCurrentInstanceId();
 
     final profilePathPtr = profilePath.toNativeUtf8();
     final instanceHandle = ffi.createTestInstanceNative(profilePathPtr);
@@ -259,35 +251,44 @@ class LanBootstrapServiceManager {
       pathResolver: const _AppPathsFfiChatResolver(),
     );
 
-    await _bootstrapService!.init();
+    try {
+      await _bootstrapService!.init();
 
-    ffi.setCurrentInstance(instanceHandle);
+      ffi.setCurrentInstance(instanceHandle);
 
-    await _bootstrapService!.login(
-      userId: 'BootstrapService',
-      userSig: 'dummy_sig',
-    );
+      await _bootstrapService!.login(
+        userId: 'BootstrapService',
+        userSig: 'dummy_sig',
+      );
 
-    final udpPort = _bootstrapService!.getUdpPort();
-    final dhtId = _bootstrapService!.getDhtId();
+      final udpPort = _bootstrapService!.getUdpPort();
+      final dhtId = _bootstrapService!.getDhtId();
 
-    if (udpPort == 0 || dhtId == null) {
-      AppLogger.logError('Failed to get bootstrap service info', null, null);
-      await stopLocalBootstrapService();
-      return false;
+      if (udpPort == 0 || dhtId == null) {
+        AppLogger.logError('Failed to get bootstrap service info', null, null);
+        // stopLocalBootstrapService will restore the previous instance.
+        await stopLocalBootstrapService();
+        return false;
+      }
+
+      _bootstrapServiceIP = localIP;
+      _bootstrapServicePort = udpPort;
+      _bootstrapServicePubkey = dhtId;
+
+      ffi.setCurrentInstance(instanceHandle);
+      await _bootstrapService!.startPolling();
+
+      await Prefs.setLanBootstrapServiceRunning(true);
+
+      AppLogger.log('[LanBootstrapService] Bootstrap service started at $localIP:$udpPort');
+      return true;
+    } finally {
+      // Always restore the user instance — even on the success path, so the
+      // rest of the app keeps targeting the user's Tox handle.
+      if (previousInstance != 0) {
+        ffi.setCurrentInstance(previousInstance);
+      }
     }
-
-    _bootstrapServiceIP = localIP;
-    _bootstrapServicePort = udpPort;
-    _bootstrapServicePubkey = dhtId;
-
-    ffi.setCurrentInstance(instanceHandle);
-    await _bootstrapService!.startPolling();
-
-    await Prefs.setLanBootstrapServiceRunning(true);
-
-    AppLogger.log('[LanBootstrapService] Bootstrap service started at $localIP:$udpPort');
-    return true;
   }
 
   /// Stop local bootstrap service
@@ -295,22 +296,47 @@ class LanBootstrapServiceManager {
     _bootstrapPollingTimer?.cancel();
     _bootstrapPollingTimer = null;
 
-    if (_bootstrapInstanceHandle != null) {
+    final ffi = Tim2ToxFfi.open();
+    final bootstrapHandle = _bootstrapInstanceHandle;
+    final previousInstance = ffi.getCurrentInstanceId();
+    // If current is the bootstrap instance (e.g. caller forgot to restore),
+    // there's no user instance to restore — clearing is safer than a dangle.
+    final restoreTarget =
+        (previousInstance != 0 && previousInstance != bootstrapHandle)
+            ? previousInstance
+            : null;
+
+    // Dispose the Dart-side FfiChatService FIRST (it stops polling and tears
+    // down listeners). Destroying the native handle before this dispose would
+    // make the dispose's tail-end FFI calls operate on a freed instance.
+    if (_bootstrapService != null) {
       try {
-        final ffi = Tim2ToxFfi.open();
-        ffi.destroyTestInstance(_bootstrapInstanceHandle!);
-        _bootstrapInstanceHandle = null;
+        if (bootstrapHandle != null) {
+          ffi.setCurrentInstance(bootstrapHandle);
+        }
+        await _bootstrapService!.dispose();
       } catch (e) {
-        AppLogger.logError('Error destroying bootstrap instance', e, null);
+        AppLogger.logError('Error disposing bootstrap service', e, null);
+      } finally {
+        _bootstrapService = null;
       }
     }
 
-    if (_bootstrapService != null) {
+    if (bootstrapHandle != null) {
       try {
-        await _bootstrapService!.dispose();
-        _bootstrapService = null;
+        ffi.destroyTestInstance(bootstrapHandle);
       } catch (e) {
-        AppLogger.logError('Error disposing bootstrap service', e, null);
+        AppLogger.logError('Error destroying bootstrap instance', e, null);
+      } finally {
+        _bootstrapInstanceHandle = null;
+      }
+    }
+
+    if (restoreTarget != null) {
+      try {
+        ffi.setCurrentInstance(restoreTarget);
+      } catch (e) {
+        AppLogger.logError('Error restoring previous instance', e, null);
       }
     }
 

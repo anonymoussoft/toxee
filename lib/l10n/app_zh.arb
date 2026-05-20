@@ -306,6 +306,8 @@
   "setAsCurrentNode": "设置为当前节点",
   "nodeTestSuccess": "节点测试成功",
   "nodeTestFailed": "节点测试失败",
+  "nodeTestUnavailableBeforeLogin": "登录前无法测试节点",
+  "failedToStartBootstrapService": "启动引导服务失败",
   "invalidNodeInfo": "请输入有效的节点信息（主机、端口和公钥）",
   "nodeSetSuccess": "已设为当前节点",
   "bootstrapNodeMode": "Bootstrap 节点模式",

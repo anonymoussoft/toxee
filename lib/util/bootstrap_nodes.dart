@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'logger.dart';
@@ -84,25 +85,47 @@ class BootstrapNode {
 
 class BootstrapNodesService {
   static const String _apiUrl = 'https://nodes.tox.chat/json';
+  static const Duration _fetchTimeout = Duration(seconds: 8);
+
+  /// True iff the most recent [fetchNodes] call returned the hardcoded
+  /// fallback list (because the HTTP fetch failed or returned no nodes).
+  /// The UI can read this to surface a "showing offline node list" hint
+  /// instead of silently behaving as if the live list was loaded.
+  static bool lastFetchUsedFallback = false;
 
   static Future<List<BootstrapNode>> fetchNodes() async {
     try {
-      final response = await http.get(Uri.parse(_apiUrl));
+      final response = await http
+          .get(Uri.parse(_apiUrl))
+          .timeout(_fetchTimeout);
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body) as Map<String, dynamic>;
         final nodesJson = jsonData['nodes'] as List<dynamic>? ?? [];
         if (nodesJson.isEmpty) {
+          AppLogger.warn(
+            '[BootstrapNodesService] fetchNodes: empty list from $_apiUrl, using fallback',
+          );
+          lastFetchUsedFallback = true;
           return _getFallbackNodes();
         }
         final nodes = nodesJson.map((n) => BootstrapNode.fromJson(n as Map<String, dynamic>)).toList();
+        lastFetchUsedFallback = false;
         return nodes;
-      } else {
-        throw Exception('Failed to fetch nodes: ${response.statusCode}');
       }
+      AppLogger.warn(
+        '[BootstrapNodesService] fetchNodes: HTTP ${response.statusCode} from $_apiUrl, using fallback',
+      );
+    } on TimeoutException catch (_) {
+      AppLogger.warn(
+        '[BootstrapNodesService] fetchNodes: timed out after ${_fetchTimeout.inSeconds}s, using fallback',
+      );
     } catch (e) {
-      // Fallback to hardcoded nodes if API fails
-      return _getFallbackNodes();
+      AppLogger.warn(
+        '[BootstrapNodesService] fetchNodes failed ($e), using fallback',
+      );
     }
+    lastFetchUsedFallback = true;
+    return _getFallbackNodes();
   }
 
   static List<BootstrapNode> _getFallbackNodes() {
