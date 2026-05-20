@@ -357,7 +357,10 @@ class AccountService {
           await service.dispose();
           try {
             await Directory(tempDir).delete(recursive: true);
-          } catch (_) {}
+          } catch (e) {
+            AppLogger.warn(
+                '[AccountService] Register: failed to clean up temp dir $tempDir: $e');
+          }
           if (attempt + 1 >= maxAttempts) {
             throw Exception('Could not create unique profile');
           }
@@ -436,7 +439,10 @@ class AccountService {
       AppLogger.logError('[AccountService] Register failed', e, st);
       try {
         await service?.dispose();
-      } catch (_) {}
+      } catch (de) {
+        AppLogger.warn(
+            '[AccountService] Register: dispose during error rollback failed: $de');
+      }
 
       if (toxId != null && toxId.isNotEmpty) {
         SessionPasswordStore.clear(toxId);
@@ -457,7 +463,10 @@ class AccountService {
           if (await d.exists()) {
             await d.delete(recursive: true);
           }
-        } catch (_) {}
+        } catch (de) {
+          AppLogger.warn(
+              '[AccountService] Register: rollback temp dir cleanup failed: $de');
+        }
       }
 
       if (finalDir != null) {
@@ -466,7 +475,10 @@ class AccountService {
           if (await d.exists()) {
             await d.delete(recursive: true);
           }
-        } catch (_) {}
+        } catch (de) {
+          AppLogger.warn(
+              '[AccountService] Register: rollback final dir cleanup failed: $de');
+        }
       }
 
       rethrow;
@@ -542,7 +554,10 @@ class AccountService {
           await prefs.remove(key);
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn(
+          '[AccountService] failed to clean UIKit failed-message prefs: $e');
+    }
 
     // 11. Clear current account ID
     await Prefs.setCurrentAccountToxId(null);
@@ -601,6 +616,9 @@ class AccountService {
           await prefs.remove(key);
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn(
+          '[AccountService] failed to clean UIKit failed-message prefs: $e');
+    }
   }
 }

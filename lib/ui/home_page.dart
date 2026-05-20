@@ -28,6 +28,7 @@ import 'package:tencent_cloud_chat_common/external/chat_message_provider.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation.dart';
 import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_message_options.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
+import 'package:tencent_cloud_chat_common/models/tencent_cloud_chat_callbacks.dart';
 import 'package:tencent_cloud_chat_common/tuicore/tencent_cloud_chat_core.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation_controller.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation.dart' as conv_pkg;
@@ -77,6 +78,7 @@ import 'home/home_utils.dart';
 import '../util/app_theme_config.dart';
 import '../util/app_tray.dart';
 import '../util/lan_bootstrap_service.dart';
+import '../util/send_failure_notifier.dart';
 import '../util/platform_utils.dart';
 import 'add_friend_dialog.dart';
 import 'add_group_dialog.dart';
@@ -89,6 +91,7 @@ import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation_
 import 'widgets/app_page_route.dart';
 import 'widgets/app_snackbar.dart';
 import 'package:window_manager/window_manager.dart';
+import '../notifications/notification_message_listener.dart';
 
 part 'home_page_persistence.dart';
 part 'home_page_plugins.dart';
@@ -207,7 +210,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 required Offset position,
               }) async => false,
             );
-          } catch (_) {}
+          } catch (e) {
+            AppLogger.warn(
+                '[HomePage] failed to restore onSecondaryTapConversationItem no-op: $e');
+          }
         });
       } catch (e, st) {
         AppLogger.logError(
@@ -719,7 +725,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         
         TencentCloudChat.controller.initGlobalAdapterInBuildPhase(context);
         _globalAdapterInited = true;
-      } catch (e) {
+      } catch (e, st) {
+        AppLogger.logError(
+            '[HomePage] initGlobalAdapterInBuildPhase failed', e, st);
       }
     }
     return TencentCloudChatThemeWidget(
@@ -1488,7 +1496,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (uid.isEmpty) continue;
       try {
         await widget.service.acceptFriendRequest(uid);
-      } catch (e) {
+      } catch (e, st) {
+        AppLogger.logError(
+            '[HomePage] acceptFriendRequest failed for $uid', e, st);
       }
     }
     _pendingFriendApps = [];

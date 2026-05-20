@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../util/logger.dart';
 
 /// Plays a ringtone (generated tone) when there is an incoming call. Stops when call is accepted/rejected.
 class RingtonePlayer {
@@ -22,7 +23,9 @@ class RingtonePlayer {
       await _player.resume();
       _playing = true;
     } catch (e) {
-      // ignore: no asset or platform error
+      // Best-effort: no asset / platform plugin missing — surface as warn so
+      // a silent failure to ring is at least visible in logs.
+      AppLogger.warn('[RingtonePlayer] start failed (no asset or platform error): $e');
     }
   }
 
@@ -32,7 +35,9 @@ class RingtonePlayer {
     try {
       await _player.stop();
       _playing = false;
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[RingtonePlayer] stop failed: $e');
+    }
   }
 
   /// Release native AudioPlayer resources and clean up temp file.
@@ -40,12 +45,16 @@ class RingtonePlayer {
     await stop();
     try {
       await _player.dispose();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[RingtonePlayer] dispose AudioPlayer failed: $e');
+    }
     if (_tempWavPath != null) {
       try {
         final file = File(_tempWavPath!);
         if (await file.exists()) await file.delete();
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('[RingtonePlayer] temp wav cleanup failed: $e');
+      }
       _tempWavPath = null;
     }
   }

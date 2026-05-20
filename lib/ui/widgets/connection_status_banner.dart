@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../util/app_theme_config.dart';
+import '../../util/logger.dart';
 
 /// Thin global banner that reflects Tox-network connection status.
 ///
@@ -36,7 +37,23 @@ class ConnectionStatusBanner extends StatelessWidget {
       initialData: initialIsConnected,
       builder: (context, snapshot) {
         final Widget child;
-        if (!snapshot.hasData) {
+        if (snapshot.hasError) {
+          // Surfacing a dead stream as "offline (unknown)" is safer than
+          // sitting in "Connecting…" forever. Sub-label distinguishes this
+          // from a normal disconnect so users (and bug reports) can tell.
+          AppLogger.logError(
+            '[ConnectionStatusBanner] statusStream error — '
+            'rendering offline-unknown',
+            snapshot.error,
+            snapshot.stackTrace,
+          );
+          child = _Banner(
+            key: const ValueKey('offline-error'),
+            kind: _Kind.offline,
+            sublabelOverride: 'Network status unavailable',
+            onRetry: onRetry,
+          );
+        } else if (!snapshot.hasData) {
           child = const _Banner(key: ValueKey('connecting'), kind: _Kind.connecting);
         } else if (snapshot.data == true) {
           child = const SizedBox.shrink(key: ValueKey('online'));
@@ -65,9 +82,15 @@ class ConnectionStatusBanner extends StatelessWidget {
 enum _Kind { connecting, offline }
 
 class _Banner extends StatelessWidget {
-  const _Banner({super.key, required this.kind, this.onRetry});
+  const _Banner({
+    super.key,
+    required this.kind,
+    this.onRetry,
+    this.sublabelOverride,
+  });
   final _Kind kind;
   final VoidCallback? onRetry;
+  final String? sublabelOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +98,8 @@ class _Banner extends StatelessWidget {
     final isOffline = kind == _Kind.offline;
     final bg = isOffline ? cs.errorContainer : cs.surfaceContainerLow;
     final fg = isOffline ? cs.onErrorContainer : cs.onSurfaceVariant;
-    final label = isOffline ? 'Disconnected' : 'Connecting to Tox network…';
+    final label = sublabelOverride ??
+        (isOffline ? 'Disconnected' : 'Connecting to Tox network…');
 
     final row = Row(
       children: [

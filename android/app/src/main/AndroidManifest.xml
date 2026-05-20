@@ -12,6 +12,11 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
                      android:maxSdkVersion="28"/>
+    <!-- Android 13+ requires runtime POST_NOTIFICATIONS permission for any
+         app that posts user-visible notifications. flutter_local_notifications
+         requests this on-demand from the plugin's Android impl, but the
+         manifest entry is mandatory. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Toxee"
         android:name="${applicationName}"

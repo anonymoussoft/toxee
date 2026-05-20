@@ -1,5 +1,6 @@
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
+import '../../util/logger.dart';
 import '../../util/prefs.dart';
 import '../../util/tox_utils.dart';
 
@@ -64,8 +65,14 @@ class HomeSessionController {
         try {
           await service.acceptFriendRequest(friendId);
           await Future.delayed(const Duration(milliseconds: 100));
-        } catch (_) {}
+        } catch (e) {
+          AppLogger.warn(
+              '[HomeSessionController] re-accept persisted friend $friendId failed: $e');
+        }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.logError(
+          '[HomeSessionController] syncPersistedFriendsToTox failed', e, st);
+    }
   }
 }

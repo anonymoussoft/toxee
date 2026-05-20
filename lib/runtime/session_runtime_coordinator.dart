@@ -8,6 +8,7 @@ import 'package:tim2tox_dart/utils/binary_replacement_history_hook.dart';
 
 import '../adapters/conversation_manager_adapter.dart';
 import '../adapters/event_bus_adapter.dart';
+import '../notifications/badge_service.dart';
 import '../sdk_fake/fake_uikit_core.dart';
 import '../sdk_fake/uikit_data_facade.dart';
 import '../util/logger.dart';
@@ -93,6 +94,16 @@ class SessionRuntimeCoordinator {
       // without UIKit listener mediation) cannot exist.
       _installBinaryReplacementHistoryHook();
 
+      // OS-level dock/launcher unread badge. Subscribes to the same bus
+      // topic UIKit's conversation listener uses (FakeIM.topicUnread) and
+      // debounces writes so a burst of poll-driven emits collapses to one
+      // platform-channel call. Idempotent — see BadgeService.start.
+      final im = FakeUIKit.instance.im;
+      if (im != null) {
+        BadgeService.instance
+            .start(bus: FakeUIKit.instance.eventBusInstance, im: im);
+      }
+
       _state = SessionRuntimeState.started;
       completer.complete();
     } catch (e, st) {
@@ -120,6 +131,10 @@ class SessionRuntimeCoordinator {
     await _pendingHookSelfIdSub?.cancel();
     _pendingHookSelfIdSub = null;
     _hookInstalled = false;
+
+    // Drop the badge subscription before FakeUIKit.dispose() closes the
+    // event bus — otherwise the cancel races with a closed StreamController.
+    await BadgeService.instance.dispose();
 
     FakeUIKit.instance.dispose();
 

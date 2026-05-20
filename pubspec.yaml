@@ -26,6 +26,13 @@ dependencies:
   shared_preferences: ^2.2.2
   flutter_secure_storage: ^9.2.2
   file_picker: ^9.2.3
+  # OS-level app icon / dock unread badge. Full support on iOS + macOS (dock
+  # tile badgeLabel), best-effort on Android (varies by launcher: Samsung,
+  # Xiaomi, OEM/Pixel all implement ShortcutBadger-style counts differently).
+  # No-op on Linux / Windows — the plugin's `isSupported()` guards calls so
+  # we never throw on unsupported platforms. See
+  # lib/notifications/badge_service.dart for the listener.
+  app_badge_plus: ^1.2.10
   path_provider: ^2.1.3
   path: ^1.8.3
   qr_flutter: ^4.1.0
@@ -47,6 +54,13 @@ dependencies:
   audioplayers: ^5.2.0
   camera_macos: ^0.0.9
   wakelock_plus: ^1.3.3
+  # OS-level notifications for new incoming messages. Cross-platform: macOS &
+  # iOS UNUserNotificationCenter, Android NotificationManager (channel +
+  # grouping), Linux libnotify, Windows Toast / AUMID. See
+  # lib/notifications/notification_service.dart for the entry point and
+  # lib/notifications/notification_message_listener.dart for the listener that
+  # drives showMessageNotification() off the V2TimAdvancedMsgListener path.
+  flutter_local_notifications: ^17.2.4
   # Debug-only: MCP toolkit that exposes the running app to Claude Code via
   # the Dart VM service. Gated by kDebugMode in lib/main.dart so the call is
   # tree-shaken from profile/release builds.

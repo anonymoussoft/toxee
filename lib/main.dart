@@ -26,6 +26,7 @@ import 'call/call_effects_listener.dart';
 import 'util/app_theme_config.dart';
 import 'util/app_component_themes.dart';
 import 'util/account_service.dart';
+import 'util/send_failure_notifier.dart';
 import 'package:tencent_cloud_chat_common/data/theme/tencent_cloud_chat_theme.dart';
 import 'startup/startup_outcome.dart';
 import 'startup/startup_session_use_case.dart';
@@ -174,12 +175,18 @@ class EchoUIKitApp extends StatefulWidget {
   State<EchoUIKitApp> createState() => _EchoUIKitAppState();
 }
 
-class _EchoUIKitAppState extends State<EchoUIKitApp> {
+class _EchoUIKitAppState extends State<EchoUIKitApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     AppTheme.mode.addListener(_syncUIKitThemeBrightness);
     _syncUIKitThemeBrightness();
+    // Observe app lifecycle so we can re-emit the unread total on resume,
+    // keeping the OS dock/launcher badge accurate when the user reads or
+    // dismisses messages on another device while toxee is backgrounded.
+    // The bus emit fans out to BadgeService (debounced) — see
+    // lib/notifications/badge_service.dart.
+    WidgetsBinding.instance.addObserver(this);
   }
 
   void _syncUIKitThemeBrightness() {
@@ -190,7 +197,21 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      try {
+        FakeUIKit.instance.im?.refreshUnreadTotal();
+      } catch (e, st) {
+        AppLogger.logError(
+            '[EchoUIKitApp] refreshUnreadTotal on resume failed', e, st);
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AppTheme.mode.removeListener(_syncUIKitThemeBrightness);
     super.dispose();
   }
@@ -208,9 +229,17 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> {
             // group list see the new language before any child builds.
             try {
               TencentCloudChatIntl().setLocale(locale);
-            } catch (_) {}
+            } catch (e) {
+              // setLocale runs on every rebuild — log at warn so we see the
+              // failure without spamming severe for an arguably best-effort sync.
+              AppLogger.warn('[App] TencentCloudChatIntl.setLocale failed: $e');
+            }
             return TencentCloudChatMaterialApp(
               title: 'Toxee',
+              // Hand the ScaffoldMessenger key to the root app so SDK
+              // callbacks (which live outside the widget tree) can surface
+              // send-failure toasts via [SendFailureNotifier].
+              scaffoldMessengerKey: SendFailureNotifier.scaffoldMessengerKey,
               debugShowCheckedModeBanner: false,
               scrollBehavior: const _AppScrollBehavior(),
               themeAnimationDuration: const Duration(milliseconds: 400),

@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
 import '../../util/app_paths.dart';
+import '../../util/logger.dart';
 import '../../util/prefs.dart';
 
 /// Result of [pickAndPersistAvatar] when the user actually chose a file.
@@ -48,11 +49,16 @@ Future<PickedAvatar?> pickAndPersistAvatar({
         if (entity is File && p.basename(entity.path).startsWith(baseName)) {
           try {
             await entity.delete();
-          } catch (_) {}
+          } catch (e) {
+            AppLogger.warn(
+                '[AvatarPicker] failed to delete stale avatar ${entity.path}: $e');
+          }
         }
       }
     }
-  } catch (_) {}
+  } catch (e) {
+    AppLogger.warn('[AvatarPicker] stale-avatar cleanup scan failed: $e');
+  }
 
   await File(pickedPath).copy(destPath);
   await Prefs.setAvatarPath(destPath);

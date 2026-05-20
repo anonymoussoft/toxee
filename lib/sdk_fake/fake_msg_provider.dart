@@ -28,9 +28,24 @@ part 'fake_msg_provider_file_progress.dart';
 part 'fake_msg_provider_routing.dart';
 part 'fake_msg_provider_mapping.dart';
 
+/// Per-conversation history-reload bookkeeping for [FakeChatMessageProvider].
+///
+/// `loadedAtMs` is the wall-clock timestamp of the last successful reload
+/// from the persistence layer. `inFlight` non-null when a reload is
+/// currently running so we don't fan out concurrent disk reads when the
+/// stream is subscribed multiple times in quick succession (page switch,
+/// hot-reload, etc.).
+class _HistoryReloadEntry {
+  int loadedAtMs;
+  Future<void>? inFlight;
+  _HistoryReloadEntry(this.loadedAtMs);
+}
+
 class FakeChatMessageProvider implements ChatMessageProvider {
   final Map<String, StreamController<List<V2TimMessage>>> _ctrls = {};
   final Map<String, List<V2TimMessage>> _buffers = {};
+  final Map<String, _HistoryReloadEntry> _historyReloadGuards = {};
+  static const int _historyReloadTtlMs = 3000;
   StreamSubscription? _sub;
   String? _cachedSelfAvatarPath; // Cache self avatar path to avoid async calls
   final Map<String, String?> _cachedFriendAvatars = {}; // Cache friend avatar paths
@@ -152,14 +167,14 @@ class FakeChatMessageProvider implements ChatMessageProvider {
     // Check if buffer already has messages
     final hasBuffer = _buffers.containsKey(conv) && _buffers[conv]!.isNotEmpty;
 
-    // CRITICAL: Always reload history when stream is requested, even if buffer has messages
-    // This ensures that when switching pages and returning, failed messages are restored
-    // Previously, we only loaded history if buffer was empty, but this caused failed messages
-    // to show as success after page switch because history wasn't reloaded
-    // Use Future.microtask to ensure this happens after the stream is set up
-    Future.microtask(() {
-      _loadHistoryForConversation(conv);
-    });
+    // The reload guard short-circuits when we already pulled history from
+    // disk within `_historyReloadTtlMs`. Rapid conversation switching (or
+    // multiple subscribers per conversation) used to hit the on-disk
+    // persistence layer for every subscribe; now repeat subscribes within
+    // the TTL just re-emit the in-memory buffer. Writes call
+    // [_invalidateHistoryReloadCache] to force the next subscribe to
+    // refresh.
+    Future.microtask(() => _reloadHistoryIfStale(conv));
 
     // If buffer already has messages, emit them immediately (for real-time updates)
     // But we still reload history in the background to ensure failed messages are restored
@@ -172,6 +187,33 @@ class FakeChatMessageProvider implements ChatMessageProvider {
     return ctrl.stream;
   }
 
+  Future<void> _reloadHistoryIfStale(String conv) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final guard = _historyReloadGuards[conv];
+    if (guard != null) {
+      if (guard.inFlight != null) return guard.inFlight!;
+      if (now - guard.loadedAtMs < _historyReloadTtlMs) {
+        return Future<void>.value();
+      }
+    }
+    final entry =
+        _historyReloadGuards.putIfAbsent(conv, () => _HistoryReloadEntry(0));
+    final future = _loadHistoryForConversation(conv).whenComplete(() {
+      entry
+        ..loadedAtMs = DateTime.now().millisecondsSinceEpoch
+        ..inFlight = null;
+    });
+    entry.inFlight = future;
+    return future;
+  }
+
+  /// Force the next [streamFor] subscribe to reload history from disk for
+  /// [conv]. Call this after any mutation that would make the cached
+  /// buffer diverge from persisted history.
+  void _invalidateHistoryReloadCache(String conv) {
+    _historyReloadGuards.remove(conv);
+  }
+
   @override
   Future<void> sendText({String? userID, String? groupID, required String text}) async {
     final conv = (groupID != null && groupID.isNotEmpty) ? 'group_$groupID' : 'c2c_$userID';
@@ -179,47 +221,12 @@ class FakeChatMessageProvider implements ChatMessageProvider {
     if (mgr == null) {
       throw Exception("Message manager is not available");
     }
-
-    // Check if friend is online BEFORE attempting to send (only for C2C, not groups)
-    if (userID != null && groupID == null) {
-      final ffi = FakeUIKit.instance.im?.ffi;
-      if (ffi != null) {
-        try {
-          final friends = await ffi.getFriendList();
-          final normalizedUserID = normalizeToxId(userID);
-          final friend = friends.firstWhere(
-            (f) => compareToxIds(f.userId, normalizedUserID),
-            orElse: () => (userId: normalizedUserID, nickName: '', online: false, status: ''),
-          );
-          if (!friend.online) {
-            // Friend is offline - throw exception so sendTextMessage can mark as failed immediately
-            throw Exception("Friend is offline. Cannot send text.");
-          }
-        } catch (e) {
-          // If it's the offline exception, re-throw it
-          if (e.toString().contains('offline')) {
-            rethrow;
-          }
-          // Continue with text send attempt if check fails for other reasons
-        }
-      }
-    }
-
-    // Friend is online (or group message) - try to send text
+    // C2C offline is handled inside FfiChatService.sendText: it queues the
+    // message and surfaces a pending bubble. Drain runs when the friend's
+    // status flips online. No pre-emptive throw here.
     try {
       await mgr.sendText(conv, text);
     } catch (e) {
-      final errorMsg = e.toString();
-
-      // If friend went offline between check and send, re-throw to let sendTextMessage handle
-      if (errorMsg.contains('offline') || errorMsg.contains('not connected')) {
-        // Only for C2C conversations (not groups)
-        if (userID != null && groupID == null) {
-          // Re-throw so sendTextMessage can mark as failed immediately
-          rethrow;
-        }
-      }
-      // For other errors or groups, re-throw to let UIKit handle
       rethrow;
     }
   }
@@ -253,46 +260,12 @@ class FakeChatMessageProvider implements ChatMessageProvider {
       // File-size check is best-effort.
     }
 
-    // Check if friend is online BEFORE attempting to send (only for C2C, not groups)
-    if (userID != null && groupID == null) {
-      final ffi = FakeUIKit.instance.im?.ffi;
-      if (ffi != null) {
-        try {
-          final friends = await ffi.getFriendList();
-          final normalizedUserID = normalizeToxId(userID);
-          final friend = friends.firstWhere(
-            (f) => compareToxIds(f.userId, normalizedUserID),
-            orElse: () => (userId: normalizedUserID, nickName: '', online: false, status: ''),
-          );
-          if (!friend.online) {
-            // Friend is offline - throw exception so sendMessageFinalPhase can update message status
-            throw Exception("Friend is offline. Cannot send file.");
-          }
-        } catch (e) {
-          // If it's the offline exception, re-throw it
-          if (e.toString().contains('offline')) {
-            rethrow;
-          }
-          // Continue with image send attempt if check fails for other reasons
-        }
-      }
-    }
-
-    // Friend is online (or group message) - try to send image as file
+    // C2C offline is handled inside FfiChatService.sendFile: it queues the
+    // transfer and surfaces a pending bubble. Drain runs when the friend's
+    // status flips online.
     try {
       await mgr.sendFile(conv, imagePath);
     } catch (e) {
-      final errorMsg = e.toString();
-
-      // If friend went offline between check and send, re-throw to let sendMessageFinalPhase handle
-      if (errorMsg.contains('offline') || errorMsg.contains('not connected')) {
-        // Only for C2C conversations (not groups)
-        if (userID != null && groupID == null) {
-          // Re-throw so sendMessageFinalPhase can update message status
-          rethrow;
-        }
-      }
-      // For other errors or groups, re-throw to let UIKit handle
       rethrow;
     }
   }
@@ -312,46 +285,12 @@ class FakeChatMessageProvider implements ChatMessageProvider {
       throw StateError('Group file transfer is not supported in toxee');
     }
 
-    // Check if friend is online BEFORE attempting to send (only for C2C, not groups)
-    if (userID != null && groupID == null) {
-      final ffi = FakeUIKit.instance.im?.ffi;
-      if (ffi != null) {
-        try {
-          final friends = await ffi.getFriendList();
-          final normalizedUserID = normalizeToxId(userID);
-          final friend = friends.firstWhere(
-            (f) => compareToxIds(f.userId, normalizedUserID),
-            orElse: () => (userId: normalizedUserID, nickName: '', online: false, status: ''),
-          );
-          if (!friend.online) {
-            // Friend is offline - throw exception so sendMessageFinalPhase can update message status
-            throw Exception("Friend is offline. Cannot send file.");
-          }
-        } catch (e) {
-          // Continue with file send attempt if check fails
-          // Re-throw if it's the offline exception
-          if (e.toString().contains('offline')) {
-            rethrow;
-          }
-        }
-      }
-    }
-
-    // Friend is online (or group message) - try to send file
+    // C2C offline is handled inside FfiChatService.sendFile: it queues the
+    // transfer and surfaces a pending bubble. Drain runs when the friend's
+    // status flips online.
     try {
       await mgr.sendFile(conv, filePath);
     } catch (e) {
-      final errorMsg = e.toString();
-
-      // If friend went offline between check and send, re-throw to let sendMessageFinalPhase handle
-      if (errorMsg.contains('offline') || errorMsg.contains('not connected')) {
-        // Only for C2C conversations (not groups)
-        if (userID != null && groupID == null) {
-          // Re-throw so sendMessageFinalPhase can update message status
-          rethrow;
-        }
-      }
-      // For other errors or groups, re-throw to let UIKit handle
       rethrow;
     }
   }
@@ -383,6 +322,8 @@ class FakeChatMessageProvider implements ChatMessageProvider {
       // New message - add it
       list.add(message);
     }
+
+    _invalidateHistoryReloadCache(conv);
 
     // Sort by timestamp ascending (oldest first, newest last)
     list.sort((a, b) => (a.timestamp ?? 0).compareTo(b.timestamp ?? 0));
@@ -420,7 +361,8 @@ class FakeChatMessageProvider implements ChatMessageProvider {
         // Emit FakeMessage event to trigger FakeProvider to update conversation lastMessage
         FakeUIKit.instance.eventBusInstance.emit(FakeIM.topicMessage, fakeMsg);
       } catch (e) {
-        // Ignore errors during FakeMessage event emission
+        AppLogger.warn(
+            '[FakeMessageProvider] FakeMessage event emission failed: $e');
       }
     }
   }
@@ -542,6 +484,8 @@ class FakeChatMessageProvider implements ChatMessageProvider {
       return msgIDs.contains(msgID) || (id.isNotEmpty && msgIDs.contains(id));
     });
 
+    _invalidateHistoryReloadCache(conversationID);
+
     // Re-sort after removal
     list.sort((a, b) => (a.timestamp ?? 0).compareTo(b.timestamp ?? 0));
     // Emit updated list to stream
@@ -560,6 +504,7 @@ class FakeChatMessageProvider implements ChatMessageProvider {
       _buffers[conversationID]!.clear();
       _buffers.remove(conversationID);
     }
+    _invalidateHistoryReloadCache(conversationID);
     // Emit empty list to stream to notify UI (if stream controller exists)
     final ctrl = _ctrls[conversationID];
     if (ctrl != null && !ctrl.isClosed) {
@@ -574,6 +519,7 @@ class FakeChatMessageProvider implements ChatMessageProvider {
     }
     _ctrls.clear();
     _buffers.clear();
+    _historyReloadGuards.clear();
     _cachedSelfAvatarPath = null;
     _cachedFriendAvatars.clear();
     _fileProgress.clear();

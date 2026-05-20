@@ -141,7 +141,12 @@ Future<void> _writeBytesAtomic(File target, Uint8List bytes) async {
     if (await stage.exists()) {
       try {
         await stage.delete();
-      } catch (_) {}
+      } catch (_) {
+        // Best-effort cleanup of staging file. We're about to rethrow the
+        // original write/rename error which carries the real failure; a
+        // delete failure here would only mask it. Stale `.new` files are
+        // harmless — the next atomic write reuses the same path.
+      }
     }
     rethrow;
   }

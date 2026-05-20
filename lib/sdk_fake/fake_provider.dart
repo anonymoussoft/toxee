@@ -17,6 +17,7 @@ import 'package:tencent_cloud_chat_sdk/enum/image_types.dart';
 import 'package:tencent_cloud_chat_sdk/enum/group_type.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'package:tim2tox_dart/models/chat_message.dart';
+import '../../util/logger.dart';
 import '../../util/prefs.dart';
 import 'fake_uikit_core.dart';
 import 'fake_im.dart';
@@ -102,8 +103,9 @@ class FakeChatDataProvider implements ChatDataProvider {
             _updateTotalUnreadCount(initialList);
           }
         }
-      } catch (e) {
-        // Error seeding conversations - silently fail
+      } catch (e, st) {
+        AppLogger.logError(
+            '[FakeChatDataProvider] error seeding initial conversations', e, st);
       }
     }();
     _convSub = FakeUIKit.instance.eventBusInstance
@@ -225,7 +227,8 @@ class FakeChatDataProvider implements ChatDataProvider {
             }
           }
         } catch (e) {
-          // If check fails, continue with normal processing
+          AppLogger.warn(
+              '[FakeChatDataProvider] failed-message check threw, continuing with normal mapping: $e');
         }
 
         // Try to get the message from lastMessages first
@@ -527,7 +530,8 @@ class FakeChatDataProvider implements ChatDataProvider {
           }
         }
       } catch (e) {
-        // Ignore errors during failed message loading
+        AppLogger.warn(
+            '[FakeChatDataProvider] failed-message loading for conversation row threw: $e');
       }
 
       // Get message from lastMessages (keyed by normalized peer id)
@@ -642,7 +646,8 @@ class FakeChatDataProvider implements ChatDataProvider {
               fileSize = file.lengthSync();
             }
           } catch (e) {
-            // Ignore file size errors
+            AppLogger.warn(
+                '[FakeChatDataProvider] file size lookup for image attachment failed: $e');
           }
 
           // Create imageList with both thumb and origin images

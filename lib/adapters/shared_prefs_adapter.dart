@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tim2tox_dart/interfaces/extended_preferences_service.dart';
 import 'package:tim2tox_dart/ffi/tim2tox_ffi.dart';
 
+import '../util/logger.dart';
 import '../util/prefs/scoped_key.dart';
 
 /// Adapter that implements ExtendedPreferencesService using SharedPreferences.
@@ -339,7 +340,10 @@ class SharedPreferencesAdapter implements ExtendedPreferencesService {
               }
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          AppLogger.warn(
+              '[SharedPrefsAdapter] account_list JSON parse for avatar fallback failed: $e');
+        }
       }
     }
     return null;

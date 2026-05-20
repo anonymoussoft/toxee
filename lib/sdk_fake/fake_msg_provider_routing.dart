@@ -594,6 +594,7 @@ extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
         AppLogger.log('[FakeMessageProvider] New msg added: msgID=${mappedMsg.msgID}, conv=$conv, elemType=${mappedMsg.elemType}, bufferSize=${list.length}, ctrlExists=${_ctrls[conv] != null}');
         _ctrls[conv]?.add(reversedList);
       }
+      _invalidateHistoryReloadCache(conv);
     }
   }
 
@@ -644,7 +645,8 @@ extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
         msg.status = MessageStatus.V2TIM_MSG_STATUS_SEND_FAIL;
       }
     } catch (e) {
-      // If check fails, continue with normal mapping
+      AppLogger.warn(
+          '[FakeMessageProvider] failed-message status check threw during mapping: $e');
     }
 
     return msg;
@@ -685,8 +687,11 @@ extension _FakeChatMessageProviderRouting on FakeChatMessageProvider {
       if (parsed is Map) {
         return Map<String, dynamic>.from(parsed);
       }
-    } catch (_) {
-      // Swallow parse failures — callers still suppress the control message.
+    } catch (e) {
+      // Callers still suppress the control message either way; log at debug
+      // so we can spot malformed revoke payloads in dev without alarming users.
+      AppLogger.debug(
+          '[FakeMessageProvider] failed to parse __revoke__ control payload: $e');
     }
     return null;
   }

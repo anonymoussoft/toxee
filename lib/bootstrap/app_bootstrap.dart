@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../notifications/notification_service.dart';
 import '../util/account_reconciliation.dart';
 import '../util/app_paths.dart';
+import '../util/logger.dart';
 import 'app_bootstrap_result.dart';
 import 'app_runtime_bootstrap.dart';
 import 'desktop_shell_bootstrap.dart';
@@ -27,6 +29,18 @@ class AppBootstrap {
     await AccountReconciliation.reconcileOrphanedProfiles();
     await AppRuntimeBootstrap.initialize();
     await DesktopShellBootstrap.initializeIfNeeded();
+    // OS-level notifications. Lazy-safe — the service no-ops on unsupported
+    // platforms and the V2TimAdvancedMsgListener that actually drives
+    // showMessageNotification() is registered later (HomePage, after the
+    // session is fully bootstrapped) so historical messages loaded during
+    // the session-warmup phase don't trigger banners.
+    try {
+      await NotificationService.instance.init();
+    } catch (e, st) {
+      // Don't let a notification-init failure block app startup.
+      AppLogger.logError(
+          '[AppBootstrap] NotificationService.init failed; continuing', e, st);
+    }
     // iOS: keep received-file scratch space out of iCloud / iTunes backups.
     // file_recv holds derivable / re-transferable content; Apple's review
     // guidelines forbid letting it be backed up. markExcludedFromBackup is

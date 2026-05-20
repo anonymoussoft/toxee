@@ -517,7 +517,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // If it throws an error about password, we'll catch and prompt
         }
       } catch (e) {
-        // Error reading file, continue with import (will handle error there)
+        AppLogger.warn(
+            '[SettingsPage] pre-import file size probe failed (import will retry and surface the real error): $e');
       }
 
       // Import account data (will check encryption and prompt for password if needed)
@@ -927,7 +928,11 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       try {
         TencentCloudChatIntl().setLocale(AppLocale.locale.value);
-      } catch (_) {}
+      } catch (e) {
+        // Per-frame: log at warn so a real failure isn't invisible, but accept
+        // that this fires every build. setLocale itself rarely throws.
+        AppLogger.warn('[SettingsPage] TencentCloudChatIntl.setLocale failed: $e');
+      }
     });
     return ValueListenableBuilder<Locale>(
       valueListenable: AppLocale.locale,

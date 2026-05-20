@@ -143,7 +143,9 @@ class PairingClient {
       final toxId = await _materializeProfile(plain);
       try {
         await sock.close();
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('[PairingClient] socket close after success failed: $e');
+      }
       _succeed(toxId);
     } on TimeoutException catch (e) {
       _fail(ClientFailureReason.timeout, '$e');
@@ -168,7 +170,9 @@ class PairingClient {
     _completed = true;
     try {
       _sock?.destroy();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[PairingClient] socket destroy during cancel failed: $e');
+    }
     _events.add(ClientFailed(ClientFailureReason.cancelled, reason));
     await _events.close();
   }
@@ -185,7 +189,9 @@ class PairingClient {
     _completed = true;
     try {
       _sock?.destroy();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[PairingClient] socket destroy during failure handling failed: $e');
+    }
     _events.add(ClientFailed(reason, message));
     _events.close();
   }

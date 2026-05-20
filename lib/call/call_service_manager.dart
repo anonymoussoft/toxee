@@ -10,6 +10,7 @@ import 'package:tim2tox_dart/service/tuicallkit_adapter.dart';
 import 'package:tim2tox_dart/service/tuicallkit_tuicore_integration.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
 import '../adapters/logger_adapter.dart';
+import '../util/logger.dart';
 import 'call_codec_profile.dart';
 import 'call_quality_estimator.dart';
 import 'call_state_notifier.dart';
@@ -578,7 +579,11 @@ class CallServiceManager implements CallOverlayManager {
 
   Future<void> syncPlatformEffectsForState(CallUIState state) {
     final next = (_pendingSync ?? Future<void>.value())
-        .catchError((_) {}) // Don't poison the chain if a prior sync threw.
+        // Don't poison the chain if a prior sync threw — but record the failure
+        // so it doesn't vanish silently.
+        .catchError((Object e, StackTrace st) {
+          AppLogger.warn('[CallServiceManager] previous platform-effects sync failed: $e');
+        })
         .then((_) => _doSyncPlatformEffectsForState(state));
     _pendingSync = next;
     return next;

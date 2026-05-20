@@ -431,7 +431,10 @@ abstract final class AppPaths {
       try {
         await dir.create(recursive: true);
         return custom;
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn(
+            '[AppPaths] custom downloads dir $custom create failed, falling back: $e');
+      }
     }
 
     // 2. Desktop: system Downloads via path_provider, with manual fallback
@@ -442,7 +445,10 @@ abstract final class AppPaths {
           if (!await dir.exists()) await dir.create(recursive: true);
           return dir.path;
         }
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn(
+            '[AppPaths] path_provider getDownloadsDirectory failed, using manual fallback: $e');
+      }
       // Manual fallback
       if (Platform.isMacOS || Platform.isLinux) {
         final home = Platform.environment['HOME'];

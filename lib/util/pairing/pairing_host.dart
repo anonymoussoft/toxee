@@ -131,10 +131,14 @@ class PairingHost {
     _acceptTimer?.cancel();
     try {
       await _peer?.close();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[PairingHost] peer close during cancel failed: $e');
+    }
     try {
       await _server?.close();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[PairingHost] server close during cancel failed: $e');
+    }
     _events.add(HostFailed(HostFailureReason.cancelled, reason));
     await _events.close();
   }
@@ -145,7 +149,9 @@ class PairingHost {
       // Race: cancelled while we were waiting for `first`. Drop the socket.
       try {
         await sock.close();
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('[PairingHost] dropped-peer close failed: $e');
+      }
       return;
     }
     _peer = sock;
@@ -224,7 +230,9 @@ class PairingHost {
     _acceptTimer?.cancel();
     try {
       unawaited(_server?.close());
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[PairingHost] server close during success failed: $e');
+    }
     _events.add(const HostCompleted());
     unawaited(_events.close());
   }
@@ -235,10 +243,14 @@ class PairingHost {
     _acceptTimer?.cancel();
     try {
       _peer?.destroy();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[PairingHost] peer destroy during failure failed: $e');
+    }
     try {
       unawaited(_server?.close());
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[PairingHost] server close during failure failed: $e');
+    }
     _events.add(HostFailed(reason, message));
     unawaited(_events.close());
   }

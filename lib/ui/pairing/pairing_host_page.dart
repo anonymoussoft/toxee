@@ -100,7 +100,10 @@ class _PairingHostPageState extends State<PairingHostPage> {
           final bytes = await File(tmp).readAsBytes();
           try {
             await File(tmp).delete();
-          } catch (_) {}
+          } catch (e) {
+            AppLogger.warn(
+                '[PairingHostPage] failed to delete temp export file $tmp: $e');
+          }
           return bytes;
         },
         bindAddress: '0.0.0.0',

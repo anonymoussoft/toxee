@@ -201,7 +201,9 @@ class AudioHandler {
     _streamSub = null;
     try {
       await _recorder.stop();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[AudioHandler] recorder.stop failed during stop: $e');
+    }
     _buffer.clear();
     synchronized(_playBuffer, () => _playBuffer.clear());
     if (_playbackSetup) {

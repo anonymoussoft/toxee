@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/locale_controller.dart';
+import '../../util/logger.dart';
 import '../../util/theme_controller.dart';
 import '../../util/prefs.dart';
 import '../../i18n/app_localizations.dart';
@@ -88,7 +89,10 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
         final appDir = await getApplicationDocumentsDirectory();
         return p.join(appDir.path, 'Downloads');
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn(
+          '[GlobalSettings] default downloads directory lookup failed: $e');
+    }
     return null;
   }
 

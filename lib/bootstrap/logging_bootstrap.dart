@@ -75,7 +75,11 @@ class LoggingBootstrap {
             }
           }
         } catch (e) {
-          // Directory.current might not work in app bundle
+          // Directory.current might not work in app bundle — fall through to
+          // the symlink/timestamped fallback. Logger isn't initialised yet so
+          // stderr is the best we can do, but the fallback path is the
+          // canonical case so loud logging here would be noisy.
+          stderr.writeln('AppLogger: Directory.current probe failed: $e');
         }
       }
 

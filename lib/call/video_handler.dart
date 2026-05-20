@@ -252,7 +252,9 @@ class VideoHandler extends ChangeNotifier {
     if (pending != null) {
       try {
         await pending;
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('[VideoHandler] awaiting in-flight stop before startCapture failed: $e');
+      }
     }
     if (_disposed || _capturing) return;
     final future = _doStartCapture(friendNumber, avService);
@@ -317,10 +319,14 @@ class VideoHandler extends ChangeNotifier {
         // Tear down native camera session so later capture attempts don't fail with device in-use.
         try {
           await CameraMacOS.instance.stopImageStream();
-        } catch (_) {}
+        } catch (e) {
+          AppLogger.warn('[VideoHandler] stopImageStream during error recovery failed: $e');
+        }
         try {
           await CameraMacOS.instance.destroy();
-        } catch (_) {}
+        } catch (e) {
+          AppLogger.warn('[VideoHandler] camera destroy during error recovery failed: $e');
+        }
         notifyListeners();
         debugPrint('[VideoHandler] startCapture macOS camera_macos error: $e');
         AppLogger.log('[VideoHandler] startCapture macOS camera_macos error: $e');
@@ -546,7 +552,9 @@ class VideoHandler extends ChangeNotifier {
     if (pendingStart != null) {
       try {
         await pendingStart;
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('[VideoHandler] awaiting in-flight start before stop failed: $e');
+      }
     }
     final future = _doStop();
     _stopFuture = future;
@@ -563,14 +571,18 @@ class VideoHandler extends ChangeNotifier {
       try {
         await CameraMacOS.instance.stopImageStream();
         await CameraMacOS.instance.destroy();
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('[VideoHandler] macOS camera teardown failed: $e');
+      }
       _usingMacOSCamera = false;
       _macosTextureId = null;
     }
     try {
       await _controller?.stopImageStream();
       await _controller?.dispose();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[VideoHandler] camera controller teardown failed: $e');
+    }
     _controller = null;
     final previous = remoteImage.value;
     remoteImage.value = null;
@@ -613,7 +625,9 @@ class VideoHandler extends ChangeNotifier {
     if (pendingStart != null) {
       try {
         await pendingStart;
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('[VideoHandler] awaiting in-flight start before disposeAsync failed: $e');
+      }
     }
     await stop();
     super.dispose();

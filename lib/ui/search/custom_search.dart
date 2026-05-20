@@ -11,6 +11,7 @@ import '../widgets/app_page_route.dart';
 import '../widgets/empty_state_widget.dart';
 import '../widgets/loading_shimmer.dart';
 import '../../sdk_fake/uikit_data_facade.dart';
+import '../../util/logger.dart';
 import 'package:tencent_cloud_chat_common/chat_sdk/components/tencent_cloud_chat_search_sdk.dart';
 import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_message_options.dart';
 import 'package:tencent_cloud_chat_common/components/tencent_cloud_chat_components_utils.dart';
@@ -107,8 +108,9 @@ class _CustomSearchState extends State<CustomSearch> {
             if (res.isFinished) break;
             lastMsgID = res.messageList.last.msgID;
           }
-        } catch (_) {
-          // keep whatever we have in allMessages
+        } catch (e) {
+          AppLogger.warn(
+              '[CustomSearch] global history pagination failed; keeping partial allMessages: $e');
         }
       }
       final matching = allMessages.where(messageMatches).toList();
@@ -296,7 +298,10 @@ class _CustomSearchState extends State<CustomSearch> {
                   if (res.isFinished) break;
                   lastMsgID = res.messageList.last.msgID;
                 }
-              } catch (_) {}
+              } catch (e) {
+                AppLogger.warn(
+                    '[CustomSearch] history pagination failed mid-scan: $e');
+              }
             }
             final matching = allMessages.where((msg) {
               final text = msg.textElem?.text ?? '';

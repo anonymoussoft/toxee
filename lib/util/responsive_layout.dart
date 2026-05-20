@@ -15,7 +15,11 @@ class ResponsiveLayout {
   /// Width at or above which we render a master-detail (two-column)
   /// conversation list + chat layout. Below this, the chat fills the
   /// available area like a phone.
-  static const double masterDetailBreakpoint = 900.0;
+  ///
+  /// 800pt covers landscape large-phones (e.g. Pixel 6 rotated, 892pt) and
+  /// small 7-9" tablets in landscape (typically 1024×768) without forcing
+  /// master-detail on portrait phones (which top out around 430pt).
+  static const double masterDetailBreakpoint = 800.0;
 
   /// Reserved vertical space at the top of the sidebar on macOS so the
   /// traffic-light buttons do not overlap interactive content (avatar,

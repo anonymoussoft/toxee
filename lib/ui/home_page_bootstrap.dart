@@ -20,6 +20,18 @@ extension _HomePageBootstrap on _HomePageState {
       AppLogger.logError('[HomePage] Failed to initialize TIMManager SDK: $e', e, stackTrace);
     });
 
+    // Wire send-failure toast on the SDK callbacks trigger. The handler is
+    // idempotent against multiple registrations (we deregister on dispose via
+    // _bag) and dedups bursts of the same error code internally. Note: SDK
+    // callbacks register on a singleton, so re-init after logout/login flows
+    // would otherwise stack listeners — _bag.add ensures cleanup.
+    final sdkFailureCallback = TencentCloudChatCallbacks(
+      onTencentCloudChatSDKFailedCallback: SendFailureNotifier.handleSdkFailure,
+    );
+    TencentCloudChat.instance.callbacks.addCallback(sdkFailureCallback);
+    _bag.add(() => TencentCloudChat.instance.callbacks
+        .removeCallback(sdkFailureCallback));
+
     ChatDataProviderRegistry.provider ??= FakeChatDataProvider(ffiService: widget.service);
     ChatMessageProviderRegistry.provider ??= FakeChatMessageProvider();
 
@@ -530,9 +542,25 @@ extension _HomePageBootstrap on _HomePageState {
         }
         await _loadPersistedGroupsIntoUIKit();
         if (FakeUIKit.instance.im != null) {
-          FakeUIKit.instance.im!.refreshContacts().catchError((e) {
-            // Silently handle errors
+          FakeUIKit.instance.im!.refreshContacts().catchError((e, st) {
+            AppLogger.logError('[HomePage] refreshContacts after initial load failed', e, st);
           });
+        }
+        // Register the OS-notification listener AFTER the initial history /
+        // contacts load completes so historical messages don't fire banners
+        // on first launch. The listener is idempotent — calling register()
+        // twice is a no-op (see NotificationMessageListener._registered).
+        if (mounted) {
+          unawaited(NotificationMessageListener
+              .forService(widget.service)
+              .register(
+            onConversationTapped: (payload) {
+              // TODO(toxee): wire tap-to-route. For now we just stash the
+              // payload so the user's tap doesn't get lost on cold start.
+              AppLogger.info(
+                  '[HomePage] Notification tapped, payload=$payload (routing not yet implemented)');
+            },
+          ));
         }
       }
     });
@@ -643,8 +671,8 @@ extension _HomePageBootstrap on _HomePageState {
       UikitDataFacade.setApplicationUnreadCount(mapped);
       _pendingFriendApps = List<V2TimFriendApplication>.from(mapped);
       if (_autoAcceptFriends && mapped.isNotEmpty) {
-        _acceptFriendApplications(mapped).catchError((e) {
-          // Silently handle errors during async friend acceptance
+        _acceptFriendApplications(mapped).catchError((e, st) {
+          AppLogger.logError('[HomePage] auto-accept friend applications failed', e, st);
         });
       }
       // No setState — UIKit's contact data layer drives application-row UI;

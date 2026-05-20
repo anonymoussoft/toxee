@@ -1,26 +1,45 @@
-/// Tox utility functions for handling user IDs
-/// 
-/// Tox IDs can be in two formats:
-/// - 64 characters: Public key (32 bytes in hex)
-/// - 76 characters: Full address (64 bytes public key + 4 bytes nospam + 2 bytes checksum)
-/// 
-/// This utility provides functions to normalize IDs for consistent comparison and lookup.
+// Tox IDs come in two widths: 64-char public key (32 bytes hex), and 76-char full
+// address (public key + nospam + checksum). Normalize to public-key form for lookup
+// and comparison so the two representations don't fork into separate cache buckets.
 
 /// Normalizes a Tox friend/user ID to 64 characters (public key length).
-/// 
+///
 /// Tox friend IDs are 64 characters (public key, 32 bytes in hex).
 /// If the ID is 76 characters (full address), extracts the first 64 characters (public key).
 /// If longer, extracts only the first 64 characters.
 /// If shorter, returns as is (might be a partial ID or different format).
-/// 
+///
 /// Parameters:
 /// - [id]: The user ID to normalize
-/// 
+///
 /// Returns:
 /// - Normalized ID (64 characters if original was longer, otherwise unchanged)
 String normalizeToxId(String id) {
   final trimmed = id.trim();
-  return trimmed.length > 64 ? trimmed.substring(0, 64) : trimmed;
+  if (trimmed.length == 76) return trimmed.substring(0, 64);
+  if (trimmed.length > 64) return trimmed.substring(0, 64);
+  return trimmed;
+}
+
+/// Canonical Tox public-key extractor.
+///
+/// Tox public keys are 64 hex chars; full Tox IDs are 76 hex chars
+/// (64 pubkey + 8 nospam + 4 checksum). Callers that need a stable
+/// identity for routing, history, or friend lookup want the 64-char
+/// public-key form regardless of which they were handed.
+///
+/// Behaviour (preserve historical safety — never throws):
+///   * Strip whitespace, lower-case (hex is case-insensitive).
+///   * 76 chars → first 64.
+///   * 64 chars → returned as-is.
+///   * Anything else → returned unchanged (lowercased + trimmed) so
+///     non-hex placeholders, group IDs, and short test fixtures still
+///     round-trip the way pre-existing call sites expected.
+String toToxPublicKey(String input) {
+  final cleaned = input.trim().toLowerCase();
+  if (cleaned.length == 76) return cleaned.substring(0, 64);
+  if (cleaned.length > 64) return cleaned.substring(0, 64);
+  return cleaned;
 }
 
 /// Compares two Tox IDs for equality after normalization.

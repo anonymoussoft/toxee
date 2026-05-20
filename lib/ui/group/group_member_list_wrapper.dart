@@ -7,6 +7,7 @@ import '../../i18n/app_localizations.dart';
 import '../../sdk_fake/fake_uikit_core.dart';
 import '../../sdk_fake/uikit_data_facade.dart';
 import '../../util/group_member_last_seen_cache.dart';
+import '../../util/logger.dart';
 import '../../util/responsive_layout.dart';
 import '../widgets/empty_state_widget.dart';
 import '../widgets/loading_shimmer.dart';
@@ -135,8 +136,9 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
         if (ffi != null) {
           await ffi.messageHistoryPersistence.loadHistory(groupID);
         }
-      } catch (_) {
-        // Ignore load errors; time map will be empty
+      } catch (e) {
+        AppLogger.warn(
+            '[GroupMemberListWrapper] history load failed; time map will be empty: $e');
       }
       if (!mounted || groupID != widget.groupInfo.groupID) return;
       final timeMap = _buildLastMessageTimeMap(groupID);

@@ -107,7 +107,10 @@ class _PairingClientPageState extends State<PairingClientPage> {
         } finally {
           try {
             await File(tmpPath).delete();
-          } catch (_) {}
+          } catch (e) {
+            AppLogger.warn(
+                '[PairingClientPage] failed to delete temp incoming profile $tmpPath: $e');
+          }
         }
       },
     );
@@ -116,7 +119,9 @@ class _PairingClientPageState extends State<PairingClientPage> {
     // Stop the camera so the preview doesn't fight us during handshake.
     try {
       await _scannerController?.stop();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('[PairingClientPage] scanner stop failed: $e');
+    }
     try {
       await client.connect(url);
     } catch (e, st) {
