@@ -175,17 +175,13 @@ class _IrcChannelDialogState extends State<IrcChannelDialog> {
                             ElevatedButton(
                               onPressed: () {
                                 if (_formKey.currentState!.validate()) {
+                                  // _validateChannel already enforces a leading
+                                  // `#` or `&` — no normalization needed here.
                                   final channel = _channelController.text.trim();
-                                  // Ensure channel starts with # or &
-                                  final normalizedChannel =
-                                      (channel.startsWith('#') || channel.startsWith('&'))
-                                          ? channel
-                                          : '#$channel';
                                   final password = _passwordController.text.trim();
                                   final nickname = _nicknameController.text.trim();
-                                  // Return channel, password, and nickname as a record
                                   Navigator.of(context).pop((
-                                    channel: normalizedChannel,
+                                    channel: channel,
                                     password: password.isEmpty ? null : password,
                                     nickname: nickname.isEmpty ? null : nickname,
                                   ));
