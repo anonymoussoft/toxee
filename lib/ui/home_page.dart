@@ -41,7 +41,6 @@ import 'contact/contact_builder_override.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile_body.dart';
 import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
-import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import '../i18n/app_localizations.dart';
 import '../util/logger.dart';
 import 'package:tencent_cloud_chat_common/components/component_event_handlers/tencent_cloud_chat_contact_event_handlers.dart';
@@ -74,6 +73,7 @@ import 'settings/settings_page.dart';
 import 'settings/sidebar.dart';
 import 'applications/applications_page.dart';
 import 'home/home_utils.dart';
+import 'home/toxee_message_header_info.dart';
 import '../util/app_theme_config.dart';
 import '../util/app_tray.dart';
 import '../util/bootstrap_nodes.dart';
@@ -82,6 +82,7 @@ import '../util/send_failure_notifier.dart';
 import '../util/platform_utils.dart';
 import 'add_friend_dialog.dart';
 import 'add_group_dialog.dart';
+import 'home/home_group_controller.dart';
 import 'home/home_session_controller.dart';
 import 'home/home_widgets.dart';
 import '../util/irc_app_manager.dart';
@@ -168,6 +169,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   GroupProfileBuilderOverrideHandle? _groupBuilderOverride;
   String? _initErrorMessage;
   late final HomeSessionController _sessionController;
+  late final HomeGroupController _groupController;
   // Tracks the last computed `shouldShowMasterDetail` so we only schedule the
   // UIKit `setConfigs(forceDesktopLayout: ...)` post-frame callback when the
   // breakpoint actually crosses, instead of on every rebuild.
@@ -183,6 +185,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _sessionController = HomeSessionController(service: widget.service);
+    _groupController = HomeGroupController(
+      ops: GroupSyncOps.real(
+        getKnownGroups: () => widget.service.knownGroups,
+        onUpdateTray: _updateTray,
+      ),
+    );
     WidgetsBinding.instance.addObserver(this);
     _bag.add(() => WidgetsBinding.instance.removeObserver(this));
     // HYBRID MODE: Using both binary replacement (for most operations) and Platform interface (for history queries)
@@ -1594,205 +1602,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// Load persisted groups into UIKit on app startup
   /// This ensures groups are visible in the group list even if contacts haven't been refreshed yet
-  Future<void> _loadPersistedGroupsIntoUIKit() async {
-    try {
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Loading persisted groups');
-      
-      // Load groups directly from Prefs instead of relying on service.knownGroups
-      // This ensures we get groups even if service.init() hasn't completed yet
-      final savedGroups = await Prefs.getGroups();
-      final quitGroups = await Prefs.getQuitGroups();
-      // Only load groups that are not in quit list
-      final activeGroups = savedGroups.where((g) => !quitGroups.contains(g)).toSet();
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Loaded ${activeGroups.length} groups from Prefs (savedGroups=${savedGroups.length}, quitGroups=${quitGroups.length})');
-      
-      // Also try to get groups from service (in case init() has completed)
-      final knownGroups = widget.service.knownGroups;
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: knownGroups from service: ${knownGroups.length} groups');
-      
-      // Merge both sources to ensure we have all groups
-      final allGroups = {...activeGroups, ...knownGroups};
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Total groups to load: ${allGroups.length}');
-      
-      // Load group info for each group and add to UIKit
-      for (final gid in allGroups) {
-        // resolveGroupDisplayName picks alias > canonical name > gid so UIKit
-        // always shows the user's locally-chosen label when one was set.
-        final displayName = await Prefs.resolveGroupDisplayName(gid);
-        final savedAvatar = await Prefs.getGroupAvatar(gid);
-        final groupInfo = V2TimGroupInfo(
-          groupID: gid,
-          groupType: "work",
-          groupName: displayName == gid ? null : displayName,
-          faceUrl: savedAvatar,
-        );
-        // addGroupInfoToJoinedGroupList will check if group already exists and update it if needed
-        UikitDataFacade.addGroupInfoToJoinedGroupList(groupInfo);
-      }
+  Future<void> _loadPersistedGroupsIntoUIKit() =>
+      _groupController.loadPersistedGroupsIntoUIKit();
 
-      // Also call getGroupList() to refresh the list from SDK
-      // However, we need to preserve existing groups because SDK may not know about historical groups
-      // Save existing groups before calling getGroupList()
-      final groupsBeforeSDK = List<V2TimGroupInfo>.from(UikitDataFacade.groupList);
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Groups before getGroupList(): ${groupsBeforeSDK.length}, groupIds=${groupsBeforeSDK.map((g) => '${g.groupID}(${g.groupName})').toList()}');
-
-      await TencentCloudChat.instance.chatSDKInstance.contactSDK.getGroupList();
-
-      final sdkGroupList = UikitDataFacade.groupList;
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: SDK returned ${sdkGroupList.length} groups: ${sdkGroupList.map((g) => '${g.groupID}(${g.groupName})').toList()}');
-      
-      // Use quitGroups that was already loaded earlier (line 1836)
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Quit groups: ${quitGroups.toList()}');
-      
-      // Merge SDK groups with existing groups to preserve historical groups.
-      // When our source of truth (Prefs + service) has no groups (e.g. new account after logout),
-      // do not merge in groupsBeforeSDK — they are stale from the previous account.
-      final groupsMap = <String, V2TimGroupInfo>{};
-      if (allGroups.isNotEmpty) {
-        // First add existing groups from UIKit (filter out quit groups and empty groupIDs)
-        for (final group in groupsBeforeSDK) {
-          if (group.groupID.isEmpty) continue; // Skip entries with empty groupID
-          if (!quitGroups.contains(group.groupID)) {
-            groupsMap[group.groupID] = group;
-          } else {
-            if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Filtering out quit group: ${group.groupID}');
-          }
-        }
-      }
-      // Then add/update with SDK groups (SDK groups take precedence, but filter out quit groups and empty groupIDs)
-      for (final group in sdkGroupList) {
-        if (group.groupID.isEmpty) continue; // Skip entries with empty groupID
-        if (!quitGroups.contains(group.groupID)) {
-          groupsMap[group.groupID] = group;
-        } else {
-          if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Filtering out quit group from SDK list: ${group.groupID}');
-        }
-      }
-
-      final mergedGroups = groupsMap.values.toList();
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Merged ${mergedGroups.length} groups: ${mergedGroups.map((g) => '${g.groupID}(${g.groupName})').toList()}');
-      
-      // Update with merged groups
-      UikitDataFacade.buildGroupList(mergedGroups, '_loadPersistedGroupsIntoUIKit_merge');
-
-      final finalGroupList = UikitDataFacade.groupList;
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Final groupList length=${finalGroupList.length}, groupIds=${finalGroupList.map((g) => g.groupID).toList()}');
-      
-      // Refresh conversations to ensure conversation list is in sync with group list
-      // This is critical for startup scenario to ensure data consistency
-      if (kDebugMode) debugPrint('[HomePage] _loadPersistedGroupsIntoUIKit: Refreshing conversations to sync with group list');
-      await FakeUIKit.instance.im?.refreshConversations();
-    } catch (e, stackTrace) {
-      AppLogger.logError('[HomePage] _loadPersistedGroupsIntoUIKit: Error loading groups', e, stackTrace);
-    }
-  }
-
-  Future<void> _handleGroupChanged(String groupId, {String? displayName}) async {
-    if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: groupId=$groupId, displayName=$displayName');
-    if (displayName != null && displayName.isNotEmpty) {
-      await Prefs.setGroupName(groupId, displayName);
-    }
-    
-    // Clear UIKit's in-memory message list for this group ID.
-    // When a group ID is reused (e.g., quit tox_7 then create new tox_7),
-    // UIKit's _messageListMap may still hold old messages from the previous group.
-    UikitDataFacade.clearMessageList(groupID: groupId);
-
-    // CRITICAL: Save existing groups before calling getGroupList()
-    // This is necessary because buildGroupList() clears the entire list and only keeps SDK-returned groups
-    // SDK may not know about historical groups, so we need to preserve them
-    final existingGroups = List<V2TimGroupInfo>.from(UikitDataFacade.groupList);
-    if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Saved ${existingGroups.length} existing groups before getGroupList: ${existingGroups.map((g) => '${g.groupID}(${g.groupName})').toList()}');
-
-    // Delete old group info from UIKit first to ensure clean state
-    // This is important when group ID is reused (e.g., numeric IDs)
-    UikitDataFacade.deleteGroupInfoFromJoinedGroupList(groupId);
-    
-    // Refresh group list in UIKit first to ensure we have the latest list from SDK
-    // However, we need to merge SDK groups with existing groups to preserve historical groups
-    try {
-      if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Calling getGroupList()');
-      await TencentCloudChat.instance.chatSDKInstance.contactSDK.getGroupList();
-      final sdkGroupList = UikitDataFacade.groupList;
-      if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: After getGroupList(), SDK returned ${sdkGroupList.length} groups: ${sdkGroupList.map((g) => '${g.groupID}(${g.groupName})').toList()}');
-      
-      // Merge SDK groups with existing groups (excluding the group being updated)
-      // This preserves historical groups that SDK doesn't know about
-      final existingGroupsMap = <String, V2TimGroupInfo>{};
-      for (final group in existingGroups) {
-        if (group.groupID.isEmpty) continue; // Skip entries with empty groupID
-        if (group.groupID != groupId) { // Exclude the group being updated
-          existingGroupsMap[group.groupID] = group;
-        }
-      }
-
-      // Add SDK groups to the map (they will override existing groups with same ID)
-      for (final group in sdkGroupList) {
-        if (group.groupID.isEmpty) continue; // Skip entries with empty groupID
-        existingGroupsMap[group.groupID] = group;
-      }
-      
-      // Rebuild the merged list
-      final mergedGroups = existingGroupsMap.values.toList();
-      if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Merged ${mergedGroups.length} groups (${existingGroups.length} existing + ${sdkGroupList.length} SDK): ${mergedGroups.map((g) => '${g.groupID}(${g.groupName})').toList()}');
-      
-      // Update the group list with merged groups
-      UikitDataFacade.buildGroupList(mergedGroups, '_handleGroupChanged_merge');
-    } catch (e) {
-      if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: getGroupList() failed: $e');
-    }
-    // Update group info in UIKit to ensure it has the latest data (including cleared avatar)
-    // This is called after getGroupList() to ensure the new group is added even if getGroupList
-    // didn't include it (e.g., due to timing issues).
-    // resolveGroupDisplayName picks alias > canonical name > gid; when no
-    // alias/name is set we pass `null` to UIKit (gid is fallback, not a
-    // real name) so UIKit doesn't display the raw id as a label.
-    final resolvedName = await Prefs.resolveGroupDisplayName(groupId);
-    final savedAvatar = await Prefs.getGroupAvatar(groupId);
-    final groupInfo = V2TimGroupInfo(
-      groupID: groupId,
-      groupType: "work",
-      groupName: resolvedName == groupId ? null : resolvedName,
-      faceUrl: savedAvatar, // This will be null if cleared, ensuring UIKit doesn't use old avatar
-    );
-    if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Adding groupInfo: groupID=${groupInfo.groupID}, groupName=${groupInfo.groupName}');
-    UikitDataFacade.addGroupInfoToJoinedGroupList(groupInfo);
-    final afterAddGroupList = UikitDataFacade.groupList;
-    if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: After addGroupInfoToJoinedGroupList(), groupList length=${afterAddGroupList.length}, groupIds=${afterAddGroupList.map((g) => g.groupID).toList()}');
-    
-    // Ensure group is in knownGroups and persisted before refreshing conversations
-    // This ensures refreshConversations() can find the new group
-    if (!widget.service.knownGroups.contains(groupId)) {
-      if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Group $groupId not in knownGroups, ensuring it is added');
-      // The group should already be in knownGroups from createGroup, but double-check
-      // If not, we need to ensure it's added (though this shouldn't happen)
-    }
-    
-    // Ensure group is persisted to Prefs before refreshing conversations
-    final currentPersistedGroups = await Prefs.getGroups();
-    if (!currentPersistedGroups.contains(groupId)) {
-      if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Group $groupId not in persisted groups, adding it');
-      currentPersistedGroups.add(groupId);
-      await Prefs.setGroups(currentPersistedGroups);
-    }
-    
-    // Small delay to ensure persistence is complete
-    await Future.delayed(const Duration(milliseconds: 50));
-
-    // CRITICAL: Unblock the conversation in FakeChatDataProvider.
-    // deleteGroupInfoFromJoinedGroupList (above) fires a quitGroup event which adds
-    // this conversation to _sdkDeletedConvIds, preventing it from being rebuilt with
-    // proper showName. Remove it so refreshConversations can re-create it correctly.
-    final provider = ChatDataProviderRegistry.provider;
-    if (provider is FakeChatDataProvider) {
-      provider.unblockConversation('group_$groupId');
-    }
-
-    // Refresh conversations to update conversation list
-    if (kDebugMode) debugPrint('[HomePage] _handleGroupChanged: Refreshing conversations to add group $groupId to conversation list');
-    await FakeUIKit.instance.im?.refreshConversations();
-    await _updateTray();
-  }
+  Future<void> _handleGroupChanged(String groupId, {String? displayName}) =>
+      _groupController.handleGroupChanged(groupId, displayName: displayName);
 
   /// Dialog inset on narrow phones — Flutter's default symmetric(40, 24)
   /// leaves only ~240pt of usable width on a 320pt iPhone SE, which
