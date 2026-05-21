@@ -227,11 +227,35 @@ class PasswordVerifier {
     final storedHash = '$pbkdf2Prefix${base64Encode(hashBytes)}';
     final storedSalt = base64Encode(salt);
 
+    // Snapshot any prior secure-storage state so we can restore it if one
+    // of the two writes below fails. Without this, a partial success
+    // (hash persisted but salt write swallowed, or vice versa) leaves the
+    // pair desynchronized: verifyPassword would then mix new-hash + legacy-
+    // salt (or old-hash + new-salt) and the password would be permanently
+    // unverifiable. This is the closest we can get to atomicity with the
+    // flutter_secure_storage API surface (no transactions).
+    final priorHash = await _secureStorage.read(secureHashKey(toxId));
+    final priorSalt = await _secureStorage.read(secureSaltKey(toxId));
+
     final hashWrote = await _secureStorage.write(secureHashKey(toxId), storedHash);
     final saltWrote = await _secureStorage.write(secureSaltKey(toxId), storedSalt);
     if (!hashWrote || !saltWrote) {
-      // Secure storage refused. Don't touch the legacy plain-prefs entries —
-      // they remain the only durable copy until secure storage works again.
+      // Best-effort rollback: restore the snapshot. If the restore writes
+      // themselves fail, we're no worse off than the partial-write state
+      // we entered with — but most platforms either accept all writes or
+      // reject all (MissingPluginException, sandbox denial), so a
+      // restorable rollback is typical. Don't touch the legacy plain-prefs
+      // entries either way; they remain the durable fallback.
+      if (priorHash != null && priorHash.isNotEmpty) {
+        await _secureStorage.write(secureHashKey(toxId), priorHash);
+      } else {
+        await _secureStorage.delete(secureHashKey(toxId));
+      }
+      if (priorSalt != null && priorSalt.isNotEmpty) {
+        await _secureStorage.write(secureSaltKey(toxId), priorSalt);
+      } else {
+        await _secureStorage.delete(secureSaltKey(toxId));
+      }
       return false;
     }
     // Drop legacy plain-prefs entries if a prior install left them behind.
