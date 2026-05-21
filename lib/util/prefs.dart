@@ -1,38 +1,23 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
-import 'dart:math';
 import 'dart:ui';
 import 'package:collection/collection.dart';
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, PlatformException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:crypto/crypto.dart' as crypto;
 
 import 'logger.dart';
 import 'tox_utils.dart';
 import '../models/account_summary.dart';
+import 'prefs/password_verifier.dart';
 import 'prefs/scoped_key.dart';
 
 part 'prefs/window_prefs.dart';
 part 'prefs/security_prefs.dart';
 part 'prefs/account_prefs.dart';
 part 'prefs/chat_prefs.dart';
-
-/// Length-invariant XOR-accumulation equality. Used only for password-hash
-/// comparison to defeat timing side channels — never short-circuits on a
-/// mismatched byte. Returns false up-front on length mismatch (length is
-/// not the secret).
-bool _constantTimeEquals(String a, String b) {
-  if (a.length != b.length) return false;
-  var x = 0;
-  for (var i = 0; i < a.length; i++) {
-    x |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
-  }
-  return x == 0;
-}
 
 /// Static facade for app preferences. New code should prefer repository instances
 /// ([PrefsImpl] or [prefs_interfaces.dart] interfaces) for testability and bounded context.
@@ -91,15 +76,6 @@ class Prefs {
   // Contact list sorting
   static const _kFriendListSortingMode = 'friend_list_sorting_mode'; // 'name' | 'activity'
   static String _friendActivityKey(String userId) => 'friend_activity_$userId';
-
-  // Password salt key prefix
-  static const _kPasswordSaltPrefix = 'account_password_salt_';
-  static String _passwordSaltKey(String toxId) => '$_kPasswordSaltPrefix$toxId';
-
-  /// PBKDF2 stored hash prefix (new format); without it we treat as legacy SHA256.
-  static const _kPbkdf2Prefix = 'pbkdf2:';
-  static const int _pbkdf2Iterations = 150000;
-  static const int _pbkdf2Bits = 256;
 
   // Per-account settings keys (scoped by account prefix, replacing JSON storage)
   static const _kAccountAutoAcceptFriends = 'acct_auto_accept_friends';
@@ -1231,8 +1207,8 @@ class Prefs {
     }
 
     // 2) Remove only this account's password-related keys
-    keysToRemove.add(_accountPasswordKey(toxId));
-    keysToRemove.add(_passwordSaltKey(toxId));
+    keysToRemove.add(PasswordVerifier.legacyHashKey(toxId));
+    keysToRemove.add(PasswordVerifier.legacySaltKey(toxId));
 
     // 3) Legacy single-account keys: clear when deleting current account, or when
     //    logged out (so deleting an account from login page does not leave stale
@@ -1454,63 +1430,6 @@ class Prefs {
 
   // Account list management for multiple accounts
   static const _kAccountList = 'account_list'; // JSON array of account info
-
-  // Legacy SharedPreferences keys for password hash + salt. Kept ONLY for
-  // read-time migration into secure storage; new writes never touch these.
-  // Both forms (`account_password_<toxId>` hash, `account_password_salt_<toxId>`
-  // salt) were stored as plain text in SharedPreferences and would otherwise
-  // sync to iCloud on iOS and sit as world-readable XML on rooted Android.
-  static String _accountPasswordKey(String toxId) => 'account_password_$toxId';
-
-  // Secure-storage keys (Keychain on iOS/macOS, Keystore on Android, libsecret/
-  // DPAPI on Linux/Windows). flutter_secure_storage defaults to
-  // kSecAttrAccessibleWhenUnlocked (non-iCloud-synced) on Apple platforms.
-  static String _securePasswordKey(String toxId) => 'pwd_$toxId';
-  static String _securePasswordSaltKey(String toxId) => 'pwd_salt_$toxId';
-
-  /// Read PBKDF2 hash from secure storage, migrating any legacy plain-prefs
-  /// value into the secure store on first hit. Returns null when no password
-  /// is set for the account.
-  static Future<String?> _readPasswordHashWithMigration(String toxId) async {
-    if (toxId.isEmpty) return null;
-    final secureKey = _securePasswordKey(toxId);
-    final fromSecure = await _secureRead(secureKey);
-    if (fromSecure != null && fromSecure.isNotEmpty) return fromSecure;
-    // Migrate from legacy SharedPreferences (S1: was plain-text on disk).
-    // Only remove the legacy entry once the secure write actually persisted —
-    // a swallowed keychain failure here would lose the user's password hash.
-    final p = await _getPrefs();
-    final legacy = p.getString(_accountPasswordKey(toxId));
-    if (legacy != null && legacy.isNotEmpty) {
-      final wrote = await _secureWrite(secureKey, legacy);
-      if (wrote) {
-        await p.remove(_accountPasswordKey(toxId));
-      }
-      return legacy;
-    }
-    return null;
-  }
-
-  /// Read salt from secure storage, migrating from legacy plain prefs when
-  /// present. Returns null when no salt is stored.
-  static Future<String?> _readPasswordSaltWithMigration(String toxId) async {
-    if (toxId.isEmpty) return null;
-    final secureKey = _securePasswordSaltKey(toxId);
-    final fromSecure = await _secureRead(secureKey);
-    if (fromSecure != null && fromSecure.isNotEmpty) return fromSecure;
-    final p = await _getPrefs();
-    final legacy = p.getString(_passwordSaltKey(toxId));
-    if (legacy != null && legacy.isNotEmpty) {
-      // Only drop the legacy salt once the secure write actually persisted —
-      // losing the salt while keeping the hash makes the password unverifiable.
-      final wrote = await _secureWrite(secureKey, legacy);
-      if (wrote) {
-        await p.remove(_passwordSaltKey(toxId));
-      }
-      return legacy;
-    }
-    return null;
-  }
 
   /// Account info structure: {toxId (required), nickname, statusMessage, lastLoginTime?, avatarPath?, autoLogin?, ...}
   /// toxId is the primary key for account identification
@@ -1767,18 +1686,32 @@ class Prefs {
   // Account password management — secure-storage backed since S1 review.
   // Hash + salt live in flutter_secure_storage (Keychain / Keystore / libsecret
   // / DPAPI). Any pre-existing plain-prefs values get migrated on first read.
+  //
+  // The actual PBKDF2/SHA-256 + legacy-migration logic lives in
+  // `PasswordVerifier` (`prefs/password_verifier.dart`). The methods on
+  // `Prefs` are kept for callers that already depend on the static facade
+  // and simply delegate to a `PasswordVerifier` wired up to the same
+  // secure storage + the legacy SharedPreferences entries.
+
+  /// `PasswordVerifier` configured to use the app's keychain-backed
+  /// secure storage and the `SharedPreferences`-backed legacy migration
+  /// adapter. Lazily constructed on first use.
+  static PasswordVerifier? _passwordVerifier;
+  static PasswordVerifier _verifier() {
+    return _passwordVerifier ??= PasswordVerifier(
+      secureStorage: FlutterSecureStorageFacade(_secureStorage),
+      legacyStore: SharedPreferencesLegacyPasswordStore(_getPrefs),
+    );
+  }
 
   /// Check if an account has a password set.
-  static Future<bool> hasAccountPassword(String toxId) async {
-    if (toxId.isEmpty) return false;
-    return (await _readPasswordHashWithMigration(toxId)) != null;
-  }
+  static Future<bool> hasAccountPassword(String toxId) =>
+      _verifier().hasPassword(toxId);
 
   /// Get account password hash (for verification). Migrates legacy plain-prefs
   /// values into secure storage on first read.
-  static Future<String?> getAccountPasswordHash(String toxId) async {
-    return _readPasswordHashWithMigration(toxId);
-  }
+  static Future<String?> getAccountPasswordHash(String toxId) =>
+      _verifier().getPasswordHash(toxId);
 
   /// Set account password (stores PBKDF2 hash + salt in secure storage).
   /// New accounts use PBKDF2; legacy SHA256 hashes are migrated on next
@@ -1789,42 +1722,8 @@ class Prefs {
   /// the legacy plain-prefs entries are intentionally left intact so a
   /// subsequent attempt can recover). The empty-password short-circuit
   /// (which removes any existing password) returns true on full cleanup.
-  static Future<bool> setAccountPassword(String toxId, String password) async {
-    if (toxId.isEmpty) {
-      throw ArgumentError('toxId cannot be empty');
-    }
-    if (password.isEmpty) {
-      return removeAccountPassword(toxId);
-    }
-    final salt = List<int>.generate(32, (_) => Random.secure().nextInt(256));
-    final pbkdf2 = Pbkdf2(
-      macAlgorithm: Hmac.sha256(),
-      iterations: _pbkdf2Iterations,
-      bits: _pbkdf2Bits,
-    );
-    final secretKey = await pbkdf2.deriveKeyFromPassword(
-      password: password,
-      nonce: salt,
-    );
-    final hashBytes = await secretKey.extractBytes();
-    final storedHash = '$_kPbkdf2Prefix${base64Encode(hashBytes)}';
-    final storedSalt = base64Encode(salt);
-
-    final hashWrote = await _secureWrite(_securePasswordKey(toxId), storedHash);
-    final saltWrote = await _secureWrite(_securePasswordSaltKey(toxId), storedSalt);
-    if (!hashWrote || !saltWrote) {
-      // Secure storage refused. Don't touch the legacy plain-prefs entries —
-      // they remain the only durable copy until secure storage works again.
-      return false;
-    }
-    // Drop legacy plain-prefs entries if a prior install left them behind.
-    final p = await _getPrefs();
-    await Future.wait([
-      p.remove(_accountPasswordKey(toxId)),
-      p.remove(_passwordSaltKey(toxId)),
-    ]);
-    return true;
-  }
+  static Future<bool> setAccountPassword(String toxId, String password) =>
+      _verifier().setPassword(toxId, password);
 
   /// Remove account password and its salt from both secure storage and any
   /// remaining legacy SharedPreferences entries.
@@ -1833,84 +1732,15 @@ class Prefs {
   /// plain-prefs entries were also cleared); false when either secure
   /// delete was swallowed, in which case the legacy entries are left in
   /// place so we don't destroy the last remaining copy.
-  static Future<bool> removeAccountPassword(String toxId) async {
-    if (toxId.isEmpty) return true;
-    final hashDeleted = await _secureDelete(_securePasswordKey(toxId));
-    final saltDeleted = await _secureDelete(_securePasswordSaltKey(toxId));
-    if (!hashDeleted || !saltDeleted) {
-      return false;
-    }
-    final p = await _getPrefs();
-    await Future.wait([
-      p.remove(_accountPasswordKey(toxId)),
-      p.remove(_passwordSaltKey(toxId)),
-    ]);
-    return true;
-  }
+  static Future<bool> removeAccountPassword(String toxId) =>
+      _verifier().removePassword(toxId);
 
   /// Verify account password.
   /// Supports PBKDF2 (new) and SHA256 salted/unsalted (legacy); migrates legacy
   /// on success. Reads from secure storage with backward-compat plain-prefs
   /// migration.
-  static Future<bool> verifyAccountPassword(String toxId, String password) async {
-    if (toxId.isEmpty || password.isEmpty) return false;
-
-    final storedHash = await _readPasswordHashWithMigration(toxId);
-    if (storedHash == null) return false;
-    final saltBase64 = await _readPasswordSaltWithMigration(toxId);
-
-    if (storedHash.startsWith(_kPbkdf2Prefix)) {
-      if (saltBase64 == null) return false;
-      List<int> salt;
-      try {
-        salt = base64Decode(saltBase64);
-      } catch (_) {
-        return false;
-      }
-      final pbkdf2 = Pbkdf2(
-        macAlgorithm: Hmac.sha256(),
-        iterations: _pbkdf2Iterations,
-        bits: _pbkdf2Bits,
-      );
-      final secretKey = await pbkdf2.deriveKeyFromPassword(
-        password: password,
-        nonce: salt,
-      );
-      final hashBytes = await secretKey.extractBytes();
-      final expected = base64Encode(hashBytes);
-      final actual = storedHash.substring(_kPbkdf2Prefix.length);
-      return _constantTimeEquals(actual, expected);
-    }
-
-    // Legacy SHA256 (salted or unsalted) — migrate on success.
-    if (saltBase64 != null && saltBase64.isNotEmpty) {
-      final bytes = utf8.encode('$saltBase64$password');
-      final hash = crypto.sha256.convert(bytes);
-      if (storedHash == hash.toString()) {
-        final migrated = await setAccountPassword(toxId, password);
-        if (!migrated) {
-          // Verify still succeeded; the legacy hash remains valid for the
-          // next attempt. Surface the failure via print (main() reroutes
-          // print to AppLogger).
-          // ignore: avoid_print
-          print('[prefs] WARN: PBKDF2 migration after legacy salted-SHA256 verify failed for toxId=$toxId (secure storage unavailable); legacy entry retained.');
-        }
-        return true;
-      }
-      return false;
-    }
-    final bytes = utf8.encode(password);
-    final hash = crypto.sha256.convert(bytes);
-    if (storedHash == hash.toString()) {
-      final migrated = await setAccountPassword(toxId, password);
-      if (!migrated) {
-        // ignore: avoid_print
-        print('[prefs] WARN: PBKDF2 migration after legacy unsalted-SHA256 verify failed for toxId=$toxId (secure storage unavailable); legacy entry retained.');
-      }
-      return true;
-    }
-    return false;
-  }
+  static Future<bool> verifyAccountPassword(String toxId, String password) =>
+      _verifier().verifyPassword(toxId, password);
 
   // --- Window/layout state (desktop) ---
 
