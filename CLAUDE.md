@@ -41,6 +41,8 @@ dart run tool/check_complexity.dart   # warns on files in lib/ > 500 LOC
 flutter test
 flutter test test/call_bridge_service_test.dart            # single file
 flutter test --plain-name 'sends signaling on accept'      # single test by name
+flutter test integration_test/                              # E2E smoke (tagged `needs-native`; builds the host app first — needs libtim2tox_ffi built)
+flutter test integration_test/ --exclude-tags=needs-native  # Same but skip smokes when the native lib isn't built locally
 
 # Tim2Tox auto_tests local smoke (Tier 1; recommended before every push, ~2 min on M-series)
 # Tiers 2/3/4 run in CI — see third_party/tim2tox/auto_tests/README.en.md "CI pipeline".

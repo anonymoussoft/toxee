@@ -35,3 +35,36 @@ jobs:
 
       - name: Complexity guard
         run: dart run tool/check_complexity.dart
+
+      # Advisory coverage baseline. continue-on-error because 2 known test
+      # failures exist today; do not block PRs. TODO: once those are fixed,
+      # flip continue-on-error off and introduce a minimum-coverage gate.
+      - name: Flutter test with coverage (advisory)
+        continue-on-error: true
+        run: flutter test --coverage
+
+      - name: Summarize lcov coverage
+        continue-on-error: true
+        run: |
+          if [ ! -f coverage/lcov.info ]; then
+            echo "no coverage report"
+            exit 0
+          fi
+          awk 'BEGIN { lh=0; lf=0 }
+               /^LH:/ { lh += substr($0, 4) + 0 }
+               /^LF:/ { lf += substr($0, 4) + 0 }
+               END {
+                 if (lf == 0) {
+                   printf "lines hit: %d / lines found: 0 (no instrumented lines)\n", lh
+                 } else {
+                   printf "lines hit: %d / lines found: %d (%.2f%%)\n", lh, lf, (lh*100.0)/lf
+                 }
+               }' coverage/lcov.info
+
+      - name: Upload coverage artifact
+        if: ${{ hashFiles('coverage/lcov.info') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: toxee-coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: ignore

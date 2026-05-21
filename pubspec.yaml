@@ -68,6 +68,14 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Provides the `integration_test` package so the smoke under
+  # `integration_test/` can use `IntegrationTestWidgetsFlutterBinding` (the
+  # current smoke uses `TestWidgetsFlutterBinding` for hermeticity — see
+  # the header comment in `integration_test/app_smoke_test.dart` — but a
+  # follow-up on-device smoke can opt into the integration binding without
+  # re-doing the pubspec dance).
+  integration_test:
+    sdk: flutter
   flutter_lints: ^3.0.2
   flutter_launcher_icons: ^0.14.4
   msix: ^3.16.8

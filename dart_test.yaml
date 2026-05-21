@@ -1,0 +1,8 @@
+# Declared test tags. Run `flutter test --exclude-tags=needs-native` to skip
+# tests that require the libtim2tox_ffi native lib or a host platform binary.
+tags:
+  needs-native:
+    description: >-
+      Requires the libtim2tox_ffi native library to be built and present on the
+      runtime loader path, and (for integration_test) a host platform binary
+      (macOS/Linux/Windows) or simulator/emulator (iOS/Android).

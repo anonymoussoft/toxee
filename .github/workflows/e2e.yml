@@ -1,0 +1,195 @@
+name: E2E Smoke (integration_test)
+
+# Opt-in E2E run of the integration_test/ smoke against the toxee Flutter app.
+# Phase 2 of the rollout plan in doc/architecture/E2E_TESTING.en.md.
+#
+# Why label-gated:
+#   `flutter test integration_test/` builds a real host platform binary
+#   (linking libtim2tox_ffi) before running. That's slow and on macOS the
+#   resulting binary launches inside the app sandbox. Rather than pay that
+#   cost on every PR, we opt-in per-PR via the `ci:e2e` label, mirroring the
+#   `ci:full` pattern used by auto_tests_full.yml.
+#
+# Trigger:
+#   - workflow_dispatch (manual)
+#   - pull_request labeled `ci:e2e` (and re-runs on subsequent pushes while
+#     the label remains). Add with: gh pr edit <N> --add-label ci:e2e
+#
+# Matrix: ubuntu-24.04 + macos-14. Windows deferred — the smoke uses macOS
+# sandbox paths and hasn't been validated on Windows yet.
+#
+# Release branches: intentionally no `push: branches: [release/**]` trigger.
+# auto_tests_full.yml owns the release-branch heavy run; the E2E smoke is
+# still opt-in per release PR via the same `ci:e2e` label.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-smoke:
+    name: e2e smoke (${{ matrix.os }})
+    # PR runs are opt-in via the `ci:e2e` label. workflow_dispatch always runs.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:e2e')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            clang \
+            libgtk-3-dev \
+            liblzma-dev \
+            libstdc++-12-dev \
+            libsodium-dev \
+            libopus-dev \
+            libvpx-dev \
+            libsqlite3-dev \
+            xvfb
+
+      - name: Install macOS native dependencies
+        if: runner.os == 'macOS'
+        run: |
+          # cmake, pkg-config, ninja typically pre-installed on macos-14;
+          # `brew install` is idempotent so re-running is cheap.
+          brew update
+          brew install libsodium opus libvpx cmake ninja pkg-config
+
+      - name: Enable Linux desktop
+        if: runner.os == 'Linux'
+        run: flutter config --enable-linux-desktop
+
+      - name: Enable macOS desktop
+        if: runner.os == 'macOS'
+        run: flutter config --enable-macos-desktop
+
+      - name: Bootstrap dependencies
+        run: dart run tool/bootstrap_deps.dart
+
+      - name: Install toxee Flutter packages
+        run: flutter pub get
+
+      - name: Build libtim2tox_ffi (Linux, debug + toxav)
+        if: runner.os == 'Linux'
+        run: bash tool/ci/build_tim2tox.sh --target linux --mode debug --toxav
+
+      - name: Build libtim2tox_ffi (macOS, debug + toxav)
+        if: runner.os == 'macOS'
+        run: bash tool/ci/build_tim2tox.sh --target macos --mode debug --toxav
+
+      - name: Stage libtim2tox_ffi.so for runtime loader (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          src_dir="$GITHUB_WORKSPACE/build/native-artifacts/linux"
+          if [[ ! -f "$src_dir/libtim2tox_ffi.so" ]]; then
+            echo "::error::libtim2tox_ffi.so not found under $src_dir"
+            ls -la "$src_dir" || true
+            exit 1
+          fi
+          echo "LD_LIBRARY_PATH=$src_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Pre-build macOS Toxee.app (so we can inject the dylib pre-launch)
+        if: runner.os == 'macOS'
+        # `flutter test integration_test/ -d macos` builds + launches Toxee.app as
+        # a Mach-O bundle. macOS System Integrity Protection strips DYLD_* env
+        # vars from .app children, so DYLD_LIBRARY_PATH is useless here. The
+        # dylib must live at `@loader_path` (Contents/MacOS/) before launch.
+        # Build the .app explicitly so the next step can inject the dylib
+        # before the test launches it. `flutter test` reuses this build.
+        run: flutter build macos --debug
+
+      - name: Bundle libtim2tox_ffi.dylib into Toxee.app (macOS)
+        if: runner.os == 'macOS'
+        # Mirrors tool/ci/package_artifacts.sh::package_macos() — the same
+        # copy + install_name_tool dance used by the release build. Keep in
+        # sync if that script changes.
+        run: |
+          set -euo pipefail
+          app_bundle="$GITHUB_WORKSPACE/build/macos/Build/Products/Debug/Toxee.app"
+          macos_dir="$app_bundle/Contents/MacOS"
+          native_dir="$GITHUB_WORKSPACE/build/native-artifacts/macos"
+          if [[ ! -d "$app_bundle" ]]; then
+            echo "::error::Toxee.app not found under $app_bundle"
+            exit 1
+          fi
+          if [[ ! -f "$native_dir/libtim2tox_ffi.dylib" ]]; then
+            echo "::error::libtim2tox_ffi.dylib not found under $native_dir"
+            ls -la "$native_dir" || true
+            exit 1
+          fi
+          cp "$native_dir/libtim2tox_ffi.dylib" "$macos_dir/"
+          sodium_lib="$(find "$native_dir" -maxdepth 1 -type f -name 'libsodium*.dylib' | head -n 1 || true)"
+          if [[ -n "$sodium_lib" ]]; then
+            cp "$sodium_lib" "$macos_dir/"
+            old_path="$(otool -L "$macos_dir/libtim2tox_ffi.dylib" | awk '/libsodium.*dylib/ {print $1; exit}' || true)"
+            new_name="$(basename "$sodium_lib")"
+            if [[ -n "$old_path" ]]; then
+              install_name_tool -change "$old_path" "@loader_path/$new_name" "$macos_dir/libtim2tox_ffi.dylib"
+            fi
+          fi
+          echo "Injected dylib(s) into $macos_dir:"
+          ls -la "$macos_dir"
+
+      - name: List Flutter devices
+        run: flutter devices
+
+      - name: Run integration_test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          mkdir -p build/e2e-logs
+          flutter test integration_test/ -d macos 2>&1 | tee build/e2e-logs/flutter_test_macos.log
+
+      - name: Run integration_test (Linux, under xvfb)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          mkdir -p build/e2e-logs
+          xvfb-run -a flutter test integration_test/ -d linux 2>&1 | tee build/e2e-logs/flutter_test_linux.log
+
+      - name: Upload E2E artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-artifacts-${{ matrix.os }}
+          if-no-files-found: warn
+          path: |
+            build/e2e-logs/
+            integration_test/**/*.png
+            integration_test/**/screenshots/
+            build/**/screenshots/

@@ -251,6 +251,12 @@ void main(List<String> args) async {
     overrides.writeln('    path: third_party/chat-uikit-flutter/$p');
   }
   overrides.writeln('  record_linux: ^1.2.1');
+  // integration_test (from the Flutter SDK) pins `file: 7.0.1`, while the
+  // path-pinned tencent_cloud_chat_intl still asks for `^6.1.2`. The two
+  // versions are API-compatible for the surfaces those packages use; pin
+  // the override here so `flutter pub get` resolves cleanly when the
+  // integration_test dev dependency is in pubspec.yaml.
+  overrides.writeln('  file: ^7.0.1');
   // Only rewrite when content differs, so we don't bump the mtime on no-op runs
   // (Flutter build scripts gate `flutter pub get` on pubspec_overrides.yaml freshness).
   final overridesFile = File('$repoRoot/pubspec_overrides.yaml');
