@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
-import 'package:tencent_cloud_chat_sdk/native_im/adapter/tim_manager.dart';
-import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
+import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
 import '../util/prefs.dart';
 import '../i18n/app_localizations.dart';
@@ -13,6 +12,7 @@ import '../util/responsive_layout.dart';
 import '../util/app_theme_config.dart';
 import '../util/logger.dart';
 import '../util/account_service.dart';
+import '../util/app_bootstrap_coordinator.dart';
 import '../util/app_spacing.dart';
 import 'home_page.dart';
 import 'widgets/app_page_route.dart';
@@ -21,8 +21,45 @@ import 'widgets/first_run_backup_wizard.dart';
 
 /// Standalone page for registering a new account (opened from login page).
 /// Mirrors the layout of [LoginSettingsPage]: AppBar with back + title, form in body.
+typedef _RegisterAccountFn = Future<RegisterResult> Function({
+  required String nickname,
+  required String statusMessage,
+  required String password,
+});
+
+typedef _RegisterBootSessionFn = Future<void> Function(FfiChatService service);
+
+typedef _RegisterTeardownSessionFn = Future<void> Function({
+  required FfiChatService service,
+  bool reEncryptProfile,
+});
+
+typedef _ShowFirstRunBackupWizardFn = Future<void> Function({
+  required BuildContext context,
+  required String toxId,
+  required String nickname,
+});
+
+typedef _NavigateToHomeFn = Future<void> Function(
+  BuildContext context,
+  FfiChatService service,
+);
+
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  const RegisterPage({
+    super.key,
+    this.registerAccount,
+    this.bootSession,
+    this.teardownSession,
+    this.showFirstRunBackupWizard,
+    this.navigateToHome,
+  });
+
+  final _RegisterAccountFn? registerAccount;
+  final _RegisterBootSessionFn? bootSession;
+  final _RegisterTeardownSessionFn? teardownSession;
+  final _ShowFirstRunBackupWizardFn? showFirstRunBackupWizard;
+  final _NavigateToHomeFn? navigateToHome;
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -46,6 +83,11 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _confirmPasswordFocused = false;
   bool _passwordObscure = true;
   bool _confirmPasswordObscure = true;
+  late final _RegisterAccountFn _registerAccount;
+  late final _RegisterBootSessionFn _bootSession;
+  late final _RegisterTeardownSessionFn _teardownSession;
+  late final _ShowFirstRunBackupWizardFn _showFirstRunBackupWizard;
+  late final _NavigateToHomeFn _navigateToHome;
 
   @override
   void dispose() {
@@ -63,6 +105,44 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   void initState() {
     super.initState();
+    _registerAccount = widget.registerAccount ??
+        ({
+          required String nickname,
+          required String statusMessage,
+          required String password,
+        }) =>
+            AccountService.registerNewAccount(
+              nickname: nickname,
+              statusMessage: statusMessage,
+              password: password,
+            );
+    _bootSession = widget.bootSession ?? AppBootstrapCoordinator.boot;
+    _teardownSession = widget.teardownSession ??
+        ({
+          required FfiChatService service,
+          bool reEncryptProfile = true,
+        }) =>
+            AccountService.teardownCurrentSession(
+              service: service,
+              reEncryptProfile: reEncryptProfile,
+            );
+    _showFirstRunBackupWizard = widget.showFirstRunBackupWizard ??
+        ({
+          required BuildContext context,
+          required String toxId,
+          required String nickname,
+        }) =>
+            FirstRunBackupWizard.show(
+              context,
+              toxId: toxId,
+              nickname: nickname,
+            ).then((_) {});
+    _navigateToHome = widget.navigateToHome ??
+        (BuildContext context, FfiChatService service) {
+          return Navigator.of(context).pushReplacement(AppPageRoute(
+            page: HomePage(service: service),
+          ));
+        };
     _nicknameController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -83,27 +163,11 @@ class _RegisterPageState extends State<RegisterPage> {
     });
   }
 
-  Future<void> _initTIMManagerSDK() async {
-    try {
-      if (TIMManager.instance.isInitSDK()) return;
-      final result = await TIMManager.instance.initSDK(
-        sdkAppID: 0,
-        logLevel: LogLevelEnum.V2TIM_LOG_INFO,
-        uiPlatform: 0,
-      );
-      if (!result) {
-        throw Exception(AppLocalizations.of(context)!.failedToInitializeTIMManager);
-      }
-    } catch (e, stackTrace) {
-      AppLogger.logError('[RegisterPage] Error initializing TIMManager SDK: $e', e, stackTrace);
-      rethrow;
-    }
-  }
-
   Future<void> _register() async {
     if (_busy) return;
     if (!_formKey.currentState!.validate()) return;
     final l10n = AppLocalizations.of(context)!;
+    RegisterResult? result;
     setState(() {
       _busy = true;
       _error = null;
@@ -115,16 +179,19 @@ class _RegisterPageState extends State<RegisterPage> {
         throw Exception(l10n.nicknameCannotBeEmpty);
       }
 
-      final result = await AccountService.registerNewAccount(
+      result = await _registerAccount(
         nickname: nickname,
         statusMessage: statusMessage,
         password: _passwordController.text,
       );
 
-      await _initTIMManagerSDK();
+      await _bootSession(result.service);
       await Prefs.getAccountList(); // refresh list
 
-      if (!mounted) return;
+      if (!mounted) {
+        await _teardownSession(service: result.service);
+        return;
+      }
 
       // First-run backup wizard: blocks navigation to HomePage until the user
       // either exports their .tox file or explicitly acknowledges the
@@ -133,19 +200,23 @@ class _RegisterPageState extends State<RegisterPage> {
       // not pass through here). Gated by the feature flag so we can flip
       // the wizard off in a hotfix if a user-reported issue appears.
       if (FeatureFlags.enableFirstRunBackupWizard) {
-        await FirstRunBackupWizard.show(
-          context,
+        await _showFirstRunBackupWizard(
+          context: context,
           toxId: result.toxId,
           nickname: nickname,
         );
-        if (!mounted) return;
+        if (!mounted) {
+          await _teardownSession(service: result.service);
+          return;
+        }
       }
 
       unawaited(HapticFeedback.lightImpact());
-      Navigator.of(context).pushReplacement(AppPageRoute(
-        page: HomePage(service: result.service),
-      ));
+      await _navigateToHome(context, result.service);
     } catch (e, stackTrace) {
+      if (result != null) {
+        await _teardownSession(service: result.service);
+      }
       AppLogger.logError('[RegisterPage] Register failed: $e', e, stackTrace);
       if (mounted) {
         unawaited(HapticFeedback.lightImpact());

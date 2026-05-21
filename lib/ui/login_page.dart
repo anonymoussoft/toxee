@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../util/app_spacing.dart';
@@ -24,9 +25,16 @@ import '../util/account_export_service.dart';
 import '../util/account_service.dart';
 import '../util/app_bootstrap_coordinator.dart';
 import '../util/feature_flags.dart';
+import '../util/logger.dart';
 import '../auth/login_use_case.dart';
 import 'login/login_page_controller.dart';
 import 'pairing/pairing_client_page.dart';
+
+typedef _BootSessionFn = Future<void> Function(FfiChatService service);
+typedef _TeardownSessionFn = Future<void> Function({
+  required FfiChatService service,
+  bool reEncryptProfile,
+});
 
 /// Returns the appropriate trailing chevron for the current text direction.
 /// In LTR locales this is `chevron_right`; in RTL locales it flips to
@@ -38,9 +46,18 @@ IconData _trailingChevron(BuildContext context) {
 }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, this.loginUseCase});
+  const LoginPage({
+    super.key,
+    this.loginUseCase,
+    this.loginPageController,
+    this.bootSession,
+    this.teardownSession,
+  });
 
   final LoginUseCase? loginUseCase;
+  final LoginPageController? loginPageController;
+  final _BootSessionFn? bootSession;
+  final _TeardownSessionFn? teardownSession;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -55,7 +72,10 @@ class _LoginPageState extends State<LoginPage> {
   FfiChatService? _service;
   List<Map<String, String>> _accountList = [];
   String? _verifiedPassword; // Password already verified by _quickLogin, avoids re-prompting in _login
+  String? _verifiedPasswordToxId;
   late final LoginPageController _loginController;
+  late final _BootSessionFn _bootSession;
+  late final _TeardownSessionFn _teardownSession;
   final TextEditingController _manualHostController = TextEditingController();
   final TextEditingController _manualPortController = TextEditingController();
   final TextEditingController _manualPubkeyController = TextEditingController();
@@ -75,7 +95,18 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    _loginController = LoginPageController(loginUseCase: widget.loginUseCase);
+    _loginController = widget.loginPageController ??
+        LoginPageController(loginUseCase: widget.loginUseCase);
+    _bootSession = widget.bootSession ?? AppBootstrapCoordinator.boot;
+    _teardownSession = widget.teardownSession ??
+        ({
+          required FfiChatService service,
+          bool reEncryptProfile = true,
+        }) =>
+            AccountService.teardownCurrentSession(
+              service: service,
+              reEncryptProfile: reEncryptProfile,
+            );
     // Listen to text changes to update UI
     _nicknameController.addListener(() {
       if (mounted) setState(() {});
@@ -237,30 +268,56 @@ class _LoginPageState extends State<LoginPage> {
     final toxId = account['toxId'];
     if (toxId == null || toxId.isEmpty) return;
 
+    final cachedVerifiedPassword =
+        _verifiedPasswordToxId == toxId ? _verifiedPassword : null;
     // Check if account has password
-    final hasPassword = await Prefs.hasAccountPassword(toxId);
+    final hasPassword = (cachedVerifiedPassword != null &&
+            cachedVerifiedPassword.isNotEmpty)
+        ? true
+        : await Prefs.hasAccountPassword(toxId);
     if (hasPassword) {
-      final password = await _showPasswordDialog(AppLocalizations.of(context)!.enterPasswordForAccount(account['nickname'] ?? ''));
-      if (password == null) return; // User cancelled
-
-      final isValid = await Prefs.verifyAccountPassword(toxId, password);
-      if (!isValid) {
-        if (mounted) {
-          setState(() {
-            _error = AppLocalizations.of(context)!.invalidPassword;
-          });
-          AppSnackBar.showError(context, AppLocalizations.of(context)!.invalidPassword);
+      String? password = cachedVerifiedPassword;
+      final usedCachedVerifiedPassword =
+          password != null && password.isNotEmpty;
+      if (!usedCachedVerifiedPassword) {
+        password = await _showPasswordDialog(AppLocalizations.of(context)!
+            .enterPasswordForAccount(account['nickname'] ?? ''));
+        if (password == null) return; // User cancelled
+        final isValid = await Prefs.verifyAccountPassword(toxId, password);
+        if (!isValid) {
+          _verifiedPassword = null;
+          _verifiedPasswordToxId = null;
+          if (mounted) {
+            setState(() {
+              _error = AppLocalizations.of(context)!.invalidPassword;
+            });
+            AppSnackBar.showError(context, AppLocalizations.of(context)!.invalidPassword);
+          }
+          return;
         }
-        return;
       }
       // Store verified password so _login() won't prompt again
       _verifiedPassword = password;
+      _verifiedPasswordToxId = toxId;
     }
 
     // Fill controllers for _login() without expanding the nickname/signature form
     _nicknameController.text = account['nickname'] ?? '';
     _statusMessageController.text = account['statusMessage'] ?? '';
     await _login();
+  }
+
+  @visibleForTesting
+  Future<void> debugQuickLoginForTest(Map<String, String> account) =>
+      _quickLogin(account);
+
+  @visibleForTesting
+  void debugPrimeVerifiedPasswordForTest({
+    required String toxId,
+    required String password,
+  }) {
+    _verifiedPasswordToxId = toxId;
+    _verifiedPassword = password;
   }
 
   Future<void> _loadSettings() async {
@@ -308,13 +365,18 @@ class _LoginPageState extends State<LoginPage> {
     final account = await Prefs.getUniqueAccountByNickname(nickname);
     final toxIdForLogin = account?['toxId'];
     if (toxIdForLogin != null && toxIdForLogin.isNotEmpty) {
-      final hasPassword = await Prefs.hasAccountPassword(toxIdForLogin);
+      final cachedVerifiedPassword =
+          _verifiedPasswordToxId == toxIdForLogin ? _verifiedPassword : null;
+      final hasPassword = (cachedVerifiedPassword != null &&
+              cachedVerifiedPassword.isNotEmpty)
+          ? true
+          : await Prefs.hasAccountPassword(toxIdForLogin);
       if (hasPassword) {
-        password = _verifiedPassword;
+        password = cachedVerifiedPassword;
         _verifiedPassword = null;
+        _verifiedPasswordToxId = null;
         if (password == null || password.isEmpty) {
           if (!mounted) {
-            setState(() => _busy = false);
             return;
           }
           password = await _showPasswordDialog(
@@ -353,29 +415,45 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) {
       if (result is LoginControllerSuccess) {
-        await result.service.dispose();
+        await _teardownSession(service: result.service);
       }
-      setState(() => _busy = false);
       return;
     }
 
     setState(() => _busy = false);
     switch (result) {
       case LoginControllerSuccess(:final service):
-        await _loadAccountList();
-        if (!mounted) return;
-        _service = service;
-        await AppBootstrapCoordinator.boot(service);
-        // Boot succeeded — only now mark this account as "recently logged in"
-        // so a failed boot earlier doesn't leave a misleading timestamp.
         try {
-          await Prefs.touchAccountLoginTime(service.selfId);
-        } catch (_) {}
-        if (!mounted) return;
-        unawaited(HapticFeedback.lightImpact());
-        Navigator.of(context).pushReplacement(
-          AppPageRoute(page: HomePage(service: service)),
-        );
+          await _loadAccountList();
+          if (!mounted) {
+            await _teardownSession(service: service);
+            return;
+          }
+          _service = service;
+          await _bootSession(service);
+          // Boot succeeded — only now mark this account as "recently logged in"
+          // so a failed boot earlier doesn't leave a misleading timestamp.
+          try {
+            await Prefs.touchAccountLoginTime(service.selfId);
+          } catch (_) {}
+          if (!mounted) {
+            await _teardownSession(service: service);
+            return;
+          }
+          unawaited(HapticFeedback.lightImpact());
+          Navigator.of(context).pushReplacement(
+            AppPageRoute(page: HomePage(service: service)),
+          );
+        } catch (e, stackTrace) {
+          await _teardownSession(service: service);
+          AppLogger.logError('[LoginPage] Login boot failed', e, stackTrace);
+          if (!mounted) return;
+          unawaited(HapticFeedback.lightImpact());
+          final message =
+              e is Exception ? e.toString().replaceFirst('Exception: ', '') : e.toString();
+          setState(() => _error = message);
+          AppSnackBar.showError(context, message);
+        }
         break;
       case LoginControllerFailure(:final message):
         unawaited(HapticFeedback.lightImpact());
@@ -402,10 +480,19 @@ class _LoginPageState extends State<LoginPage> {
       );
       if (!mounted) return;
       switch (result) {
-        case RestoreSuccess(:final nickname):
+        case RestoreSuccess(
+            :final nickname,
+            :final password,
+            :final toxId,
+          ):
           await _loadAccountList();
           if (!mounted) return;
-          setState(() => _error = null);
+          setState(() {
+            _error = null;
+            _nicknameController.text = nickname;
+            _verifiedPassword = password;
+            _verifiedPasswordToxId = toxId;
+          });
           AppSnackBar.showSuccess(
             context,
             l10n.restoreFromToxFileSuccess(nickname),
@@ -1035,25 +1122,29 @@ class _LoginActionCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 24),
-              AppSpacing.horizontalMd,
-              Text(
-                label,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: color,
-                      fontWeight: isPrimary ? FontWeight.w600 : null,
-                    ),
-              ),
-              const Spacer(),
-              Icon(
-                _trailingChevron(context),
-                size: 20,
-                color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.4),
-              ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 24),
+                AppSpacing.horizontalMd,
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: color,
+                          fontWeight: isPrimary ? FontWeight.w600 : null,
+                        ),
+                  ),
+                ),
+                AppSpacing.horizontalSm,
+                Icon(
+                  _trailingChevron(context),
+                  size: 20,
+                  color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.4),
+                ),
             ],
           ),
         ),
@@ -1109,4 +1200,3 @@ class _PressableScaleState extends State<_PressableScale> {
     );
   }
 }
-

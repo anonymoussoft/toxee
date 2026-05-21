@@ -22,11 +22,15 @@
 // (which is implicitly verified above).
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toxee/ui/login/login_page_controller.dart';
+import 'package:toxee/util/app_paths.dart';
 import 'package:toxee/util/prefs.dart';
+
+import '../../account_export/test_support.dart';
 
 Future<void> _initEmptyPrefs() async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -137,6 +141,111 @@ void main() {
         skip: Platform.environment['TOXEE_TESTS_NEED_NATIVE'] == '1'
             ? false
             : 'requires libtim2tox_ffi (set TOXEE_TESTS_NEED_NATIVE=1 to run)');
+
+    test('rolls back written profile when restore fails after artifacts were created',
+        () async {
+      final env = await setUpAccountExportTestEnv();
+      addTearDown(env.dispose);
+      const toxId =
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      final controller = LoginPageController(
+        importAccountDataFn: ({
+          required String filePath,
+          String? password,
+        }) async =>
+            <String, dynamic>{
+          'toxId': toxId,
+          'toxProfile': Uint8List.fromList(<int>[1, 2, 3, 4]),
+          'nickname': 'Recovered',
+        },
+        addAccountFn: ({
+          required String toxId,
+          required String nickname,
+          required String statusMessage,
+          required bool autoLogin,
+          required bool autoAcceptFriends,
+          required bool notificationSoundEnabled,
+        }) async {
+          throw Exception('boom after profile write');
+        },
+      );
+
+      final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
+      final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
+
+      final result = await controller.restoreFromToxFile(
+        requestPassword: () async => null,
+        importedAccountDefaultName: 'Imported',
+        filePathOverride: '/tmp/fake_restore_success.tox',
+      );
+
+      expect(result, isA<RestoreFailure>());
+      expect((result as RestoreFailure).kind, RestoreFailureKind.generalError);
+      expect(await File(profileFilePath).exists(), isFalse,
+          reason: 'restore rollback must remove the profile written earlier');
+      expect(await Prefs.getAccountByToxId(toxId), isNull,
+          reason: 'restore rollback must not leave a visible account row');
+    });
+
+    test('rolls back full-backup filesystem changes when import fails after extraction',
+        () async {
+      final env = await setUpAccountExportTestEnv();
+      addTearDown(env.dispose);
+      const toxId =
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+      final controller = LoginPageController(
+        readFullBackupMetadataFn: (String filePath) async => <String, dynamic>{
+          'toxId': toxId,
+        },
+        importFullBackupFn: ({
+          required String filePath,
+          String? password,
+        }) async {
+          final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
+          await Directory(profileDir).create(recursive: true);
+          final profilePath = AppPaths.profileFileInDirectory(profileDir);
+          await File(profilePath).writeAsBytes(<int>[7, 8, 9]);
+
+          final accountRoot = await AppPaths.getAccountDataRoot(toxId);
+          final historyDir = await AppPaths.getAccountChatHistoryPath(toxId);
+          await Directory(historyDir).create(recursive: true);
+          await File('$historyDir/history.json').writeAsString('{}');
+
+          return <String, dynamic>{
+            'toxId': toxId,
+            'nickname': 'Imported Zip',
+            'toxProfile': Uint8List.fromList(<int>[7, 8, 9]),
+          };
+        },
+        addAccountFn: ({
+          required String toxId,
+          required String nickname,
+          required String statusMessage,
+          required bool autoLogin,
+          required bool autoAcceptFriends,
+          required bool notificationSoundEnabled,
+        }) async {
+          throw Exception('boom after backup extraction');
+        },
+      );
+
+      final result = await controller.importAccount(
+        requestPassword: () async => null,
+        importedAccountDefaultName: 'Imported',
+        filePathOverride: '/tmp/fake_backup.zip',
+      );
+
+      expect(result, isA<ImportFailure>());
+      expect((result as ImportFailure).kind, ImportFailureKind.generalError);
+      expect(await Directory(await AppPaths.getProfileDirectoryForToxId(toxId)).exists(),
+          isFalse,
+          reason: 'import rollback must delete the extracted profile directory');
+      expect(await Directory(await AppPaths.getAccountDataRoot(toxId)).exists(),
+          isFalse,
+          reason: 'import rollback must delete extracted account data');
+      expect(await Prefs.getAccountByToxId(toxId), isNull,
+          reason: 'import rollback must not leave the imported account visible');
+    });
   });
 
   group('LoginPageController construction', () {

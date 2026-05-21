@@ -29,11 +29,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tencent_cloud_chat_sdk/native_im/bindings/native_library_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toxee/auth/login_use_case.dart';
 import 'package:toxee/i18n/app_localizations.dart';
+import 'package:toxee/ui/login/login_page_controller.dart';
 import 'package:toxee/ui/login_page.dart';
 import 'package:toxee/util/prefs.dart';
+import 'package:tim2tox_dart/ffi/tim2tox_ffi.dart';
+import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
 /// Stub LoginUseCase that throws a controlled error from `execute()`. The base
 /// class only declares the one method; extending and overriding lets us avoid
@@ -49,6 +53,83 @@ class _ThrowingLoginUseCase extends LoginUseCase {
   }
 }
 
+class _StubFfiChatService extends FfiChatService {
+  _StubFfiChatService() : super();
+}
+
+bool _ffiAvailable() {
+  try {
+    setNativeLibraryName('tim2tox_ffi');
+    Tim2ToxFfi.open();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+class _SuccessfulLoginPageController extends LoginPageController {
+  _SuccessfulLoginPageController(this.service);
+
+  final FfiChatService service;
+  int loginCalls = 0;
+
+  @override
+  Future<LoginControllerResult> login({
+    required String nickname,
+    required String statusMessage,
+    String? password,
+  }) async {
+    loginCalls++;
+    return LoginControllerSuccess(service);
+  }
+}
+
+class _RecordingLoginUseCase extends LoginUseCase {
+  LoginParams? lastParams;
+
+  @override
+  Future<LoginSuccess> execute(LoginParams params) async {
+    lastParams = params;
+    throw Exception('stop after recording');
+  }
+}
+
+class _RestoringLoginPageController extends LoginPageController {
+  _RestoringLoginPageController();
+
+  static const toxId =
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  static const password = 'restored-secret';
+  LoginParams? lastLoginParams;
+
+  @override
+  Future<RestoreResult> restoreFromToxFile({
+    required Future<String?> Function() requestPassword,
+    required String importedAccountDefaultName,
+    String? filePathOverride,
+  }) async {
+    return const RestoreSuccess(
+      toxId: toxId,
+      nickname: 'Recovered',
+      password: password,
+    );
+  }
+
+  @override
+  Future<LoginControllerResult> login({
+    required String nickname,
+    required String statusMessage,
+    String? password,
+  }) async {
+    lastLoginParams = LoginParams(
+      nickname: nickname,
+      statusMessage: statusMessage,
+      password: password,
+    );
+    return const LoginControllerFailure('stop after recording');
+  }
+}
+
 /// Stub that never resolves — useful for asserting the "busy" UI state where
 /// the user has tapped Login and the controller is still in flight. Not used
 /// yet, but available if a future test wants to pin down the busy spinner.
@@ -61,7 +142,15 @@ class _PendingLoginUseCase extends LoginUseCase {
   }
 }
 
-Widget _pumpableLoginPage({LoginUseCase? loginUseCase}) {
+Widget _pumpableLoginPage({
+  LoginUseCase? loginUseCase,
+  LoginPageController? loginPageController,
+  Future<void> Function(FfiChatService service)? bootSession,
+  Future<void> Function({
+    required FfiChatService service,
+    bool reEncryptProfile,
+  })? teardownSession,
+}) {
   return MaterialApp(
     localizationsDelegates: const [
       AppLocalizations.delegate,
@@ -70,7 +159,12 @@ Widget _pumpableLoginPage({LoginUseCase? loginUseCase}) {
       GlobalCupertinoLocalizations.delegate,
     ],
     supportedLocales: const [Locale('en')],
-    home: LoginPage(loginUseCase: loginUseCase),
+    home: LoginPage(
+      loginUseCase: loginUseCase,
+      loginPageController: loginPageController,
+      bootSession: bootSession,
+      teardownSession: teardownSession,
+    ),
   );
 }
 
@@ -115,6 +209,19 @@ Future<void> _pumpAndLoad(WidgetTester tester, Widget root) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 50));
   await tester.pump(const Duration(milliseconds: 250));
+}
+
+Future<Object?> _pumpAndLoadStrictNarrow(
+  WidgetTester tester,
+  Widget root,
+) async {
+  await tester.binding.setSurfaceSize(const Size(360, 800));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(root);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
+  await tester.pump(const Duration(milliseconds: 250));
+  return tester.takeException();
 }
 
 Future<void> _initEmptyPrefs() async {
@@ -181,6 +288,67 @@ void main() {
       expect(find.byIcon(Icons.settings), findsOneWidget,
           reason: 'Settings entry must be reachable from the login page');
     });
+
+    testWidgets('welcome action cards fit on a 360dp-wide screen without overflow',
+        (tester) async {
+      await _initEmptyPrefs();
+      final exception =
+          await _pumpAndLoadStrictNarrow(tester, _pumpableLoginPage());
+
+      expect(exception, isNull,
+          reason:
+              'The first-run login actions must render on a narrow phone width '
+              'without throwing a RenderFlex overflow.');
+      expect(
+        find.byKey(const Key('loginPage.restoreFromToxFile')),
+        findsOneWidget,
+        reason:
+            'The restore action must remain visible on narrow screens after layout settles.',
+      );
+    });
+
+    testWidgets(
+        'restore success lets the restored password flow into the next account login without re-prompting',
+        (tester) async {
+      await _initPrefsWithSavedAccount(
+        nickname: 'Recovered',
+        toxId: _RestoringLoginPageController.toxId,
+        statusMessage: 'Back from backup',
+      );
+      final controller = _RestoringLoginPageController();
+      await _pumpAndLoad(
+        tester,
+        _pumpableLoginPage(
+          loginPageController: controller,
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('loginPage.restoreFromToxFile')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final recoveredFinder = find.text('Recovered');
+      expect(recoveredFinder, findsOneWidget,
+          reason: 'The restored account should already be present in the picker.');
+
+      final recoveredCard = find.ancestor(
+        of: recoveredFinder,
+        matching: find.byType(InkWell),
+      );
+      tester.widget<InkWell>(recoveredCard).onTap!.call();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.byType(AlertDialog), findsNothing,
+          reason:
+              'The restored password should be reusable for the next tap-to-login '
+              'instead of prompting the user again immediately.');
+      expect(controller.lastLoginParams, isNotNull,
+          reason: 'Tapping the restored account should proceed into login.');
+      expect(controller.lastLoginParams?.password,
+          _RestoringLoginPageController.password);
+      expect(controller.lastLoginParams?.nickname, 'Recovered');
+    });
   });
 
   group('LoginPage - saved-account picker', () {
@@ -235,5 +403,46 @@ void main() {
       // haven't pressed Login.
       expect(find.byIcon(Icons.shield_outlined), findsOneWidget);
     });
+
+    testWidgets('successful login tears the session down when injected boot fails',
+        (tester) async {
+      if (!_ffiAvailable()) return;
+      await _initPrefsWithSavedAccount(
+        nickname: 'Alice',
+        toxId: 'A' * 64,
+      );
+      final service = _StubFfiChatService();
+      final tornDown = <FfiChatService>[];
+      final controller = _SuccessfulLoginPageController(service);
+      await _pumpAndLoad(
+        tester,
+        _pumpableLoginPage(
+          loginPageController: controller,
+          bootSession: (_) async => throw Exception('boot failed'),
+          teardownSession: ({required service, reEncryptProfile = true}) async {
+            tornDown.add(service);
+          },
+        ),
+      );
+
+      final dynamic state = tester.state(find.byType(LoginPage));
+      state.debugPrimeVerifiedPasswordForTest(
+        toxId: 'A' * 64,
+        password: 'primed-password',
+      );
+      await state.debugQuickLoginForTest({
+        'toxId': 'A' * 64,
+        'nickname': 'Alice',
+        'statusMessage': '',
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(controller.loginCalls, 1,
+          reason: 'Saved-account tap should invoke the injected login controller.');
+      expect(tornDown, [service],
+          reason:
+              'LoginPage must tear down a live session when boot fails after login succeeded.');
+    }, skip: !_ffiAvailable());
   });
 }

@@ -420,7 +420,6 @@ class AccountService {
           toxId: tid,
           profileDirectory: profileDir,
         );
-        await newService.startPolling();
 
         return RegisterResult(
           service: newService,
@@ -437,7 +436,6 @@ class AccountService {
         toxId: tid,
         profileDirectory: profileDir,
       );
-      await scopedService.startPolling();
 
       return RegisterResult(
         service: scopedService,
