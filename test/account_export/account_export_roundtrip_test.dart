@@ -137,7 +137,8 @@ void main() {
 
       tearDown(() => env.dispose());
 
-      test('unencrypted export/import produces identical profile bytes', () async {
+      test('unencrypted export/import produces identical profile bytes',
+          () async {
         final exportPath = await AccountExportService.exportAccountData(
           toxId: fixture.toxId,
           filePath: p.join(env.extras, 'plain.tox'),
@@ -145,10 +146,11 @@ void main() {
         expect(File(exportPath).existsSync(), isTrue);
         final exportBytes = await File(exportPath).readAsBytes();
         expect(exportBytes, equals(fixture.savedata),
-            reason: 'unencrypted export must be byte-identical to source profile');
+            reason:
+                'unencrypted export must be byte-identical to source profile');
 
-        final imported = await AccountExportService.importAccountData(
-            filePath: exportPath);
+        final imported =
+            await AccountExportService.importAccountData(filePath: exportPath);
         // importAccountData returns the 64-char public key (extract_tox_id_from_profile
         // does not preserve the nospam+checksum tail of the full 76-char address).
         expect(imported['toxId'], fixture.publicKeyHex);
@@ -177,8 +179,7 @@ void main() {
         final exportBytes = await File(exportPath).readAsBytes();
         expect(exportBytes, isNot(equals(fixture.savedata)),
             reason: 'encrypted .tox must differ from the plain savedata');
-        expect(
-            await AccountExportService.isProfileFileEncrypted(exportPath),
+        expect(await AccountExportService.isProfileFileEncrypted(exportPath),
             isTrue,
             reason: 'on-disk bytes must carry the Tox-encrypted magic header');
 
@@ -203,8 +204,7 @@ void main() {
         final encryptedOnDisk = await scratch.readAsBytes();
         expect(encryptedOnDisk, isNot(equals(fixture.savedata)),
             reason: 'in-place encryptProfileFile must produce ciphertext');
-        expect(
-            await AccountExportService.isProfileFileEncrypted(scratch.path),
+        expect(await AccountExportService.isProfileFileEncrypted(scratch.path),
             isTrue);
 
         await AccountExportService.decryptProfileFile(scratch.path, password);
@@ -236,8 +236,7 @@ void main() {
         await AccountExportService.encryptProfileFile(scratch.path, password);
         expect(File('${scratch.path}.new').existsSync(), isFalse,
             reason: 'atomic-write staging file must be renamed away');
-        expect(
-            await AccountExportService.isProfileFileEncrypted(scratch.path),
+        expect(await AccountExportService.isProfileFileEncrypted(scratch.path),
             isTrue);
       });
 
@@ -297,8 +296,7 @@ void main() {
           filePath: p.join(env.extras, 'backup.zip'),
         );
         expect(File(zipPath).existsSync(), isTrue);
-        final meta =
-            await AccountExportService.readFullBackupMetadata(zipPath);
+        final meta = await AccountExportService.readFullBackupMetadata(zipPath);
         expect(meta['toxId'], fixture.toxId);
         expect(meta['nickname'], 'TestNick');
       });
@@ -316,14 +314,13 @@ void main() {
       final zipPath = p.join(env.extras, 'meta_only.zip');
       const fakeToxId =
           '0011223344556677889900112233445566778899001122334455667788990011';
-      await _writeFakeBackupZip(zipPath,
-          metadata: {
-            'toxId': fakeToxId,
-            'nickname': 'Synth',
-            'statusMessage': '',
-            'exportDate': DateTime.now().toIso8601String(),
-            'scopedPrefs': <String, dynamic>{},
-          });
+      await _writeFakeBackupZip(zipPath, metadata: {
+        'toxId': fakeToxId,
+        'nickname': 'Synth',
+        'statusMessage': '',
+        'exportDate': DateTime.now().toIso8601String(),
+        'scopedPrefs': <String, dynamic>{},
+      });
 
       final meta = await AccountExportService.readFullBackupMetadata(zipPath);
       expect(meta['toxId'], fakeToxId);
@@ -336,6 +333,51 @@ void main() {
       expect(
         () => AccountExportService.readFullBackupMetadata(txt.path),
         throwsA(isA<Exception>()),
+      );
+    });
+  });
+
+  group('exportFullBackup metadata (pure-Dart)', () {
+    late AccountExportTestEnv env;
+    setUp(() async {
+      env = await setUpAccountExportTestEnv();
+    });
+    tearDown(() => env.dispose());
+
+    test('discovers timestamped friend avatar files without an existing pref',
+        () async {
+      const toxId =
+          '0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF';
+      const friendId =
+          'FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210';
+      const avatarFileName = 'friend_${friendId}_avatar_1700000000000.png';
+
+      await Prefs.addAccount(toxId: toxId, nickname: 'Avatar Owner');
+      final avatarsPath = await AppPaths.getAccountAvatarsPath(toxId);
+      await Directory(avatarsPath).create(recursive: true);
+      await File(p.join(avatarsPath, avatarFileName))
+          .writeAsBytes(<int>[0x89, 0x50, 0x4E, 0x47]);
+
+      final zipPath = await AccountExportService.exportFullBackup(
+        toxId: toxId,
+        filePath: p.join(env.extras, 'avatar_backup.zip'),
+      );
+
+      final archive =
+          ZipDecoder().decodeBytes(await File(zipPath).readAsBytes());
+      final metadataFile = archive.findFile('metadata.json');
+      expect(metadataFile, isNotNull);
+      final metadata =
+          json.decode(utf8.decode(metadataFile!.content as List<int>))
+              as Map<String, dynamic>;
+      final scopedPrefs = metadata['scopedPrefs'] as Map<String, dynamic>;
+
+      expect(
+        scopedPrefs['friend_avatar_path_$friendId'],
+        '@account_data/avatars/$avatarFileName',
+        reason:
+            'full backup must not drop avatar files that follow the persisted '
+            'friend_<id>_avatar_<timestamp>.<ext> naming scheme.',
       );
     });
   });
@@ -368,8 +410,7 @@ void main() {
           'statusMessage': '',
           'exportDate': DateTime.now().toIso8601String(),
           'scopedPrefs': <String, dynamic>{
-            'muted_peers_$fakeToxId':
-                jsonEncode(['m1', 'm2']),
+            'muted_peers_$fakeToxId': jsonEncode(['m1', 'm2']),
           },
         },
         chatHistoryFiles: const {
@@ -383,16 +424,100 @@ void main() {
       expect(result['toxId'], fakeToxId);
       expect(result['nickname'], 'HistoryOwner');
 
-      final histPath =
-          await AppPaths.getAccountChatHistoryPath(fakeToxId);
+      final histPath = await AppPaths.getAccountChatHistoryPath(fakeToxId);
       final restoredHist =
           await File(p.join(histPath, 'conv_peer1.json')).readAsString();
       expect(restoredHist, '[{"msg":"hi"}]');
 
       final queuePath =
           await AppPaths.getAccountOfflineQueueFilePath(fakeToxId);
+      expect(await File(queuePath).readAsString(),
+          '[{"to":"peer1","body":"queued"}]');
+    });
+
+    test('rejects chat history entries that escape the account directory',
+        () async {
+      const fakeToxId =
+          '11223344556677889900AABBCCDDEEFF11223344556677889900AABBCCDDEEFF';
+      final zipPath = p.join(env.extras, 'unsafe_history.zip');
+      await _writeFakeBackupZip(
+        zipPath,
+        metadata: {
+          'toxId': fakeToxId,
+          'nickname': 'UnsafeHistory',
+          'scopedPrefs': <String, dynamic>{},
+        },
+        chatHistoryFiles: const {
+          '../escape.json': '{"msg":"outside"}',
+        },
+        toxProfile: Uint8List.fromList(<int>[1, 2, 3, 4]),
+      );
+
+      await expectLater(
+        () => AccountExportService.importFullBackup(filePath: zipPath),
+        throwsA(predicate((e) => e.toString().contains('Unsafe backup path'))),
+      );
+
+      final historyDir = await AppPaths.getAccountChatHistoryPath(fakeToxId);
       expect(
-          await File(queuePath).readAsString(), '[{"to":"peer1","body":"queued"}]');
+          File(p.normalize(p.join(historyDir, '..', 'escape.json')))
+              .existsSync(),
+          isFalse);
+      final profileDir = await AppPaths.getProfileDirectoryForToxId(fakeToxId);
+      expect(File(AppPaths.profileFileInDirectory(profileDir)).existsSync(),
+          isFalse,
+          reason:
+              'unsafe archive paths are preflighted before tox_profile.tox is restored');
+    });
+
+    test('rejects avatar entries that escape the account directory', () async {
+      const fakeToxId =
+          'FFEEDDCCBBAA00998877665544332211FFEEDDCCBBAA00998877665544332211';
+      final zipPath = p.join(env.extras, 'unsafe_avatar.zip');
+      await _writeFakeBackupZip(
+        zipPath,
+        metadata: {
+          'toxId': fakeToxId,
+          'nickname': 'UnsafeAvatar',
+          'scopedPrefs': <String, dynamic>{},
+        },
+        avatarFiles: const {
+          '../escape.png': [0x89, 0x50, 0x4E, 0x47],
+        },
+      );
+
+      await expectLater(
+        () => AccountExportService.importFullBackup(filePath: zipPath),
+        throwsA(predicate((e) => e.toString().contains('Unsafe backup path'))),
+      );
+
+      final avatarsDir = await AppPaths.getAccountAvatarsPath(fakeToxId);
+      expect(
+          File(p.normalize(p.join(avatarsDir, '..', 'escape.png')))
+              .existsSync(),
+          isFalse);
+    });
+
+    test('rejects archive entries with Windows drive prefixes', () async {
+      const fakeToxId =
+          '3344556677889900AABBCCDDEEFF11223344556677889900AABBCCDDEEFF1122';
+      final zipPath = p.join(env.extras, 'unsafe_windows_drive.zip');
+      await _writeFakeBackupZip(
+        zipPath,
+        metadata: {
+          'toxId': fakeToxId,
+          'nickname': 'UnsafeWindowsDrive',
+          'scopedPrefs': <String, dynamic>{},
+        },
+        chatHistoryFiles: const {
+          'C:/escape.json': '{"msg":"drive"}',
+        },
+      );
+
+      await expectLater(
+        () => AccountExportService.importFullBackup(filePath: zipPath),
+        throwsA(predicate((e) => e.toString().contains('Unsafe backup path'))),
+      );
     });
   });
 }
@@ -401,26 +526,31 @@ Future<void> _writeFakeBackupZip(
   String zipPath, {
   required Map<String, dynamic> metadata,
   Map<String, String> chatHistoryFiles = const {},
+  Map<String, List<int>> avatarFiles = const {},
   String? offlineQueue,
   Uint8List? toxProfile,
 }) async {
   final archive = Archive();
-  final metaBytes = utf8.encode(const JsonEncoder.withIndent('  ').convert(metadata));
-  archive.addFile(
-      ArchiveFile('metadata.json', metaBytes.length, metaBytes));
+  final metaBytes =
+      utf8.encode(const JsonEncoder.withIndent('  ').convert(metadata));
+  archive.addFile(ArchiveFile('metadata.json', metaBytes.length, metaBytes));
   if (toxProfile != null) {
-    archive.addFile(ArchiveFile(
-        'tox_profile.tox', toxProfile.length, toxProfile));
+    archive
+        .addFile(ArchiveFile('tox_profile.tox', toxProfile.length, toxProfile));
   }
   for (final entry in chatHistoryFiles.entries) {
     final bytes = utf8.encode(entry.value);
-    archive.addFile(ArchiveFile(
-        'chat_history/${entry.key}', bytes.length, bytes));
+    archive
+        .addFile(ArchiveFile('chat_history/${entry.key}', bytes.length, bytes));
+  }
+  for (final entry in avatarFiles.entries) {
+    archive.addFile(
+        ArchiveFile('avatars/${entry.key}', entry.value.length, entry.value));
   }
   if (offlineQueue != null) {
     final bytes = utf8.encode(offlineQueue);
-    archive.addFile(ArchiveFile(
-        'offline_message_queue.json', bytes.length, bytes));
+    archive.addFile(
+        ArchiveFile('offline_message_queue.json', bytes.length, bytes));
   }
   final zipBytes = ZipEncoder().encode(archive);
   await File(zipPath).writeAsBytes(zipBytes);

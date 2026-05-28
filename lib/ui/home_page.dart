@@ -30,12 +30,15 @@ import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_common/models/tencent_cloud_chat_callbacks.dart';
 import 'package:tencent_cloud_chat_common/tuicore/tencent_cloud_chat_core.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation_controller.dart';
-import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation.dart' as conv_pkg;
-import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message.dart' as msg_pkg;
+import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation.dart'
+    as conv_pkg;
+import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message.dart'
+    as msg_pkg;
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_input/tencent_cloud_chat_message_input.dart';
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_widgets/tencent_cloud_chat_message_item_builders.dart';
 import 'package:tencent_cloud_chat_common/components/components_definition/tencent_cloud_chat_component_builder_definitions.dart';
-import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart' as contact_pkg;
+import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart'
+    as contact_pkg;
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart';
 import 'contact/contact_builder_override.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile.dart';
@@ -47,8 +50,10 @@ import 'package:tencent_cloud_chat_common/components/component_event_handlers/te
 import 'package:tencent_cloud_chat_common/components/component_config/tencent_cloud_chat_message_config.dart';
 import 'package:tencent_cloud_chat_common/components/component_config/tencent_cloud_chat_message_common_defines.dart';
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_layout/special_case/tencent_cloud_chat_message_no_chat.dart';
-import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_header/tencent_cloud_chat_message_header.dart' as msg_header;
-import 'package:tencent_cloud_chat_common/utils/tencent_cloud_chat_utils.dart' as tcc_utils;
+import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_header/tencent_cloud_chat_message_header.dart'
+    as msg_header;
+import 'package:tencent_cloud_chat_common/utils/tencent_cloud_chat_utils.dart'
+    as tcc_utils;
 import 'package:tencent_cloud_chat_common/models/tencent_cloud_chat_models.dart';
 import 'package:tencent_cloud_chat_common/components/tencent_cloud_chat_components_utils.dart';
 import 'package:tencent_cloud_chat_sdk/models/v2_tim_callback.dart';
@@ -76,6 +81,7 @@ import 'home/home_utils.dart';
 import 'home/toxee_message_header_info.dart';
 import '../util/app_theme_config.dart';
 import '../util/app_tray.dart';
+import '../util/bootstrap_node_ensurer.dart';
 import '../util/bootstrap_nodes.dart';
 import '../util/lan_bootstrap_service.dart';
 import '../util/send_failure_notifier.dart';
@@ -113,7 +119,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _globalAdapterInited = false;
   StreamSubscription? _friendsSub;
   StreamSubscription? _appsSub;
-  List<({String userId, String nickName, bool online, String status})> _friends = [];
+  List<({String userId, String nickName, bool online, String status})>
+      _friends = [];
   Timer? _refreshTimer;
   Set<String> _localFriends = {};
   bool _autoAcceptFriends = false;
@@ -137,9 +144,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // disconnect (or never connect on cold start). Cancelled on
   // conn:success.
   Timer? _noConnectionBannerTimer;
-  StreamSubscription<TencentCloudChatConversationData<dynamic>>? _conversationDataSub;
+  StreamSubscription<TencentCloudChatConversationData<dynamic>>?
+      _conversationDataSub;
   StreamSubscription<TencentCloudChatContactData<dynamic>>? _contactDataSub;
-  StreamSubscription<TencentCloudChatGroupProfileData<dynamic>>? _groupProfileDataSub;
+  StreamSubscription<TencentCloudChatGroupProfileData<dynamic>>?
+      _groupProfileDataSub;
   StreamSubscription<List<V2TimConversation>>? _convProviderSub;
   StreamSubscription<int>? _unreadProviderSub;
   // Track last membersChange event time per groupID to prevent loops
@@ -157,7 +166,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // The desktop mode component will rebuild when currentConversation changes
   // Counter to ensure unique keys across conversation switches
   int _messageWidgetKeyCounter = 0;
-  
+
   // LAN bootstrap service state
   bool _lanBootstrapServiceRunning = false;
   String? _lanBootstrapServiceIP;
@@ -213,8 +222,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       try {
-        conv_pkg.TencentCloudChatConversationManager.eventHandlers
-            .uiEventHandlers
+        conv_pkg
+            .TencentCloudChatConversationManager.eventHandlers.uiEventHandlers
             .setEventHandlers(
           onSecondaryTapConversationItem: ({
             required V2TimConversation conversation,
@@ -244,11 +253,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               onSecondaryTapConversationItem: ({
                 required V2TimConversation conversation,
                 required Offset position,
-              }) async => false,
+              }) async =>
+                  false,
               onLongPressConversationItem: ({
                 required V2TimConversation conversation,
                 required Offset position,
-              }) async => false,
+              }) async =>
+                  false,
             );
           } catch (e) {
             AppLogger.warn(
@@ -265,7 +276,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_maybePrewarmCallPermissions());
     });
   }
-
 
   /// Used by home_page_bootstrap.dart extension to call setState (avoids invalid_use_of_protected_member).
   void _bootstrapSetState(VoidCallback fn) {
@@ -309,7 +319,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       color: colorTheme.backgroundColor,
                     ),
                   ),
-                  color: colorTheme.contactAddContactFriendInfoStateButtonBackgroundColor,
+                  color: colorTheme
+                      .contactAddContactFriendInfoStateButtonBackgroundColor,
                 ),
                 // Toxee-owned widget — use literal symmetric insets rather
                 // than UIKit's screen adapter so this row doesn't reach into
@@ -334,10 +345,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       },
     );
   }
-  
+
   // Handle add friend action (e.g. from user profile in group/contact)
   Future<void> _onAddFriend(BuildContext context, String userID) async {
-    final requestMessage = AppLocalizations.of(context)?.defaultFriendRequestMessage ?? 'Hello';
+    final requestMessage =
+        AppLocalizations.of(context)?.defaultFriendRequestMessage ?? 'Hello';
     try {
       await widget.service.addFriend(userID, requestMessage: requestMessage);
       // Show success message
@@ -364,7 +376,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     final running = await Prefs.getLanBootstrapServiceRunning();
     if (running) {
-      final info = await LanBootstrapServiceManager.instance.getBootstrapServiceInfo();
+      final info =
+          await LanBootstrapServiceManager.instance.getBootstrapServiceInfo();
       if (!mounted) return;
       // Only call setState if anything actually changed — this method is
       // driven by a 2-second periodic timer; without the equality gate we
@@ -438,18 +451,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _refreshBootstrapOnResume() async {
     try {
-      if (widget.service.isConnected) return;
-      final node = await Prefs.getCurrentBootstrapNode();
-      if (node == null) return;
-      final added = await widget.service.addBootstrapNode(
-        node.host,
-        node.port,
-        node.pubkey,
-      );
-      AppLogger.debug(
-        '[HomePage] resume bootstrap refresh attempted '
-        '(host=${node.host}, success=$added)',
-      );
+      // In auto mode this re-fetches the live node list and applies several
+      // fresh online nodes, so a saved node that has gone offline since launch
+      // doesn't strand the session; in manual/LAN mode it re-applies the saved
+      // node. No-op when already connected. (Best-effort, non-fatal.)
+      await BootstrapNodeEnsurer.refreshIfDisconnected(widget.service);
     } catch (e, st) {
       AppLogger.logError(
         '[HomePage] Resume bootstrap refresh failed (non-fatal)',
@@ -540,9 +546,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     unawaited(_updateTray());
   }
 
-  Future<void> _sendMedia(BuildContext context, {String? userId, String? groupId, required _MediaPickType type}) async {
+  Future<void> _sendMedia(BuildContext context,
+      {String? userId, String? groupId, required _MediaPickType type}) async {
     final appL10n = AppLocalizations.of(context)!;
     final label = type == _MediaPickType.image ? appL10n.photo : appL10n.video;
+    String? pickedPath;
     if (groupId != null && groupId.isNotEmpty) {
       _showSnackBar(appL10n.sendingToGroupsNotSupported(label));
       return;
@@ -556,26 +564,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _showSnackBar(appL10n.noLabelSelected(label));
         return;
       }
+      pickedPath = path;
       if (userId != null) {
-        // Check if friend is online before sending
-        final friends = await widget.service.getFriendList();
-        final friend = friends.firstWhere(
-          (f) => f.userId == userId,
-          orElse: () => (userId: userId, nickName: '', online: false, status: ''),
-        );
-        if (!friend.online) {
-          // Send a text message to chat window indicating failure (two lines: error + file path)
-          final failureMsg = type == _MediaPickType.image 
-              ? appL10n.friendOfflineSendImageFailed 
-              : appL10n.friendOfflineSendVideoFailed;
-          final twoLineMsg = '$failureMsg\n$path';
-          final mgr = FakeUIKit.instance.messageManager;
-          if (mgr != null) {
-            await mgr.sendText('c2c_$userId', twoLineMsg);
-          }
-          return;
-        }
-        await widget.service.sendFile(userId, path);
+        await widget.service.sendFile(userId, pickedPath);
         _showSnackBar('$label sent');
       }
     } catch (e) {
@@ -584,14 +575,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       String userMsg;
       if (errorMsg.contains('offline') || errorMsg.contains('not connected')) {
         // Send a text message to chat window indicating failure (two lines: error + file path)
-        // Note: path variable is not available in catch block, so we skip file path in error message
+        // If a picker path was available, keep it in the failure bubble so the
+        // user can see which media item failed.
         if (userId != null) {
-          final failureMsg = type == _MediaPickType.image 
-              ? appL10n.friendOfflineSendImageFailed 
+          final failureMsg = type == _MediaPickType.image
+              ? appL10n.friendOfflineSendImageFailed
               : appL10n.friendOfflineSendVideoFailed;
           final mgr = FakeUIKit.instance.messageManager;
           if (mgr != null) {
-            await mgr.sendText('c2c_$userId', failureMsg);
+            final text =
+                pickedPath == null ? failureMsg : '$failureMsg\n$pickedPath';
+            await mgr.sendText('c2c_$userId', text);
           }
         }
         userMsg = appL10n.friendOfflineCannotSendFile;
@@ -625,20 +619,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<String> _createSelfQrCardImage() async {
     final nick = await Prefs.getNickname();
     final avatarPath = await Prefs.getAvatarPath();
-    final displayName = (nick != null && nick.trim().isNotEmpty) ? nick.trim() : widget.service.selfId;
+    final displayName = (nick != null && nick.trim().isNotEmpty)
+        ? nick.trim()
+        : widget.service.selfId;
     final locale = AppLocale.locale.value;
     final appL10n = AppLocalizations.of(context);
     return generateContactCardImage(
       userId: widget.service.selfId,
       displayName: displayName,
       locale: locale,
-      bottomText: appL10n?.scanQrCodeToAddContact ?? 'Scan QR code to add me as contact',
+      bottomText: appL10n?.scanQrCodeToAddContact ??
+          'Scan QR code to add me as contact',
       primaryColor: AppThemeConfig.primaryColor,
       avatarPath: avatarPath,
     );
   }
 
-  List<TencentCloudChatMessageGeneralOptionItem> _buildDesktopInputOptions(BuildContext context, {String? userID, String? groupID}) {
+  List<TencentCloudChatMessageGeneralOptionItem> _buildDesktopInputOptions(
+      BuildContext context,
+      {String? userID,
+      String? groupID}) {
     final appL10n = AppLocalizations.of(context)!;
     final photoLabel = appL10n.photo;
     final videoLabel = appL10n.video;
@@ -651,14 +651,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         icon: Icons.photo_outlined,
         label: photoLabel,
         onTap: ({Offset? offset}) async {
-          await _sendMedia(context, userId: userID, groupId: groupID, type: _MediaPickType.image);
+          await _sendMedia(context,
+              userId: userID, groupId: groupID, type: _MediaPickType.image);
         },
       ),
       TencentCloudChatMessageGeneralOptionItem(
         icon: Icons.videocam_outlined,
         label: videoLabel,
         onTap: ({Offset? offset}) async {
-          await _sendMedia(context, userId: userID, groupId: groupID, type: _MediaPickType.video);
+          await _sendMedia(context,
+              userId: userID, groupId: groupID, type: _MediaPickType.video);
         },
       ),
     ];
@@ -673,13 +675,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               final friends = await widget.service.getFriendList();
               final friend = friends.firstWhere(
                 (f) => f.userId == userID,
-                orElse: () => (userId: userID, nickName: '', online: false, status: ''),
+                orElse: () =>
+                    (userId: userID, nickName: '', online: false, status: ''),
               );
               if (!friend.online) {
                 final appL10n = AppLocalizations.of(context)!;
                 // Send a text message to chat window indicating failure (two lines: error + file path)
                 final qrPath = await _createSelfQrCardImage();
-                final twoLineMsg = '${appL10n.friendOfflineSendCardFailed}\n$qrPath';
+                final twoLineMsg =
+                    '${appL10n.friendOfflineSendCardFailed}\n$qrPath';
                 final mgr = FakeUIKit.instance.messageManager;
                 if (mgr != null) {
                   await mgr.sendText('c2c_$userID', twoLineMsg);
@@ -694,12 +698,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               final appL10n = AppLocalizations.of(context)!;
               final errorMsg = e.toString();
               String userMsg;
-              if (errorMsg.contains('offline') || errorMsg.contains('not connected')) {
+              if (errorMsg.contains('offline') ||
+                  errorMsg.contains('not connected')) {
                 // Send a text message to chat window indicating failure (two lines: error + file path)
                 // Try to get the file path from the error or use a default message
                 try {
                   final qrPath = await _createSelfQrCardImage();
-                  final twoLineMsg = '${appL10n.friendOfflineSendCardFailed}\n$qrPath';
+                  final twoLineMsg =
+                      '${appL10n.friendOfflineSendCardFailed}\n$qrPath';
                   final mgr = FakeUIKit.instance.messageManager;
                   if (mgr != null) {
                     await mgr.sendText('c2c_$userID', twoLineMsg);
@@ -712,7 +718,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   );
                   final mgr = FakeUIKit.instance.messageManager;
                   if (mgr != null) {
-                    await mgr.sendText('c2c_$userID', appL10n.friendOfflineSendCardFailed);
+                    await mgr.sendText(
+                        'c2c_$userID', appL10n.friendOfflineSendCardFailed);
                   }
                 }
                 userMsg = appL10n.friendOfflineCannotSendFile;
@@ -732,9 +739,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   final colonIndex = errorText.indexOf(':');
                   if (colonIndex > 0) {
                     final beforeColon = errorText.substring(0, colonIndex);
-                    final afterColon = errorText.substring(colonIndex + 1).trim();
+                    final afterColon =
+                        errorText.substring(colonIndex + 1).trim();
                     // Check if after colon looks like a file path
-                    if (afterColon.startsWith('/') || afterColon.contains('\\')) {
+                    if (afterColon.startsWith('/') ||
+                        afterColon.contains('\\')) {
                       errorText = beforeColon;
                     }
                   }
@@ -771,7 +780,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final applicationUnreadCount = UikitDataFacade.applicationUnreadCount;
     // Total count = conversation unread + friend applications
     final totalCount = uikitUnreadCount + applicationUnreadCount;
-    await AppTray.instance.update(count: totalCount, online: widget.service.isConnected);
+    await AppTray.instance
+        .update(count: totalCount, online: widget.service.isConnected);
   }
 
   @override
@@ -788,7 +798,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       try {
         // Set contact event handlers for navigation
         // Note: onNavigateToChat is an alias for onTapContactItem (getter that returns _onTapContactItem)
-        UikitDataFacade.contactEventHandlers = TencentCloudChatContactEventHandlers(
+        UikitDataFacade.contactEventHandlers =
+            TencentCloudChatContactEventHandlers(
           uiEventHandlers: TencentCloudChatContactUIEventHandlers(
             onTapContactItem: ({String? userID, String? groupID}) async {
               // Handle navigation from contact list and profile page "Send Message" button.
@@ -824,7 +835,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             },
           ),
         );
-        
+
         TencentCloudChat.controller.initGlobalAdapterInBuildPhase(context);
         _globalAdapterInited = true;
       } catch (e, st) {
@@ -841,8 +852,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             // layouts (< 720pt) — replaces the old `isMobile` gate so
             // landscape phones (600-720pt) keep the bottom nav instead of
             // jumping to a sidebar. `useSidebar` is its inverse.
-            final useBottomNav =
-                ResponsiveLayout.shouldShowBottomNav(context);
+            final useBottomNav = ResponsiveLayout.shouldShowBottomNav(context);
             final useSidebar = !useBottomNav;
             final showMasterDetail =
                 ResponsiveLayout.shouldShowMasterDetail(context);
@@ -888,153 +898,183 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 if (didPop) return;
                 // At the root of the navigator stack: handle tab/exit logic.
                 if (_index != 0) {
-                  setState(() { _index = 0; });
+                  setState(() {
+                    _index = 0;
+                  });
                   return;
                 }
                 // On Chats tab at root: double-press back to exit.
                 final now = DateTime.now();
                 if (_lastBackPressTime != null &&
-                    now.difference(_lastBackPressTime!) < const Duration(seconds: 2)) {
+                    now.difference(_lastBackPressTime!) <
+                        const Duration(seconds: 2)) {
                   SystemNavigator.pop();
                   return;
                 }
                 _lastBackPressTime = now;
-                AppSnackBar.show(_scaffoldMessengerContext ?? context, AppLocalizations.of(context)!.pressBackAgainToExit);
+                AppSnackBar.show(_scaffoldMessengerContext ?? context,
+                    AppLocalizations.of(context)!.pressBackAgainToExit);
               },
               child: Scaffold(
-              // Drawer removed: there was no AppBar and no `openDrawer()`
-              // call site, so it was unreachable. Bottom nav covers all
-              // entries on phone.
-              body: SafeArea(
-                child: Stack(
-                children: [
-                  Row(
+                // Drawer removed: there was no AppBar and no `openDrawer()`
+                // call site, so it was unreachable. Bottom nav covers all
+                // entries on phone.
+                body: SafeArea(
+                  child: Stack(
                     children: [
-                      if (useSidebar) ...[
-                        SizedBox(
-                          width: ResponsiveLayout.responsiveSidebarWidth(context),
-                          child: Column(
-                            children: [
-                              // macOS traffic-light reservation — without this
-                              // the avatar at the top of the sidebar sits under
-                              // the window control dots.
-                              if (PlatformUtils.isMacOS)
-                                const SizedBox(
-                                  height: ResponsiveLayout
-                                      .macTitleBarReservedHeight,
-                                ),
-                              Expanded(child: _uikitSidebar()),
-                            ],
-                          ),
-                        ),
-                        VerticalDivider(
-                          width: 1,
-                          thickness: 1,
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                      ],
-                      Expanded(
-                        child: _buildMainPane(context),
-                      ),
-                    ],
-                  ),
-                  // Bootstrap service status banner — show on native desktop
-                  // and on wide tablet/desktop-class viewports (e.g. iPad in
-                  // landscape) so the LAN status surface isn't hidden on
-                  // bigger touch devices that can act as the LAN host.
-                  if (PlatformUtils.isDesktop ||
-                      ResponsiveLayout.isDesktop(context))
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      // Asymmetric enter/exit: snappy 250ms in (easeOut) so the
-                      // banner shows up quickly when the LAN service comes
-                      // online, faster 150ms out (easeIn) so dismissing feels
-                      // responsive and doesn't linger.
-                      child: AnimatedSwitcher(
-                        duration: MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : const Duration(milliseconds: 250),
-                        reverseDuration: MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : const Duration(milliseconds: 150),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        transitionBuilder: (child, animation) {
-                          final slide = Tween<Offset>(
-                            begin: const Offset(0, -1),
-                            end: Offset.zero,
-                          ).animate(animation);
-                          return SlideTransition(
-                            position: slide,
-                            child: FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: (_lanBootstrapServiceRunning && _lanBootstrapServiceIP != null && _lanBootstrapServicePort != null)
-                            ? Material(
-                                key: const ValueKey('lan-bootstrap-banner'),
-                                elevation: 0,
-                                color: AppThemeConfig.successColor.withValues(alpha: 0.08),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-                                  decoration: BoxDecoration(
-                                    border: Border(
-                                      bottom: BorderSide(
-                                        color: AppThemeConfig.successColor.withValues(alpha: 0.25),
-                                        width: 1,
-                                      ),
+                      Row(
+                        children: [
+                          if (useSidebar) ...[
+                            SizedBox(
+                              width: ResponsiveLayout.responsiveSidebarWidth(
+                                  context),
+                              child: Column(
+                                children: [
+                                  // macOS traffic-light reservation — without this
+                                  // the avatar at the top of the sidebar sits under
+                                  // the window control dots.
+                                  if (PlatformUtils.isMacOS)
+                                    const SizedBox(
+                                      height: ResponsiveLayout
+                                          .macTitleBarReservedHeight,
                                     ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.cloud_done_outlined,
-                                        color: AppThemeConfig.successColor,
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: Text(
-                                          AppLocalizations.of(context)!.bootstrapServiceRunning(
-                                            _lanBootstrapServiceIP!,
-                                            _lanBootstrapServicePort!,
+                                  Expanded(child: _uikitSidebar()),
+                                ],
+                              ),
+                            ),
+                            VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color:
+                                  Theme.of(context).colorScheme.outlineVariant,
+                            ),
+                          ],
+                          Expanded(
+                            child: _buildMainPane(context),
+                          ),
+                        ],
+                      ),
+                      // Bootstrap service status banner — show on native desktop
+                      // and on wide tablet/desktop-class viewports (e.g. iPad in
+                      // landscape) so the LAN status surface isn't hidden on
+                      // bigger touch devices that can act as the LAN host.
+                      if (PlatformUtils.isDesktop ||
+                          ResponsiveLayout.isDesktop(context))
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          // Asymmetric enter/exit: snappy 250ms in (easeOut) so the
+                          // banner shows up quickly when the LAN service comes
+                          // online, faster 150ms out (easeIn) so dismissing feels
+                          // responsive and doesn't linger.
+                          child: AnimatedSwitcher(
+                            duration: MediaQuery.disableAnimationsOf(context)
+                                ? Duration.zero
+                                : const Duration(milliseconds: 250),
+                            reverseDuration:
+                                MediaQuery.disableAnimationsOf(context)
+                                    ? Duration.zero
+                                    : const Duration(milliseconds: 150),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            transitionBuilder: (child, animation) {
+                              final slide = Tween<Offset>(
+                                begin: const Offset(0, -1),
+                                end: Offset.zero,
+                              ).animate(animation);
+                              return SlideTransition(
+                                position: slide,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: (_lanBootstrapServiceRunning &&
+                                    _lanBootstrapServiceIP != null &&
+                                    _lanBootstrapServicePort != null)
+                                ? Material(
+                                    key: const ValueKey('lan-bootstrap-banner'),
+                                    elevation: 0,
+                                    color: AppThemeConfig.successColor
+                                        .withValues(alpha: 0.08),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.lg,
+                                          vertical: AppSpacing.sm),
+                                      decoration: BoxDecoration(
+                                        border: Border(
+                                          bottom: BorderSide(
+                                            color: AppThemeConfig.successColor
+                                                .withValues(alpha: 0.25),
+                                            width: 1,
                                           ),
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                color: Theme.of(context).colorScheme.onSurface,
-                                                fontWeight: FontWeight.w500,
-                                              ),
                                         ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close, size: 18),
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                        // 44x44 minimum tap area for mobile (Apple HIG / Material 48dp).
-                                        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                                        padding: EdgeInsets.zero,
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: () {
-                                          setState(() {
-                                            _lanBootstrapServiceRunning = false;
-                                          });
-                                        },
-                                        tooltip: AppLocalizations.of(context)!.hide,
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.cloud_done_outlined,
+                                            color: AppThemeConfig.successColor,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: AppSpacing.sm),
+                                          Expanded(
+                                            child: Text(
+                                              AppLocalizations.of(context)!
+                                                  .bootstrapServiceRunning(
+                                                _lanBootstrapServiceIP!,
+                                                _lanBootstrapServicePort!,
+                                              ),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurface,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.close,
+                                                size: 18),
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            // 44x44 minimum tap area for mobile (Apple HIG / Material 48dp).
+                                            constraints: const BoxConstraints(
+                                                minWidth: 44, minHeight: 44),
+                                            padding: EdgeInsets.zero,
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            onPressed: () {
+                                              setState(() {
+                                                _lanBootstrapServiceRunning =
+                                                    false;
+                                              });
+                                            },
+                                            tooltip:
+                                                AppLocalizations.of(context)!
+                                                    .hide,
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              )
-                            : const SizedBox.shrink(key: ValueKey('lan-bootstrap-banner-hidden')),
-                      ),
-                    ),
-                ],
+                                    ),
+                                  )
+                                : const SizedBox.shrink(
+                                    key: ValueKey(
+                                        'lan-bootstrap-banner-hidden')),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                bottomNavigationBar:
+                    useBottomNav ? _buildBottomNavigationBar() : null,
               ),
-              ),
-              bottomNavigationBar: useBottomNav ? _buildBottomNavigationBar() : null,
-            ),
             );
             // Desktop keyboard shortcuts — meta+/ctrl+ comma/N/W/F.
             // Setting both `meta` and `control` on the SingleActivator
@@ -1128,8 +1168,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               // expose theirs yet — leave them as TODO.
               if (i == 0) {
                 unawaited(
-                  TencentCloudChatConversationController.instance
-                      .scrollToTop(),
+                  TencentCloudChatConversationController.instance.scrollToTop(),
                 );
               }
               // TODO: scroll-to-top for tabs 1 (contacts), 2 (applications),
@@ -1153,8 +1192,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           selectedFontSize: 12,
           unselectedFontSize: 12,
           selectedLabelStyle: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+            fontWeight: FontWeight.w600,
+          ),
           unselectedLabelStyle: theme.textTheme.labelSmall,
           items: [
             BottomNavigationBarItem(
@@ -1171,19 +1210,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           if (totalUnreadCount == 0) {
                             return const SizedBox.shrink();
                           }
-                          final displayText = totalUnreadCount > 99 ? "99+" : "$totalUnreadCount";
+                          final displayText = totalUnreadCount > 99
+                              ? "99+"
+                              : "$totalUnreadCount";
                           final isLargeText = displayText.length > 2;
                           return Semantics(
-                            label: AppLocalizations.of(context)!.unreadMessagesSemantics(totalUnreadCount),
+                            label: AppLocalizations.of(context)!
+                                .unreadMessagesSemantics(totalUnreadCount),
                             container: true,
                             child: UnconstrainedBox(
                               child: Container(
                                 constraints: const BoxConstraints(minWidth: 16),
                                 height: 16,
-                                padding: EdgeInsets.symmetric(horizontal: isLargeText ? 5 : 4),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: isLargeText ? 5 : 4),
                                 decoration: BoxDecoration(
                                   color: AppThemeConfig.errorColor,
-                                  borderRadius: BorderRadius.circular(AppThemeConfig.badgeBorderRadius),
+                                  borderRadius: BorderRadius.circular(
+                                      AppThemeConfig.badgeBorderRadius),
                                   border: Border.all(
                                     color: theme.scaffoldBackgroundColor,
                                     width: 1.5,
@@ -1195,15 +1239,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       displayText,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.labelSmall?.copyWith(
-                                            color: scheme.onError,
-                                            fontWeight: FontWeight.w600,
-                                            height: 1.0,
-                                            fontSize: 10,
-                                            fontFeatures: const [
-                                              FontFeature.tabularFigures(),
-                                            ],
-                                          ),
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        color: scheme.onError,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.0,
+                                        fontSize: 10,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                      ),
                                       textAlign: TextAlign.center,
                                     ),
                                   ),
@@ -1303,9 +1348,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       child: NewEntryButton(
                         onAddFriend: _showAddFriendDialog,
                         onCreateGroup: _showAddGroupDialog,
-                        onJoinIrcChannel: _ircAppInstalled
-                            ? _showJoinIrcChannelDialog
-                            : null,
+                        onJoinIrcChannel:
+                            _ircAppInstalled ? _showJoinIrcChannelDialog : null,
                       ),
                     ),
                   ),
@@ -1537,7 +1581,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (target == null) {
       target = V2TimConversation(
         conversationID: targetConvId,
-        type: hasGroup ? ConversationType.V2TIM_GROUP : ConversationType.V2TIM_C2C,
+        type: hasGroup
+            ? ConversationType.V2TIM_GROUP
+            : ConversationType.V2TIM_C2C,
         userID: hasGroup ? null : peerId,
         groupID: hasGroup ? groupId : null,
         showName: hasGroup ? groupId : peerId,
@@ -1555,7 +1601,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await Prefs.setAutoAcceptFriends(value, toxId);
     }
     if (value && _pendingFriendApps.isNotEmpty) {
-      await _acceptFriendApplications(List<V2TimFriendApplication>.from(_pendingFriendApps));
+      await _acceptFriendApplications(
+          List<V2TimFriendApplication>.from(_pendingFriendApps));
     }
   }
 
@@ -1570,7 +1617,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     widget.service.setAutoAcceptGroupInvites(value);
   }
 
-  Future<void> _acceptFriendApplications(List<V2TimFriendApplication> apps) async {
+  Future<void> _acceptFriendApplications(
+      List<V2TimFriendApplication> apps) async {
     for (final app in apps) {
       final uid = app.userID;
       if (uid.isEmpty) continue;
@@ -1585,7 +1633,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted) setState(() {});
     await FakeUIKit.instance.im?.refreshContacts();
     await _load();
-      _showSnackBar(AppLocalizations.of(context)!.autoAcceptedNewFriendRequest);
+    _showSnackBar(AppLocalizations.of(context)!.autoAcceptedNewFriendRequest);
     await _updateTray();
   }
 
@@ -1665,7 +1713,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _showJoinIrcChannelDialog() async {
     final ircAppManager = IrcAppManager();
     await ircAppManager.init();
-    
+
     // Check if app is installed
     if (!ircAppManager.isInstalled) {
       final appL10n = AppLocalizations.of(context)!;
@@ -1687,7 +1735,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         password: result.password,
       );
       if (groupId != null) {
-        await _handleGroupChanged(groupId, displayName: 'IRC: ${result.channel}');
+        await _handleGroupChanged(groupId,
+            displayName: 'IRC: ${result.channel}');
         final appL10n = AppLocalizations.of(context)!;
         _showSnackBar(appL10n.ircChannelAdded(result.channel));
       } else {
@@ -1715,20 +1764,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     AppSnackBar.showError(ctx, message);
   }
 
-  Future<void> _showMessageReceiversDialog(BuildContext context, String msgID, String groupID) async {
+  Future<void> _showMessageReceiversDialog(
+      BuildContext context, String msgID, String groupID) async {
     final manager = FakeUIKit.instance.messageManager;
     if (manager == null) return;
-    
+
     final receivers = manager.getMessageReceivers(msgID);
     if (receivers.isEmpty) {
       _showSnackBar(AppLocalizations.of(context)!.noReceivers);
       return;
     }
-    
+
     // Get friend list to get nicknames
     final friends = await widget.service.getFriendList();
     final friendMap = {for (var f in friends) f.userId: f.nickName};
-    
+
     // Show dialog with receiver list
     if (!context.mounted) return;
     await showDialog(
@@ -1737,7 +1787,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
         ),
-        title: Text(AppLocalizations.of(context)!.messageReceivers(receivers.length.toString())),
+        title: Text(AppLocalizations.of(context)!
+            .messageReceivers(receivers.length.toString())),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
@@ -1752,7 +1803,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   backgroundColor: scheme.primary.withValues(alpha: 0.12),
                   foregroundColor: scheme.primary,
                   child: Text(
-                    nickname.isNotEmpty ? nickname.substring(0, 1).toUpperCase() : '?',
+                    nickname.isNotEmpty
+                        ? nickname.substring(0, 1).toUpperCase()
+                        : '?',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: scheme.primary,
                           fontWeight: FontWeight.w600,

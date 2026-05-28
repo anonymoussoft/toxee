@@ -9,6 +9,10 @@ import 'package:tim2tox_dart/service/call_bridge_service.dart';
 import 'package:tim2tox_dart/service/tuicallkit_adapter.dart';
 
 void main() {
+  tearDown(() {
+    getTUICallKitAdapter()?.dispose();
+  });
+
   test(
       'registers outgoing signaling calls so they can be looked up and canceled',
       () async {
@@ -23,6 +27,9 @@ void main() {
       data: '{"type":"audio","audio":true,"video":false}',
       friendNumber: 7,
     );
+    // Model the adapter marking the media leg started after startCall()
+    // succeeds, so endCall() tears the ToxAV leg down (not just signaling).
+    bridge.markAvLegStarted('invite-1');
 
     final info = bridge.getCallInfo('invite-1');
     expect(info, isNotNull);
@@ -54,6 +61,71 @@ void main() {
 
     expect(handled, isFalse);
     expect(sdk.inviteCallCount, 0);
+    expect(bridge.getCallInfo('invite-1'), isNull);
+  });
+
+  test('outgoing accept does not start the ToxAV leg twice', () async {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    final adapter = await TUICallKitAdapter.initialize(sdk, av, bridge);
+    final changes = <_CallChange>[];
+    bridge.onCallStateChanged = (inviteID, state, {endReason}) {
+      changes.add(_CallChange(inviteID, state, endReason));
+    };
+
+    final handled = await adapter.handleCall(
+      type: TYPE_AUDIO,
+      userids: const ['friend-1'],
+    );
+    sdk.listener!.onInviteeAccepted('invite-1', 'friend-1', '{}');
+
+    expect(handled, isTrue);
+    expect(av.startedFriendNumbers, const [7]);
+    expect(bridge.getCallInfo('invite-1')?.state, CallState.inCall);
+    expect(changes.single.state, CallState.inCall);
+  });
+
+  test('duplicate outgoing accept does not re-fire inCall', () async {
+    // The signaling transport can redeliver an accept for an already
+    // established call. The idempotency guard in onInviteeAccepted must skip
+    // the second transition so the UI does not re-run enterCall / media
+    // capture on a live call.
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    final adapter = await TUICallKitAdapter.initialize(sdk, av, bridge);
+    final changes = <_CallChange>[];
+    bridge.onCallStateChanged = (inviteID, state, {endReason}) {
+      changes.add(_CallChange(inviteID, state, endReason));
+    };
+
+    await adapter.handleCall(type: TYPE_AUDIO, userids: const ['friend-1']);
+    sdk.listener!.onInviteeAccepted('invite-1', 'friend-1', '{}');
+    sdk.listener!.onInviteeAccepted('invite-1', 'friend-1', '{}');
+
+    expect(
+      changes.where((c) => c.state == CallState.inCall).length,
+      1,
+      reason: 'a redelivered accept must not re-fire the inCall callback',
+    );
+    expect(bridge.getCallInfo('invite-1')?.state, CallState.inCall);
+  });
+
+  test('outgoing call cancels signaling when ToxAV start fails', () async {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend()..startResult = false;
+    final bridge = CallBridgeService(sdk, av);
+    final adapter = await TUICallKitAdapter.initialize(sdk, av, bridge);
+
+    final handled = await adapter.handleCall(
+      type: TYPE_AUDIO,
+      userids: const ['friend-1'],
+    );
+
+    expect(handled, isFalse);
+    expect(av.startedFriendNumbers, const [7]);
+    expect(sdk.cancelledInviteIds, const ['invite-1']);
     expect(bridge.getCallInfo('invite-1'), isNull);
   });
 
@@ -127,6 +199,165 @@ void main() {
 
     expect(ok, isFalse);
   });
+
+  test(
+      'incoming cancellation while ringing does not end an unanswered ToxAV leg',
+      () async {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    final changes = <_CallChange>[];
+    bridge.onCallStateChanged = (inviteID, state, {endReason}) {
+      changes.add(_CallChange(inviteID, state, endReason));
+    };
+
+    sdk.listener!.onReceiveNewInvitation(
+      'invite-in-cancel',
+      'peer-1',
+      '',
+      const ['self'],
+      '{"type":"audio","audio":true,"video":false}',
+    );
+    sdk.listener!.onInvitationCancelled(
+      'invite-in-cancel',
+      'peer-1',
+      '{}',
+    );
+
+    expect(av.endedFriendNumbers, isEmpty);
+    expect(bridge.getCallInfo('invite-in-cancel'), isNull);
+    expect(changes.last.state, CallState.ended);
+    expect(changes.last.endReason, 'cancel');
+  });
+
+  test('incoming timeout while ringing does not end an unanswered ToxAV leg',
+      () async {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    final changes = <_CallChange>[];
+    bridge.onCallStateChanged = (inviteID, state, {endReason}) {
+      changes.add(_CallChange(inviteID, state, endReason));
+    };
+
+    sdk.listener!.onReceiveNewInvitation(
+      'invite-in-timeout',
+      'peer-1',
+      '',
+      const ['self'],
+      '{"type":"audio","audio":true,"video":false}',
+    );
+    sdk.listener!.onInvitationTimeout(
+      'invite-in-timeout',
+      const ['self'],
+    );
+
+    expect(av.endedFriendNumbers, isEmpty);
+    expect(bridge.getCallInfo('invite-in-timeout'), isNull);
+    expect(changes.last.state, CallState.ended);
+    expect(changes.last.endReason, 'timeout');
+  });
+
+  test('outgoing rejection tears down the already-started ToxAV leg', () {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    final changes = <_CallChange>[];
+    bridge.onCallStateChanged = (inviteID, state, {endReason}) {
+      changes.add(_CallChange(inviteID, state, endReason));
+    };
+
+    bridge.registerOutgoingCall(
+      inviteID: 'invite-out-reject',
+      inviter: 'self',
+      invitee: 'friend-1',
+      data: '{"type":"audio","audio":true,"video":false}',
+      friendNumber: 7,
+    );
+    // The ToxAV leg actually started (adapter called startCall → markAvLegStarted).
+    bridge.markAvLegStarted('invite-out-reject');
+    sdk.listener!.onInviteeRejected(
+      'invite-out-reject',
+      'friend-1',
+      '{}',
+    );
+
+    expect(av.endedFriendNumbers, const [7]);
+    expect(bridge.getCallInfo('invite-out-reject'), isNull);
+    expect(changes.single.state, CallState.ended);
+    expect(changes.single.endReason, 'reject');
+  });
+
+  test('outgoing timeout tears down the already-started ToxAV leg', () {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    final changes = <_CallChange>[];
+    bridge.onCallStateChanged = (inviteID, state, {endReason}) {
+      changes.add(_CallChange(inviteID, state, endReason));
+    };
+
+    bridge.registerOutgoingCall(
+      inviteID: 'invite-out-timeout',
+      inviter: 'self',
+      invitee: 'friend-1',
+      data: '{"type":"audio","audio":true,"video":false}',
+      friendNumber: 7,
+    );
+    // The ToxAV leg actually started (adapter called startCall → markAvLegStarted).
+    bridge.markAvLegStarted('invite-out-timeout');
+    sdk.listener!.onInvitationTimeout(
+      'invite-out-timeout',
+      const ['friend-1'],
+    );
+
+    expect(av.endedFriendNumbers, const [7]);
+    expect(bridge.getCallInfo('invite-out-timeout'), isNull);
+    expect(changes.single.state, CallState.ended);
+    expect(changes.single.endReason, 'timeout');
+  });
+
+  test(
+      'outgoing teardown in the registerOutgoingCall->startCall gap does not '
+      'end a never-started ToxAV leg', () {
+    final sdk = _FakeSdkPlatform();
+    final av = _FakeAvBackend();
+    final bridge = CallBridgeService(sdk, av);
+    final changes = <_CallChange>[];
+    bridge.onCallStateChanged = (inviteID, state, {endReason}) {
+      changes.add(_CallChange(inviteID, state, endReason));
+    };
+
+    // Registered (state: calling), friendNumber resolved — but the adapter has
+    // NOT yet reached _avService.startCall() / markAvLegStarted. This is the
+    // realistic gap where a fast reject/timeout/cancel can land.
+    bridge.registerOutgoingCall(
+      inviteID: 'invite-out-gap',
+      inviter: 'self',
+      invitee: 'friend-1',
+      data: '{"type":"audio","audio":true,"video":false}',
+      friendNumber: 7,
+    );
+    sdk.listener!.onInvitationTimeout(
+      'invite-out-gap',
+      const ['friend-1'],
+    );
+
+    // No media leg existed yet, so endCall() must NOT fire on it (native
+    // endCall with no call in progress can block/error).
+    expect(av.endedFriendNumbers, isEmpty);
+    expect(bridge.getCallInfo('invite-out-gap'), isNull);
+    expect(changes.single.state, CallState.ended);
+    expect(changes.single.endReason, 'timeout');
+  });
+}
+
+class _CallChange {
+  const _CallChange(this.inviteID, this.state, this.endReason);
+
+  final String inviteID;
+  final CallState state;
+  final String? endReason;
 }
 
 class _FakeSdkPlatform extends TencentCloudChatSdkPlatform {
@@ -193,7 +424,9 @@ class _FakeSdkPlatform extends TencentCloudChatSdkPlatform {
 class _FakeAvBackend implements CallAvBackend {
   final List<int> endedFriendNumbers = <int>[];
   final List<int> answeredFriendNumbers = <int>[];
+  final List<int> startedFriendNumbers = <int>[];
   bool answerResult = true;
+  bool startResult = true;
 
   @override
   bool get isInitialized => true;
@@ -232,6 +465,7 @@ class _FakeAvBackend implements CallAvBackend {
     int audioBitRate = 48,
     int videoBitRate = 5000,
   }) async {
-    return true;
+    startedFriendNumbers.add(friendNumber);
+    return startResult;
   }
 }

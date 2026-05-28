@@ -64,7 +64,8 @@ void main() {
       expect(result.map((app) => app.userId), ['alice', 'carol']);
     });
 
-    test('a fresh application with new wording is NOT filtered when only the '
+    test(
+        'a fresh application with new wording is NOT filtered when only the '
         'old wording was dismissed', () {
       // Regression for the user-visible bug: refusing peer B's first request
       // must not silently filter B's later requests with different wording.
@@ -81,8 +82,7 @@ void main() {
       expect(result, apps);
     });
 
-    test('normalizes 76-char Tox addresses down to the 64-char public key',
-        () {
+    test('normalizes 76-char Tox addresses down to the 64-char public key', () {
       // Native applications surface a 64-char public key; UI/dismissal calls
       // can carry the full 76-char address. Filter normalizes the input
       // userID to its 64-char prefix before composing the fingerprint, so a
@@ -131,8 +131,8 @@ void main() {
       // mutation. The "restart" is this fresh instance.
       final restartedService = FfiChatService(preferencesService: prefs);
 
-      final dismissed = await restartedService
-          .getFriendApplicationsDismissedSetForTest();
+      final dismissed =
+          await restartedService.getFriendApplicationsDismissedSetForTest();
       expect(dismissed, {'$peer|original wording'},
           reason: 'restarted service must read the previous session\'s '
               'dismissed set from prefs');
@@ -182,6 +182,46 @@ void main() {
           .getStringList(FfiChatService.dismissedFriendApplicationsKey);
       expect(stored, ['bob|some wording']);
     });
+
+    test('accept cleanup clears every fingerprint matching the userId', () {
+      // Seed a synthetic dismissed set with two fingerprints for the same
+      // peer plus one unrelated entry; after a real FFI accept succeeds,
+      // acceptFriendRequest delegates to this pure helper before persisting.
+      const userID = 'peer-reapply';
+      final updated = FfiChatService.clearDismissedApplicationsForAcceptedUser(
+        {
+          '$userID|first wording',
+          '$userID|second wording',
+          'other|hi',
+        },
+        userID,
+      );
+
+      expect(updated, {'other|hi'});
+    });
+
+    test('accept cleanup persists the trimmed dismissed set to prefs',
+        () async {
+      // End-to-end persist coverage for the post-accept cleanup that
+      // acceptFriendRequest runs after a successful FFI accept. The FFI accept
+      // itself can't succeed in a unit test, so exercise the extracted persist
+      // step directly: two fingerprints for the accepted peer must be removed
+      // and the trimmed set written back, while the unrelated entry survives.
+      // (Replaces the FFI-dependent acceptFriendRequest test that could only
+      // run with a live Tox friend — that one was the sole coverage of the
+      // load → clear → save side-effect, not just the pure helper.)
+      const userID = 'peer-reapply';
+      await prefs.setStringList(
+        FfiChatService.dismissedFriendApplicationsKey,
+        ['$userID|first wording', '$userID|second wording', 'other|hi'],
+      );
+
+      await service.clearDismissedApplicationsAfterAccept(userID);
+
+      final stored = await prefs
+          .getStringList(FfiChatService.dismissedFriendApplicationsKey);
+      expect(stored, ['other|hi']);
+    });
   });
 
   group('FfiChatService friend-application dismissal (FFI-dependent)',
@@ -207,24 +247,6 @@ void main() {
       final stored = await prefs
           .getStringList(FfiChatService.dismissedFriendApplicationsKey);
       expect(stored ?? <String>[], isEmpty);
-    });
-
-    test('acceptFriendRequest clears every fingerprint matching the userId',
-        () async {
-      // Seed prefs with two fingerprints for the same peer plus one unrelated
-      // entry; accept must remove the two matching entries but leave the
-      // unrelated one intact.
-      const userID = 'peer-reapply';
-      await prefs.setStringList(
-        FfiChatService.dismissedFriendApplicationsKey,
-        ['$userID|first wording', '$userID|second wording', 'other|hi'],
-      );
-
-      await service.acceptFriendRequest(userID);
-
-      final stored = await prefs
-          .getStringList(FfiChatService.dismissedFriendApplicationsKey);
-      expect(stored, ['other|hi']);
     });
   });
 }

@@ -775,29 +775,23 @@ Future<void> sendFile({
   required String filePath,
   String? fileName,
 }) async {
-  final ffi = FakeUIKit.instance.im?.ffi;
-  if (ffi == null) return;
-  
-  // 检查朋友是否在线（仅 C2C）
-  if (userID != null && groupID == null) {
-    final friends = await ffi.getFriendList();
-    final friend = friends.firstWhere(
-      (f) => compareToxIds(f.userId, userID),
-      orElse: () => (userId: userID, nickName: '', online: false),
-    );
-    if (!friend.online) {
-      throw Exception("Friend is offline. Cannot send file.");
-    }
+  final conv = groupID != null ? 'group_$groupID' : 'c2c_$userID';
+  final mgr = FakeUIKit.instance.messageManager;
+  if (mgr == null) return;
+
+  // Tox 群组层当前不支持文件/图片/视频传输，必须快速失败。
+  if (groupID != null && groupID.isNotEmpty) {
+    throw StateError('Group file transfer is not supported in toxee');
   }
-  
-  // 发送文件
-  if (groupID != null) {
-    await ffi.sendGroupFile(groupID, filePath);
-  } else {
-    await ffi.sendFile(userID!, filePath);
-  }
+
+  // C2C 离线文件由 FfiChatService.sendFile 统一处理：
+  // 好友离线时写入 offline_message_queue.json，并在会话中显示 pending 气泡；
+  // 好友上线后由 drain 逻辑重放。
+  await mgr.sendFile(conv, filePath);
 }
 ```
+
+HomePage 自定义图片/视频入口也直接委托 `widget.service.sendFile(userId, pickedPath)`。UI 层不再用 `getFriendList()` 做离线预判，避免把本应进入离线队列的媒体发送误报为失败。
 
 ### 接收文件
 
@@ -1199,6 +1193,11 @@ UIKit 显示文件
 - **影响**: UI 会一直显示loading状态
 - **缓解措施**: 客户端重启后通过 `_cancelPendingFileTransfers` 标记为失败
 
+**限制 3: 群组媒体/文件传输**
+- **现象**: Tox group/conference 当前没有可用的文件传输通道
+- **影响**: 群聊图片、视频和文件不会进入 pending 队列
+- **缓解措施**: `FakeChatMessageProvider.sendImage/sendFile` 在 `groupID` 存在时快速失败，避免 UI 留下永远不会完成的发送气泡
+
 ## 好友管理实现
 
 ### 添加好友
@@ -1241,26 +1240,20 @@ Future<V2TimFriendOperationResult> addFriend({
 Future<V2TimFriendOperationResult> acceptFriendApplication({
   required V2TimFriendApplication application,
 }) async {
-  final result = await ffiService.acceptFriend(application.userID);
-  
-  if (result) {
-    // 发出好友添加事件
-    _notifyFriendListAdded([application.userID]);
-    
-    return V2TimFriendOperationResult(
-      resultCode: 0,
-      resultInfo: 'success',
-      userID: application.userID,
-    );
-  } else {
-    return V2TimFriendOperationResult(
-      resultCode: -1,
-      resultInfo: 'failed',
-      userID: application.userID,
-    );
-  }
+  await ffiService.acceptFriendRequest(application.userID);
+
+  // 发出好友添加事件
+  _notifyFriendListAdded([application.userID]);
+
+  return V2TimFriendOperationResult(
+    resultCode: 0,
+    resultInfo: 'success',
+    userID: application.userID,
+  );
 }
 ```
+
+好友申请列表会把用户“忽略/关闭”的申请记录为 `<userId>|<wording>` 指纹，用于过滤重复 wording。接受好友申请时必须先确认 FFI `acceptFriendRequest` 成功；成功后再清理该 `userId` 下所有 dismissed 指纹，保证同一联系人重新申请或申请 wording 变化时不会被旧忽略状态挡住。
 
 ## 群组管理实现
 
@@ -1576,6 +1569,8 @@ toxee 使用两种主要的持久化存储方式：
 
 自动登录路径使用 `startPolling: false`，目的是让 `_StartupGate` 自己控制连接等待、好友预加载和首屏跳转时机。
 
+完整 `.zip` 备份会携带 profile、历史、离线队列、头像目录和 `metadata.json`。头像路径在导出时改写为 `@account_data/...`，导入时再映射到当前机器的账号目录；导入前会预检 `chat_history/` 和 `avatars/` 条目，拒绝越界路径、Windows drive 前缀和反斜杠路径，避免恶意归档写出账号目录或留下部分恢复状态。
+
 ## 通话与扩展能力
 
 ### 通话系统
@@ -1615,6 +1610,8 @@ toxee 使用**单实例**（instance_id=0），而 `tim2tox/auto_tests` 使用**
 - `createTestInstance` / `destroyTestInstance`：测试实例创建与销毁
 
 toxee 直接使用的接口（`getFriendList`、`getFriendApplications`、`startPolling`、`knownGroups` 等）与 tim2tox 当前实现兼容。`getFriendApplications()` 内部使用 `getFriendApplicationsForInstance(0, ...)`，单实例下行为正确。
+
+回调 Future 桥接使用 `NativeLibraryManager.addTimCallback2Map(...)` 和 `addTimValueCallback2Map(...)`。这组名称覆盖当前 bootstrap 后的 SDK API；不要再调用旧文档/旧补丁中出现的 `timCallback2Future` / `timValueCallback2Future` 名称，否则在 8.8/8.9 之间切换 SDK 时容易出现 analyzer 或运行期不兼容。
 
 ### 回归验证清单
 

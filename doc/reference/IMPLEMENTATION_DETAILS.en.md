@@ -769,29 +769,24 @@ Future<void> sendFile({
   required String filePath,
   String? fileName,
 }) async {
-  final ffi = FakeUIKit.instance.im?.ffi;
-  if (ffi == null) return;
-  
-  // Check if friend is online (C2C only)
-  if (userID != null && groupID == null) {
-    final friends = await ffi.getFriendList();
-    final friend = friends.firstWhere(
-      (f) => compareToxIds(f.userId, userID),
-      orElse: () => (userId: userID, nickName: '', online: false),
-    );
-    if (!friend.online) {
-      throw Exception("Friend is offline. Cannot send file.");
-    }
+  final conv = groupID != null ? 'group_$groupID' : 'c2c_$userID';
+  final mgr = FakeUIKit.instance.messageManager;
+  if (mgr == null) return;
+
+  // The current Tox group layer does not support file/image/video transfer,
+  // so group media must fail fast.
+  if (groupID != null && groupID.isNotEmpty) {
+    throw StateError('Group file transfer is not supported in toxee');
   }
-  
-  // Send file
-  if (groupID != null) {
-    await ffi.sendGroupFile(groupID, filePath);
-  } else {
-    await ffi.sendFile(userID!, filePath);
-  }
+
+  // C2C offline files are handled by FfiChatService.sendFile: offline sends
+  // are persisted to offline_message_queue.json, shown as pending bubbles,
+  // and replayed by the drain logic when the friend comes online.
+  await mgr.sendFile(conv, filePath);
 }
 ```
+
+The custom image/video picker in HomePage also delegates directly to `widget.service.sendFile(userId, pickedPath)`. The UI layer no longer pre-checks `getFriendList()` for offline status, which prevents valid offline media sends from being surfaced as immediate failures instead of queued transfers.
 
 ### Receive files
 
@@ -1193,6 +1188,11 @@ This ensures that even if the `file_request` event is lost, file reception still
 - **Impact**: UI will always display loading status
 - **Mitigation**: Marked as failed via `_cancelPendingFileTransfers` after client restart
 
+**Limitation 3: Group media/file transfer**
+- **Phenomenon**: The current Tox group/conference layer has no usable file-transfer channel.
+- **Impact**: Group images, videos, and files do not enter the pending queue.
+- **Mitigation**: `FakeChatMessageProvider.sendImage/sendFile` fail fast when `groupID` is present, preventing the UI from keeping a send bubble that can never complete.
+
 ## Friends management implementation
 
 ### Add friends
@@ -1235,26 +1235,20 @@ Future<V2TimFriendOperationResult> addFriend({
 Future<V2TimFriendOperationResult> acceptFriendApplication({
   required V2TimFriendApplication application,
 }) async {
-  final result = await ffiService.acceptFriend(application.userID);
-  
-  if (result) {
-    // Send friend adding event
-    _notifyFriendListAdded([application.userID]);
-    
-    return V2TimFriendOperationResult(
-      resultCode: 0,
-      resultInfo: 'success',
-      userID: application.userID,
-    );
-  } else {
-    return V2TimFriendOperationResult(
-      resultCode: -1,
-      resultInfo: 'failed',
-      userID: application.userID,
-    );
-  }
+  await ffiService.acceptFriendRequest(application.userID);
+
+  // Send friend-added event
+  _notifyFriendListAdded([application.userID]);
+
+  return V2TimFriendOperationResult(
+    resultCode: 0,
+    resultInfo: 'success',
+    userID: application.userID,
+  );
 }
 ```
+
+Friend applications that the user dismisses are tracked with `<userId>|<wording>` fingerprints so repeated wording can be hidden. Accepting a request must first succeed through FFI `acceptFriendRequest`; only then are all dismissed fingerprints for that `userId` cleared, so a future application from the same contact, or a changed wording, is not blocked by stale dismissal state.
 
 ## Group management implementation
 
@@ -1568,6 +1562,8 @@ Each account has an independent directory and running resources:
 
 The automatic login path uses `startPolling: false`. The purpose is to let `_StartupGate` control the connection waiting, friend preloading and first screen jump timing.
 
+Full `.zip` backups carry the profile, history, offline queue, avatar directory, and `metadata.json`. Avatar paths are rewritten to `@account_data/...` during export and mapped back to the current machine's account directory during import. Import preflights `chat_history/` and `avatars/` entries and rejects escaping paths, Windows drive prefixes, and backslash paths, preventing malicious archives from writing outside the account directory or leaving partially restored profile data.
+
 ## Calling and expansion capabilities
 
 ### Call systemThe client call link consists of three layers:
@@ -1605,6 +1601,8 @@ toxee uses **single instance** (instance_id=0), while `tim2tox/auto_tests` uses 
 - `createTestInstance` / `destroyTestInstance`: test instance creation and destruction
 
 The interfaces used directly by toxee (`getFriendList`, `getFriendApplications`, `startPolling`, `knownGroups`, etc.) are compatible with the current implementation of tim2tox. `getFriendApplications()` uses `getFriendApplicationsForInstance(0, ...)` internally and behaves correctly in a single instance.
+
+Callback Future bridging uses `NativeLibraryManager.addTimCallback2Map(...)` and `addTimValueCallback2Map(...)`. These names match the SDK API produced by the current bootstrap flow; avoid the older `timCallback2Future` / `timValueCallback2Future` names because they can break analyzer or runtime compatibility when switching between SDK 8.8 and 8.9 layouts.
 
 ### Regression verification checklist
 

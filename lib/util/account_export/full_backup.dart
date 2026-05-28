@@ -21,6 +21,7 @@ import 'package:path/path.dart' as p;
 import '../app_paths.dart';
 import '../logger.dart';
 import '../prefs.dart';
+import '../tox_utils.dart';
 import 'tox_file_io.dart';
 
 /// Current full-backup metadata schema version. Bump when the on-disk
@@ -28,6 +29,38 @@ import 'tox_file_io.dart';
 /// non-backward-compatible way. Backups without `formatVersion` are treated
 /// as v1 for legacy compatibility (older toxee builds shipped without it).
 const int _kBackupFormatVersion = 1;
+
+String _safeBackupRestorePath({
+  required String baseDir,
+  required String relativePath,
+}) {
+  if (relativePath.contains('\\')) {
+    throw Exception('Unsafe backup path: $relativePath');
+  }
+  if (relativePath.contains(':')) {
+    throw Exception('Unsafe backup path: $relativePath');
+  }
+
+  final normalizedRelative = p.url.normalize(relativePath);
+  if (normalizedRelative == '.' ||
+      normalizedRelative == '..' ||
+      normalizedRelative.startsWith('../') ||
+      p.url.isAbsolute(normalizedRelative)) {
+    throw Exception('Unsafe backup path: $relativePath');
+  }
+
+  final normalizedBase = p.normalize(p.absolute(baseDir));
+  final targetPath = p.normalize(
+    p.joinAll(<String>[
+      normalizedBase,
+      ...p.url.split(normalizedRelative),
+    ]),
+  );
+  if (targetPath != normalizedBase && !p.isWithin(normalizedBase, targetPath)) {
+    throw Exception('Unsafe backup path: $relativePath');
+  }
+  return targetPath;
+}
 
 /// Export a comprehensive .zip backup containing:
 /// - `tox_profile.tox` (the Tox identity/profile, optionally encrypted)
@@ -102,8 +135,8 @@ Future<String> exportFullBackup({
         if (entity is File) {
           final relativePath = p.relative(entity.path, from: avatarsDir);
           final data = await entity.readAsBytes();
-          archive.addFile(
-              ArchiveFile('avatars/$relativePath', data.length, data));
+          archive
+              .addFile(ArchiveFile('avatars/$relativePath', data.length, data));
         }
       }
     }
@@ -125,11 +158,14 @@ Future<String> exportFullBackup({
       await for (final entity in avatarsDirectory.list()) {
         if (entity is File) {
           final fileName = p.basename(entity.path);
-          // Match pattern: friend_<friendId>_avatar
-          final match =
-              RegExp(r'^friend_([A-Fa-f0-9]{64})_avatar$').firstMatch(fileName);
+          // Match the friend avatar naming used by FriendAssetCleanup and the
+          // receive path: friend_<id>_avatar_<timestamp>.<ext>. Older backups
+          // may also have friend_<id>_avatar or friend_<id>_avatar.<ext>.
+          final match = RegExp(
+            r'^friend_([A-Fa-f0-9]{64}(?:[A-Fa-f0-9]{12})?)_avatar(?:[_\.].*)?$',
+          ).firstMatch(fileName);
           if (match != null) {
-            final friendId = match.group(1)!;
+            final friendId = normalizeToxId(match.group(1)!);
             final pathKey = 'friend_avatar_path_$friendId';
             if (!scopedPrefs.containsKey(pathKey)) {
               // Add discovered avatar path
@@ -142,8 +178,7 @@ Future<String> exportFullBackup({
 
     // 4b. Convert absolute avatar paths to relative paths for portability.
     // On import, these will be converted back to the target machine's paths.
-    final accountDataRoot =
-        await AppPaths.getAccountDataRoot(normalizedToxId);
+    final accountDataRoot = await AppPaths.getAccountDataRoot(normalizedToxId);
     final accountAvatarsDir =
         await AppPaths.getAccountAvatarsPath(normalizedToxId);
     for (final key in scopedPrefs.keys.toList()) {
@@ -160,6 +195,12 @@ Future<String> exportFullBackup({
           final accountPath = p.join(accountAvatarsDir, fileName);
           if (await File(accountPath).exists()) {
             scopedPrefs[key] = '@account_data/avatars/$fileName';
+          } else {
+            // Not portable: the file lives outside the account data we
+            // archive, so its absolute path would dangle (or point at a
+            // foreign location) on any other machine. Drop the pref so the
+            // avatar falls back to default on restore instead.
+            scopedPrefs.remove(key);
           }
         }
       }
@@ -350,6 +391,32 @@ Future<Map<String, dynamic>> importFullBackup({
     throw Exception('Could not determine Tox ID from backup');
   }
 
+  // Preflight archive paths before writing any account files. This keeps a
+  // malicious or malformed backup from partially restoring profile data before
+  // an unsafe nested path is rejected.
+  final historyDir = await AppPaths.getAccountChatHistoryPath(toxId);
+  final avatarsDir = await AppPaths.getAccountAvatarsPath(toxId);
+  for (final entry in archive.files) {
+    if (!entry.isFile) continue;
+    if (entry.name.startsWith('chat_history/')) {
+      final relativePath = entry.name.substring('chat_history/'.length);
+      if (relativePath.isNotEmpty) {
+        _safeBackupRestorePath(
+          baseDir: historyDir,
+          relativePath: relativePath,
+        );
+      }
+    } else if (entry.name.startsWith('avatars/')) {
+      final relativePath = entry.name.substring('avatars/'.length);
+      if (relativePath.isNotEmpty) {
+        _safeBackupRestorePath(
+          baseDir: avatarsDir,
+          relativePath: relativePath,
+        );
+      }
+    }
+  }
+
   // 3. Write tox_profile.tox to per-account directory
   if (toxProfile != null) {
     final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
@@ -364,8 +431,10 @@ Future<Map<String, dynamic>> importFullBackup({
     if (entry.name.startsWith('chat_history/') && entry.isFile) {
       final relativePath = entry.name.substring('chat_history/'.length);
       if (relativePath.isEmpty) continue;
-      final historyDir = await AppPaths.getAccountChatHistoryPath(toxId);
-      final targetPath = p.join(historyDir, relativePath);
+      final targetPath = _safeBackupRestorePath(
+        baseDir: historyDir,
+        relativePath: relativePath,
+      );
       final targetFile = File(targetPath);
       await targetFile.parent.create(recursive: true);
       await targetFile.writeAsBytes(entry.content as List<int>);
@@ -378,8 +447,10 @@ Future<Map<String, dynamic>> importFullBackup({
     if (entry.name.startsWith('avatars/') && entry.isFile) {
       final relativePath = entry.name.substring('avatars/'.length);
       if (relativePath.isEmpty) continue;
-      final avatarsDir = await AppPaths.getAccountAvatarsPath(toxId);
-      final targetPath = p.join(avatarsDir, relativePath);
+      final targetPath = _safeBackupRestorePath(
+        baseDir: avatarsDir,
+        relativePath: relativePath,
+      );
       final targetFile = File(targetPath);
       await targetFile.parent.create(recursive: true);
       await targetFile.writeAsBytes(entry.content as List<int>);
@@ -405,7 +476,23 @@ Future<Map<String, dynamic>> importFullBackup({
         final val = scopedPrefs[key] as String;
         if (val.startsWith('@account_data/')) {
           final relPath = val.substring('@account_data/'.length);
-          scopedPrefs[key] = p.join(accountDataRoot, relPath);
+          try {
+            // Validate the metadata-derived path the same way archive file
+            // entries are validated — `p.join` does not normalize `..`, so a
+            // crafted `@account_data/../../../etc/...` value would otherwise
+            // be stored as a pref pointing outside the account data root and
+            // read later when rendering the avatar.
+            scopedPrefs[key] = _safeBackupRestorePath(
+              baseDir: accountDataRoot,
+              relativePath: relPath,
+            );
+          } catch (_) {
+            scopedPrefs.remove(key);
+          }
+        } else {
+          // Non-portable absolute path (older backups / foreign machine).
+          // Don't restore a path that would dangle or escape this account.
+          scopedPrefs.remove(key);
         }
       }
     }

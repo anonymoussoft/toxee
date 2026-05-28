@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
 import 'app_paths.dart';
+import 'bootstrap_node_ensurer.dart';
 import 'logger.dart';
 import 'locale_controller.dart';
 import '../call/bg_refresh_bridge.dart';
@@ -26,6 +27,15 @@ class AppBootstrapCoordinator {
     AppLogger.log('[AppBootstrapCoordinator] Starting polling...');
     await service.startPolling();
     AppLogger.log('[AppBootstrapCoordinator] Polling started');
+
+    // Guarantee the live instance has DHT bootstrap nodes applied. init()'s
+    // _loadAndApplySavedBootstrapNode only applies what was already persisted,
+    // which is nothing on a brand-new account — registration never seeds a
+    // node. Every startup path (auto-login, manual login, registration) funnels
+    // through here, so this is the one place that closes the
+    // fresh-account-can't-connect gap. Applies the saved node synchronously and
+    // (in auto mode) refreshes from the live list in the background.
+    await BootstrapNodeEnsurer.ensureForSession(service);
 
     // Android: launch the persistent foreground service so the tox polling
     // loop survives the app going into the background. No-op on other

@@ -152,6 +152,12 @@ class BootstrapNodesService {
     return _getFallbackNodes();
   }
 
+  /// The built-in, hardcoded public bootstrap nodes. Used as the offline
+  /// fallback when [fetchNodes] can't reach nodes.tox.chat, and as the
+  /// immediate first-run seed so a brand-new account has DHT entry points
+  /// without waiting on an HTTP round-trip.
+  static List<BootstrapNode> get fallbackNodes => _getFallbackNodes();
+
   static List<BootstrapNode> _getFallbackNodes() {
     // Fallback nodes from the codebase
     return [

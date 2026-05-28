@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_bootstrap_result.dart';
 import '../util/logger.dart';
+import '../util/platform_utils.dart';
 import '../util/prefs.dart';
 import '../util/prefs_upgrader.dart';
 
@@ -33,6 +34,20 @@ class PrefsBootstrap {
           '[PrefsBootstrap] LAN service was running at last shutdown — restored '
           'pre-LAN bootstrap node ${priorNode.host}:${priorNode.port}',
         );
+      }
+    }
+    // Mobile can't run the desktop-only LAN bootstrap daemon. Normalize a
+    // persisted 'lan' mode to 'auto' here — at the earliest startup point,
+    // before any FfiChatService.init() reads the mode in
+    // _loadAndApplySavedBootstrapNode. Doing it globally (not just in the
+    // startup gate) covers manual login, registration, and account switch too,
+    // so mobile never tries to bootstrap from a stale LAN node on first connect.
+    if (!PlatformUtils.isDesktop) {
+      final mode = await Prefs.getBootstrapNodeMode();
+      if (mode == 'lan') {
+        await Prefs.setBootstrapNodeMode('auto');
+        AppLogger.log(
+            '[PrefsBootstrap] Downgraded persisted LAN bootstrap mode to auto on mobile');
       }
     }
     try {
