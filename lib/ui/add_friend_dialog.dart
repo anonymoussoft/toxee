@@ -8,6 +8,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import '../util/ffi_chat_service_account_key.dart';
 import '../../i18n/app_localizations.dart';
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
@@ -125,7 +126,10 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
 
     // A1: client-side self-add check. C++ also rejects (TOX_ERR_FRIEND_ADD_OWN_KEY)
     // but surfaces a generic error; reject earlier with a clear message.
-    final selfId = widget.service.selfId;
+    // Use `accountKey` (real Tox address) — `selfId` returns the V2TIM login
+    // placeholder, which would never match a user-pasted 76-char Tox ID and
+    // silently disabled the self-add guard.
+    final selfId = widget.service.accountKey;
     if (selfId.isNotEmpty &&
         compareToxIds(rawId, selfId)) {
       _notifyVia(messenger,

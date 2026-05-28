@@ -48,6 +48,12 @@ class _NewEntryButtonState extends State<NewEntryButton> {
     final tL10n = TencentCloudChatLocalizations.of(context);
     return PopupMenuButton<String>(
       key: _menuKey,
+      // Open the menu *below* the button (anchor at the button's bottom
+      // edge) instead of Flutter's default `PopupMenuPosition.over` which
+      // places the first menu item on top of the button — that made the
+      // pill visually disappear behind the menu the moment it opened, and
+      // looked like the button "ate itself" (see sc_01.png).
+      position: PopupMenuPosition.under,
       // Hover/long-press tooltip — surfaced on desktop hover and assistive
       // tech. AppLocalizations key is authoritative; falls back to UIKit's
       // newChat string when AppLocalizations isn't ready yet.

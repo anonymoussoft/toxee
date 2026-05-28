@@ -75,12 +75,21 @@ class AccountSwitcher {
       // before navigating, then stamp lastLoginTime.
       await AppBootstrapCoordinator.boot(newService);
       try {
-        await Prefs.touchAccountLoginTime(newService.selfId);
+        // `selfId` is the V2TIM placeholder (`FlutterUIKitClient`); the
+        // `account_list` row is keyed by the real Tox address. We know the
+        // expected real ID here (`targetToxId`), so prefer the FFI's
+        // resolved value and fall back to `targetToxId` rather than the
+        // placeholder.
+        final touchId = newService.getSelfToxId() ?? targetToxId;
+        await Prefs.touchAccountLoginTime(touchId);
       } catch (_) {}
 
-      // 6. Verify toxId
-      final actualToxId = newService.selfId;
-      if (!compareToxIds(actualToxId, targetToxId)) {
+      // 6. Verify the FFI-reported Tox ID matches what we asked for. The
+      // V2TIM `selfId` is always the same placeholder string, so comparing
+      // it with `targetToxId` would always mismatch — use the real address.
+      final actualToxId = newService.getSelfToxId() ?? '';
+      if (actualToxId.isNotEmpty &&
+          !compareToxIds(actualToxId, targetToxId)) {
         // Log warning but continue
       }
 

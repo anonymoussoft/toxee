@@ -435,8 +435,12 @@ class _LoginPageState extends State<LoginPage> {
           await _bootSession(service);
           // Boot succeeded — only now mark this account as "recently logged in"
           // so a failed boot earlier doesn't leave a misleading timestamp.
+          // `selfId` is the V2TIM login placeholder (`FlutterUIKitClient`);
+          // account_list is keyed by the real Tox address, so use
+          // `getSelfToxId()` here or the touch silently misses the record.
           try {
-            await Prefs.touchAccountLoginTime(service.selfId);
+            final touchId = service.getSelfToxId() ?? service.selfId;
+            await Prefs.touchAccountLoginTime(touchId);
           } catch (_) {}
           if (!mounted) {
             await _teardownSession(service: service);

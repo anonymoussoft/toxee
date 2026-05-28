@@ -7,6 +7,7 @@ import '../adapters/shared_prefs_adapter.dart';
 import '../util/account_service.dart';
 import '../util/app_bootstrap_coordinator.dart';
 import '../util/logger.dart';
+import '../util/placeholder_account_migration.dart';
 import '../util/prefs.dart';
 
 import 'startup_outcome.dart';
@@ -47,6 +48,14 @@ class StartupSessionUseCase {
       // AppBootstrapCoordinator.boot → BootstrapNodeEnsurer.ensureForSession,
       // which every startup path shares.
 
+      // Migrate any account that was historically stored under the V2TIM
+      // login placeholder (`FlutterUIKitClient`) before we look up the
+      // account record by nickname — otherwise the lookup would return the
+      // placeholder-keyed record and propagate the wrong toxId into the
+      // session paths. Idempotent and safe to call when nothing needs
+      // migrating (returns null and exits in microseconds).
+      await PlaceholderAccountMigration.migrateIfNeeded();
+
       Map<String, String>? account;
       try {
         account = await Prefs.getUniqueAccountByNickname(nick);
@@ -83,7 +92,20 @@ class StartupSessionUseCase {
         await legacyService.init();
         await legacyService.login(
             userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-        final toxId = legacyService.selfId;
+        // See LoginUseCase: `selfId` returns the V2TIM login `userId`
+        // placeholder, not the Tox identity. Use `getSelfToxId()` for any
+        // toxId-keyed persistence (account record, pointer, prefs prefix,
+        // file paths). Storing the placeholder here was the source of
+        // `FlutterUIKitClient` showing as the User ID across the UI.
+        final toxId = legacyService.getSelfToxId();
+        if (toxId == null || toxId.isEmpty) {
+          throw StateError(
+              'StartupSessionUseCase: getSelfToxId() returned null after '
+              'login — refusing to persist an account record under a '
+              'placeholder identity. The caller should surface this so the '
+              'user can retry rather than silently end up with a corrupted '
+              'account_list entry.');
+        }
         legacyPrefsAdapter.setAccountPrefix(
             toxId.substring(0, toxId.length >= 16 ? 16 : toxId.length));
         // Apply the profile BEFORE persisting the account pointer/record.
@@ -110,7 +132,14 @@ class StartupSessionUseCase {
       await AppBootstrapCoordinator.boot(currentService);
 
       try {
-        await Prefs.touchAccountLoginTime(currentService.selfId);
+        // `selfId` is the V2TIM login placeholder — touching the account
+        // record under that string is a silent no-op because `account_list`
+        // is keyed by the real Tox ID. Resolve the real ID from the FFI;
+        // fall back to the placeholder only if discovery failed (in which
+        // case the touch was always going to be a no-op anyway).
+        final touchId =
+            currentService.getSelfToxId() ?? currentService.selfId;
+        await Prefs.touchAccountLoginTime(touchId);
       } catch (_) {}
 
       onStepChanged(StartupStep.connecting);

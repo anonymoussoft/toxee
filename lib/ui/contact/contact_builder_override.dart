@@ -1,5 +1,9 @@
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart' as contact_pkg;
 
+// Re-export the app-bar-name override so callers in `home_page.dart` (and
+// its `part of` files) only need to import this single override module.
+export 'contact_app_bar_name_override.dart';
+
 /// Capture+restore handle for toxee's contact-profile builder overrides.
 ///
 /// We do not snapshot the prior builder closures. The upstream

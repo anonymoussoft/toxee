@@ -337,18 +337,25 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final tL10n = TencentCloudChatLocalizations.of(context);
-    return ScaffoldMessenger(
-      child: ValueListenableBuilder<Locale>(
-        valueListenable: AppLocale.locale,
-        builder: (context, locale, _) {
-          return TencentCloudChatThemeWidget(
-            build: (context, colorTheme, textStyle) => Scaffold(
-              backgroundColor: Colors.transparent,
-              body: _buildConnectionAware(context, colorTheme, tL10n, locale),
-            ),
-          );
-        },
-      ),
+    // No `Scaffold` here: it would force this widget to expand to the
+    // parent's max height (the dialog cap), leaving a tall empty area
+    // below the form. `Material(type: transparency)` provides ink/ripple
+    // semantics without imposing a height. SnackBars from inside this
+    // widget bubble up to `MaterialApp`'s root `ScaffoldMessenger`, which
+    // has the host page's `Scaffold` registered — `AppSnackBar` uses
+    // `ScaffoldMessenger.of(context)` which resolves to that root, so
+    // copy/avatar-pick toasts continue to surface (via `Overlay` they
+    // render above the modal dialog anyway).
+    return ValueListenableBuilder<Locale>(
+      valueListenable: AppLocale.locale,
+      builder: (context, locale, _) {
+        return TencentCloudChatThemeWidget(
+          build: (context, colorTheme, textStyle) => Material(
+            type: MaterialType.transparency,
+            child: _buildConnectionAware(context, colorTheme, tL10n, locale),
+          ),
+        );
+      },
     );
   }
 

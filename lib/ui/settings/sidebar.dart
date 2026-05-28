@@ -8,6 +8,7 @@ import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation_tatal_unread_count.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import '../../util/ffi_chat_service_account_key.dart';
 import '../../sdk_fake/uikit_data_facade.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/prefs.dart';
@@ -30,7 +31,12 @@ const bool _showApplicationsEntry = false;
 /// `statusMessage` seed the form; `onProfileSaved` and `onAvatarChanged` let
 /// the caller propagate updates back into its own state (e.g. drawer header
 /// avatar refresh, sidebar nickname refresh).
-void showSelfProfile(
+///
+/// Returns a `Future` because the displayed User ID must be the real Tox ID
+/// from `Prefs.getCurrentAccountToxId()` rather than UIKit's
+/// `FlutterUIKitClient` placeholder (`service.selfId`); callers that
+/// fire-and-forget should wrap with `unawaited(...)`.
+Future<void> showSelfProfile(
   BuildContext context,
   FfiChatService service,
   Stream<bool> connectionStatusStream, {
@@ -38,11 +44,23 @@ void showSelfProfile(
   String? statusMessage,
   Future<void> Function(String nickname, String statusMessage)? onProfileSaved,
   ValueChanged<String?>? onAvatarChanged,
-}) {
+}) async {
   final initialOnline = service.isConnected;
 
+  // The visible User ID must be the real Tox ID, not UIKit's
+  // `FlutterUIKitClient` placeholder that `service.selfId` returns at the
+  // UIKit boundary. Fall back to `service.selfId` only if Prefs hasn't been
+  // populated yet (login race — rare).
+  final storedToxId = await Prefs.getCurrentAccountToxId();
+  final resolvedUserId =
+      (storedToxId != null && storedToxId.isNotEmpty)
+          ? storedToxId
+          : service.accountKey;
+
+  if (!context.mounted) return;
+
   ProfilePage buildProfile() => ProfilePage(
-        userId: service.selfId,
+        userId: resolvedUserId,
         nickName: nickName,
         statusMessage: statusMessage,
         isEditable: true,
@@ -75,7 +93,7 @@ void showSelfProfile(
   if (ResponsiveLayout.shouldShowBottomNav(context)) {
     final title =
         TencentCloudChatLocalizations.of(context)?.profile ?? 'Profile';
-    Navigator.of(context).push(
+    unawaited(Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
         builder: (routeContext) => Scaffold(
@@ -96,11 +114,11 @@ void showSelfProfile(
           ),
         ),
       ),
-    );
+    ));
     return;
   }
 
-  showDialog<void>(
+  unawaited(showDialog<void>(
     context: context,
     builder: (dialogContext) {
       final size = MediaQuery.sizeOf(dialogContext);
@@ -113,20 +131,25 @@ void showSelfProfile(
       return Dialog(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-          child: SizedBox(
-            width: maxW,
-            height: maxH,
+          // `ConstrainedBox` (vs `SizedBox`) so the dialog hugs the profile
+          // content when it's shorter than `maxH` — the previous fixed-height
+          // `SizedBox` left ~300px of empty space below the form on normal
+          // desktop windows. The `Stack` sizes to its largest non-Positioned
+          // child (the profile content), and the close-button `Positioned`
+          // still overlays correctly. Content taller than `maxH` scrolls via
+          // `ProfileLayout`'s internal `SingleChildScrollView`.
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
             child: Stack(
               children: [
                 Padding(
                   padding: const EdgeInsets.all(AppSpacing.xl),
-                  // Inner content fills the full dialog width so the profile
-                  // layout has room for its 2-column shell; the cap is the
-                  // dialog's own ceiling minus padding, no separate fixed
-                  // 440px clamp.
+                  // Inner width caps the profile column at the dialog's
+                  // ceiling minus padding; no fixed `height:` so the column
+                  // collapses to its intrinsic size when content is shorter
+                  // than the dialog ceiling.
                   child: SizedBox(
                     width: (maxW - 48).clamp(256.0, 840.0),
-                    height: (maxH - 40).clamp(360.0, 760.0),
                     child: buildProfile(),
                   ),
                 ),
@@ -146,7 +169,7 @@ void showSelfProfile(
         ),
       );
     },
-  );
+  ));
 }
 
 Widget buildSidebar({
@@ -185,6 +208,7 @@ Widget buildSidebar({
             Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
             AppSpacing.verticalSm,
             _SidebarItem(
+              key: const ValueKey('sidebar_chats'),
               context: context,
               selected: selectedIndex == 0,
               icon: Icons.chat_bubble_outline,
@@ -194,6 +218,7 @@ Widget buildSidebar({
               showUnreadCount: true,
             ),
             _ContactSidebarItem(
+              key: const ValueKey('sidebar_contacts'),
               context: context,
               selected: selectedIndex == 1,
               icon: Icons.contacts,
@@ -203,6 +228,7 @@ Widget buildSidebar({
             ),
             if (_showApplicationsEntry)
               _SidebarItem(
+                key: const ValueKey('sidebar_applications'),
                 context: context,
                 selected: selectedIndex == 2,
                 icon: Icons.apps,
@@ -212,6 +238,7 @@ Widget buildSidebar({
               ),
             const Spacer(),
             _SidebarItem(
+              key: const ValueKey('sidebar_settings'),
               context: context,
               selected: selectedIndex == 3,
               icon: Icons.settings,
@@ -299,7 +326,9 @@ class _UserAvatarState extends State<_UserAvatar> {
   }
 
   void _openProfile(BuildContext context) {
-    showSelfProfile(
+    // `showSelfProfile` is async because it resolves the real Tox ID from
+    // Prefs before opening the dialog; the tap handler is fire-and-forget.
+    unawaited(showSelfProfile(
       context,
       widget.service,
       widget.connectionStatusStream,
@@ -328,7 +357,7 @@ class _UserAvatarState extends State<_UserAvatar> {
           });
         }
       },
-    );
+    ));
   }
 
   @override

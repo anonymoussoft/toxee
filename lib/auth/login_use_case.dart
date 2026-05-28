@@ -112,7 +112,20 @@ class LoginUseCase {
     await legacyService.init();
     await legacyService.login(
         userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-    final toxId = legacyService.selfId;
+    // `selfId` returns the V2TIM login `userId` we just passed in (the
+    // `FlutterUIKitClient` placeholder), NOT the Tox identity. For any
+    // toxId-keyed persistence (account record, current-account pointer,
+    // per-account-prefs prefix, file paths) we must use the 76-char Tox
+    // address from `getSelfToxId()` instead — historically toxee stored the
+    // placeholder here, corrupting account_list entries to the literal
+    // string "FlutterUIKitClient".
+    final toxId = legacyService.getSelfToxId();
+    if (toxId == null || toxId.isEmpty) {
+      throw StateError(
+          'LoginUseCase: getSelfToxId() returned null after login — the '
+          'Tox FFI did not produce a self address. Refusing to persist an '
+          'account record under a placeholder identity.');
+    }
     legacyPrefsAdapter.setAccountPrefix(
         toxId.substring(0, toxId.length >= 16 ? 16 : toxId.length));
     // Apply the profile BEFORE persisting any durable prefs (mirrors the

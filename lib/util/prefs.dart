@@ -1742,6 +1742,132 @@ class Prefs {
   static Future<bool> verifyAccountPassword(String toxId, String password) =>
       _verifier().verifyPassword(toxId, password);
 
+  /// Move every password-related key (secure-storage hash + salt, plus
+  /// legacy plain-prefs hash + salt) from one toxId namespace to another.
+  ///
+  /// Used by `PlaceholderAccountMigration` when an account's identity is
+  /// being renamed from the V2TIM placeholder ("FlutterUIKitClient") to the
+  /// real 76-char Tox address. Plain `setAccountPassword(newToxId, ...)`
+  /// can't be used because we don't have the user's plaintext password —
+  /// only the stored hash and salt. So we copy the raw values verbatim
+  /// under the new key names.
+  ///
+  /// Returns:
+  /// - `MigratedNothing` when [fromToxId] has nothing in any of the four
+  ///   key slots (no-op success — common when the user never set a
+  ///   password).
+  /// - `MigratedFully` when every existing value was copied to the new
+  ///   namespace AND the old values were removed.
+  /// - `MigrationFailed` when any copy step refused / threw; partial
+  ///   writes are undone so the caller sees a clean rollback.
+  ///
+  /// Idempotent: re-running after success returns `MigratedNothing`.
+  static Future<PasswordMigrationOutcome> migrateAccountPasswordKeys({
+    required String fromToxId,
+    required String toToxId,
+  }) async {
+    if (fromToxId.isEmpty || toToxId.isEmpty || fromToxId == toToxId) {
+      return PasswordMigrationOutcome.migratedNothing;
+    }
+
+    // Snapshot source values from both storage layers.
+    final fromHashKey = PasswordVerifier.secureHashKey(fromToxId);
+    final fromSaltKey = PasswordVerifier.secureSaltKey(fromToxId);
+    final toHashKey = PasswordVerifier.secureHashKey(toToxId);
+    final toSaltKey = PasswordVerifier.secureSaltKey(toToxId);
+    final fromLegacyHashKey = PasswordVerifier.legacyHashKey(fromToxId);
+    final fromLegacySaltKey = PasswordVerifier.legacySaltKey(fromToxId);
+    final toLegacyHashKey = PasswordVerifier.legacyHashKey(toToxId);
+    final toLegacySaltKey = PasswordVerifier.legacySaltKey(toToxId);
+
+    final secureHash = await _secureRead(fromHashKey);
+    final secureSalt = await _secureRead(fromSaltKey);
+    final prefs = await _getPrefs();
+    final legacyHash = prefs.getString(fromLegacyHashKey);
+    final legacySalt = prefs.getString(fromLegacySaltKey);
+
+    final anySource = secureHash != null ||
+        secureSalt != null ||
+        legacyHash != null ||
+        legacySalt != null;
+    if (!anySource) return PasswordMigrationOutcome.migratedNothing;
+
+    // Pre-flight: refuse to clobber an existing target slot. A populated
+    // target slot means a real-toxId password is already configured —
+    // overwriting would corrupt the existing account's auth.
+    final destHash = await _secureRead(toHashKey);
+    final destSalt = await _secureRead(toSaltKey);
+    final destLegacyHash = prefs.getString(toLegacyHashKey);
+    final destLegacySalt = prefs.getString(toLegacySaltKey);
+    if (destHash != null ||
+        destSalt != null ||
+        destLegacyHash != null ||
+        destLegacySalt != null) {
+      return PasswordMigrationOutcome.migrationFailed;
+    }
+
+    // Copy under new keys. Track each write so a downstream failure can
+    // unwind to "nothing changed".
+    final undoSecure = <String>[];
+    final undoLegacy = <String>[];
+    try {
+      if (secureHash != null) {
+        if (!await _secureWrite(toHashKey, secureHash)) {
+          throw StateError('secure write of $toHashKey failed');
+        }
+        undoSecure.add(toHashKey);
+      }
+      if (secureSalt != null) {
+        if (!await _secureWrite(toSaltKey, secureSalt)) {
+          throw StateError('secure write of $toSaltKey failed');
+        }
+        undoSecure.add(toSaltKey);
+      }
+      if (legacyHash != null) {
+        if (!await prefs.setString(toLegacyHashKey, legacyHash)) {
+          throw StateError('prefs write of $toLegacyHashKey failed');
+        }
+        undoLegacy.add(toLegacyHashKey);
+      }
+      if (legacySalt != null) {
+        if (!await prefs.setString(toLegacySaltKey, legacySalt)) {
+          throw StateError('prefs write of $toLegacySaltKey failed');
+        }
+        undoLegacy.add(toLegacySaltKey);
+      }
+    } catch (_) {
+      for (final k in undoSecure) {
+        try {
+          await _secureDelete(k);
+        } catch (_) {/* best effort */}
+      }
+      for (final k in undoLegacy) {
+        try {
+          await prefs.remove(k);
+        } catch (_) {/* best effort */}
+      }
+      return PasswordMigrationOutcome.migrationFailed;
+    }
+
+    // Source removal is non-fatal. The new keys are now authoritative;
+    // a lingering old key is harmless (no caller reads under the old
+    // toxId after account_list is migrated).
+    try {
+      if (secureHash != null) await _secureDelete(fromHashKey);
+    } catch (_) {/* best effort */}
+    try {
+      if (secureSalt != null) await _secureDelete(fromSaltKey);
+    } catch (_) {/* best effort */}
+    try {
+      if (legacyHash != null) await prefs.remove(fromLegacyHashKey);
+    } catch (_) {/* best effort */}
+    try {
+      if (legacySalt != null) await prefs.remove(fromLegacySaltKey);
+    } catch (_) {/* best effort */}
+
+    return PasswordMigrationOutcome.migratedFully;
+  }
+
   // --- Window/layout state (desktop) ---
 
   /// Saved window bounds (left, top, width, height). Null if not set or invalid.
@@ -1807,5 +1933,27 @@ class Prefs {
     final key = _scopedKey(_friendActivityKey(userId), current);
     await p.setInt(key, time.millisecondsSinceEpoch);
   }
+}
+
+/// Result of [Prefs.migrateAccountPasswordKeys]. Modeled as three explicit
+/// states (rather than a bool + side-effect) so the caller can distinguish
+/// "no work needed" from "succeeded" from "rolled back due to error" — the
+/// last is what `PlaceholderAccountMigration` treats as fatal for the
+/// surrounding transaction.
+enum PasswordMigrationOutcome {
+  /// No password keys existed under the source toxId. Nothing was changed
+  /// in either secure storage or plain prefs. Idempotent re-run safe.
+  migratedNothing,
+
+  /// At least one key was copied to the destination toxId namespace and the
+  /// corresponding source key was removed. (Source removal is best-effort;
+  /// failure to remove the source is treated as success because the new
+  /// key already shadows the old in every read path that consults toxId.)
+  migratedFully,
+
+  /// A pre-flight collision was detected (destination keys already
+  /// populated) OR a write step refused / threw. Partial writes were
+  /// undone; the namespace is back to its pre-call state.
+  migrationFailed,
 }
 

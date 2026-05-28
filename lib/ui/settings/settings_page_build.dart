@@ -70,8 +70,7 @@ extension _SettingsPageBuild on _SettingsPageState {
                 _HoverableSettingsRow(
                   child: Builder(builder: (context) {
                     final toxId =
-                        _currentAccountToxId ?? widget.service.selfId;
-                    final prefix = _getToxIdPrefix(toxId);
+                        _currentAccountToxId ?? widget.service.accountKey;
                     return Row(
                       children: [
                         Icon(
@@ -88,12 +87,15 @@ extension _SettingsPageBuild on _SettingsPageState {
                         ),
                         AppSpacing.horizontalSm,
                         // Tox IDs are hex — always render LTR so RTL UI does
-                        // not visually flip the prefix.
+                        // not visually flip the chars. Show the full ID when
+                        // the row has room; Flutter's `TextOverflow.ellipsis`
+                        // truncates it on narrow widths.
                         Expanded(
                           child: Directionality(
                             textDirection: TextDirection.ltr,
                             child: Text(
-                              '$prefix…',
+                              toxId,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)
                                   .textTheme
@@ -128,6 +130,11 @@ extension _SettingsPageBuild on _SettingsPageState {
                   }),
                 ),
                 AppSpacing.verticalMd,
+                // All four account actions on one row. The destructive ones
+                // (Log Out / Delete Account) keep the error-tinted styling so
+                // their intent stays distinguishable from the neutral
+                // Export / Set Password buttons even without a divider or a
+                // dedicated "danger zone" box.
                 Wrap(
                   spacing: AppSpacing.sm,
                   runSpacing: AppSpacing.sm,
@@ -142,71 +149,36 @@ extension _SettingsPageBuild on _SettingsPageState {
                       label: Text(AppLocalizations.of(context)!.setPassword),
                       onPressed: _setAccountPassword,
                     ),
-                  ],
-                ),
-                AppSpacing.verticalMd,
-                Divider(height: 1, color: outlineVariant),
-                AppSpacing.verticalMd,
-                // Logout is isolated on its own row so it does not visually
-                // mingle with the neutral Export / Set Password actions; it
-                // also gets the error tint to flag the state-changing intent.
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.logout, size: 18),
-                    label: Text(AppLocalizations.of(context)!.logOut),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppThemeConfig.errorColor,
-                      side: const BorderSide(
-                          color: AppThemeConfig.errorColor),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                            AppThemeConfig.buttonBorderRadius),
-                      ),
-                    ),
-                    onPressed: _logout,
-                  ),
-                ),
-                AppSpacing.verticalLg,
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  decoration: BoxDecoration(
-                    color: AppThemeConfig.errorColor.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-                    border: Border.all(color: AppThemeConfig.errorColor.withValues(alpha: 0.2)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.warning_amber_rounded, color: AppThemeConfig.errorColor, size: 20),
-                          AppSpacing.horizontalSm,
-                          Text(
-                            AppLocalizations.of(context)!.deleteAccount,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  color: AppThemeConfig.errorColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ],
-                      ),
-                      AppSpacing.verticalMd,
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.delete_outline),
-                        label: Text(AppLocalizations.of(context)!.deleteAccount),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppThemeConfig.errorColor,
-                          side: const BorderSide(color: AppThemeConfig.errorColor),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
-                          ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.logout, size: 18),
+                      label: Text(AppLocalizations.of(context)!.logOut),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppThemeConfig.errorColor,
+                        side: const BorderSide(
+                            color: AppThemeConfig.errorColor),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                              AppThemeConfig.buttonBorderRadius),
                         ),
-                        onPressed: () => _showDeleteAccountConfirmation(context),
                       ),
-                    ],
-                  ),
+                      onPressed: _logout,
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label:
+                          Text(AppLocalizations.of(context)!.deleteAccount),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppThemeConfig.errorColor,
+                        side: const BorderSide(
+                            color: AppThemeConfig.errorColor),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                              AppThemeConfig.buttonBorderRadius),
+                        ),
+                      ),
+                      onPressed: () => _showDeleteAccountConfirmation(context),
+                    ),
+                  ],
                 ),
                 AppSpacing.verticalLg,
                 Divider(height: 1, color: outlineVariant),
@@ -328,7 +300,7 @@ extension _SettingsPageBuild on _SettingsPageState {
                       final accountToxId = account['toxId'] ?? '';
                       final lastLogin = account['lastLoginTime'];
                       // Use Prefs current Tox ID; widget.service.selfId is UIKit placeholder (e.g. FlutterUIKitClient)
-                      final currentId = _currentAccountToxId ?? widget.service.selfId;
+                      final currentId = _currentAccountToxId ?? widget.service.accountKey;
                       final isCurrentAccount = compareToxIds(accountToxId, currentId);
                       return _AccountCardItem(
                         account: account,
@@ -350,9 +322,14 @@ extension _SettingsPageBuild on _SettingsPageState {
                               children: [
                                 Flexible(
                                   child: Text(
-                                    '${AppLocalizations.of(context)!.userId}: ${_getToxIdPrefix(accountToxId)}...',
-                                    // Tabular figures so the hex prefix
-                                    // doesn't reflow as digits change width.
+                                    '${AppLocalizations.of(context)!.userId}: $accountToxId',
+                                    // Show the full Tox ID; `Flexible` +
+                                    // ellipsis means Flutter only truncates
+                                    // when the row actually runs out of room.
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    // Tabular figures so the hex characters
+                                    // don't reflow as digits change width.
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall
@@ -477,7 +454,7 @@ extension _SettingsPageBuild on _SettingsPageState {
       AppSpacing.verticalMd,
       wrap(1, GlobalSettingsSection(
         colorTheme: colorTheme,
-        toxId: widget.service.selfId,
+        toxId: widget.service.accountKey,
         onDownloadsConfigChanged: () {
           // FfiChatService re-reads Prefs.getDownloadsDirectory() on every
           // file save (see _getDownloadsDirectory in ffi_chat_service.dart),

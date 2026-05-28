@@ -77,8 +77,17 @@ class AccountService {
     FfiChatService? service,
     bool reEncryptProfile = true,
   }) async {
-    // Capture values before tearing down
-    final toxId = service?.selfId ?? '';
+    // Capture values before tearing down. `getSelfToxId()` returns the
+    // real 76-char Tox address used as the toxId-keyed primary key in
+    // `SessionPasswordStore`, profile paths, and `AppPaths`. `selfId`
+    // here would return the V2TIM login placeholder
+    // (`FlutterUIKitClient`) — which would look up the wrong (or empty)
+    // password slot, point at the wrong profile directory, and clear a
+    // namespace nothing was ever stored in. When `getSelfToxId()` is
+    // null (very early teardown / pre-login), fall through to empty so
+    // every subsequent guard skips silently rather than acting on
+    // a placeholder.
+    final toxId = service?.getSelfToxId() ?? '';
     final sessionPassword =
         toxId.isNotEmpty ? SessionPasswordStore.get(toxId) : null;
 
@@ -358,11 +367,22 @@ class AccountService {
         await service.init(profileDirectory: tempDir);
         await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
 
-        toxId = service.selfId;
-        if (toxId.isEmpty) {
+        // The register flow PERSISTS the toxId as the primary key of the
+        // new account_list entry, profile directory, and per-account
+        // prefs prefix — so it must be fail-closed: if the FFI didn't
+        // give us a real Tox address, abort rather than fall back to
+        // `selfId` (which is the V2TIM login placeholder and would
+        // re-create the original "FlutterUIKitClient" account-list
+        // corruption this whole migration story was about). Use
+        // `getSelfToxId()` directly here, not the `accountKey`
+        // extension, because the extension's `selfId` fallback is fine
+        // for UI/display reads but not for first-time writes.
+        final realToxId = service.getSelfToxId();
+        if (realToxId == null || realToxId.isEmpty) {
           await service.dispose();
           throw Exception('Failed to generate Tox ID');
         }
+        toxId = realToxId;
 
         finalDir = await AppPaths.getProfileDirectoryForToxId(toxId);
         final existingProfile = AppPaths.profileFileInDirectory(finalDir);

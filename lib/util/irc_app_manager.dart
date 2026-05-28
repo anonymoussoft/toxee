@@ -1,4 +1,5 @@
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import 'ffi_chat_service_account_key.dart';
 import 'prefs.dart';
 import 'dart:io';
 import 'logger.dart';
@@ -142,8 +143,11 @@ class IrcAppManager {
         if (nickname != null && nickname.isNotEmpty) {
           saslUsername = nickname;
         } else {
-          // Fall back to Tox public key if nickname is not set
-          final selfId = service.selfId;
+          // Fall back to Tox public key if nickname is not set. Use
+          // `accountKey` so the 64-char-length check actually fires —
+          // `selfId` is the V2TIM placeholder ("FlutterUIKitClient", 18
+          // chars), so the previous form silently skipped the fallback.
+          final selfId = service.accountKey;
           if (selfId.isNotEmpty && selfId.length >= 64) {
             saslUsername = selfId.substring(0, 64);
           }
@@ -252,8 +256,11 @@ class IrcAppManager {
             if (nickname != null && nickname.isNotEmpty) {
               saslUsername = nickname;
             } else {
-              // Fall back to Tox public key if nickname is not set
-              final selfId = service.selfId;
+              // Fall back to Tox public key if nickname is not set. Use
+              // `accountKey` (real Tox address); `selfId` is the V2TIM
+              // login placeholder so the 64-char-length check would
+              // silently skip otherwise.
+              final selfId = service.accountKey;
               if (selfId.isNotEmpty && selfId.length >= 64) {
                 saslUsername = selfId.substring(0, 64);
               }

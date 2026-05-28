@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import '../../util/app_paths.dart';
+import '../../util/ffi_chat_service_account_key.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
 
@@ -125,7 +126,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadAutoLogin() async {
-    final toxId = _currentAccountToxId ?? await Prefs.getCurrentAccountToxId() ?? widget.service.selfId;
+    final toxId = _currentAccountToxId ?? await Prefs.getCurrentAccountToxId() ?? widget.service.accountKey;
     if (toxId.isNotEmpty) {
       final enabled = await Prefs.getAutoLogin(toxId);
       if (mounted) {
@@ -137,7 +138,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _setAutoLogin(bool value) async {
-    final toxId = _currentAccountToxId ?? await Prefs.getCurrentAccountToxId() ?? widget.service.selfId;
+    final toxId = _currentAccountToxId ?? await Prefs.getCurrentAccountToxId() ?? widget.service.accountKey;
     if (toxId.isNotEmpty) {
       await Prefs.setAutoLogin(value, toxId);
       if (mounted) {
@@ -165,7 +166,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _currentAccountToxId = currentToxId;
         _accountList = List<Map<String, String>>.from(accounts)
           ..sort((a, b) {
-            final currentId = _currentAccountToxId ?? widget.service.selfId;
+            final currentId = _currentAccountToxId ?? widget.service.accountKey;
             final aIsCurrent = compareToxIds(a['toxId'] ?? '', currentId);
             final bIsCurrent = compareToxIds(b['toxId'] ?? '', currentId);
             if (aIsCurrent) return -1;
@@ -180,7 +181,7 @@ class _SettingsPageState extends State<SettingsPage> {
     // Update current account's lastLoginTime every 5 minutes
     _lastLoginTimeUpdateTimer?.cancel();
     _lastLoginTimeUpdateTimer = Timer.periodic(const Duration(minutes: 5), (timer) async {
-      final toxId = widget.service.selfId;
+      final toxId = widget.service.accountKey;
       if (toxId.isNotEmpty && mounted) {
         final account = await Prefs.getAccountByToxId(toxId);
         if (account != null) {
@@ -216,15 +217,11 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  String _getToxIdPrefix(String toxId) {
-    return toxId.length >= 8 ? toxId.substring(0, 8) : toxId;
-  }
-
   Future<void> _switchAccount(Map<String, String> account) async {
     final toxId = account['toxId'];
     if (toxId == null || toxId.isEmpty) return;
 
-    final currentToxId = _currentAccountToxId ?? widget.service.selfId;
+    final currentToxId = _currentAccountToxId ?? widget.service.accountKey;
     if (compareToxIds(toxId, currentToxId)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -351,7 +348,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// Export a full .zip backup including profile, chat history, and metadata.
   Future<void> _exportFullBackup() async {
-    final toxId = widget.service.selfId;
+    final toxId = widget.service.accountKey;
     if (toxId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -409,7 +406,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _exportAccount() async {
-    final toxId = widget.service.selfId;
+    final toxId = widget.service.accountKey;
     if (toxId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -687,7 +684,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _setAccountPassword() async {
-    final toxId = widget.service.selfId;
+    final toxId = widget.service.accountKey;
     if (toxId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -914,7 +911,7 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Launch the QR pairing host page for the currently active account.
   /// Gated on [FeatureFlags.enableQRPairing].
   Future<void> _startPairingAsHost() async {
-    final toxId = widget.service.selfId;
+    final toxId = widget.service.accountKey;
     if (toxId.isEmpty) return;
     await Navigator.of(context).push<void>(
       AppPageRoute<void>(page: PairingHostPage(toxId: toxId)),
@@ -954,7 +951,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _showDeleteAccountConfirmation(BuildContext context) async {
-    final toxId = widget.service.selfId;
+    final toxId = widget.service.accountKey;
     if (toxId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

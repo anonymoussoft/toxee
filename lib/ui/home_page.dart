@@ -91,6 +91,7 @@ import 'add_group_dialog.dart';
 import 'home/home_group_controller.dart';
 import 'home/home_session_controller.dart';
 import 'home/home_widgets.dart';
+import '../util/ffi_chat_service_account_key.dart';
 import '../util/irc_app_manager.dart';
 import 'applications/irc_channel_dialog.dart';
 import '../util/responsive_layout.dart';
@@ -619,13 +620,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<String> _createSelfQrCardImage() async {
     final nick = await Prefs.getNickname();
     final avatarPath = await Prefs.getAvatarPath();
+    // The visible/encoded User ID must be the real Tox ID, NOT the V2TIM
+    // login placeholder that `service.selfId` returns. Prefer the stored
+    // value; if Prefs hasn't been populated yet (login race) fall back to
+    // `accountKey` which itself resolves to the real Tox address via FFI.
+    final storedToxId = await Prefs.getCurrentAccountToxId();
+    final resolvedSelfId =
+        (storedToxId != null && storedToxId.isNotEmpty)
+            ? storedToxId
+            : widget.service.accountKey;
     final displayName = (nick != null && nick.trim().isNotEmpty)
         ? nick.trim()
-        : widget.service.selfId;
+        : resolvedSelfId;
     final locale = AppLocale.locale.value;
     final appL10n = AppLocalizations.of(context);
     return generateContactCardImage(
-      userId: widget.service.selfId,
+      userId: resolvedSelfId,
       displayName: displayName,
       locale: locale,
       bottomText: appL10n?.scanQrCodeToAddContact ??
@@ -762,7 +772,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           label: personalCardGroupLabel,
           onTap: ({Offset? offset}) async {
             final appL10n = AppLocalizations.of(context)!;
-            final text = '${appL10n.myId}: ${widget.service.selfId}';
+            final text = '${appL10n.myId}: ${widget.service.accountKey}';
             await widget.service.sendGroupText(groupID, text);
             _showSnackBar(sentGroupSnack);
           },
@@ -1321,39 +1331,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           return ValueListenableBuilder<ThemeMode>(
             valueListenable: AppTheme.mode,
             builder: (context, themeMode, __) {
-              return Stack(
-                children: [
-                  TencentCloudChatThemeWidget(
-                    build: (context, themeColors, textStyles) {
-                      return TencentCloudChatContact(
-                        key: ValueKey(
-                            'uikit-contact-${locale.languageCode}-${themeMode.name}'),
-                      );
-                    },
-                  ),
-                  Positioned(
-                    // Offset below the UIKit AppBar so the FAB doesn't sit on
-                    // top of the title. `kToolbarHeight` (56) + a small gap
-                    // mirrors the inset Material uses for action buttons; on
-                    // tablet the button lives in the sidebar pane which has
-                    // its own header above it, so the offset still clears.
-                    top: kToolbarHeight + AppSpacing.sm,
-                    right: AppSpacing.xl,
-                    // Top + right SafeArea so the button clears the status
-                    // bar / Dynamic Island and right rounded corners on
-                    // phones in landscape.
-                    child: SafeArea(
-                      left: false,
-                      bottom: false,
-                      child: NewEntryButton(
-                        onAddFriend: _showAddFriendDialog,
-                        onCreateGroup: _showAddGroupDialog,
-                        onJoinIrcChannel:
-                            _ircAppInstalled ? _showJoinIrcChannelDialog : null,
-                      ),
-                    ),
-                  ),
-                ],
+              // `NewEntryButton` is now mounted inside the UIKit contacts
+              // AppBar via `ContactAppBarNameOverride.trailing` (see
+              // `home_page_bootstrap.dart`), so the previous floating
+              // `Positioned` overlay is gone. That overlay anchored the pill
+              // at the same screen position as the popup menu, making the
+              // pill disappear behind the menu the moment it opened (the
+              // "New Chat button ate itself" symptom from sc_01.png).
+              return TencentCloudChatThemeWidget(
+                build: (context, themeColors, textStyles) {
+                  // Pass the global builder singleton explicitly so UIKit's
+                  // `_updateGlobalData()` keeps our overrides instead of
+                  // wiping them. The widget's else branch resets
+                  // `contactBuilder` to a fresh empty instance whenever
+                  // `widget.builders` is null, which deletes the
+                  // `contactAppBarNameBuilder` we wired up in
+                  // `home_page_bootstrap.dart`. Passing the manager's
+                  // singleton (already populated by setBuilders) routes
+                  // through the if branch, preserving the override.
+                  return TencentCloudChatContact(
+                    key: ValueKey(
+                        'uikit-contact-${locale.languageCode}-${themeMode.name}'),
+                    builders:
+                        contact_pkg.TencentCloudChatContactManager.builder,
+                  );
+                },
               );
             },
           );
@@ -1596,7 +1598,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _setAutoAcceptFriends(bool value) async {
     if (_autoAcceptFriends == value) return;
     setState(() => _autoAcceptFriends = value);
-    final toxId = widget.service.selfId;
+    final toxId = widget.service.accountKey;
     if (toxId.isNotEmpty) {
       await Prefs.setAutoAcceptFriends(value, toxId);
     }
@@ -1609,7 +1611,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _setAutoAcceptGroupInvites(bool value) async {
     if (_autoAcceptGroupInvites == value) return;
     setState(() => _autoAcceptGroupInvites = value);
-    final toxId = widget.service.selfId;
+    final toxId = widget.service.accountKey;
     if (toxId.isNotEmpty) {
       await Prefs.setAutoAcceptGroupInvites(value, toxId);
     }

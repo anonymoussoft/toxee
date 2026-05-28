@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
+import 'ffi_chat_service_account_key.dart';
 
 import 'app_paths.dart';
 import 'bootstrap_node_ensurer.dart';
@@ -57,7 +58,13 @@ class AppBootstrapCoordinator {
     //     is intentionally NOT excluded — that's the user's irreplaceable
     //     data and must remain restorable.
     if (Platform.isIOS) {
-      final toxId = service.selfId;
+      // `accountKey` returns the real 76-char Tox address; the iOS backup
+      // exclusion paths are derived via `AppPaths.getAccountFileRecvPath(toxId)`
+      // etc., which compute account-scoped directories from the first 16
+      // chars of the toxId. Passing `selfId` (the V2TIM placeholder) would
+      // mark the wrong directory tree (the placeholder-keyed one) for
+      // iCloud exclusion — harmless but pointless.
+      final toxId = service.accountKey;
       if (toxId.isNotEmpty) {
         unawaited(_markIosPostLoginExclusions(toxId));
       }

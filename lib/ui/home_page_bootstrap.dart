@@ -86,6 +86,22 @@ extension _HomePageBootstrap on _HomePageState {
       groupMemberListPageBuilder: ({required V2TimGroupInfo groupInfo, required List<V2TimGroupMemberFullInfo> memberInfoList}) {
         return GroupMemberListWrapper(groupInfo: groupInfo, memberInfoList: memberInfoList);
       },
+      // Suppress UIKit's built-in `Icons.maps_ugc_outlined` MenuAnchor in the
+      // contacts-tab title row. Tencent-IM's "Add Contact" / "Add Group" flows
+      // search by userID and don't work on Tox; toxee's own `NewEntryButton`
+      // (Tox ID/QR, Create Group, Join IRC) is mounted inside the override's
+      // `trailing` slot — same visual position as the upstream icon, but
+      // routed through the Tox-aware dialogs.
+      contactAppBarNameBuilder: ({String? title}) =>
+          ContactAppBarNameOverride(
+        title: title,
+        trailing: NewEntryButton(
+          onAddFriend: _showAddFriendDialog,
+          onCreateGroup: _showAddGroupDialog,
+          onJoinIrcChannel:
+              _ircAppInstalled ? _showJoinIrcChannelDialog : null,
+        ),
+      ),
     );
 
     final searchRegisterResult = search_pkg.CustomSearchManager.register();
@@ -627,7 +643,7 @@ extension _HomePageBootstrap on _HomePageState {
     _bag.add(() => _refreshTimer?.cancel());
     unawaited(_loadLocalFriends());
 
-    final toxId = widget.service.selfId;
+    final toxId = widget.service.accountKey;
     if (toxId.isNotEmpty) {
       Prefs.getAutoAcceptFriends(toxId).then((value) {
         if (mounted) {
@@ -817,6 +833,20 @@ extension _HomePageBootstrap on _HomePageState {
           return _buildAddFriendButton(userFullInfo);
         }
       },
+      // setBuilders is destructive (any slot not passed is nulled) — re-supply
+      // the app-bar-name override (including the trailing `NewEntryButton`)
+      // here so it stays mounted after the post-contacts-load override is
+      // applied.
+      contactAppBarNameBuilder: ({String? title}) =>
+          ContactAppBarNameOverride(
+        title: title,
+        trailing: NewEntryButton(
+          onAddFriend: _showAddFriendDialog,
+          onCreateGroup: _showAddGroupDialog,
+          onJoinIrcChannel:
+              _ircAppInstalled ? _showJoinIrcChannelDialog : null,
+        ),
+      ),
     );
 
     _groupBuilderOverride = GroupProfileBuilderOverrideHandle.capture();
