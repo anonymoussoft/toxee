@@ -6,9 +6,7 @@ import '../adapters/logger_adapter.dart';
 import '../adapters/shared_prefs_adapter.dart';
 import '../util/account_service.dart';
 import '../util/app_bootstrap_coordinator.dart';
-import '../util/bootstrap_nodes.dart';
 import '../util/logger.dart';
-import '../util/platform_utils.dart';
 import '../util/prefs.dart';
 
 import 'startup_outcome.dart';
@@ -43,35 +41,11 @@ class StartupSessionUseCase {
 
       onStepChanged(StartupStep.initializingService);
 
-      var mode = await Prefs.getBootstrapNodeMode();
-      if (!PlatformUtils.isDesktop && mode == 'lan') {
-        await Prefs.setBootstrapNodeMode('auto');
-        mode = 'auto';
-      }
-      if (mode == 'auto') {
-        final existingNode = await Prefs.getCurrentBootstrapNode();
-        if (existingNode == null) {
-          try {
-            final nodes = await BootstrapNodesService.fetchNodes();
-            if (nodes.isNotEmpty) {
-              final onlineNode = nodes.firstWhere(
-                (node) => node.status == 'ONLINE',
-                orElse: () => nodes.first,
-              );
-              await Prefs.setCurrentBootstrapNode(
-                onlineNode.ipv4,
-                onlineNode.port,
-                onlineNode.publicKey,
-              );
-              AppLogger.log(
-                  '[StartupSessionUseCase] Auto-fetched and saved bootstrap node');
-            }
-          } catch (e) {
-            AppLogger.logError(
-                '[StartupSessionUseCase] Failed to fetch bootstrap node', e, null);
-          }
-        }
-      }
+      // Bootstrap mode normalization (mobile 'lan' → 'auto') happens once at
+      // startup in PrefsBootstrap.initialize, before any init() reads it.
+      // Applying nodes to the live instance is handled centrally by
+      // AppBootstrapCoordinator.boot → BootstrapNodeEnsurer.ensureForSession,
+      // which every startup path shares.
 
       Map<String, String>? account;
       try {
@@ -90,15 +64,44 @@ class StartupSessionUseCase {
         );
       } else {
         final prefs = await SharedPreferences.getInstance();
-        service = FfiChatService(
-          preferencesService: SharedPreferencesAdapter(prefs),
+        // CR-10: mirror LoginUseCase's legacy branch — construct the adapter
+        // without a prefix, then inject the 16-char Tox-ID prefix once login
+        // resolves selfId so account-scoped prefs (manual bootstrap node,
+        // nickname, etc.) resolve to per-account keys instead of global ones.
+        final legacyPrefsAdapter = SharedPreferencesAdapter(prefs);
+        final legacyService = FfiChatService(
+          preferencesService: legacyPrefsAdapter,
           loggerService: AppLoggerAdapter(),
           bootstrapService: BootstrapNodesAdapter(prefs),
         );
-        await service.init();
-        await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
-        await service.updateSelfProfile(
+        // Assign the outer `service` BEFORE init/login so the catch below
+        // tears the session down on any failure here. Deferring this to the
+        // end leaked the already-initialized Tox instance when login (or a
+        // later step) threw — the catch's `if (service != null)` guard saw
+        // null and skipped teardownCurrentSession.
+        service = legacyService;
+        await legacyService.init();
+        await legacyService.login(
+            userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
+        final toxId = legacyService.selfId;
+        legacyPrefsAdapter.setAccountPrefix(
+            toxId.substring(0, toxId.length >= 16 ? 16 : toxId.length));
+        // Apply the profile BEFORE persisting the account pointer/record.
+        // updateSelfProfile only needs the prefix (set above); persisting the
+        // current-account pointer + account record first meant a throw here
+        // left a registered, half-initialized account that the next cold
+        // start would auto-resolve to (teardownCurrentSession does not revert
+        // these prefs). Ordering the durable writes last keeps the failure
+        // path clean — nothing is persisted unless the profile applied.
+        await legacyService.updateSelfProfile(
             nickname: nick, statusMessage: statusMsg ?? '');
+        await Prefs.setCurrentAccountToxId(toxId);
+        await Prefs.addAccount(
+          toxId: toxId,
+          nickname: nick,
+          statusMessage: statusMsg ?? '',
+          updateLastLogin: false,
+        );
       }
 
       final currentService = service;

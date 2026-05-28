@@ -97,13 +97,15 @@ The key point of this sequence is: `FakeUIKit` must be destroyed before `Tim2Tox
 
 Each account has an independent running directory:
 
--`tox_profile.tox`
--`chat_history/`
--`offline_message_queue.json`
--`avatars/`
+- `tox_profile.tox`
+- `chat_history/`
+- `offline_message_queue.json`
+- `avatars/`
 - `file_recv/`
 
 These paths are generated uniformly by `AppPaths` to prevent multiple accounts from sharing the same historical data or cache.
+
+Full account backup uses a `.zip` archive containing `tox_profile.tox`, `chat_history/`, `offline_message_queue.json`, `avatars/`, and `metadata.json`. Export rewrites account-local avatar paths to `@account_data/...` and backfills missing `friend_avatar_path_<friendId>` metadata, including runtime files named like `friend_<id>_avatar_<timestamp>.<ext>`. Import preflights archive paths under `chat_history/` and `avatars/`, rejects `../`, absolute paths, Windows drive prefixes, and backslash paths, and only then restores the profile, history, offline queue, and scoped prefs.
 
 ## 8. Password and profile encryption
 
@@ -115,6 +117,6 @@ These paths are generated uniformly by `AppPaths` to prevent multiple accounts f
 
 ## 9. Related documents
 
-- [HYBRID_ARCHITECTURE.md](HYBRID_ARCHITECTURE.en.md)
+- [HYBRID_ARCHITECTURE.md](../architecture/HYBRID_ARCHITECTURE.en.md)
 - [IMPLEMENTATION_DETAILS.md](IMPLEMENTATION_DETAILS.en.md)
 - [CALLING_AND_EXTENSIONS.md](CALLING_AND_EXTENSIONS.en.md)

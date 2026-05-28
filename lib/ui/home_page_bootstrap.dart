@@ -659,59 +659,75 @@ extension _HomePageBootstrap on _HomePageState {
     _bag.add(() => _progressUpdatesSub?.cancel());
 
     _friendsSub = FakeUIKit.instance.eventBusInstance.on<List<FakeUser>>(FakeIM.topicContacts).listen((list) async {
-      final mapped = await Future.wait(list.map((u) async {
-        final avatarPath = await Prefs.getFriendAvatarPath(u.userID);
-        final faceUrl = (avatarPath != null && avatarPath.isNotEmpty) ? avatarPath : null;
-        return V2TimFriendInfo(
-          userID: u.userID,
-          friendRemark: u.nickName,
-          userProfile: V2TimUserFullInfo(
+      // CR-08: capture the session this listener was bound to. On account
+      // switch the old HomePage is disposed and a new one with a different
+      // service replaces it; an in-flight async body that already passed an
+      // `await` must not keep writing into the new session's global FakeUIKit
+      // / UikitDataFacade state. Re-check after every await before any global
+      // write. The try/catch keeps a Prefs throw from becoming an unhandled
+      // Future error on the async onData.
+      final boundService = widget.service;
+      bool stillCurrent() => mounted && identical(widget.service, boundService);
+      try {
+        final mapped = await Future.wait(list.map((u) async {
+          final avatarPath = await Prefs.getFriendAvatarPath(u.userID);
+          final faceUrl = (avatarPath != null && avatarPath.isNotEmpty) ? avatarPath : null;
+          return V2TimFriendInfo(
             userID: u.userID,
-            nickName: u.nickName,
-            faceUrl: faceUrl,
-            selfSignature: u.status.isNotEmpty ? u.status : null,
-          ),
-        );
-      }));
-      UikitDataFacade.buildFriendList(mapped, "home");
-      final freshUserIds = list.map((u) => u.userID).toSet();
-      final currentContactList = UikitDataFacade.contactList;
-      final staleUserIds = currentContactList
-          .where((c) => !freshUserIds.contains(c.userID))
-          .map((c) => c.userID)
-          .where((id) => id.isNotEmpty)
-          .toList();
-      if (staleUserIds.isNotEmpty) {
-        UikitDataFacade.deleteFromFriendList(staleUserIds, 'home_sync');
-      }
-      final statuses = list
-          .map((u) => V2TimUserStatus(userID: u.userID, statusType: u.online ? 1 : 0, onlineDevices: const []))
-          .toList();
-      if (statuses.isNotEmpty) {
-        UikitDataFacade.buildUserStatusList(statuses, "home");
-      }
+            friendRemark: u.nickName,
+            userProfile: V2TimUserFullInfo(
+              userID: u.userID,
+              nickName: u.nickName,
+              faceUrl: faceUrl,
+              selfSignature: u.status.isNotEmpty ? u.status : null,
+            ),
+          );
+        }));
+        if (!stillCurrent()) return;
+        UikitDataFacade.buildFriendList(mapped, "home");
+        final freshUserIds = list.map((u) => u.userID).toSet();
+        final currentContactList = UikitDataFacade.contactList;
+        final staleUserIds = currentContactList
+            .where((c) => !freshUserIds.contains(c.userID))
+            .map((c) => c.userID)
+            .where((id) => id.isNotEmpty)
+            .toList();
+        if (staleUserIds.isNotEmpty) {
+          UikitDataFacade.deleteFromFriendList(staleUserIds, 'home_sync');
+        }
+        final statuses = list
+            .map((u) => V2TimUserStatus(userID: u.userID, statusType: u.online ? 1 : 0, onlineDevices: const []))
+            .toList();
+        if (statuses.isNotEmpty) {
+          UikitDataFacade.buildUserStatusList(statuses, "home");
+        }
 
-      final groups = widget.service.knownGroups;
-      for (final gid in groups) {
-        final savedName = await Prefs.getGroupName(gid);
-        final savedAvatar = await Prefs.getGroupAvatar(gid);
-        final groupInfo = V2TimGroupInfo(
-          groupID: gid,
-          groupType: "work",
-          groupName: savedName,
-          faceUrl: savedAvatar,
-        );
-        UikitDataFacade.addGroupInfoToJoinedGroupList(groupInfo);
-      }
+        if (!stillCurrent()) return;
+        final groups = widget.service.knownGroups;
+        for (final gid in groups) {
+          final savedName = await Prefs.getGroupName(gid);
+          final savedAvatar = await Prefs.getGroupAvatar(gid);
+          if (!stillCurrent()) return;
+          final groupInfo = V2TimGroupInfo(
+            groupID: gid,
+            groupType: "work",
+            groupName: savedName,
+            faceUrl: savedAvatar,
+          );
+          UikitDataFacade.addGroupInfoToJoinedGroupList(groupInfo);
+        }
 
-      final friendIds = list.map((u) {
-        final id = u.userID.trim();
-        return id.length > 64 ? id.substring(0, 64) : id;
-      }).toSet();
-      if (mounted) {
-        _bootstrapSetState(() {
-          _localFriends = friendIds;
-        });
+        final friendIds = list.map((u) {
+          final id = u.userID.trim();
+          return id.length > 64 ? id.substring(0, 64) : id;
+        }).toSet();
+        if (stillCurrent()) {
+          _bootstrapSetState(() {
+            _localFriends = friendIds;
+          });
+        }
+      } catch (e, st) {
+        AppLogger.logError('[HomePage] contacts listener failed', e, st);
       }
     });
     _bag.add(() => _friendsSub?.cancel());
@@ -723,42 +739,53 @@ extension _HomePageBootstrap on _HomePageState {
     }
 
     _appsSub = FakeUIKit.instance.eventBusInstance.on<List<FakeFriendApplication>>(FakeIM.topicFriendApps).listen((list) async {
-      final mapped =
-          list.map((a) => V2TimFriendApplication(userID: a.userID, addWording: a.wording, type: 1, nickname: "", faceUrl: "")).toList();
-      UikitDataFacade.buildApplicationList(mapped, "home");
-      UikitDataFacade.setApplicationUnreadCount(mapped);
-      _pendingFriendApps = List<V2TimFriendApplication>.from(mapped);
-      // P1-D3: fire an OS-level notification for any application userID we
-      // have not yet notified about in this session. Auto-accept users won't
-      // see the banner because we silently accept below before the user
-      // would have time to read it — that's acceptable; the snackbar at
-      // accept-time covers them.
-      if (!_autoAcceptFriends) {
-        for (final app in mapped) {
-          final uid = app.userID;
-          if (uid.isEmpty) continue;
-          if (_notifiedFriendReqUserIds.contains(uid)) continue;
-          _notifiedFriendReqUserIds.add(uid);
-          unawaited(NotificationService.instance.showFriendRequestNotification(
-            senderId: uid,
-            senderName: uid.length > 16 ? '${uid.substring(0, 16)}…' : uid,
-            requestMessage: app.addWording ?? '',
-          ));
+      // CR-08: same session guard as _friendsSub. Bail before any global
+      // write if this HomePage was disposed or replaced by another account's
+      // session, and wrap the body so a throw never escapes as an unhandled
+      // Future error.
+      final boundService = widget.service;
+      bool stillCurrent() => mounted && identical(widget.service, boundService);
+      try {
+        if (!stillCurrent()) return;
+        final mapped =
+            list.map((a) => V2TimFriendApplication(userID: a.userID, addWording: a.wording, type: 1, nickname: "", faceUrl: "")).toList();
+        UikitDataFacade.buildApplicationList(mapped, "home");
+        UikitDataFacade.setApplicationUnreadCount(mapped);
+        _pendingFriendApps = List<V2TimFriendApplication>.from(mapped);
+        // P1-D3: fire an OS-level notification for any application userID we
+        // have not yet notified about in this session. Auto-accept users won't
+        // see the banner because we silently accept below before the user
+        // would have time to read it — that's acceptable; the snackbar at
+        // accept-time covers them.
+        if (!_autoAcceptFriends) {
+          for (final app in mapped) {
+            final uid = app.userID;
+            if (uid.isEmpty) continue;
+            if (_notifiedFriendReqUserIds.contains(uid)) continue;
+            _notifiedFriendReqUserIds.add(uid);
+            unawaited(NotificationService.instance.showFriendRequestNotification(
+              senderId: uid,
+              senderName: uid.length > 16 ? '${uid.substring(0, 16)}…' : uid,
+              requestMessage: app.addWording ?? '',
+            ));
+          }
         }
+        // If applications were withdrawn / accepted / rejected on this device
+        // before we recorded them, prune the dedup set so a fresh request from
+        // the same peer can re-notify later in the session.
+        final currentIds = mapped.map((a) => a.userID).toSet();
+        _notifiedFriendReqUserIds.removeWhere((id) => !currentIds.contains(id));
+        if (_autoAcceptFriends && mapped.isNotEmpty) {
+          _acceptFriendApplications(mapped).catchError((e, st) {
+            AppLogger.logError('[HomePage] auto-accept friend applications failed', e, st);
+          });
+        }
+        // No setState — UIKit's contact data layer drives application-row UI;
+        // tray update still needs to fire on each apps event.
+        unawaited(_updateTray());
+      } catch (e, st) {
+        AppLogger.logError('[HomePage] friend apps listener failed', e, st);
       }
-      // If applications were withdrawn / accepted / rejected on this device
-      // before we recorded them, prune the dedup set so a fresh request from
-      // the same peer can re-notify later in the session.
-      final currentIds = mapped.map((a) => a.userID).toSet();
-      _notifiedFriendReqUserIds.removeWhere((id) => !currentIds.contains(id));
-      if (_autoAcceptFriends && mapped.isNotEmpty) {
-        _acceptFriendApplications(mapped).catchError((e, st) {
-          AppLogger.logError('[HomePage] auto-accept friend applications failed', e, st);
-        });
-      }
-      // No setState — UIKit's contact data layer drives application-row UI;
-      // tray update still needs to fire on each apps event.
-      unawaited(_updateTray());
     });
     _bag.add(() => _appsSub?.cancel());
     WidgetsBinding.instance.addPostFrameCallback((_) {

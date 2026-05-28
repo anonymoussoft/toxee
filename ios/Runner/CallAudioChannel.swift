@@ -100,10 +100,17 @@ final class CallAudioChannel: NSObject, FlutterStreamHandler {
   }
 
   private func deactivateSession() {
+    // The route preference is local intent, not OS state, so clearing it is
+    // always safe.
+    preferredRouteId = nil
     do {
       try session.overrideOutputAudioPort(.none)
       try session.setPreferredInput(nil)
       try session.setActive(false, options: [.notifyOthersOnDeactivation])
+      // Only record the session as inactive once the OS actually deactivated
+      // it. Previously a `defer` cleared this flag unconditionally, so a thrown
+      // setActive(false) (e.g. another app holding the route) left the app
+      // believing the session was torn down while it was still active.
       isSessionActive = false
     } catch {
       NSLog("[CallAudioChannel] Failed to deactivate audio session: \(error)")

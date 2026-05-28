@@ -21,6 +21,7 @@
 - [architecture/HYBRID_ARCHITECTURE.md](architecture/HYBRID_ARCHITECTURE.md) - 当前混合架构的职责与回调路径
 - [reference/ACCOUNT_AND_SESSION.md](reference/ACCOUNT_AND_SESSION.md) - 账号初始化、切换、退出与删除的生命周期
 - [reference/IMPLEMENTATION_DETAILS.md](reference/IMPLEMENTATION_DETAILS.md) - 关键模块与消息/事件处理实现细节
+- [reviews/2026-05-26-core-feature-review.md](reviews/2026-05-26-core-feature-review.md) - 本轮核心功能 review、修复项、验证范围与限制
 
 ## 入门与操作
 

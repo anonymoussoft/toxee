@@ -4,9 +4,9 @@
 ///
 /// The previous implementation hardcoded `audioBitRate: 48` and
 /// `videoBitRate: 5000` (kbit/s) at five different call sites
-/// (`CallServiceManager.acceptCall`, `CallBridgeService.onInviteeAccepted`,
-/// `TUICallKitAdapter._handleCall`, `VideoHandler._minFrameInterval`, plus
-/// the in-call view's video toggle). That's wrong on two axes:
+/// (`CallServiceManager.acceptCall`, `TUICallKitAdapter._handleCall`,
+/// `VideoHandler._minFrameInterval`, plus the in-call view's video toggle).
+/// That's wrong on two axes:
 ///
 ///   1. Identical values for every device/network meant a slow connection
 ///      saw the same 5 Mbit/s video target as a fast one, fell over, and

@@ -105,6 +105,8 @@
 
 这些路径由 `AppPaths` 统一生成，避免多个账号共享同一份历史数据或缓存。
 
+完整账号备份使用 `.zip` 格式，包含 `tox_profile.tox`、`chat_history/`、`offline_message_queue.json`、`avatars/` 和 `metadata.json`。导出时会把账号目录下的头像路径改写为 `@account_data/...`，并会补齐缺失的 `friend_avatar_path_<friendId>` 元数据（包括 `friend_<id>_avatar_<timestamp>.<ext>` 这类运行期头像文件）。导入时会先校验 `chat_history/` 与 `avatars/` 内的归档路径，拒绝 `../`、绝对路径、Windows drive 前缀或反斜杠路径，确认安全后才写入 profile、历史、离线队列和 scoped prefs。
+
 ## 8. 密码与 profile 加密
 
 - 密码哈希保存在持久化配置中，用于校验账号密码。

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_method_channel.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
@@ -8,6 +9,7 @@ import 'package:tim2tox_dart/utils/binary_replacement_history_hook.dart';
 
 import '../adapters/conversation_manager_adapter.dart';
 import '../adapters/event_bus_adapter.dart';
+import '../adapters/logger_adapter.dart';
 import '../call/bg_refresh_bridge.dart';
 import '../notifications/badge_service.dart';
 import '../notifications/notification_message_listener.dart';
@@ -30,6 +32,20 @@ class SessionRuntimeCoordinator {
   static SessionRuntimeState _state = SessionRuntimeState.notStarted;
   static Future<void>? _initializing;
 
+  /// Non-null for the ENTIRE duration of a [disposeRuntime] (including its
+  /// async teardown tail), not just until `_state` flips to disposed.
+  /// [ensureInitialized] awaits this before claiming the critical section, so
+  /// a re-init started mid-teardown can't run its body interleaved with the
+  /// teardown (and get clobbered by the teardown tail). Concurrent
+  /// [disposeRuntime] calls coalesce onto it.
+  static Future<void>? _disposing;
+
+  /// Monotonic token bumped by [disposeRuntime]. [ensureInitialized] captures
+  /// it after claiming the critical section and refuses to publish the
+  /// `started` state if a concurrent dispose superseded it — so a logout /
+  /// account-switch that lands mid-init can't be clobbered back to `started`.
+  static int _generation = 0;
+
   /// Whether the [BinaryReplacementHistoryHook] has been installed by this
   /// coordinator for the current session. Reset by [disposeRuntime] so a
   /// post-logout re-init reinstalls the hook against the new selfId.
@@ -41,111 +57,259 @@ class SessionRuntimeCoordinator {
 
   static SessionRuntimeState get state => _state;
 
+  /// Test seam: when non-null, [ensureInitialized] runs this instead of the
+  /// real init body ([_performInit]) — the FakeUIKit / platform /
+  /// callServiceManager / badge / hook installs that aren't safe to bring up
+  /// in a pure-Dart test process. The surrounding serialization logic (the
+  /// loop, [_disposing] gating, generation guard, `started` commit) still
+  /// runs for real, which is what concurrency tests exercise. Null in
+  /// production.
+  @visibleForTesting
+  static Future<void> Function(FfiChatService service)? debugInitBodyOverride;
+
+  /// Test seam: when non-null, [_runTeardown] runs this instead of the real
+  /// teardown work (hook uninstall, BadgeService/FakeUIKit dispose, platform
+  /// swap, …) AFTER the generation bump + `await _initializing` + `disposed`
+  /// transition (which still run for real). Null in production.
+  @visibleForTesting
+  static Future<void> Function()? debugTeardownBodyOverride;
+
+  /// Test seam: reset all static lifecycle state to its initial values so each
+  /// test starts from a clean slate without depending on the real teardown
+  /// (which touches singletons). Does NOT touch FakeUIKit / the platform —
+  /// callers that installed those should reset them separately.
+  @visibleForTesting
+  static void debugReset() {
+    _state = SessionRuntimeState.notStarted;
+    _initializing = null;
+    _disposing = null;
+    _generation = 0;
+    _hookInstalled = false;
+    _pendingHookSelfIdSub = null;
+    debugInitBodyOverride = null;
+    debugTeardownBodyOverride = null;
+  }
+
   /// Initializes session runtime if not already started. Idempotent.
   /// Concurrent callers await the same in-flight initialization.
   /// After [disposeRuntime] (e.g. logout/account switch), calling this again
   /// re-initializes the runtime for the new session.
   Future<void> ensureInitialized() async {
-    if (_state == SessionRuntimeState.started) return;
-    if (_state == SessionRuntimeState.starting) {
+    // Serialize against init/dispose interleavings on the shared static state.
+    // The whole method is a loop because any await can change the world out
+    // from under us:
+    //   - an in-flight disposeRuntime() (which holds [_disposing] for its
+    //     ENTIRE teardown) must fully finish before we run our init body, or
+    //     its teardown tail (FakeUIKit.dispose / platform swap) clobbers what
+    //     we install (#4);
+    //   - an init — whether one we JOINED or our OWN — can be superseded by a
+    //     concurrent dispose and bail at the generation guard without
+    //     publishing `started`; rather than return a false success against a
+    //     disposed runtime (#3), we re-evaluate from the top (which first
+    //     waits out the dispose) and re-init.
+    while (true) {
+      final disposing = _disposing;
+      if (disposing != null) {
+        await disposing;
+        continue;
+      }
+      if (_state == SessionRuntimeState.started) return;
       final inFlight = _initializing;
       if (inFlight != null) {
+        // A throw here (the joined init errored) propagates to this caller,
+        // matching the previous behavior; a normal completion means the init
+        // finished — loop to see whether it actually reached `started`.
         await inFlight;
-      }
-      return;
-    }
-    final inFlight = _initializing;
-    if (inFlight != null) {
-      await inFlight;
-      return;
-    }
-    // Allow re-initialization after dispose (post-logout / account-switch).
-    if (_state == SessionRuntimeState.disposed) {
-      AppLogger.debug('[SessionRuntimeCoordinator] Re-initializing after teardown');
-    }
-
-    // Claim the critical section: assign _initializing BEFORE flipping
-    // _state to starting. Concurrent observers then see either
-    // notStarted/disposed (proceed) or starting + non-null _initializing
-    // (join in-flight) — never starting + null _initializing, even if a
-    // future refactor inserts an await between these two assignments.
-    final completer = Completer<void>();
-    _initializing = completer.future;
-    _state = SessionRuntimeState.starting;
-
-    try {
-      if (!FakeUIKit.instance.isStarted) {
-        // Async since A7: awaits initial pinned-conversation read so the
-        // platform bridge installed below never sees an empty pinned set.
-        await FakeUIKit.instance.startWithFfi(service);
+        continue;
       }
 
-      if (TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform) {
-        final eventBusAdapter = EventBusAdapter(FakeUIKit.instance.eventBusInstance);
-        final conversationManagerAdapter = ConversationManagerAdapter(
-          FakeUIKit.instance.conversationManager!,
-        );
-        final platform = Tim2ToxSdkPlatform(
-          ffiService: service,
-          eventBusProvider: eventBusAdapter,
-          conversationManagerProvider: conversationManagerAdapter,
-        );
-        TencentCloudChatSdkPlatform.instance = platform;
-        platform.onGroupMessageReceivedForUnread = (groupId) {
-          if (groupId != null && groupId.isNotEmpty) {
-            service.incrementGroupUnread(groupId);
-          }
-          FakeUIKit.instance.im?.refreshConversations();
-          FakeUIKit.instance.im?.refreshUnreadTotal();
-        };
-        AppLogger.debug('[SessionRuntimeCoordinator] Set TencentCloudChatSdkPlatform to Tim2ToxSdkPlatform');
+      // notStarted or disposed, and nothing in flight → we own the next init.
+      if (_state == SessionRuntimeState.disposed) {
+        AppLogger.debug(
+            '[SessionRuntimeCoordinator] Re-initializing after teardown');
       }
 
-      await FakeUIKit.instance.callServiceManager?.initialize();
-      UikitDataFacade.setUseCallKit(true);
+      // Claim the critical section: assign _initializing BEFORE flipping
+      // _state to starting. The claim is synchronous (no await between the
+      // loop checks above and here), so concurrent observers see either
+      // notStarted/disposed (proceed) or starting + non-null _initializing
+      // (join in-flight) — never starting + null _initializing.
+      final completer = Completer<void>();
+      _initializing = completer.future;
+      _state = SessionRuntimeState.starting;
+      final myGeneration = _generation;
 
-      // Install the binary-replacement history hook in the same atomic init
-      // block as the platform, so the "platform installed but hook not yet
-      // installed" window (where FFI-path messages could land in persistence
-      // without UIKit listener mediation) cannot exist.
-      _installBinaryReplacementHistoryHook();
+      try {
+        final initOverride = debugInitBodyOverride;
+        if (initOverride != null) {
+          await initOverride(service);
+        } else {
+          await _performInit();
+        }
 
-      // OS-level dock/launcher unread badge. Subscribes to the same bus
-      // topic UIKit's conversation listener uses (FakeIM.topicUnread) and
-      // debounces writes so a burst of poll-driven emits collapses to one
-      // platform-channel call. Idempotent — see BadgeService.start.
-      final im = FakeUIKit.instance.im;
-      if (im != null) {
-        BadgeService.instance
-            .start(bus: FakeUIKit.instance.eventBusInstance, im: im);
+        // CR-02: a concurrent disposeRuntime() (logout / account switch)
+        // bumped the generation while we were initializing. Do NOT publish
+        // `started`. Complete the completer (so dispose, which awaits it, can
+        // proceed to tear down), then loop: the top of the loop will wait out
+        // the dispose via [_disposing] and re-init cleanly afterwards (#3).
+        if (_generation != myGeneration ||
+            _state != SessionRuntimeState.starting) {
+          completer.complete();
+          continue;
+        }
+        _state = SessionRuntimeState.started;
+        completer.complete();
+        return;
+      } catch (e, st) {
+        _state = SessionRuntimeState.notStarted;
+        completer.completeError(e, st);
+        rethrow;
+      } finally {
+        _initializing = null;
       }
-
-      _state = SessionRuntimeState.started;
-      completer.complete();
-    } catch (e, st) {
-      _state = SessionRuntimeState.notStarted;
-      completer.completeError(e, st);
-      rethrow;
-    } finally {
-      _initializing = null;
+      // callSystemReady is set by FakeUIKit.startWithFfi() via
+      // addPostFrameCallback to avoid "setState()/markNeedsBuild() during
+      // build".
     }
-    // callSystemReady is set by FakeUIKit.startWithFfi() via addPostFrameCallback to avoid
-    // "setState() or markNeedsBuild() called during build".
+  }
+
+  /// The real init body: start FakeUIKit, install the Tim2Tox platform, bring
+  /// up the call service, install the history hook, and start the badge.
+  /// Factored out of [ensureInitialized] so [debugInitBodyOverride] can replace
+  /// it in tests; the serialization logic around it stays in
+  /// [ensureInitialized].
+  Future<void> _performInit() async {
+    if (!FakeUIKit.instance.isStarted) {
+      // Async since A7: awaits initial pinned-conversation read so the
+      // platform bridge installed below never sees an empty pinned set.
+      await FakeUIKit.instance.startWithFfi(service);
+    }
+
+    if (TencentCloudChatSdkPlatform.instance is! Tim2ToxSdkPlatform) {
+      final eventBusAdapter =
+          EventBusAdapter(FakeUIKit.instance.eventBusInstance);
+      final conversationManagerAdapter = ConversationManagerAdapter(
+        FakeUIKit.instance.conversationManager!,
+      );
+      final platform = Tim2ToxSdkPlatform(
+        ffiService: service,
+        eventBusProvider: eventBusAdapter,
+        conversationManagerProvider: conversationManagerAdapter,
+      );
+      TencentCloudChatSdkPlatform.instance = platform;
+      platform.onGroupMessageReceivedForUnread = (groupId) {
+        if (groupId != null && groupId.isNotEmpty) {
+          service.incrementGroupUnread(groupId);
+        }
+        FakeUIKit.instance.im?.refreshConversations();
+        FakeUIKit.instance.im?.refreshUnreadTotal();
+      };
+      AppLogger.debug(
+          '[SessionRuntimeCoordinator] Set TencentCloudChatSdkPlatform to Tim2ToxSdkPlatform');
+    }
+
+    await FakeUIKit.instance.callServiceManager?.initialize();
+    UikitDataFacade.setUseCallKit(true);
+
+    // Install the binary-replacement history hook in the same atomic init
+    // block as the platform, so the "platform installed but hook not yet
+    // installed" window (where FFI-path messages could land in persistence
+    // without UIKit listener mediation) cannot exist.
+    _installBinaryReplacementHistoryHook();
+
+    // OS-level dock/launcher unread badge. Subscribes to the same bus topic
+    // UIKit's conversation listener uses (FakeIM.topicUnread) and debounces
+    // writes so a burst of poll-driven emits collapses to one platform-channel
+    // call. Idempotent — see BadgeService.start.
+    final im = FakeUIKit.instance.im;
+    if (im != null) {
+      BadgeService.instance
+          .start(bus: FakeUIKit.instance.eventBusInstance, im: im);
+    }
   }
 
   /// Call on session teardown (e.g. logout). Resets runtime state.
+  ///
+  /// Holds [_disposing] for the ENTIRE teardown so a concurrent
+  /// [ensureInitialized] blocks at its top until teardown finishes instead of
+  /// re-installing platform/badge/hook midway and having the teardown tail
+  /// clobber them (#4). Concurrent dispose calls coalesce onto the in-flight
+  /// one.
   static Future<void> disposeRuntime() async {
+    final inFlightDispose = _disposing;
+    if (inFlightDispose != null) return inFlightDispose;
     if (_state == SessionRuntimeState.disposed) return;
+
+    final disposeCompleter = Completer<void>();
+    _disposing = disposeCompleter.future;
+    try {
+      await _runTeardown();
+    } finally {
+      _disposing = null;
+      // Complete normally even if a teardown step threw: awaiters only need to
+      // know teardown is no longer in progress; the throw still propagates to
+      // disposeRuntime's own caller.
+      if (!disposeCompleter.isCompleted) disposeCompleter.complete();
+    }
+  }
+
+  /// The actual teardown sequence, run under the [_disposing] guard by
+  /// [disposeRuntime]. Not to be called directly.
+  static Future<void> _runTeardown() async {
+    // CR-02: invalidate any in-flight ensureInitialized() FIRST, then wait for
+    // it to run to completion so its side-effects (platform install, badge,
+    // hook) all land before we tear them down — instead of interleaving and
+    // leaving a half-disposed runtime. The generation bump makes that init
+    // abort its `started` commit when it resumes.
+    _generation++;
+    final inFlight = _initializing;
+    if (inFlight != null) {
+      try {
+        await inFlight;
+      } catch (_) {
+        // An init failure is already surfaced to its own caller.
+      }
+    }
     _state = SessionRuntimeState.disposed;
 
-    // BinaryReplacementHistoryHook intentionally exposes no public uninstall
-    // API: its static `_persistence`/`_selfId` are overwritten by the next
-    // `initialize`, and an in-flight `saveMessage` from the old session is
-    // fenced by its generation counter (see X8 regression test). We therefore
-    // only reset our own bookkeeping here so a subsequent `ensureInitialized`
-    // re-installs the hook against the new session's persistence + selfId.
-    await _pendingHookSelfIdSub?.cancel();
+    final teardownOverride = debugTeardownBodyOverride;
+    if (teardownOverride != null) {
+      await teardownOverride();
+      return;
+    }
+
+    // Teardown steps are best-effort. A throw in one step must NOT skip the
+    // rest: disposeRuntime() completes [_disposing] *normally* once teardown is
+    // no longer in flight (a concurrent re-init only learns teardown finished,
+    // not whether every step succeeded — see ensureInitialized's `await
+    // disposing`). If a mid-teardown throw aborted the remaining steps, that
+    // re-init would rebuild on top of a half-disposed runtime (e.g. hook
+    // uninstalled but platform still swapped in, or badge still subscribed).
+    // So run every step, capture the first error, and rethrow it at the end —
+    // disposeRuntime's own caller still surfaces the failure, while awaiters
+    // resume against a fully torn-down runtime.
+    Object? firstError;
+    StackTrace? firstStack;
+    Future<void> step(String label, FutureOr<void> Function() op) async {
+      try {
+        await op();
+      } catch (e, st) {
+        AppLogger.logError(
+            '[SessionRuntimeCoordinator] teardown step "$label" failed', e, st);
+        firstError ??= e;
+        firstStack ??= st;
+      }
+    }
+
+    // CR-01: actually uninstall the standalone history listener and reset its
+    // static persistence/selfId/logger + bump its generation, so a late
+    // message after logout cannot write into the next account's history. Must
+    // be awaited as part of atomic runtime teardown.
+    await step('cancel pending hook selfId sub',
+        () => _pendingHookSelfIdSub?.cancel());
     _pendingHookSelfIdSub = null;
+    await step('uninstall history hook',
+        BinaryReplacementHistoryHook.uninstallStandalone);
     _hookInstalled = false;
 
     // Clear the iOS BG-refresh callback so a refresh window granted AFTER
@@ -157,23 +321,25 @@ class SessionRuntimeCoordinator {
 
     // Drop the badge subscription before FakeUIKit.dispose() closes the
     // event bus — otherwise the cancel races with a closed StreamController.
-    await BadgeService.instance.dispose();
+    await step('dispose badge service', BadgeService.instance.dispose);
 
     // Detach the notification message listener BEFORE the Tim2Tox platform
     // swap below so removeAdvancedMsgListener still hits the live platform.
     // disposeAndReset is a no-op when no singleton was constructed.
-    await NotificationMessageListener.disposeAndReset();
+    await step('dispose notification listener',
+        NotificationMessageListener.disposeAndReset);
 
     // Clear OS-level banners AND in-process inbox bookkeeping before the next
     // account boots, so a new account doesn't inherit grouped lines or the
     // previous account's conversationId→notificationId hash map.
-    await NotificationService.instance.resetSessionState();
+    await step('reset notification session state',
+        NotificationService.instance.resetSessionState);
 
-    FakeUIKit.instance.dispose();
+    await step('dispose FakeUIKit', () => FakeUIKit.instance.dispose());
 
     final platform = TencentCloudChatSdkPlatform.instance;
     if (platform is Tim2ToxSdkPlatform) {
-      platform.dispose();
+      await step('dispose Tim2Tox platform', () => platform.dispose());
       TencentCloudChatSdkPlatform.instance = MethodChannelTencentCloudChatSdk();
     }
 
@@ -181,7 +347,12 @@ class SessionRuntimeCoordinator {
     // keeping the persistent notification (and the OS reservation that comes
     // with it) once polling is gone. No-op on non-Android. Failures are
     // logged inside the wrapper — never fatal.
-    await RuntimeForegroundService.instance.stop();
+    await step('stop runtime foreground service',
+        RuntimeForegroundService.instance.stop);
+
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStack ?? StackTrace.current);
+    }
   }
 
   /// Installs the binary-replacement history hook as a standalone, independent
@@ -206,7 +377,8 @@ class SessionRuntimeCoordinator {
       // message gets dropped instead of mis-attributed.
       final selfId = service.selfId;
       BinaryReplacementHistoryHook.installStandalone(
-          service.messageHistoryPersistence, selfId);
+          service.messageHistoryPersistence, selfId,
+          logger: AppLoggerAdapter());
       _hookInstalled = true;
       AppLogger.debug(
           '[SessionRuntimeCoordinator] BinaryReplacementHistoryHook installed (standalone, selfId=${selfId.isEmpty ? "<deferred>" : "<set>"})');
@@ -225,10 +397,16 @@ class SessionRuntimeCoordinator {
         });
       }
     } catch (e, st) {
+      // CR-03: history persistence on the binary-replacement path is a
+      // single source of truth and part of atomic runtime init. A silent
+      // failure here would leave the app "ready" while messages silently
+      // fail to persist. Fail the whole init so the caller tears down and
+      // surfaces the error instead.
       AppLogger.logError(
-          '[SessionRuntimeCoordinator] Error installing history hook: $e',
+          '[SessionRuntimeCoordinator] history hook install failed — failing runtime init',
           e,
           st);
+      rethrow;
     }
   }
 }

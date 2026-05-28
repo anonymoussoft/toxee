@@ -34,6 +34,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
+    <!-- Android requires a phoneCall foreground service to either declare
+         MANAGE_OWN_CALLS or run as the default dialer. Toxee is a VoIP app, not
+         the device dialer, so declare the self-managed-call prerequisite. -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
     <!-- Needed to launch full-screen incoming-call UI from a notification when
          the device is locked. Without it Android 14+ silently downgrades the
          full-screen intent to a heads-up. -->

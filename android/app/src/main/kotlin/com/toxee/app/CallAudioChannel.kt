@@ -141,23 +141,18 @@ class CallAudioChannel(
         requestAudioFocus()
         registerReceivers()
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        if (preferredRouteId == null) {
-            preferredRouteId = if (preferSpeaker) "speaker" else "earpiece"
-        }
-        applyPreferredRoute()
+        applyPreferredRoute(preferSpeaker)
     }
 
     private fun deactivateSession() {
         audioSessionActive = false
+        preferredRouteId = null
         unregisterReceivers()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.clearCommunicationDevice()
         }
         audioManager.isSpeakerphoneOn = false
-        if (audioManager.isBluetoothScoOn) {
-            audioManager.stopBluetoothSco()
-            audioManager.isBluetoothScoOn = false
-        }
+        stopBluetoothScoIfActive()
         abandonAudioFocus()
         audioManager.mode = AudioManager.MODE_NORMAL
     }
@@ -219,7 +214,7 @@ class CallAudioChannel(
 
     private fun setRoute(routeId: String?) {
         preferredRouteId = routeId
-        applyPreferredRoute()
+        applyPreferredRoute(defaultToSpeaker = false)
         emit("routeChanged")
     }
 
@@ -309,16 +304,17 @@ class CallAudioChannel(
         }
     }
 
-    private fun applyPreferredRoute() {
-        when (preferredRouteId) {
+    private fun applyPreferredRoute(defaultToSpeaker: Boolean) {
+        val routeId = preferredRouteId ?: if (defaultToSpeaker) "speaker" else "earpiece"
+        when (routeId) {
             "speaker" -> routeToSpeaker()
             "earpiece" -> routeToEarpiece()
-            null -> routeToEarpiece()
-            else -> routeToDevice(preferredRouteId!!)
+            else -> routeToDevice(routeId)
         }
     }
 
     private fun routeToSpeaker() {
+        stopBluetoothScoIfActive()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             findSpeakerDevice()?.let {
                 audioManager.setCommunicationDevice(it)
@@ -335,10 +331,7 @@ class CallAudioChannel(
             }
         }
         audioManager.isSpeakerphoneOn = false
-        if (audioManager.isBluetoothScoOn) {
-            audioManager.stopBluetoothSco()
-            audioManager.isBluetoothScoOn = false
-        }
+        stopBluetoothScoIfActive()
     }
 
     private fun routeToDevice(routeId: String) {
@@ -361,6 +354,7 @@ class CallAudioChannel(
             }
 
             "wired" -> {
+                stopBluetoothScoIfActive()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     audioManager.setCommunicationDevice(device)
                 }
@@ -369,6 +363,14 @@ class CallAudioChannel(
 
             "speaker" -> routeToSpeaker()
             else -> routeToEarpiece()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun stopBluetoothScoIfActive() {
+        if (audioManager.isBluetoothScoOn) {
+            audioManager.stopBluetoothSco()
+            audioManager.isBluetoothScoOn = false
         }
     }
 

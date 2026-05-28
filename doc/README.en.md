@@ -21,6 +21,7 @@
 - [architecture/HYBRID_ARCHITECTURE.md](architecture/HYBRID_ARCHITECTURE.en.md) - Current hybrid architecture responsibilities and callback paths
 - [reference/ACCOUNT_AND_SESSION.md](reference/ACCOUNT_AND_SESSION.en.md) - Account init, switch, logout, delete lifecycle
 - [reference/IMPLEMENTATION_DETAILS.md](reference/IMPLEMENTATION_DETAILS.en.md) - Key modules and message/event handling implementation details
+- [reviews/2026-05-26-core-feature-review.md](reviews/2026-05-26-core-feature-review.md) - Core feature review, fixes, verification scope, and limitations from this pass
 
 ## Operations and build
 

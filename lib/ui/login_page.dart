@@ -420,7 +420,9 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    setState(() => _busy = false);
+    // CR-09: keep _busy held through boot + navigation so a second tap can't
+    // re-enter login/boot concurrently. It is cleared only on the failure
+    // branches below; on success this State is replaced by HomePage.
     switch (result) {
       case LoginControllerSuccess(:final service):
         try {
@@ -451,13 +453,19 @@ class _LoginPageState extends State<LoginPage> {
           unawaited(HapticFeedback.lightImpact());
           final message =
               e is Exception ? e.toString().replaceFirst('Exception: ', '') : e.toString();
-          setState(() => _error = message);
+          setState(() {
+            _error = message;
+            _busy = false;
+          });
           AppSnackBar.showError(context, message);
         }
         break;
       case LoginControllerFailure(:final message):
         unawaited(HapticFeedback.lightImpact());
-        setState(() => _error = message);
+        setState(() {
+          _error = message;
+          _busy = false;
+        });
         AppSnackBar.showError(context, message);
         FocusScope.of(context).requestFocus(_nicknameFocusNode);
         break;
