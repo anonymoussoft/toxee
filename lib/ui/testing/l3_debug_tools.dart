@@ -2760,25 +2760,12 @@ MCPCallEntry _l3CreateGroupEntry() => MCPCallEntry.tool(
     final type = (request['type'] as Object?)?.toString().trim().toLowerCase();
     final groupType = type == 'private' ? 'Private' : 'group';
     try {
-      // [FREEZE-DIAG] Stage timing for the NGC-create UI-freeze investigation
-      // (2026-06-02). The maintainer observed "getGroupChatId returns, then the
-      // merged platform thread hangs". These logs bracket each stage so a live
-      // run localizes the stall: a large `ffi.createGroup` elapsed = the native
-      // synchronous create; long getGroupChatId attempts = the chat-id wait; a
-      // freeze AFTER the final "post-create" log = the platform-channel return /
-      // groupJoinNotification handler (NOT the create itself). Remove once fixed.
-      final swCreate = Stopwatch()..start();
       final effectiveName = (name == null || name.isEmpty)
           ? 'l3_test_group'
           : name;
       final gid = await ffi.createGroup(
         effectiveName,
         groupType: groupType,
-      );
-      swCreate.stop();
-      AppLogger.info(
-        '[FREEZE-DIAG] l3_create_group: ffi.createGroup(type=$groupType) '
-        'returned gid=$gid in ${swCreate.elapsedMilliseconds}ms',
       );
       if (gid == null || gid.isEmpty) {
         return MCPCallResult(
@@ -2791,29 +2778,11 @@ MCPCallEntry _l3CreateGroupEntry() => MCPCallEntry.tool(
       // Fetch it (with a short retry — it can lag the create by a tick) so a
       // peer can l3_join_group it.
       String? chatId;
-      final swChatId = Stopwatch()..start();
-      var attempts = 0;
       for (var i = 0; i < 12; i++) {
-        attempts = i + 1;
-        final swAttempt = Stopwatch()..start();
         chatId = ffi.getGroupChatId(gid);
-        swAttempt.stop();
-        AppLogger.info(
-          '[FREEZE-DIAG] l3_create_group: getGroupChatId attempt $attempts -> '
-          '${chatId == null ? "null" : "len=${chatId.length}"} in '
-          '${swAttempt.elapsedMilliseconds}ms',
-        );
         if (chatId != null && chatId.length == 64) break;
         await Future<void>.delayed(const Duration(milliseconds: 300));
       }
-      swChatId.stop();
-      AppLogger.info(
-        '[FREEZE-DIAG] l3_create_group: getGroupChatId loop done after '
-        '$attempts attempt(s) in ${swChatId.elapsedMilliseconds}ms — now '
-        'building/returning result (gid=$gid). If the UI freezes AFTER this '
-        'line, the stall is the post-create platform-channel return / '
-        'groupJoinNotification handler, NOT the native create.',
-      );
       // Store the display name like the UI create path does — the
       // conversation list resolves group titles from Prefs.getGroupName
       // (fake_provider._refreshGroups), so without this the tile (and the
