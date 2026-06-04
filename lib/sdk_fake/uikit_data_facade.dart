@@ -106,9 +106,13 @@ class UikitDataFacade {
 
   /// Wraps `TencentCloudChat.instance.dataInstance.contact.deleteGroupInfoFromJoinedGroupList(...)`.
   /// UIKit internal: private API; verify on every chat-uikit-flutter rebase.
-  static void deleteGroupInfoFromJoinedGroupList(String groupID) {
+  /// [fireQuitEvent] false performs a SILENT delete (no quitGroup event) — used
+  /// by the group-list reconcile, which deletes-then-rebuilds and must not
+  /// signal a real quit. Defaults true so real quit/dismiss paths are unchanged.
+  static void deleteGroupInfoFromJoinedGroupList(String groupID,
+      {bool fireQuitEvent = true}) {
     TencentCloudChat.instance.dataInstance.contact
-        .deleteGroupInfoFromJoinedGroupList(groupID);
+        .deleteGroupInfoFromJoinedGroupList(groupID, fireQuitEvent: fireQuitEvent);
   }
 
   /// Wraps `TencentCloudChat.instance.dataInstance.contact.getGroupInfo(...)` (read).
@@ -217,6 +221,16 @@ class UikitDataFacade {
   static List<V2TimMessage> getMessageList({required String key}) {
     return TencentCloudChat.instance.dataInstance.messageData
         .getMessageList(key: key);
+  }
+
+  /// Wraps `TencentCloudChat.instance.dataInstance.messageData.messageListMap.keys` (read).
+  /// UIKit internal: private API; verify on every chat-uikit-flutter rebase.
+  /// Exposed for the L3 Bug-C render check, which must enumerate EVERY render
+  /// key and match by logical Tox identity rather than guess a single key form:
+  /// the map is exact-string keyed and toxee populates it under several id forms
+  /// (64-char pubkey, 76-char full id, with/without `c2c_` prefix, mixed case).
+  static Iterable<String> messageListKeys() {
+    return TencentCloudChat.instance.dataInstance.messageData.messageListMap.keys;
   }
 
   /// Wraps `TencentCloudChat.instance.dataInstance.messageData.notifyListener(TencentCloudChatMessageDataKeys.messageNeedUpdate, userID, groupID)`.

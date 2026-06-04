@@ -1,0 +1,25 @@
+{
+  "id": "L3-multi-send",
+  "suite": "c2c",
+  "description": "Send 3 distinct messages in succession; each must echo back and persist exactly once per direction (stresses the cross-path dedup under multiple sends — the area the original double-write bug lived; also the standing regression for the retracted msgID-collision class). Requires echo_live. #18 (codex-vetted 2026-05-30): texts carry a per-run {{nonce}}, so the earlier 4/8 failure mode (a FIXED text like multi-a1 accumulating across back-to-back runs when a straggler echo lands after the bounded reset → `count=4`) can no longer inflate the assertions. PROMOTED to a HARD GATE 2026-05-30: measured 33/33 back-to-back PASS on the nonce build (8 + 25) plus 3 clean full-suite runs, meeting codex's 20-30-run bar, so nonBlocking was removed.",
+  "requiresEchoPeer": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "warmup", "text": "multi-warmup-{{nonce}}", "timeoutSecs": 60 },
+    { "action": "send_text", "text": "multi-a1-{{nonce}}" },
+    { "action": "send_text", "text": "multi-b2-{{nonce}}" },
+    { "action": "send_text", "text": "multi-c3-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "multi-a1-{{nonce}}", "isSelf": false, "timeoutSecs": 60 },
+    { "action": "wait_for", "predicate": "message_exists", "text": "multi-b2-{{nonce}}", "isSelf": false, "timeoutSecs": 60 },
+    { "action": "wait_for", "predicate": "message_exists", "text": "multi-c3-{{nonce}}", "isSelf": false, "timeoutSecs": 60 }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "text": "multi-a1-{{nonce}}", "isSelf": true, "equals": 1 },
+    { "type": "message_count_text", "text": "multi-a1-{{nonce}}", "isSelf": false, "equals": 1 },
+    { "type": "message_count_text", "text": "multi-b2-{{nonce}}", "isSelf": true, "equals": 1 },
+    { "type": "message_count_text", "text": "multi-b2-{{nonce}}", "isSelf": false, "equals": 1 },
+    { "type": "message_count_text", "text": "multi-c3-{{nonce}}", "isSelf": true, "equals": 1 },
+    { "type": "message_count_text", "text": "multi-c3-{{nonce}}", "isSelf": false, "equals": 1 }
+  ]
+}

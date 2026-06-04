@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../../util/app_paths.dart';
 import '../../util/logger.dart';
 import '../../util/prefs.dart';
+import '../testing/l3_debug_tools.dart';
 
 /// Result of [pickAndPersistAvatar] when the user actually chose a file.
 class PickedAvatar {
@@ -22,8 +23,14 @@ Future<PickedAvatar?> pickAndPersistAvatar({
   required bool isEditable,
   required String userId,
 }) async {
-  final result = await FilePicker.platform.pickFiles(type: FileType.image);
-  final pickedPath = result?.files.single.path;
+  // S79: the native image picker can't be driven headless. The L3 surface can
+  // set an override path that bypasses the NSOpenPanel (no-op in release).
+  final pickedPath = await runL3AwareAvatarPicker(
+    pickFiles: () async {
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
+      return result?.files.single.path;
+    },
+  );
   if (pickedPath == null) return null;
   final currentToxId = await Prefs.getCurrentAccountToxId();
   final avatarsDirPath = (currentToxId != null && currentToxId.isNotEmpty)

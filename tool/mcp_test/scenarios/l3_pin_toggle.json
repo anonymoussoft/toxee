@@ -1,0 +1,16 @@
+{
+  "id": "L3-pin-toggle",
+  "suite": "c2c",
+  "description": "F2 conversation pin/unpin (coverage-widening, hermetic): drive l3_set_pinned and prove a pin/unpin round-trips through l3_dump_state.pinnedConversations (the Prefs-backed pinned set FakeConversationManager.setPinned writes — the same UIKit long-press 'pin' path). Pins the seeded echo-peer C2C conversation, asserts its id enters the pinned set, unpins, asserts the set is empty again. Starts AND ends with an empty pinned set so the fixture self-cleans even if interrupted (the start wait_for catches a dirty fixture). No echo round-trip — pinning is local Prefs state, so this is a hermetic hard gate. Maps to feature F2.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_contains", "field": "pinnedConversations", "contains": "[]", "timeoutSecs": 10 },
+    { "action": "set_pinned", "conversationId": "c2c_3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244", "pinned": true },
+    { "action": "wait_for", "predicate": "state_contains", "field": "pinnedConversations", "contains": "3116CBE0974181B6", "timeoutSecs": 10 },
+    { "action": "set_pinned", "conversationId": "c2c_3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244", "pinned": false }
+  ],
+  "assertions": [
+    { "type": "state", "field": "pinnedConversations", "contains": "[]" }
+  ]
+}

@@ -1,0 +1,238 @@
+{
+  "_comment": "Machine-readable index of the Fixture C two-process gates (plan doc/research/TEST_CASE_ORGANIZATION_PLAN.en.md section 3.4). One entry per run_fixture_c_*.sh wrapper (28). Ordered: non-media non-destructive first, then media (real ToxAV calls), destructive last (network_drop, kick). Scenario S-numbers come from each driver's header/source - never invented. class: 2proc-l3 (driven via l3_* debug tools) or 2proc-ui (real widgets + osascript). media=true for real ToxAV call flows. destructive=true for network_drop + kick. costSecs is a rough typical wall-clock budget (pair launch+boot ~30-40s + driver convergence; retry-loop and multi-phase scripts cost more); it is a planning hint, NOT a hard timeout. The drive_real_ui_pair.dart entry has NO .sh wrapper (class 2proc-ui) and is SKIPPED by run_fixture_c_suite.sh - see its launchNote.",
+  "entries": [
+    {
+      "script": "run_fixture_c_non_media.sh",
+      "scenarios": ["S61", "S62"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_accept.sh",
+      "scenarios": ["S26"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_decline.sh",
+      "scenarios": ["S27"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_custom_message.sh",
+      "scenarios": ["S54"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_autoaccept_friend.sh",
+      "scenarios": ["S46"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_contact_search.sh",
+      "scenarios": ["S49"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 90
+    },
+    {
+      "script": "run_fixture_c_concurrent.sh",
+      "scenarios": ["S64"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_receipt.sh",
+      "scenarios": ["S63"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_typing.sh",
+      "scenarios": ["S63"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_window.sh",
+      "scenarios": ["S58"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_notification_tap.sh",
+      "scenarios": ["S53"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 90
+    },
+    {
+      "script": "run_fixture_c_mute.sh",
+      "scenarios": ["S83"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 90
+    },
+    {
+      "script": "run_fixture_c_self_profile.sh",
+      "scenarios": ["S52"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_avatar.sh",
+      "scenarios": ["S52"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 150
+    },
+    {
+      "script": "run_fixture_c_avatar_picker.sh",
+      "scenarios": ["S79"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 90
+    },
+    {
+      "script": "run_fixture_c_file.sh",
+      "scenarios": ["S21", "S24"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 150
+    },
+    {
+      "script": "run_fixture_c_image.sh",
+      "scenarios": ["S88"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 150
+    },
+    {
+      "script": "run_fixture_c_voice_msg.sh",
+      "scenarios": ["S78"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 150
+    },
+    {
+      "script": "run_fixture_c_presence.sh",
+      "scenarios": ["S51"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 240
+    },
+    {
+      "script": "run_fixture_c_group.sh",
+      "scenarios": ["S34"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_join.sh",
+      "scenarios": ["S33"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 480
+    },
+    {
+      "script": "run_fixture_c_member_list.sh",
+      "scenarios": ["S36"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 480
+    },
+    {
+      "script": "run_fixture_c_group_invite.sh",
+      "scenarios": ["S47", "S81"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 150
+    },
+    {
+      "script": "run_fixture_c_block.sh",
+      "scenarios": ["S29"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_call.sh",
+      "scenarios": ["S65", "S66", "S67", "S68", "S74", "S75", "S76"],
+      "class": "2proc-l3",
+      "media": true,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_missed_call.sh",
+      "scenarios": ["S77"],
+      "class": "2proc-l3",
+      "media": true,
+      "destructive": false,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_network_drop.sh",
+      "scenarios": ["S69"],
+      "class": "2proc-l3",
+      "media": true,
+      "destructive": true,
+      "costSecs": 120
+    },
+    {
+      "script": "run_fixture_c_kick.sh",
+      "scenarios": ["S37"],
+      "class": "2proc-l3",
+      "media": false,
+      "destructive": true,
+      "costSecs": 360
+    },
+    {
+      "script": "drive_real_ui_pair.dart",
+      "scenarios": ["S26", "S61", "S27", "S62", "S64", "S108"],
+      "class": "2proc-ui",
+      "media": false,
+      "destructive": false,
+      "costSecs": 240,
+      "launchNote": "No .sh wrapper. Drives the REAL UIKit widgets across two live instances via ext.flutter.flutter_skill taps + osascript foreground/keystroke/Return - it needs two manually-launched live instances (launch_toxee_instance.sh) and a foreground-able macOS session, so it cannot be batched by run_fixture_c_suite.sh (which SKIPs this 2proc-ui entry with a NOTE). Invoke directly: dart run tool/mcp_test/drive_real_ui_pair.dart <scenario> <wsA> <pidA> <nickA> <wsB> <pidB> <nickB> where scenario is handshake (S26/S61) | handshake_detail (S108) | decline (S27) | message (S62/S64). See REAL_UI_TWO_PROCESS.md."
+    }
+  ]
+}

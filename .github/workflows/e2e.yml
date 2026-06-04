@@ -58,7 +58,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.0'
+          flutter-version: '3.41.9'
           channel: 'stable'
           cache: true
 
@@ -173,14 +173,59 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/e2e-logs
-          flutter test integration_test/ -d macos 2>&1 | tee build/e2e-logs/flutter_test_macos.log
+          # integration_test/ currently contains app_smoke_test.dart (a host-
+          # binary smoke that needs libtim2tox_ffi). The skip-when-empty guard
+          # below is defensive: the directory may go empty again during
+          # refactors, and we don't want the job to hard-fail in that case.
+          # Use `find` instead of `compgen -G '**/*'` because macOS bash 3.2
+          # has no `globstar` and would silently skip nested subdirectory tests.
+          if find integration_test -name '*_test.dart' -print -quit 2>/dev/null | grep -q .; then
+            # Run EACH test file in its own `flutter test` invocation. Flutter
+            # desktop launches one host app per invocation, so a single command
+            # over multiple files fails to launch the 2nd+ app
+            # ("Unable to start the app on the device"). A per-file loop also
+            # gives each file its own isolate (defensive against cross-test
+            # state leaks in the host-app widget tree). pipefail makes a failing
+            # `flutter test` propagate through the `tee`.
+            : > build/e2e-logs/flutter_test_macos.log
+            fail=0
+            while IFS= read -r f; do
+              echo "=== $f ===" | tee -a build/e2e-logs/flutter_test_macos.log
+              if ! flutter test "$f" -d macos 2>&1 | tee -a build/e2e-logs/flutter_test_macos.log; then
+                fail=1
+              fi
+            done < <(find integration_test -name '*_test.dart' | sort)
+            [ "$fail" -eq 0 ]
+          else
+            echo "integration_test/ has no *_test.dart files; skipping host-binary smoke run."
+            echo "skipped: integration_test/ is empty" > build/e2e-logs/flutter_test_macos.log
+          fi
 
       - name: Run integration_test (Linux, under xvfb)
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           mkdir -p build/e2e-logs
-          xvfb-run -a flutter test integration_test/ -d linux 2>&1 | tee build/e2e-logs/flutter_test_linux.log
+          # See macOS step for rationale — directory currently has
+          # app_smoke_test.dart but the skip-when-empty guard is defensive.
+          # Use `find` instead of `compgen -G '**/*'` for shell-version
+          # portability (no `globstar` reliance — see macOS step comment).
+          if find integration_test -name '*_test.dart' -print -quit 2>/dev/null | grep -q .; then
+            # Per-file loop — same rationale as the macOS step (one host app
+            # per `flutter test` invocation). pipefail propagates failures.
+            : > build/e2e-logs/flutter_test_linux.log
+            fail=0
+            while IFS= read -r f; do
+              echo "=== $f ===" | tee -a build/e2e-logs/flutter_test_linux.log
+              if ! xvfb-run -a flutter test "$f" -d linux 2>&1 | tee -a build/e2e-logs/flutter_test_linux.log; then
+                fail=1
+              fi
+            done < <(find integration_test -name '*_test.dart' | sort)
+            [ "$fail" -eq 0 ]
+          else
+            echo "integration_test/ has no *_test.dart files; skipping host-binary smoke run."
+            echo "skipped: integration_test/ is empty" > build/e2e-logs/flutter_test_linux.log
+          fi
 
       - name: Upload E2E artifacts on failure
         if: failure()

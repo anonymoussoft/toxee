@@ -4,8 +4,10 @@ import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import '../adapters/bootstrap_adapter.dart';
 import '../adapters/logger_adapter.dart';
 import '../adapters/shared_prefs_adapter.dart';
+import '../util/account_export_service.dart';
 import '../util/account_service.dart';
 import '../util/app_bootstrap_coordinator.dart';
+import '../util/app_paths.dart';
 import '../util/logger.dart';
 import '../util/placeholder_account_migration.dart';
 import '../util/prefs.dart';
@@ -54,6 +56,18 @@ class StartupSessionUseCase {
       // placeholder-keyed record and propagate the wrong toxId into the
       // session paths. Idempotent and safe to call when nothing needs
       // migrating (returns null and exits in microseconds).
+      //
+      // TODO(codex-review-3): this trigger only fires in the auto-login path
+      // and only after the `nickname/autoLogin` early returns above. The
+      // manual login path in `LoginUseCase` never invokes the migration, so
+      // a user whose account is encrypted and who toggles off auto-login can
+      // stay stuck under the `FlutterUIKitClient` namespace indefinitely.
+      // Also, the migration's `_discoverRealToxId()` opens a discovery
+      // FfiChatService without a password, which can't unlock encrypted
+      // profile blobs. Long-term fix: thread the live `FfiChatService`'s
+      // already-resolved `getSelfToxId()` into the migration so encrypted
+      // profiles migrate post-login instead of via a separate probe. See
+      // `LoginUseCase` for the matching stub.
       await PlaceholderAccountMigration.migrateIfNeeded();
 
       Map<String, String>? account;
@@ -65,6 +79,31 @@ class StartupSessionUseCase {
       final toxIdForStartup = account?['toxId'];
 
       if (toxIdForStartup != null && toxIdForStartup.isNotEmpty) {
+        // S40 Bug 3: an encrypted profile cannot auto-login. There is no
+        // cross-process password cache (SessionPasswordStore is in-memory and
+        // empty on cold start), so initializeServiceForAccount(password: null)
+        // below would hand FFI an undecryptable blob and throw — surfacing a
+        // generic StartupShowError. Detect it up front and route to the login
+        // page instead, where tapping the account prompts for the password
+        // (LoginPage._quickLogin → LoginUseCase → init WITH the password →
+        // decrypt). Fail-open: a probe error must never block the normal init
+        // path (the probe is advisory).
+        try {
+          final profilePath =
+              await AppPaths.resolveToxProfilePath(toxIdForStartup);
+          if (profilePath != null &&
+              await AccountExportService.isProfileFileEncrypted(profilePath)) {
+            return const StartupShowLogin();
+          }
+        } catch (probeError, probeSt) {
+          AppLogger.logError(
+            '[StartupSessionUseCase] encrypted-profile probe failed; '
+            'continuing with init',
+            probeError,
+            probeSt,
+          );
+        }
+
         service = await AccountService.initializeServiceForAccount(
           toxId: toxIdForStartup,
           nickname: nick,

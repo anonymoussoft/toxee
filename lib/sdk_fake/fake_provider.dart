@@ -23,6 +23,7 @@ import 'fake_uikit_core.dart';
 import 'fake_im.dart';
 import 'fake_models.dart';
 import 'uikit_data_facade.dart';
+import 'c2c_recv_opt_cache.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
 
@@ -32,9 +33,22 @@ V2TimConversation mergeExternalConversationUpdate({
 }) {
   if (existing == null) return refreshed;
 
-  refreshed.faceUrl ??= existing.faceUrl;
-  refreshed.showName ??= existing.showName;
+  // Display fields: treat EMPTY strings as absent, not just null. Sparse/minimal
+  // native emits (the recvOpt mute push, post-send / pin / draft notifies built
+  // without a cached snapshot) fill these with "" placeholders, which must not
+  // clobber known values.
+  if (refreshed.faceUrl == null || refreshed.faceUrl!.isEmpty) {
+    refreshed.faceUrl = existing.faceUrl;
+  }
+  if (refreshed.showName == null || refreshed.showName!.isEmpty) {
+    refreshed.showName = existing.showName;
+  }
   refreshed.lastMessage ??= existing.lastMessage;
+  // Scalars: sparse emits carry 0/false placeholders here too, but per-field
+  // ownership is ambiguous (the pin notify legitimately owns isPinned while the
+  // mute push does not), so keep null-coalescing. A placeholder that slips
+  // through is transient: the ~5s FakeConversation rebuild restores the real
+  // values from Prefs/FfiChatService.
   refreshed.orderkey ??= existing.orderkey;
   refreshed.unreadCount ??= existing.unreadCount;
   refreshed.isPinned ??= existing.isPinned;
@@ -78,6 +92,11 @@ class FakeChatDataProvider implements ChatDataProvider {
           final list = await mgr.getConversationList();
           // Get quit groups to filter them out
           final quitGroups = await Prefs.getQuitGroups();
+          // Hydrate the C2C recvOpt projection cache from Prefs (the durable
+          // backing store) BEFORE _mapConv reads it, so a mute set in a previous
+          // session is reflected on restart. Prefs is persistence only; the cache
+          // is the runtime source of truth _mapConv reads.
+          final selfToxId = await Prefs.getCurrentAccountToxId();
           for (final c in list) {
             // Skip group conversations that have been quit
             if (c.isGroup) {
@@ -85,6 +104,9 @@ class FakeChatDataProvider implements ChatDataProvider {
               if (quitGroups.contains(gid)) {
                 continue;
               }
+            } else {
+              await C2CRecvOptCache.hydrateFromPrefs(
+                  c.conversationID.replaceFirst('c2c_', ''), selfToxId);
             }
             _convMap[c.conversationID] = await _mapConv(c);
           }
@@ -153,6 +175,17 @@ class FakeChatDataProvider implements ChatDataProvider {
             isGroup: c.isGroup,
             isPinned: c.isPinned,
           );
+        }
+      }
+      // Lazily hydrate this peer's persisted mute state before _mapConv reads
+      // the projection cache — a C2C conversation that only appears AFTER the
+      // provider seed (e.g. the peer comes online later) would otherwise hit a
+      // cache miss and render as un-muted until the next explicit mute action.
+      if (!c.isGroup) {
+        final peer = c.conversationID.replaceFirst('c2c_', '');
+        if (C2CRecvOptCache.needsHydration(peer)) {
+          final selfToxId = await Prefs.getCurrentAccountToxId();
+          await C2CRecvOptCache.hydrateFromPrefs(peer, selfToxId);
         }
       }
       final newConv = await _mapConv(c);
@@ -374,8 +407,34 @@ class FakeChatDataProvider implements ChatDataProvider {
         final listener = V2TimConversationListener(
           onConversationChanged: (List<V2TimConversation> conversationList) {
             for (final conv in conversationList) {
-              if (_convMap.containsKey(conv.conversationID)) {
-                _convMap[conv.conversationID] = conv;
+              final cid = conv.conversationID;
+              // Project a C2C recvOpt change (e.g. a real-UI mute, delivered via
+              // the native SetC2CReceiveMessageOpt -> UpdateC2CReceiveOptAndNotify
+              // -> OnConversationChanged push) into the synchronous cache and
+              // persist it. This is the authoritative recvOpt event and is handled
+              // even when no local conversation row exists yet (mute can be set
+              // from the friend profile before any message).
+              if (cid.startsWith('c2c_') && conv.recvOpt != null) {
+                final peer = cid.substring(4);
+                final opt = conv.recvOpt!;
+                if (C2CRecvOptCache.optFor(peer) != opt) {
+                  // SYNCHRONOUS cache write first — _shouldSuppress must see the
+                  // new opt immediately (a message can arrive in the gap an
+                  // async-only write would leave). Durable persist follows.
+                  C2CRecvOptCache.setLocal(peer, opt);
+                  unawaited(Prefs.getCurrentAccountToxId().then(
+                    (toxId) => C2CRecvOptCache.setAndPersist(peer, opt, toxId),
+                  ));
+                }
+              }
+              if (_convMap.containsKey(cid)) {
+                // MERGE, not replace: the native push can be sparse (recvOpt-only),
+                // so preserve the existing showName/faceUrl/lastMessage/orderkey/
+                // unreadCount/isPinned instead of clobbering them with placeholders.
+                _convMap[cid] = mergeExternalConversationUpdate(
+                  existing: _convMap[cid],
+                  refreshed: conv,
+                );
               }
             }
             _scheduleConvListEmit();
@@ -463,8 +522,20 @@ class FakeChatDataProvider implements ChatDataProvider {
     conv.faceUrl = c.faceUrl; // Set faceUrl from FakeConversation
     conv.unreadCount = c.unreadCount;
     conv.isPinned = c.isPinned;
-    // Set default recvOpt to 0 (V2TIM_RECEIVE_MESSAGE - normal receive)
-    conv.recvOpt = 0;
+    // recvOpt is the per-peer DND/mute state (0 = V2TIM_RECEIVE_MESSAGE,
+    // 2 = V2TIM_RECEIVE_NOT_NOTIFY/mute). Read it SYNCHRONOUSLY from the
+    // C2CRecvOptCache projection of the native receive-opt map (NOT Prefs — Prefs
+    // is only the durable backing store, hydrated into the cache at session
+    // start). A real-UI mute flows through the binary-replacement binding and
+    // updates this cache via the native OnConversationChanged push. _mapConv was
+    // previously hardcoded to 0, which wiped the mute on every ~5s rebuild, so
+    // _shouldSuppress (and l3_dump_state, and the profile toggle which reads this
+    // same conversation.recvOpt) all saw 0 and the mute never took effect.
+    // Groups keep the 0 default (group mute is handled separately).
+    conv.recvOpt = c.isGroup
+        ? 0
+        : C2CRecvOptCache.optFor(
+            conv.userID ?? c.conversationID.replaceFirst('c2c_', ''));
     // Set orderkey for sorting: pinned conversations get higher orderkey
     // Use timestamp as base, add large offset for pinned conversations
     // UIKit sorts by orderkey descending (higher value = first)
@@ -804,6 +875,14 @@ class FakeChatDataProvider implements ChatDataProvider {
             final gid = c.conversationID.replaceFirst('group_', '');
             if (quitGroups.contains(gid)) {
               continue;
+            }
+          } else {
+            // Lazily hydrate persisted mute state on cache miss before _mapConv
+            // reads the projection (see the FakeConversation listener rationale).
+            final peer = c.conversationID.replaceFirst('c2c_', '');
+            if (C2CRecvOptCache.needsHydration(peer)) {
+              final selfToxId = await Prefs.getCurrentAccountToxId();
+              await C2CRecvOptCache.hydrateFromPrefs(peer, selfToxId);
             }
           }
           final mappedConv = await _mapConv(c);

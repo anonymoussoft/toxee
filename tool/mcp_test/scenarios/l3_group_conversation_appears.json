@@ -1,0 +1,18 @@
+{
+  "id": "L3-group-conversation-appears",
+  "suite": "group",
+  "description": "Group surfaces as a CONVERSATION (hermetic, single-instance): create a group and prove it enters the sidebar conversation list as 'group_<gid>' (l3_dump_state.conversationIds — the flat id companion to conversations[], so EXACT membership avoids the group_tox_1 ⊂ group_tox_10 substring trap). The conversation list is UI-live and rebuilds from knownGroups shortly after the create, so the gate POLLS (state_contains_item) before asserting. Distinct from l3_group_send_persist (which only proves the FFI/knownGroups layer) — this proves the UIKit sidebar surface. Self-cleans via teardown leave.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "create_group", "name": "L3gconv-{{nonce}}", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "conversationIds", "containsItem": "group_{{gid}}", "timeoutSecs": 20 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "conversationIds", "containsItem": "group_{{gid}}" }
+  ],
+  "teardown": [
+    { "action": "leave_group", "groupId": "{{gid}}" }
+  ]
+}

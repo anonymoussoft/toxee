@@ -1,0 +1,10 @@
+{
+  "format_version": 1,
+  "captured_at": "2026-05-30T17:30:11Z",
+  "id_length": 76,
+  "id_emit_line_format": "ECHO_PEER_TOX_ID: <id>",
+  "id_emit_stream": "stdout",
+  "start_to_id_emit_ms": 24,
+  "state_dir_first_write_ms": 15,
+  "teardown_ms": 250
+}

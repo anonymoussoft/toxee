@@ -17,6 +17,8 @@ import 'session_password_store.dart';
 import 'group_member_list_debouncer.dart';
 import 'irc_app_manager.dart';
 import 'logger.dart';
+import 'short_tox_id_backfill.dart';
+import 'tox_utils.dart';
 
 /// Result from [AccountService.registerNewAccount].
 class RegisterResult {
@@ -138,6 +140,53 @@ class AccountService {
   }
 
   // ---------------------------------------------------------------------------
+  // Live-session password updates
+  // ---------------------------------------------------------------------------
+  //
+  // The on-disk profile is plaintext during an active session
+  // (initializeServiceForAccount decrypts it before init); teardownCurrentSession
+  // re-encrypts it on logout using the password in SessionPasswordStore. So any
+  // mid-session password change MUST update SessionPasswordStore, or logout will
+  // encrypt with the wrong (stale) password — or skip encryption — leaving the
+  // on-disk encryption state out of sync with the verifier and breaking the next
+  // launch. These two helpers own that contract so callers (the Settings page)
+  // can't get it wrong. Both derive the canonical toxId from the live service
+  // (getSelfToxId) — never the accountKey placeholder fallback, which must not
+  // key durable password state.
+
+  /// Set or change the account password mid-session. Writes the durable
+  /// verifier (Prefs) AND updates the in-memory [SessionPasswordStore] so
+  /// [teardownCurrentSession] re-encrypts the profile with the NEW password on
+  /// logout. Returns whether the verifier write succeeded; the session store is
+  /// only updated when it did (a failed verifier write must not arm logout to
+  /// encrypt under a password the user can't later verify).
+  static Future<bool> setAccountPassword(
+      FfiChatService service, String password) async {
+    final toxId = service.getSelfToxId();
+    if (toxId == null || toxId.isEmpty) return false;
+    final ok = await Prefs.setAccountPassword(toxId, password);
+    if (ok) {
+      SessionPasswordStore.set(toxId, password);
+    }
+    return ok;
+  }
+
+  /// Remove the account password mid-session. Removes the durable verifier
+  /// (Prefs) AND clears the in-memory [SessionPasswordStore], so
+  /// [teardownCurrentSession] does NOT re-encrypt the profile the user just
+  /// chose to leave unprotected. Without the clear, logout re-encrypts with the
+  /// now-removed password while the verifier is gone → next launch shows no
+  /// password prompt and hands FFI an undecryptable blob (silent startup
+  /// failure). Returns whether the verifier removal succeeded.
+  static Future<bool> removeAccountPassword(FfiChatService service) async {
+    final toxId = service.getSelfToxId();
+    if (toxId == null || toxId.isEmpty) return false;
+    final ok = await Prefs.removeAccountPassword(toxId);
+    SessionPasswordStore.clear(toxId);
+    return ok;
+  }
+
+  // ---------------------------------------------------------------------------
   // Initialization
   // ---------------------------------------------------------------------------
 
@@ -159,10 +208,22 @@ class AccountService {
     bool startPolling = true,
   }) async {
     final previousAccount = await Prefs.getCurrentAccountToxId();
+    // Snapshot the global nickname/statusMessage/avatarPath so we can roll
+    // them back alongside `currentAccountToxId` if init fails. `_UserAvatar`
+    // and other UI surfaces read these globals — if we updated the
+    // current-account pointer but didn't restore the labels on rollback, the
+    // sidebar would show the new (failed) account's identity over the
+    // previously-active account's profile.
+    final previousNickname = await Prefs.getNickname();
+    final previousStatusMessage = await Prefs.getStatusMessage();
+    final previousAvatarPath = await Prefs.getAvatarPath();
     FfiChatService? service;
     String? profileFile;
     bool profileWasDecrypted = false;
     bool initSucceeded = false;
+    // Hoisted so the catch path can clear the post-backfill session-password
+    // cache too — see the catch block below for why this matters.
+    String? canonicalToxId;
     final accountPrefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
     final migrPrefs = await SharedPreferences.getInstance();
 
@@ -221,6 +282,27 @@ class AccountService {
       await service.init(profileDirectory: profileDir);
       await service.login(userId: 'FlutterUIKitClient', userSig: 'dummy_sig');
 
+      // F12 backfill: imported accounts land in account_list with a
+      // 64-char public key (from `tox_self_get_public_key`); once we're
+      // logged in, Tim2Tox has the full 76-char address available. Rewrite
+      // `account_list` + `current_account_tox_id` + password keys so every
+      // downstream caller (Prefs.setCurrentAccountToxId / addAccount /
+      // getAccountByToxId, the ProfilePage SelectableText, "Copy full ID"
+      // clipboard action, sidebar) sees the complete nospam+checksum form.
+      // Idempotent and safe to call on every login. The 16-char scoped-prefs
+      // / on-disk prefix is identical between 64 and 76 representations
+      // (the long form is `public_key || nospam || checksum`), so no scoped
+      // state needs re-keying.
+      canonicalToxId = await ShortToxIdBackfill.backfillIfNeeded(
+            service: service,
+            persistedToxId: toxId,
+          ) ??
+          toxId;
+      // Local non-nullable handle: Dart flow analysis won't promote the
+      // outer `canonicalToxId` across awaits, but the value is known
+      // non-null at this point and the catch path reads the outer var.
+      final activeToxId = canonicalToxId;
+
       if (nickname != null) {
         await service.updateSelfProfile(
           nickname: nickname,
@@ -233,17 +315,62 @@ class AccountService {
       }
 
       if (password != null && password.isNotEmpty) {
-        SessionPasswordStore.set(toxId, password);
+        // Key the live session password under the canonical (post-backfill)
+        // toxId — `ShortToxIdBackfill` moves the durable password keys to
+        // the long form, so the session cache must agree or `verifyPassword`
+        // on next login would see a stale short-form cache hit.
+        SessionPasswordStore.set(activeToxId, password);
       }
 
-      await Prefs.setCurrentAccountToxId(toxId);
+      await Prefs.setCurrentAccountToxId(activeToxId);
+      // Switch the user-facing nickname/status to the new account's record
+      // so the sidebar `_UserAvatar` (which reads `Prefs.getNickname()` /
+      // `Prefs.getStatusMessage()`) reflects the active account immediately.
+      // Without this, the global pref keeps the previous account's label and
+      // the UI looks unchanged after a successful switch — the bug the
+      // 2026-05-28 import-then-switch repro surfaced. Only update when the
+      // caller actually passed a nickname; null means "don't touch labels"
+      // (e.g. resume flows that already have the right value cached).
+      if (nickname != null) {
+        await Prefs.setNickname(nickname);
+        await Prefs.setStatusMessage(statusMessage ?? '');
+      }
+      // Pull avatarPath from the per-account record (the source of truth for
+      // multi-account avatar mappings) and mirror it to the global pref so
+      // every consumer of `Prefs.getAvatarPath()` (sidebar, settings page,
+      // home page header, fake msg provider) sees the new account's avatar
+      // without each one having to learn about per-account records.
+      final accountRecord = await Prefs.getAccountByToxId(activeToxId);
+      final accountAvatarPath = accountRecord?['avatarPath'];
+      await Prefs.setAvatarPath(
+        accountAvatarPath is String && accountAvatarPath.isNotEmpty
+            ? accountAvatarPath
+            : null,
+      );
       initSucceeded = true;
       return service;
     } catch (e) {
       await service?.dispose();
       await Prefs.setCurrentAccountToxId(previousAccount);
+      // Mirror the success path: if we set nickname/status/avatar above,
+      // undo them. We always restore here because we may have failed AFTER
+      // the setCurrentAccountToxId line, leaving partially-applied state.
+      await Prefs.setNickname(previousNickname ?? '');
+      await Prefs.setStatusMessage(previousStatusMessage ?? '');
+      await Prefs.setAvatarPath(previousAvatarPath);
       if (password != null && password.isNotEmpty) {
+        // We don't know whether ShortToxIdBackfill ran successfully (the
+        // throw could be from before or after it), so clear both keys
+        // defensively. SessionPasswordStore.clear is a no-op when the key
+        // is absent. The canonical (post-backfill) toxId is hoisted above
+        // the try so it's reachable here — without this, a throw after
+        // `SessionPasswordStore.set(canonicalToxId, ...)` would strand a
+        // stale 76-char entry in memory while we only cleared the 64-char
+        // input arg, leaking the password across the failed attempt.
         SessionPasswordStore.clear(toxId);
+        if (canonicalToxId != null && canonicalToxId != toxId) {
+          SessionPasswordStore.clear(canonicalToxId);
+        }
       }
       rethrow;
     } finally {
@@ -444,6 +571,13 @@ class AccountService {
           toxId: tid,
           profileDirectory: profileDir,
         );
+        // The `updateSelfProfile` above ran on the now-disposed temp service;
+        // its in-memory `tox_self_set_name` did NOT survive the dispose+reopen
+        // (the on-disk profile predates it). Re-apply on the LIVE scoped
+        // instance, or the running Tox keeps an empty name and friends receive
+        // an empty `friend_name` (display falls back to the raw tox-id).
+        await newService.updateSelfProfile(
+            nickname: nickname, statusMessage: statusMessage);
 
         return RegisterResult(
           service: newService,
@@ -460,6 +594,10 @@ class AccountService {
         toxId: tid,
         profileDirectory: profileDir,
       );
+      // See the password branch above: set the name on the live scoped instance
+      // (the pre-dispose temp service's name set is lost on reopen).
+      await scopedService.updateSelfProfile(
+          nickname: nickname, statusMessage: statusMessage);
 
       return RegisterResult(
         service: scopedService,
@@ -658,7 +796,7 @@ class AccountService {
     // Clear current account ID if we just deleted the active account, so a
     // subsequent cold start does not try to load this profile.
     final current = await Prefs.getCurrentAccountToxId();
-    if (current == toxId) {
+    if (current != null && compareToxIds(current, toxId)) {
       await Prefs.setCurrentAccountToxId(null);
     }
   }

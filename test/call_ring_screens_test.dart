@@ -5,6 +5,7 @@ import 'package:toxee/call/call_state_notifier.dart';
 import 'package:toxee/call/incoming_call_view.dart';
 import 'package:toxee/call/outgoing_call_view.dart';
 import 'package:toxee/call/ringing_call_manager.dart';
+import 'package:toxee/ui/testing/ui_keys.dart';
 
 class FakeRingingCallManager implements RingingCallManager {
   @override
@@ -40,8 +41,9 @@ Widget buildOutgoingCallTestApp(CallStateNotifier callState) {
 }
 
 void main() {
-  testWidgets('incoming screen uses shared shell with two primary actions',
-      (tester) async {
+  testWidgets('incoming screen uses shared shell with two primary actions', (
+    tester,
+  ) async {
     final callState = CallStateNotifier()
       ..startRinging(
         mode: CallMode.video,
@@ -55,11 +57,14 @@ void main() {
 
     expect(find.byKey(const ValueKey('call-top-bar')), findsOneWidget);
     expect(find.byKey(const ValueKey('incoming-call-actions')), findsOneWidget);
+    expect(find.byKey(UiKeys.callDeclineButton), findsOneWidget);
+    expect(find.byKey(UiKeys.callAcceptButton), findsOneWidget);
     expect(find.text('Alice'), findsAtLeast(1));
   });
 
-  testWidgets('outgoing screen uses shared shell with one destructive action',
-      (tester) async {
+  testWidgets('outgoing screen uses shared shell with one destructive action', (
+    tester,
+  ) async {
     final callState = CallStateNotifier()
       ..startRinging(
         mode: CallMode.audio,
@@ -73,6 +78,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('call-top-bar')), findsOneWidget);
     expect(find.byKey(const ValueKey('outgoing-call-actions')), findsOneWidget);
+    expect(find.byKey(UiKeys.callHangupButton), findsOneWidget);
     expect(find.text('Bob'), findsAtLeast(1));
   });
 }

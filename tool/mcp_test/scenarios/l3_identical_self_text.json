@@ -1,0 +1,16 @@
+{
+  "id": "L3-identical-self-text",
+  "suite": "c2c",
+  "description": "Bug F regression (codex-found 2026-05-29, FIXED): send the SAME text twice in rapid succession (within the 2s content-dedup window). Both must persist as two distinct self rows. The fix makes appendHistory content-dedup run only for inbound messages, so self-sends with unique sequenced msgIDs are kept distinct. Hermetic — asserts only on self rows, no echo peer needed. #18: the duplicate text carries a per-run {{nonce}}; the SAME token in BOTH send steps resolves to the SAME string, so the pair stays BYTE-IDENTICAL within the run (preserving the Bug-F condition) while being unique across runs. PROMOTED to a HARD GATE 2026-05-30: measured 20/20 back-to-back PASS on the nonce build (hermetic/deterministic), so nonBlocking was removed.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "send_text", "text": "dupe-self-{{nonce}}" },
+    { "action": "send_text", "text": "dupe-self-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "dupe-self-{{nonce}}", "isSelf": true, "timeoutSecs": 15 }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "text": "dupe-self-{{nonce}}", "isSelf": true, "equals": 2 }
+  ]
+}

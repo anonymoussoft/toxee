@@ -14,6 +14,7 @@ import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/responsive_layout.dart';
 import '../../util/tox_utils.dart';
+import 'testing/ui_keys.dart';
 
 // TOX_MAX_FRIEND_REQUEST_LENGTH — used for both inline counter and validation.
 const int _kMaxFriendRequestLength = 921;
@@ -69,12 +70,28 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
   // clearer message before the FFI roundtrip.
   final Set<String> _attemptedThisSession = <String>{};
 
+  bool get _canSubmit {
+    if (_isSubmitting) return false;
+    return _idController.text.trim().isNotEmpty &&
+        _messageController.text.trim().isNotEmpty;
+  }
+
+  void _rebuildOnControllerChange() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
     // Default request message is locale-dependent, so initialize empty here
     // and fill in didChangeDependencies once we have a BuildContext.
     _messageController = TextEditingController();
+    // Submit button's `onPressed` is gated by `_canSubmit`, which reads from
+    // both controllers. TextField only rebuilds its own subtree on keystroke,
+    // so without these listeners the parent's `build()` never re-runs and the
+    // button stays disabled even after the user types a valid Tox ID.
+    _idController.addListener(_rebuildOnControllerChange);
+    _messageController.addListener(_rebuildOnControllerChange);
     _isConnected = widget.service.isConnected;
     _connSub = widget.service.connectionStatusStream.listen((connected) {
       if (!mounted) return;
@@ -95,6 +112,8 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
   void dispose() {
     _connSub?.cancel();
     _submitFocusNode.dispose();
+    _idController.removeListener(_rebuildOnControllerChange);
+    _messageController.removeListener(_rebuildOnControllerChange);
     _idController.dispose();
     _messageController.dispose();
     super.dispose();
@@ -116,8 +135,8 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
     final navigator = Navigator.of(context);
     final defaultMessage =
         AppLocalizations.of(context)!.defaultFriendRequestMessage;
-    final successText = _localeText(context, 'requestSent',
-        fallback: 'Friend request sent');
+    final successText =
+        _localeText(context, 'requestSent', fallback: 'Friend request sent');
     final queuedText = _localeText(context, 'requestQueued',
         fallback:
             'Offline — request queued and will be sent when you reconnect');
@@ -130,9 +149,9 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
     // placeholder, which would never match a user-pasted 76-char Tox ID and
     // silently disabled the self-add guard.
     final selfId = widget.service.accountKey;
-    if (selfId.isNotEmpty &&
-        compareToxIds(rawId, selfId)) {
-      _notifyVia(messenger,
+    if (selfId.isNotEmpty && compareToxIds(rawId, selfId)) {
+      _notifyVia(
+          messenger,
           _localeText(context, 'cannotAddSelf',
               fallback: 'You cannot add yourself as a friend'));
       return;
@@ -153,22 +172,48 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
       _notifyVia(messenger, alreadySentText);
       return;
     }
-    try {
-      final friends = await widget.service.getFriendList();
-      final alreadyFriend = friends.any(
-          (f) => normalizeToxId(f.userId) == normalizedRaw);
-      if (alreadyFriend) {
-        _notifyVia(messenger, alreadyFriendText);
-        return;
-      }
-    } catch (_) {
-      // If we can't read the friend list (rare), fall through and let the
-      // FFI layer handle dedup. Don't block the user on a transient read.
-    }
 
+    // A3: the validator already enforces "exactly 76 hex chars", which is the
+    // Tox protocol contract for AddFriend (pubkey + nospam + checksum).
+    // Anything else is rejected before this point, so no special pre-flight
+    // is needed here — the unified validator + async result callback
+    // together cover all failure modes that used to be silent.
+
+    // Flip _isSubmitting BEFORE the first await so a double-tap during the
+    // friend-list read can't slip past the early-return guard on line 110
+    // and race two concurrent addFriend() calls.
     setState(() => _isSubmitting = true);
     try {
-      await widget.service.addFriend(rawId, requestMessage: message);
+      try {
+        final friends = await widget.service.getFriendList();
+        final alreadyFriend =
+            friends.any((f) => normalizeToxId(f.userId) == normalizedRaw);
+        if (alreadyFriend) {
+          _notifyVia(messenger, alreadyFriendText);
+          return;
+        }
+      } catch (_) {
+        // If we can't read the friend list (rare), fall through and let the
+        // FFI layer handle dedup. Don't block the user on a transient read.
+      }
+
+
+      // `addFriend()` resolves with an [AddFriendResult] that carries the
+      // V2TIMFriendOperationResult.resultCode the C++ layer surfaces via the
+      // `friendAddResult` callback. Non-zero codes (e.g. 6770 "Friend add
+      // requires full Tox address") are real failures even though dispatch
+      // succeeded — only `result.isSuccess` should pop the dialog. On
+      // failure, keep the dialog mounted so the user can edit and retry.
+      final result =
+          await widget.service.addFriend(rawId, requestMessage: message);
+      if (!result.isSuccess) {
+        await HapticFeedback.lightImpact();
+        final detail = result.resultInfo.isNotEmpty
+            ? result.resultInfo
+            : 'result_code=${result.resultCode}';
+        _notifyVia(messenger, '$failurePrefix: $detail');
+        return;
+      }
       _attemptedThisSession.add(normalizedRaw);
       await widget.onFriendAdded?.call(rawId);
       await HapticFeedback.lightImpact();
@@ -190,22 +235,22 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
     }
   }
 
+  // Tox protocol: AddFriend requires the full 76-char Tox address
+  // (32-byte pubkey + 4-byte nospam + 2-byte checksum, all hex-encoded).
+  // A bare 64-char public key is rejected by the C++ layer with
+  // ERR_INVALID_PARAMETERS (6770) and used to fail silently in the UI.
+  // Enforcing exactly 76 here keeps the validator, submit handler, and hint
+  // text in agreement so any invalid input is rejected with one clear
+  // error before the async round-trip.
+  static final RegExp _kToxAddressRegex = RegExp(r'^[0-9a-fA-F]{76}$');
+
   String? _validateToxId(String? value) {
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) {
-      return _localeText(context, 'enterId',
-          fallback: 'Please enter a Tox ID');
+      return _localeText(context, 'enterId', fallback: 'Please enter a Tox ID');
     }
-    // Accept 64 (public key) or 76 (full address). Keep 76 as-is - Tox friend
-    // request spam mechanism relies on nospam+checksum in the full address.
-    if (trimmed.length < 64) {
-      return _localeText(context, 'invalidLength',
-          fallback: 'ID must be at least 64 hex characters');
-    }
-    final hexRegex = RegExp(r'^[0-9A-Fa-f]+$');
-    if (!hexRegex.hasMatch(trimmed)) {
-      return _localeText(context, 'invalidHex',
-          fallback: 'Only hexadecimal characters are allowed');
+    if (!_kToxAddressRegex.hasMatch(trimmed)) {
+      return AppLocalizations.of(context)!.addFriendInvalidToxIdHint;
     }
     return null;
   }
@@ -302,8 +347,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                       AppSpacing.xl,
                       AppSpacing.xl,
                       AppSpacing.xl,
-                      AppSpacing.xl +
-                          MediaQuery.viewInsetsOf(context).bottom,
+                      AppSpacing.xl + MediaQuery.viewInsetsOf(context).bottom,
                     ),
                     child: Form(
                       key: _formKey,
@@ -325,7 +369,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                               context,
                               'addContactHint',
                               fallback:
-                                  'Enter the peer Tox ID (at least 64 hex characters, or 76 for full address).',
+                                  'Enter the friend\'s 76-character hex Tox address.',
                             ),
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: scheme.onSurfaceVariant,
@@ -344,10 +388,11 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                           ],
                           AppSpacing.verticalLg,
                           TextFormField(
+                            key: UiKeys.addFriendIdInput,
                             controller: _idController,
                             textAlignVertical: TextAlignVertical.center,
                             autofocus: true,
-                            // Tox IDs are 64/76-char hex strings — iOS would
+                            // Tox addresses are 76-char hex strings — iOS would
                             // otherwise try to autocorrect/capitalize them.
                             keyboardType: TextInputType.visiblePassword,
                             autocorrect: false,
@@ -372,6 +417,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                                       onPressed: _scanQr,
                                     ),
                                   IconButton(
+                                    key: UiKeys.addFriendPasteButton,
                                     icon: const Icon(Icons.paste),
                                     tooltip: _localeText(context, 'paste',
                                         fallback: 'Paste'),
@@ -386,6 +432,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                           ),
                           AppSpacing.verticalLg,
                           TextFormField(
+                            key: UiKeys.addFriendMessageInput,
                             controller: _messageController,
                             textAlignVertical: TextAlignVertical.center,
                             // Free-form prose: keep autocorrect on, but
@@ -431,6 +478,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         TextButton(
+          key: UiKeys.addFriendCancelButton,
           onPressed:
               _isSubmitting ? null : () => Navigator.of(context).maybePop(),
           child: Text(cancelLabel),
@@ -441,6 +489,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
               ? _localeText(context, 'sending', fallback: 'Sending...')
               : '',
           child: FilledButton.icon(
+            key: UiKeys.addFriendSubmitButton,
             focusNode: _submitFocusNode,
             style: FilledButton.styleFrom(
               shape: RoundedRectangleBorder(
@@ -459,7 +508,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
                   )
                 : const Icon(Icons.person_add_alt_1),
             label: Text(submitLabel),
-            onPressed: _isSubmitting ? null : _submit,
+            onPressed: _canSubmit ? _submit : null,
           ),
         ),
       ],

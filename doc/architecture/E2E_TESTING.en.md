@@ -3,6 +3,8 @@
 > Language: [Chinese](E2E_TESTING.md) | [English](E2E_TESTING.en.md)
 >
 > Generated 2026-05-20. Sibling docs: `HYBRID_ARCHITECTURE.en.md`, `MAINTAINER_ARCHITECTURE.en.md`, and the protocol-level test suite at `third_party/tim2tox/auto_tests/README.en.md`.
+>
+> See also: [`TESTING_OVERVIEW.en.md`](TESTING_OVERVIEW.en.md) — the one-stop map of all toxee test assets (inventory, execution-class taxonomy, cheap→expensive run order, CI status).
 
 ## Executive summary
 
@@ -139,7 +141,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.29.0', channel: 'stable' }
+        with: { flutter-version: '3.41.9', channel: 'stable' }
       - run: dart run tool/bootstrap_deps.dart
       - run: flutter pub get
       - run: ./build_all.sh --platform macos --mode debug
@@ -151,7 +153,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.29.0', channel: 'stable' }
+        with: { flutter-version: '3.41.9', channel: 'stable' }
       - run: sudo apt-get update && sudo apt-get install -y xvfb libsodium-dev libopus-dev libvpx-dev libsqlite3-dev ninja-build libgtk-3-dev
       - run: dart run tool/bootstrap_deps.dart
       - run: flutter pub get
@@ -196,7 +198,7 @@ Gate: macOS + Linux green by PR, iOS sim green on a slower tier (Step 3a/3b can 
 4. **Test isolation under singleton flow**. `CLAUDE.md` flags that toxee uses Tim2Tox's default singleton model. The two-app-instance approach sidesteps this by running two **OS processes**, not two SDK instances in one process. Any contributor who tries to shortcut this by reusing one process for both peers will hit `ToxManager not initialized`-style failures — document the convention loudly in the harness script comment.
 5. **Patrol on macOS desktop**. Patrol's pub.dev tags list macOS, but our research did not find a single open-source toxee-shaped project running Patrol on macOS in CI. Treat macOS Patrol as unproven and stick to stock `integration_test` there until the project demands native dialog work on the desktop.
 6. **Coverage overlap with `auto_tests/`**. The line we are committing to: `auto_tests/` proves the **protocol** is correct, the new E2E layer proves the **UI** drives it correctly. Any scenario expressible purely as "two TIM SDKs talking" belongs in `auto_tests/`, not here.
-7. **Flutter version pinning**. The plan inherits the 3.29.0 stable pin from `analyze.yml`. Patrol 4.5 supports current stable Flutter; verify on first install. If Patrol later requires a newer Flutter than CI uses, demote Patrol to "optional local-only" rather than upgrading CI for one tool.
+7. **Flutter version pinning**. The plan inherits the 3.41.9 stable pin from `analyze.yml`. Patrol 4.5 supports current stable Flutter; verify on first install. If Patrol later requires a newer Flutter than CI uses, demote Patrol to "optional local-only" rather than upgrading CI for one tool.
 
 ## Sources
 

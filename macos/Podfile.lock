@@ -169,7 +169,7 @@ SPEC CHECKSUMS:
   flutter_local_notifications: 7e5a17a1dbc00d83dc10d43c2c4c05f2ceed233c
   flutter_pcm_sound: 66c15658e17150e5578b5fc1bcd7db97b2644711
   flutter_secure_storage_macos: 7f45e30f838cf2659862a4e4e3ee1c347c2b3b54
-  FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24
+  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   HydraAsync: 8d589bd725b0224f899afafc9a396327405f8063
   image_clipboard: ddded75e93e9535a8ae1c8e709bc04709efbd187
   mobile_scanner: 0e365ed56cad24f28c0fd858ca04edefb40dfac3

@@ -154,10 +154,14 @@
   "copied": "Copied to clipboard",
   "addFailed": "Add failed",
   "enterId": "Please enter Tox ID",
-  "invalidLength": "ID must be 64 or 76 hexadecimal characters",
+  "invalidLength": "Invalid ID length",
   "invalidCharacters": "Can only contain hexadecimal characters",
   "paste": "Paste",
-  "addContactHint": "Enter friend's Tox ID (64 or 76 hexadecimal characters).",
+  "addContactHint": "Enter the peer Tox address.",
+  "addFriendInvalidToxIdHint": "Tox address must be 76 hexadecimal characters",
+  "@addFriendInvalidToxIdHint": {
+    "description": "Validator error shown in AddFriend dialog when input is not exactly 76 hex chars"
+  },
   "verificationMessage": "Verification Message",
   "defaultFriendRequestMessage": "Hello, I'd like to add you as a friend.",
   "@defaultFriendRequestMessage": {

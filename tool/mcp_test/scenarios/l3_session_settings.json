@@ -1,0 +1,17 @@
+{
+  "id": "L3-session-settings",
+  "suite": "session",
+  "feature": ["S39", "S46", "S47", "S57", "S72"],
+  "description": "#4 (codex-vetted 2026-05-30): read-only verification that l3_dump_state surfaces account-level settings + the sidebar conversation list. Maps to S39 (auto-login) / S46-S47 (auto-accept) / S57 (theme) read-half and S72 (multi-account isolation) at the state layer. Asserts the seeded echo account's known fixture state: autoLogin=true, autoAcceptFriends=false, themeMode=system, and the conversation list contains the echo peer. No mutation and no echo round-trip — the seeded conversation is already on disk. The conversation list is UI-live (hydrates shortly after login) so the scenario POLLS via state_contains before asserting presence (codex point 3).",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_contains", "field": "conversations", "contains": "3116CBE0974181B6", "timeoutSecs": 20 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "autoLogin", "equals": true },
+    { "type": "state", "field": "autoAcceptFriends", "equals": false },
+    { "type": "state", "field": "themeMode", "equals": "system" },
+    { "type": "state", "field": "conversations", "contains": "3116CBE0974181B6" }
+  ]
+}

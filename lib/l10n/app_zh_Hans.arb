@@ -108,10 +108,14 @@
   "copied": "已复制到剪切板",
   "addFailed": "添加失败",
   "enterId": "请输入 Tox ID",
-  "invalidLength": "ID 必须为 64 或 76 位十六进制字符",
+  "invalidLength": "ID 长度不正确",
   "invalidCharacters": "只能包含十六进制字符",
   "paste": "粘贴",
-  "addContactHint": "输入好友的 Tox ID（64 或 76 位十六进制字符）。",
+  "addContactHint": "请输入对方的 Tox 地址。",
+  "addFriendInvalidToxIdHint": "Tox 地址必须是 76 位十六进制字符",
+  "@addFriendInvalidToxIdHint": {
+    "description": "Validator error shown in AddFriend dialog when input is not exactly 76 hex chars"
+  },
   "verificationMessage": "验证信息",
   "defaultFriendRequestMessage": "你好，我想添加你为好友。",
   "friendRequestMessageTooLong": "好友请求消息不能超过 921 个字符",

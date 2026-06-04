@@ -244,8 +244,34 @@ build_flutter() {
     : > "$FLUTTER_BUILD_LOG"
   fi
 
+  # MCP_BINDING is a debug-only switch for the AI-UI-debug MCP comparison
+  # (see doc/research/MCP_COMPARISON_TEST_PLAN.en.md). Forwarded to flutter build as a
+  # --dart-define so lib/main.dart picks the right binding at startup.
+  # Defaults to "skill" (current behavior) when the env var is unset.
+  # Whitelist the accepted values and use an array to avoid word-split
+  # injection if MCP_BINDING contains spaces or extra flags.
+  local -a flutter_build_args=(build macos --debug --dart-define=FLUTTER_BUILD_MODE=debug)
+  if [[ -n "${MCP_BINDING:-}" ]]; then
+    case "${MCP_BINDING}" in
+      skill|marionette|stock)
+        flutter_build_args+=("--dart-define=MCP_BINDING=${MCP_BINDING}")
+        echo -e "${YELLOW}    MCP_BINDING=${MCP_BINDING}${NC}"
+        # Enable the L3 test-only debug MCP tool surface (deterministic send,
+        # state dump — see lib/ui/testing/l3_debug_tools.dart). Gated by
+        # kDebugMode too, so it never reaches profile/release. Opt out with
+        # TOXEE_L3_TEST=false.
+        flutter_build_args+=("--dart-define=TOXEE_L3_TEST=${TOXEE_L3_TEST:-true}")
+        echo -e "${YELLOW}    TOXEE_L3_TEST=${TOXEE_L3_TEST:-true}${NC}"
+        ;;
+      *)
+        echo -e "${RED}    Invalid MCP_BINDING='${MCP_BINDING}'. Allowed: skill|marionette|stock.${NC}" >&2
+        return 1
+        ;;
+    esac
+  fi
+
   echo -e "${YELLOW}==> Building Flutter app (DEBUG)...${NC}"
-  (cd "$FLUTTER_APP_DIR" && flutter build macos --debug --dart-define=FLUTTER_BUILD_MODE=debug) >> "$FLUTTER_BUILD_LOG" 2>&1
+  (cd "$FLUTTER_APP_DIR" && flutter "${flutter_build_args[@]}") >> "$FLUTTER_BUILD_LOG" 2>&1
 
   if [[ ! -d "$APP_EXE_DIR" ]]; then
     echo -e "${RED}macOS app bundle not found at ${APP_BUNDLE}${NC}"; return 1
@@ -313,8 +339,41 @@ launch_app() {
   mkdir -p "$(dirname "$APP_SUPPORT_LOG")"
   : > "$APP_SUPPORT_LOG"
 
+  # Engine switches: tell the Dart engine to (1) bind the VM service on a
+  # free port and announce it, and (2) skip the auth token so the
+  # advertised URI is `http://127.0.0.1:<port>/<bare-token>/ws`. On macOS
+  # the desktop embedder routes process argv into `dartEntrypointArguments`
+  # — NOT into engine switches — so command-line flags don't work; the
+  # canonical mechanism is the `FLUTTER_ENGINE_SWITCHES` env var family
+  # (see `engine_switches.cc`). Per codex Round 4 review P1.
+  # Debug-only + 127.0.0.1-bound, so disabling auth codes here is the
+  # documented L3 fallback path, not a production exposure.
+  export FLUTTER_ENGINE_SWITCHES=2
+  export FLUTTER_ENGINE_SWITCH_1="vm-service-port=0"
+  export FLUTTER_ENGINE_SWITCH_2="disable-service-auth-codes"
+
+  # Dedicated stdout/stderr capture for the Dart VM service URI
+  # announcement. The macOS embedder prints "flutter: The Dart VM service
+  # is listening on http://127.0.0.1:<port>/" to STDOUT (not stderr,
+  # contra Round 4 review's initial guess; empirically confirmed via
+  # direct-binary test). We can't share `$APP_SUPPORT_LOG` because the
+  # in-app `AppLogger` probe (`logging_bootstrap.dart:45`) does an
+  # exclusive `writeAsStringSync('test', FileMode.write)` on
+  # `flutter_client.log` which truncates anything we redirected there.
+  # Tee both streams into both the dedicated archive AND the AppLogger
+  # log so the existing dev-loop `tail -f` keeps showing early engine +
+  # `stderr.writeln` diagnostics (per codex Round 4 P2).
+  local stdio_log="$BUILD_DIR/toxee_stdio.log"
+  local vm_uri_file="$BUILD_DIR/vm_service_uri.txt"
+  : > "$stdio_log"
+  # Always clear the stale URI file so a failed launch doesn't leave a
+  # zombie URI for the next session to pick up (codex Round 4 P2).
+  rm -f "$vm_uri_file"
+
   echo -e "${YELLOW}==> Launching app (DEBUG)...${NC}"
-  "$APP_EXECUTABLE" >> "$APP_SUPPORT_LOG" 2>&1 &
+  # tee stdout + stderr into $stdio_log for URI extraction; the dev-loop
+  # log is still maintained in parallel by AppLogger's own writes.
+  "$APP_EXECUTABLE" > >(tee -a "$stdio_log") 2> >(tee -a "$stdio_log" >&2) &
   APP_PID=$!
 
   sleep 2
@@ -336,11 +395,41 @@ launch_app() {
   tail -f "$tail_log" &
   TAIL_PID=$!
 
+  # Surface the Dart VM service URI for L3 MCP harnesses. The engine
+  # prints the full announcement (`flutter: The Dart VM service is
+  # listening on http://127.0.0.1:<port>/[<token>/]`) to stdout within
+  # ~5s of launch. Capture the FULL URI including any auth-code path
+  # segment, in case `disable-service-auth-codes` didn't take effect.
+  local vm_uri=""
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    vm_uri=$(grep -oE "http://127\.0\.0\.1:[0-9]+(/[A-Za-z0-9_=-]+)?/?" \
+        "$stdio_log" 2>/dev/null | head -1)
+    if [[ -n "$vm_uri" ]]; then break; fi
+    sleep 1
+  done
+
   echo ""
   echo -e "${GREEN}Logs:${NC}"
-  echo "  Native build: $NATIVE_BUILD_LOG"
-  echo "  Flutter build: $FLUTTER_BUILD_LOG"
-  echo "  Client:        $CLIENT_LOG"
+  echo "  Native build:   $NATIVE_BUILD_LOG"
+  echo "  Flutter build:  $FLUTTER_BUILD_LOG"
+  echo "  Client:         $CLIENT_LOG"
+  echo "  Engine stdio:   $stdio_log"
+  echo ""
+  if [[ -n "$vm_uri" ]]; then
+    # Normalize trailing slash, then derive ws URI directly from the full
+    # http URI (including any auth-code path segment).
+    vm_uri="${vm_uri%/}"
+    local ws_uri="${vm_uri/http:/ws:}/ws"
+    echo -e "${GREEN}VM Service:${NC} $vm_uri/"
+    echo -e "${GREEN}WS URI:${NC}     $ws_uri"
+    # Park the URI in a known location for MCP harnesses. Consumers:
+    # `marionette.connect(uri=...)`,
+    # `arenukvern.fmt_connect_debug_app({mode:'uri', uri:'...'})`.
+    echo "$ws_uri" > "$vm_uri_file"
+  else
+    echo -e "${YELLOW}VM Service URI not found in stderr after 15s; check ${stderr_log}${NC}"
+    echo -e "${YELLOW}(URI file ${vm_uri_file} was cleared at launch and not rewritten.)${NC}"
+  fi
   echo ""
   echo -e "${YELLOW}  Debugger:     lldb -p $APP_PID${NC}"
   echo -e "${YELLOW}  Symbolicate:  atos -arch arm64 -o $APP_EXECUTABLE -l <load_addr> <crash_addr>${NC}"
@@ -382,6 +471,16 @@ if ! build_flutter; then
   exit 1
 fi
 bundle_libs
+
+# Build-only mode for harnesses that launch the app themselves (e.g. the
+# product-screenshot pipeline tool/screenshots/capture.sh, which needs the
+# MCP_BINDING/TOXEE_L3_TEST dart-defines compiled in but manages its own
+# multi-instance launches via tool/mcp_test/launch_toxee_instance.sh).
+if [[ "${TOXEE_BUILD_ONLY:-0}" == "1" ]]; then
+  echo -e "${GREEN}==> TOXEE_BUILD_ONLY=1 — build complete, skipping launch.${NC}"
+  exit 0
+fi
+
 launch_app
 
 # Wait for app to exit (no source watching)

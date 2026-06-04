@@ -1,0 +1,19 @@
+{
+  "id": "L3-reply-text",
+  "suite": "c2c",
+  "feature": ["S18"],
+  "description": "S18 reply/quote, data half (FEATURE-FIX, hermetic): send a base message, reply to it via l3_reply_text, and prove the reply persists SENDER-SIDE with the V2TIM messageReply cloudCustomData quoting the base. This validates the cloudCustomData plumbing fix — previously the reply metadata was dropped at FfiChatService.sendText and absent from the persisted ChatMessage, so the sender's own quote was lost on reload. Asserts the self reply message's cloudCustomData contains 'messageReply' AND the base text (the messageAbstract). replyToIsSelf:true disambiguates the base if a running echo peer mirrored it back inbound. Hermetic — sender-side persistence; the quote is intentionally NOT sent over Tox (documented wire limitation, separate follow-up). Maps to S18 data half.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "send_text", "text": "S18base-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "S18base-{{nonce}}", "isSelf": true, "timeoutSecs": 15 },
+    { "action": "reply_text", "text": "S18reply-{{nonce}}", "replyToText": "S18base-{{nonce}}", "replyToIsSelf": true },
+    { "action": "wait_for", "predicate": "message_exists", "text": "S18reply-{{nonce}}", "isSelf": true, "timeoutSecs": 15 }
+  ],
+  "assertions": [
+    { "type": "message_field_contains", "text": "S18reply-{{nonce}}", "isSelf": true, "field": "cloudCustomData", "contains": "messageReply" },
+    { "type": "message_field_contains", "text": "S18reply-{{nonce}}", "isSelf": true, "field": "cloudCustomData", "contains": "S18base-{{nonce}}" }
+  ]
+}

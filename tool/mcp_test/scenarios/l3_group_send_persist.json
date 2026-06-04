@@ -1,0 +1,22 @@
+{
+  "id": "L3-group-send-persist",
+  "suite": "group",
+  "feature": ["S34"],
+  "description": "Group SEND→PERSIST (hermetic, single-instance): create an NGC group, send one text into it via l3_send_group_text (FfiChatService.sendGroupText), and prove the self-send PERSISTS to the group's LOCAL history. A creator sending into its OWN group appends synchronously to history (isSelf=true, keyed by the bare gid) when connected — no second peer needed. The runner reads the group history by overriding conv='group_{{gid}}' (the l3_dump_state group-history readout). leave_group WIPES group history (quitGroup -> clearGroupHistory), so the assertion runs on the LIVE group and the leave is deferred to teardown (which also runs on failure, so no dangling group leaks into knownGroups). Maps to the single-instance data-half of S34 (group send/persist).",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_equals", "field": "isConnected", "equals": true, "timeoutSecs": 30 },
+    { "action": "create_group", "name": "L3gsend-{{nonce}}", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "send_group_text", "groupId": "{{gid}}", "text": "gmsg-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "conv": "group_{{gid}}", "text": "gmsg-{{nonce}}", "isSelf": true, "timeoutSecs": 20 }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "conv": "group_{{gid}}", "text": "gmsg-{{nonce}}", "isSelf": true, "equals": 1 },
+    { "type": "message_field_contains", "conv": "group_{{gid}}", "text": "gmsg-{{nonce}}", "isSelf": true, "field": "isPending", "contains": "false" }
+  ],
+  "teardown": [
+    { "action": "leave_group", "groupId": "{{gid}}" }
+  ]
+}

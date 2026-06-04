@@ -1,0 +1,197 @@
+# Real-UI two-process driving — harness, recipe, findings
+
+Goal: execute the test scenarios that **directly drive UI controls** (the real
+UIKit widgets a user touches) **across two live instances** (`accounts=2`) —
+i.e. the intersection the `l3_*` "debug bypass" drivers (`drive_fixture_c_*.dart`)
+do **not** cover. "直接驱动 UI 控件且是双进程".
+
+## The driving channel (no marionette, no hang)
+
+The default `skill` build (`run_toxee.sh`, `MCP_BINDING=skill`) already exposes a
+full real-UI driving API over the VM service — **no marionette binding** (which
+hangs at startup) is needed:
+
+- `ext.flutter.flutter_skill.{tap,enterText,pressKey,tapAt,waitForElement,
+  interactiveStructured,getWidgetTree,screenshot}` — drives **real widgets** by
+  `ValueKey` / visible text / coordinates. Reachable with raw `vm_service`
+  (`callServiceExtension`), the same transport the l3 drivers use.
+- `ext.mcp.toolkit.l3_*` — data-layer assertions/setup (dump_state, etc.).
+
+`tool/mcp_test/_scratch/skill_call.dart <ws> <ext.method> '<json>'` is the
+one-shot probe; `tool/mcp_test/drive_real_ui_pair.dart` is the reusable driver.
+
+## Hard-won harness facts (the "problems found" + how solved)
+
+1. **Unfocused window stalls the UI.** Instances launched by
+   `launch_toxee_instance.sh` (direct `exec`) do **not** pump frames / service
+   platform channels while their macOS window is backgrounded. A post-register
+   `await Prefs.getAccountList()` (SharedPreferences method channel) then hangs,
+   so the app never navigates past RegisterPage and `screenshot` returns empty —
+   even though `dump_state` says `sessionReady:true`. **FIX:** osascript-
+   foreground the target pid before each UI phase:
+   `osascript -e 'tell application "System Events" to set frontmost of (first
+   process whose unix id is <pid>) to true'`. Data/DHT runs on native threads, so
+   the *other* instance can stay backgrounded between phases.
+2. **`flutter_skill.enterText{key}` only matches an editable carrying the key.**
+   Our text keys (`register_page_nickname_field`, `add_friend_id_input`) sit on
+   `TextFormField` wrappers, not the inner editable → "No TextField matching
+   key". **FIX:** `focusType` = `tap{key}` (general widget search focuses it) then
+   `enterText{no key}` into the focused field.
+3. **The desktop chat composer can't be driven synthetically.** It is an
+   `ExtendedTextField`; `enterText` lands "via system channel (no focused
+   TextField)". **FIX:** `tapAt` the composer center, then **real OS keystrokes**
+   (`osascript … keystroke`).
+4. **Enter-to-send rides the legacy `FocusNode.onKey` RawKeyEvent path**
+   (`tencent_cloud_chat_message_input_desktop.dart:545`). A synthetic key does
+   not reach it, and a freshly-typed field races a single real Return. **FIX:**
+   real `osascript … key code 36`, **retry focus+Return until the conversation's
+   lastMessage == text** (`sendComposerMessage`).
+5. **First-run backup wizard blocks navigation** after register
+   (`FeatureFlags.enableFirstRunBackupWizard=true`). It is pushed on the
+   `rootNavigator`. **FIX:** dismiss via text "I'll do it later" →
+   "I understand, continue".
+6. **`contact_new_contacts_tab` ValueKey is on a non-tappable element.** The key
+   exists (`tencent_cloud_chat_contact_tab.dart:47/111`) but `tap{key}` can't land
+   it; tapping the **"New Contacts"** label works. *(Fork fix candidate: move the
+   key onto the tappable row; needs a rebuild — driver uses the text fallback.)*
+
+## Driver
+
+`dart run tool/mcp_test/drive_real_ui_pair.dart <scenario> <wsA> <pidA> <nickA> <wsB> <pidB> <nickB>`
+
+Scenarios implemented: `handshake` (S61+S26, A accepts via the INLINE row
+button), `handshake_detail` (S108, A accepts via the pushed application-DETAIL
+screen — `contact_application_detail_accept_button`, the distinct UI entry S26
+does not exercise), `decline` (S27), `message` (S62/S64, `RUITEST_STAMP=<n>` for
+a stable nonce). Reusable primitives:
+`foreground`, `tapKey`/`tryTapKey`/`tapText`/`focusType`/`tapAt`,
+`osaType`/`osaReturn`/`osaClear`, `waitKey`/`waitText`/`waitState`,
+`openChat`, `sendComposerMessage`, `dumpState`, `shot`.
+
+## Validated (real UI, two process)
+
+| Spec | What was driven (real UI) | Result |
+|---|---|---|
+| **S26 / S61** accept / handshake | B: Add-Friend dialog (`new_entry_menu_button` → `new_entry_add_contact_item` → `add_friend_id_input` → `add_friend_submit_button`); A: New Contacts → **Accept** | **PASS** — friendship both directions, application consumed |
+| **S62 / S64** message delivery | real composer + real Return, A↔B | **PASS** — bidirectional, rendered bubbles on both sides |
+
+## Filtered set still to codify (same primitives)
+
+Friend: S27 decline (fresh pair), S54 custom-msg request, S46 auto-accept. ·
+Messaging: S64 concurrent (burst), S21/S88 file/image (attach button), S78 voice.
+· Group: S33 join, S34 message, S37 kick, S81 invite, S47 auto-accept. · Calls:
+S65/S66 initiate, S67/S68 accept/decline, S74/S75/S76 mute/camera/hangup. ·
+Conversation: S83 mute, S52 profile, S63 receipt/typing.
+
+Each reuses `foreground` + `flutter_skill` taps + (for sends) the osascript
+composer/Return recipe.
+
+## Findings from continued execution (blockers / real bugs)
+
+Driving the next batch surfaced that the real-UI layer is **not fully wired for
+this slice** — these are the "problems found", several are genuine product/fork
+bugs the `l3_*` bypass masks:
+
+- **[PRODUCT BUG — FIXED ✅] Register-time display name never reached the live
+  Tox instance.** After a fresh real-UI handshake, BOTH peers showed each other
+  by raw tox-ID (`nickName` empty, both directions). **Root cause** (logs:
+  `HandleFriendName: … changed name to:` *empty*): `registerNewAccount`
+  (`account_service.dart`) called `updateSelfProfile`→`setSelfInfo`→
+  `tox_self_set_name` on the **temp** FfiChatService, then **disposed** it
+  (`await svc.dispose()`) and re-created a `_createAccountScopedService` from the
+  on-disk profile saved *before* the name was set — so the name lived only on the
+  discarded temp instance; the live instance kept an empty name and Tox sent ""
+  to peers. The l3 S52 gate masked it (asserts via an explicit later
+  `l3_set_self_profile` push). **Fix:** call `updateSelfProfile(nickname,
+  statusMessage)` on the live scoped instance in BOTH register branches.
+  **Verified** on the rebuilt app: handshake gate now prints
+  `A sees B="BobFix" B sees A="AliceFix"` and the contact list renders the
+  nickname. The driver's `handshake` scenario now gates on name propagation.
+- **[FORK — FIXED ✅] Call automation `ValueKey`s now attached.**
+  `chat_call_voice_button`/`chat_call_video_button` added to the header
+  `IconButton`s (`tencent_cloud_chat_message_header_actions.dart`).
+  `call_accept_button`/`call_decline_button` added to the `CallDockAction`s in
+  `incoming_call_view.dart`. The in-call mute/camera/hangup + outgoing hangup keys
+  already existed but were **dropped** — `_CallDockButton` never applied
+  `action.key`; fixed in `call_ui_components.dart` (key the InkWell), which
+  activates ALL `CallDockAction` keys at once. `contact_new_contacts_tab` was
+  already correctly on the tappable row (earlier "not found" was the stale build).
+  **Verified live** (rebuilt): `chat_call_voice_button` taps → initiates the call;
+  A's outgoing UI renders with a findable+tappable `call_hangup_button` (tap → call
+  idle). accept/decline/mute/camera use the same now-proven activation.
+- **[NOT A BUG — call flow works] S65 + S67 verified end-to-end via real UI.**
+  An earlier "incoming call never rings / finishes in 1s" reading was a **test
+  artifact** of rapid *overlapping* manual call attempts confusing the call state.
+  A **clean** single call (both idle first) showed B `ringing/incoming` **stably
+  for 7+ s**; tapping `call_accept_button` put **both sides `inCall`**. A suspected
+  outgoing **double-invite was also a miscount** — the clean isolated log shows one
+  tap → one `audioCall` → one `signaling_invite` → one `startCall`/
+  `_onOutgoingCallInitiated`. (The earlier `grep -c` matched two *different* line
+  patterns for one call; the `inv_0`/`inv_1` were two separate taps.) Full real-UI
+  call path confirmed: `chat_call_voice_button` → ring → `call_accept_button` →
+  `inCall`, `call_hangup_button` → idle. No fix needed. **Lesson:** isolate the
+  scenario (idle start, fresh log window) before declaring a state-machine bug.
+- **Composer→typing not wired (S63).** No setTyping on composer text-change in the
+  message-input dir, so typing in the real composer does not raise the peer's
+  `isTyping`. (l3 uses `l3_set_typing`.) Real-UI typing would need that wiring.
+- **Self-profile edit is an overlay**, edit pencil at the top of a dialog
+  (`profile_edit_toggle` IS attached); the inline edit field/save keys did not
+  land via `tap{key}` in edit mode — drive by coordinates + osascript, or attach
+  keys to the editable.
+
+- **[PRODUCT CRASH — found via real UI, FIXED ✅] Conversation-mute switch
+  SIGSEGV'd the app — an FFI ABI signature mismatch.** Toggling the real
+  friend-profile mute switch (`user_profile_conversation_mute_switch`) crashed
+  both instances: `[callback_bridge] FATAL: received signal 11`. **Root cause:**
+  the native `DartSetC2CReceiveMessageOpt` (`dart_compat_user.cpp`) declared **2
+  args** `(const char*, void* user_data)`, but the Dart binding
+  (`native_imsdk_bindings_generated.dart:711`) calls it with **3**
+  `(Pointer<Char> json_identifier_array, UnsignedInt opt, Pointer<Void>
+  user_data)`. The args misaligned: native `user_data` received the `opt`
+  **integer** and dereferenced it as a pointer (`SendApiCallbackResult` →
+  `UserDataToString` → `str[0]` on addr `0x2`), and the userID JSON was parsed as
+  a nested object so the list was always empty. Exactly the
+  "`Dart*` signature drift compiles fine, crashes at call time" hazard in
+  tim2tox's CLAUDE.md. The l3 gate (`l3_set_c2c_recv_opt`, prefs) bypassed the
+  binding entirely, so the data-layer S83 gate never caught it. **Fix:** corrected
+  the native signature to the 3-arg ABI, parse `json_identifier_array` as a plain
+  string array, take `opt` directly (+ retained a use-after-free hardening on the
+  success callback: copy `user_data` to a string up front, use
+  `SendApiCallbackResultWithString`). **Verified:** rebuilt `libtim2tox_ffi`,
+  re-embedded, toggled the switch 3× → NO crash, switch flips ON. **Native FFI fix
+  → covers desktop AND mobile** (the ABI mismatch crashed both). GET + group
+  variants checked: GET's 2-arg ABI already matches; group SET routes through the
+  safe Platform. **Residual (separate, pre-existing):** the binary-replacement
+  path stores `opt` in a C++ map, distinct from the Prefs-backed conversation
+  cache that `notification_message_listener._shouldSuppress` reads, so the cache
+  `recvOpt` (and notification suppression) doesn't reflect the toggle — a
+  native→Dart sync follow-up, not the crash.
+
+### Friend-profile controls sweep (real UI, single instance) — a clear pattern
+
+Drove every control in the friend-profile sheet. **toxee Prefs-backed controls
+work; SDK native-manager controls are broken/crashy** — the systematic split that
+real-UI driving surfaces (the l3/Prefs gates bypass the SDK native path):
+
+| Control | Path | Result |
+|---|---|---|
+| **Pin (S84)** | toxee `FakeConversationManager.setPinned` (Prefs) | ✅ `pinnedConversations` flips, no crash |
+| **Block/unblock (S29)** | toxee Prefs blackList | ✅ `blockedUsers` flips both ways, no crash |
+| **Mute (S83)** | SDK `setC2CReceiveMessageOpt` (native) | crash FIXED (ABI); switch toggles; `recvOpt` cache-sync residual |
+| **Remark (S30)** | SDK `setFriendInfo` (native) | ⚠️ dialog + keystroke land text, but Confirm **doesn't persist** (UI + dump stay "BobFix"); same broken native-manager path as mute (likely another `Dart*` ABI/stub) |
+| **Clear Chat History** | — | tapped + confirmed, no crash; observable inconclusive (a `[Call]` record remained) |
+| **Delete friend (S28)** | — | delete tap ok, but the confirm-dialog button key (`user_profile_delete_friend_button`) wasn't found → incomplete |
+
+**Takeaway:** the friend-profile controls that route through toxee's own
+Prefs-backed managers (Pin, Block) are solid; the ones routing through the Tencent
+SDK's native binary-replacement managers (Mute `recvOpt`, Remark `setFriendInfo`)
+are where the bugs cluster — the **audit opportunity** (other `Dart*` natives vs
+the generated bindings) is real and high-value. Remark (S30) is the next likely
+ABI/stub fix in the same family as the mute crash.
+
+**Net:** the foundational slice (friend handshake/accept, C2C messaging, calls)
+executes cleanly via real UI and PASSES; the friend-profile Pin/Block controls
+PASS; Mute crash is fixed; Remark + the recvOpt cache-sync are open native-path
+follow-ups. The rest of the filtered slice is gated on fork
+UI-wiring work (attach keys, wire typing) + one native bug (name propagation),
+each rebuild-gated. Those are the concrete next "problems to solve".

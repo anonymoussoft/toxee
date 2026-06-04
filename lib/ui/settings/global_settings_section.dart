@@ -9,11 +9,13 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
+import '../../util/appearance_sync.dart';
 import '../../util/locale_controller.dart';
 import '../../util/logger.dart';
 import '../../util/theme_controller.dart';
 import '../../util/prefs.dart';
 import '../../i18n/app_localizations.dart';
+import '../testing/ui_keys.dart';
 import '../widgets/section_header.dart';
 import '_hoverable_settings_row.dart';
 
@@ -29,8 +31,10 @@ class GlobalSettingsSection extends StatefulWidget {
   });
 
   final dynamic colorTheme;
+
   /// When non-null, show notification sound setting (per-account).
   final String? toxId;
+
   /// Optional hook the host can use to notify the running FfiChatService when
   /// the downloads directory or auto-download size limit changes. The service
   /// reads Prefs on-demand for each file transfer so this is currently
@@ -45,14 +49,16 @@ class GlobalSettingsSection extends StatefulWidget {
 class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
   bool _languageExpanded = false;
   bool _notificationSoundEnabled = true;
-  final TextEditingController _downloadsDirectoryController = TextEditingController();
+  final TextEditingController _downloadsDirectoryController =
+      TextEditingController();
   final TextEditingController _sizeLimitController = TextEditingController();
 
   dynamic get _colorTheme => widget.colorTheme;
 
   bool _isLocaleEqual(Locale a, Locale b) {
     if (a.languageCode != b.languageCode) return false;
-    if (a.scriptCode != null && b.scriptCode != null) return a.scriptCode == b.scriptCode;
+    if (a.scriptCode != null && b.scriptCode != null)
+      return a.scriptCode == b.scriptCode;
     if (a.scriptCode != null || b.scriptCode != null) return false;
     return true;
   }
@@ -100,7 +106,8 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
       }
     } catch (e) {
       AppLogger.warn(
-          '[GlobalSettings] default downloads directory lookup failed: $e');
+        '[GlobalSettings] default downloads directory lookup failed: $e',
+      );
     }
     return null;
   }
@@ -125,21 +132,23 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
   Future<void> _selectDownloadsDirectory() async {
     if (!mounted) return;
     try {
-      final selectedDirectory =
-          await FilePicker.platform.getDirectoryPath();
+      final selectedDirectory = await FilePicker.platform.getDirectoryPath();
       if (selectedDirectory != null && selectedDirectory.isNotEmpty) {
         await Prefs.setDownloadsDirectory(selectedDirectory);
         widget.onDownloadsConfigChanged?.call();
         if (mounted) {
-          setState(() =>
-              _downloadsDirectoryController.text = selectedDirectory);
+          setState(
+            () => _downloadsDirectoryController.text = selectedDirectory,
+          );
         }
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${AppLocalizations.of(context)!.failedToSelectDirectory}: $e'),
+          content: Text(
+            '${AppLocalizations.of(context)!.failedToSelectDirectory}: $e',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -193,7 +202,9 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             side: BorderSide(color: outlineVariant),
-            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+            borderRadius: BorderRadius.circular(
+              AppThemeConfig.cardBorderRadius,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -213,34 +224,38 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                           ButtonSegment<ThemeMode>(
                             value: ThemeMode.system,
                             icon: const Icon(Icons.brightness_auto),
-                            label: Text(AppLocalizations.of(context)!.themeSystem),
+                            label: Text(
+                              AppLocalizations.of(context)!.themeSystem,
+                            ),
                           ),
                           ButtonSegment<ThemeMode>(
                             value: ThemeMode.light,
                             icon: const Icon(Icons.light_mode),
-                            label: Text(AppLocalizations.of(context)!.themeLight),
+                            label: Text(
+                              AppLocalizations.of(context)!.themeLight,
+                            ),
                           ),
                           ButtonSegment<ThemeMode>(
                             value: ThemeMode.dark,
                             icon: const Icon(Icons.dark_mode),
-                            label: Text(AppLocalizations.of(context)!.themeDark),
+                            label: Text(
+                              AppLocalizations.of(context)!.themeDark,
+                            ),
                           ),
                         ],
                         selected: <ThemeMode>{mode},
                         showSelectedIcon: false,
                         onSelectionChanged: (Set<ThemeMode> selection) {
                           final chosen = selection.first;
-                          unawaited(AppTheme.set(chosen));
-                          // For 'system', pick the resolved platform
-                          // brightness so the UIKit layer matches the live
-                          // appearance; otherwise mirror the explicit choice.
-                          final resolved = chosen == ThemeMode.system
-                              ? MediaQuery.platformBrightnessOf(context)
-                              : (chosen == ThemeMode.dark
-                                  ? Brightness.dark
-                                  : Brightness.light);
-                          TencentCloudChat.controller
-                              .setBrightnessMode(resolved);
+                          // Shared applier: app theme + UIKit brightness in
+                          // one step (also used by l3_set_setting{themeMode}).
+                          unawaited(
+                            applyThemeModeEverywhere(
+                              chosen,
+                              platformBrightness:
+                                  MediaQuery.platformBrightnessOf(context),
+                            ),
+                          );
                         },
                       ),
                     );
@@ -257,7 +272,9 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             side: BorderSide(color: outlineVariant),
-            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+            borderRadius: BorderRadius.circular(
+              AppThemeConfig.cardBorderRadius,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -272,8 +289,20 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                     final appL10n = AppLocalizations.of(context)!;
                     final languages = [
                       (locale: const Locale('en'), label: appL10n.english),
-                      (locale: const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans'), label: appL10n.simplifiedChinese),
-                      (locale: const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'), label: appL10n.traditionalChinese),
+                      (
+                        locale: const Locale.fromSubtags(
+                          languageCode: 'zh',
+                          scriptCode: 'Hans',
+                        ),
+                        label: appL10n.simplifiedChinese,
+                      ),
+                      (
+                        locale: const Locale.fromSubtags(
+                          languageCode: 'zh',
+                          scriptCode: 'Hant',
+                        ),
+                        label: appL10n.traditionalChinese,
+                      ),
                       (locale: const Locale('ja'), label: appL10n.japanese),
                       (locale: const Locale('ko'), label: appL10n.korean),
                       (locale: const Locale('ar'), label: appL10n.arabic),
@@ -288,7 +317,8 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                     if (selectedLocale == null) {
                       for (final lang in languages) {
                         if (loc.languageCode == lang.locale.languageCode) {
-                          if (loc.languageCode == 'zh' && loc.scriptCode == null) {
+                          if (loc.languageCode == 'zh' &&
+                              loc.scriptCode == null) {
                             if (lang.locale.scriptCode == 'Hans') {
                               selectedLocale = lang.locale;
                               break;
@@ -301,15 +331,19 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                       }
                     }
                     selectedLocale ??= languages.first.locale;
-                    final selectedLabel = languages.firstWhere(
-                      (l) => _isLocaleEqual(l.locale, selectedLocale!),
-                      orElse: () => languages.first,
-                    ).label;
+                    final selectedLabel = languages
+                        .firstWhere(
+                          (l) => _isLocaleEqual(l.locale, selectedLocale!),
+                          orElse: () => languages.first,
+                        )
+                        .label;
                     void selectLocale(Locale newLocale) {
-                      AppLocale.set(newLocale);
-                      TencentCloudChatIntl().setLocale(newLocale);
+                      // Shared applier: app locale + UIKit intl in one step
+                      // (also used by l3_set_setting{languageCode}).
+                      unawaited(applyLocaleEverywhere(newLocale));
                       setState(() => _languageExpanded = false);
                     }
+
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -317,24 +351,37 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                         Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: () => setState(() => _languageExpanded = !_languageExpanded),
-                            borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                            onTap: () => setState(
+                              () => _languageExpanded = !_languageExpanded,
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              AppThemeConfig.inputBorderRadius,
+                            ),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.md,
+                              ),
                               decoration: BoxDecoration(
                                 border: Border.all(color: outlineVariant),
-                                borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                                borderRadius: BorderRadius.circular(
+                                  AppThemeConfig.inputBorderRadius,
+                                ),
                               ),
                               child: Row(
                                 children: [
                                   Expanded(
                                     child: Text(
                                       selectedLabel,
-                                      style: Theme.of(context).textTheme.bodyLarge,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyLarge,
                                     ),
                                   ),
                                   Icon(
-                                    _languageExpanded ? Icons.expand_less : Icons.expand_more,
+                                    _languageExpanded
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
                                     color: Theme.of(context).iconTheme.color,
                                   ),
                                 ],
@@ -345,28 +392,45 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                         if (_languageExpanded) ...[
                           AppSpacing.verticalSm,
                           ...languages.map((lang) {
-                            final isSelected = _isLocaleEqual(selectedLocale!, lang.locale);
+                            final isSelected = _isLocaleEqual(
+                              selectedLocale!,
+                              lang.locale,
+                            );
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
                                 onTap: () => selectLocale(lang.locale),
-                                borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                                borderRadius: BorderRadius.circular(
+                                  AppThemeConfig.inputBorderRadius,
+                                ),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.md),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: AppSpacing.md,
+                                    horizontal: AppSpacing.md,
+                                  ),
                                   child: Row(
                                     children: [
                                       Icon(
-                                        isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                        isSelected
+                                            ? Icons.radio_button_checked
+                                            : Icons.radio_button_off,
                                         size: 20,
                                         color: isSelected
-                                            ? Theme.of(context).colorScheme.primary
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
                                             : Theme.of(context).iconTheme.color,
                                       ),
                                       AppSpacing.horizontalMd,
                                       Text(
                                         lang.label,
-                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                              fontWeight: isSelected ? FontWeight.w600 : null,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyLarge
+                                            ?.copyWith(
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : null,
                                             ),
                                       ),
                                     ],
@@ -391,7 +455,9 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
             clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
               side: BorderSide(color: outlineVariant),
-              borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+              borderRadius: BorderRadius.circular(
+                AppThemeConfig.cardBorderRadius,
+              ),
             ),
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -415,15 +481,14 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                           AppSpacing.verticalXs,
                           Text(
                             AppLocalizations.of(context)!.notificationSoundDesc,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: _secondaryTextColor(context),
-                                    ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: _secondaryTextColor(context)),
                           ),
                         ],
                       ),
                     ),
                     Switch(
+                      key: UiKeys.settingsNotificationSoundSwitch,
                       value: _notificationSoundEnabled,
                       onChanged: _setNotificationSoundEnabled,
                     ),
@@ -440,14 +505,18 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             side: BorderSide(color: outlineVariant),
-            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+            borderRadius: BorderRadius.circular(
+              AppThemeConfig.cardBorderRadius,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SectionHeader(title: AppLocalizations.of(context)!.downloadsDirectory),
+                SectionHeader(
+                  title: AppLocalizations.of(context)!.downloadsDirectory,
+                ),
                 AppSpacing.verticalSm,
                 Row(
                   children: [
@@ -457,17 +526,22 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                         readOnly: true,
                         textAlignVertical: TextAlignVertical.center,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontFamily: 'monospace',
-                              color: _primaryTextColor(context),
-                            ),
+                          fontFamily: 'monospace',
+                          color: _primaryTextColor(context),
+                        ),
                         decoration: InputDecoration(
                           // hintText removed: the same string is shown as the
                           // helper Text below the field, so the hint was just
                           // duplicate copy fighting for the user's eye.
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppThemeConfig.inputBorderRadius,
+                            ),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
                         ),
                       ),
                     ),
@@ -481,10 +555,16 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                       AppSpacing.horizontalSm,
                       OutlinedButton.icon(
                         icon: const Icon(Icons.folder_open, size: 18),
-                        label: Text(AppLocalizations.of(context)!.selectDownloadsDirectory),
+                        label: Text(
+                          AppLocalizations.of(
+                            context,
+                          )!.selectDownloadsDirectory,
+                        ),
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppThemeConfig.buttonBorderRadius,
+                            ),
                           ),
                         ),
                         onPressed: _selectDownloadsDirectory,
@@ -496,8 +576,8 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                 Text(
                   AppLocalizations.of(context)!.downloadsDirectoryDesc,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: _secondaryTextColor(context),
-                      ),
+                    color: _secondaryTextColor(context),
+                  ),
                 ),
               ],
             ),
@@ -510,43 +590,60 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             side: BorderSide(color: outlineVariant),
-            borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+            borderRadius: BorderRadius.circular(
+              AppThemeConfig.cardBorderRadius,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SectionHeader(title: AppLocalizations.of(context)!.autoDownloadSizeLimit),
+                SectionHeader(
+                  title: AppLocalizations.of(context)!.autoDownloadSizeLimit,
+                ),
                 AppSpacing.verticalSm,
                 Row(
                   children: [
                     Expanded(
                       child: TextField(
+                        key: UiKeys.settingsDownloadLimitField,
                         controller: _sizeLimitController,
                         keyboardType: TextInputType.number,
                         textAlignVertical: TextAlignVertical.center,
                         decoration: InputDecoration(
-                          labelText: AppLocalizations.of(context)!.sizeLimitInMB,
+                          labelText: AppLocalizations.of(
+                            context,
+                          )!.sizeLimitInMB,
                           // Hint reflects the platform default — 5 MB on
                           // mobile (cellular-friendly), 30 MB on desktop.
-                          hintText: (Platform.isAndroid || Platform.isIOS) ? '5' : '30',
+                          hintText: (Platform.isAndroid || Platform.isIOS)
+                              ? '5'
+                              : '30',
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppThemeConfig.inputBorderRadius,
+                            ),
                           ),
                           suffixText: 'MB',
-                          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
                         ),
                         onSubmitted: (_) => _saveAutoDownloadSizeLimit(),
                       ),
                     ),
                     AppSpacing.horizontalSm,
                     ElevatedButton.icon(
+                      key: UiKeys.settingsDownloadLimitSaveButton,
                       icon: const Icon(Icons.save, size: 18),
                       label: Text(AppLocalizations.of(context)!.save),
                       style: ElevatedButton.styleFrom(
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppThemeConfig.buttonBorderRadius,
+                          ),
                         ),
                       ),
                       onPressed: _saveAutoDownloadSizeLimit,
@@ -557,8 +654,8 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                 Text(
                   AppLocalizations.of(context)!.autoDownloadSizeLimitDesc,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: _secondaryTextColor(context),
-                      ),
+                    color: _secondaryTextColor(context),
+                  ),
                 ),
               ],
             ),
@@ -568,4 +665,3 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
     );
   }
 }
-

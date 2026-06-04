@@ -1,0 +1,72 @@
+name: MCP Harness Smoke
+
+# First CI gate for the MCP / L3 + Fixture C test harness (tool/mcp_test/).
+# Until now its helper-contract regressions ran only on a maintainer's machine,
+# so the harness could silently rot between local runs (see
+# doc/research/L3_MCP_HANDOFF_2026-05-31.md). This job enforces the harness's
+# HERMETIC contracts on every PR.
+#
+# Deliberately cheap and deterministic: it does NOT launch the app, build the
+# native libtim2tox_ffi, run the echo peer, or touch the Tox DHT. It exercises
+# file-level / argument-level contracts only:
+#   - restore_fixture_c_pair.sh copy contract (self-skips when the secret-key-
+#     bearing paired_for_e2e A/B source trees are absent; the manifest itself is
+#     committed harness source and is mandatory)
+#   - _write_toxee_instance_json.py isolation-value recording
+#   - run_fixture_c_non_media.sh mode documentation
+#   - drive_fixture_c_pair.dart usage exit-code (64) propagation
+#
+#   - L3 scenario JSON schema (suite/order/feature/uiDriven) via the runner's
+#     --validate-only mode (no VM connection)
+#   - scenario classification + INDEX freshness via gen_scenario_index.dart
+#     --check (anti-fabrication guard included)
+#
+# Scope honesty: this gates the harness's portable contracts, NOT the live
+# two-process P2P scenarios (which remain local + DHT-dependent). See
+# test/mcp/INDEX.en.md (generated) and doc/research/L3_RUNNER_COVERAGE_MAP.en.md.
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  fixture-c-helper-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: 'stable'
+
+      # drive_fixture_c_pair.dart imports only dart:* + package:vm_service, so
+      # pub get is enough to compile it for the no-arg usage-code check. The
+      # native libtim2tox_ffi is intentionally NOT built — the usage path exits
+      # before any FFI load.
+      - name: Bootstrap dependencies
+        run: dart run tool/bootstrap_deps.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Fixture C helper contracts (hermetic)
+        run: bash tool/mcp_test/fixture_c_helpers_regression.sh
+
+      # Schema gate for the 46 L3 scenario JSONs: required suite enum, order/
+      # feature/uiDriven types, unique ids. Pure file validation — no app, no
+      # VM service (the runner waives the ws_uri arg for this mode).
+      - name: L3 scenario schema (validate-only)
+        run: dart run tool/mcp_test/run_l3_scenarios.dart --validate-only
+
+      # Coverage-index gate: regenerates test/mcp/INDEX.en.md in memory and
+      # fails when the committed copy is stale, a scenario's feature points at
+      # a missing playbook, a playbook claims covered with no artifacts
+      # (anti-fabrication), or a playbook is missing one of the five required
+      # header fields (M9b landed 2026-06-03: the header backlog was cleaned in
+      # the same change, so header schema is HARD from day one —
+      # doc/research/TEST_CASE_ORGANIZATION_PLAN.en.md §3.3).
+      - name: Scenario index check
+        run: dart run tool/mcp_test/gen_scenario_index.dart --check --warn-playbook-headers

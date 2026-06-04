@@ -180,13 +180,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autoAcceptFriendRequests => 'Auto-accept friend requests';
 
   @override
-  String get autoAcceptFriendRequestsDesc => 'Accept incoming friend requests automatically';
+  String get autoAcceptFriendRequestsDesc =>
+      'Accept incoming friend requests automatically';
 
   @override
   String get autoAcceptGroupInvites => 'Auto-accept group invitations';
 
   @override
-  String get autoAcceptGroupInvitesDesc => 'Accept incoming group invitations automatically';
+  String get autoAcceptGroupInvitesDesc =>
+      'Accept incoming group invitations automatically';
 
   @override
   String get bootstrapNodes => 'Bootstrap Nodes';
@@ -198,7 +200,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get viewAndTestNodes => 'View and Test Nodes';
 
   @override
-  String get currentlyOnlineNoReconnect => 'Currently online, no need to reconnect';
+  String get currentlyOnlineNoReconnect =>
+      'Currently online, no need to reconnect';
 
   @override
   String get addOrCreateGroup => 'Add / Create Group';
@@ -240,10 +243,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get createFailed => 'Failed to create group';
 
   @override
-  String get joinQueued => 'Offline — join request will be sent when you reconnect';
+  String get joinQueued =>
+      'Offline — join request will be sent when you reconnect';
 
   @override
-  String get offlineBanner => 'Offline — group operations will be queued and processed when you reconnect.';
+  String get offlineBanner =>
+      'Offline — group operations will be queued and processed when you reconnect.';
 
   @override
   String get groupType => 'Group Type';
@@ -255,13 +260,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get privateGroup => 'Private';
 
   @override
-  String get publicGroupHint => 'Public group — discoverable on the DHT and joinable by anyone with the chat ID.';
+  String get publicGroupHint =>
+      'Public group — discoverable on the DHT and joinable by anyone with the chat ID.';
 
   @override
-  String get privateGroupHint => 'Private group — invitation-only, not announced on the DHT.';
+  String get privateGroupHint =>
+      'Private group — invitation-only, not announced on the DHT.';
 
   @override
-  String get conferenceHint => 'Legacy conference — older protocol, no roles or persistence.';
+  String get conferenceHint =>
+      'Legacy conference — older protocol, no roles or persistence.';
 
   @override
   String get searchHintBody => 'Search contacts, groups, and messages';
@@ -285,7 +293,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterId => 'Please enter Tox ID';
 
   @override
-  String get invalidLength => 'ID must be 64 or 76 hexadecimal characters';
+  String get invalidLength => 'Invalid ID length';
 
   @override
   String get invalidCharacters => 'Can only contain hexadecimal characters';
@@ -294,16 +302,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get paste => 'Paste';
 
   @override
-  String get addContactHint => 'Enter friend\'s Tox ID (64 or 76 hexadecimal characters).';
+  String get addContactHint => 'Enter the peer Tox address.';
+
+  @override
+  String get addFriendInvalidToxIdHint =>
+      'Tox address must be 76 hexadecimal characters';
 
   @override
   String get verificationMessage => 'Verification Message';
 
   @override
-  String get defaultFriendRequestMessage => 'Hello, I\'d like to add you as a friend.';
+  String get defaultFriendRequestMessage =>
+      'Hello, I\'d like to add you as a friend.';
 
   @override
-  String get friendRequestMessageTooLong => 'Friend request message cannot exceed 921 characters';
+  String get friendRequestMessageTooLong =>
+      'Friend request message cannot exceed 921 characters';
 
   @override
   String get enterMessage => 'Please enter a message';
@@ -339,7 +353,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get idCopiedToClipboard => 'ID copied to clipboard';
 
   @override
-  String get establishingEncryptedChannel => 'Establishing encrypted channel...';
+  String get establishingEncryptedChannel =>
+      'Establishing encrypted channel...';
 
   @override
   String get checkingUserInfo => 'Checking user information...';
@@ -438,7 +453,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reconnect => 'Reconnect';
 
   @override
-  String get reconnectConfirmMessage => 'Will reconnect using the selected bootstrap node. Continue?';
+  String get reconnectConfirmMessage =>
+      'Will reconnect using the selected bootstrap node. Continue?';
 
   @override
   String get reconnectedWaiting => 'Re-logged in, waiting for connection...';
@@ -447,19 +463,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reconnectWithThisNode => 'Reconnect with this node';
 
   @override
-  String get friendOfflineCannotSendFile => 'Friend is offline. Cannot send file. Please wait until they are online.';
+  String get friendOfflineCannotSendFile =>
+      'Friend is offline. Cannot send file. Please wait until they are online.';
 
   @override
-  String get friendOfflineSendCardFailed => 'Friend is offline. Failed to send personal card.';
+  String get friendOfflineSendCardFailed =>
+      'Friend is offline. Failed to send personal card.';
 
   @override
-  String get friendOfflineSendImageFailed => 'Friend is offline. Failed to send image.';
+  String get friendOfflineSendImageFailed =>
+      'Friend is offline. Failed to send image.';
 
   @override
-  String get friendOfflineSendVideoFailed => 'Friend is offline. Failed to send video.';
+  String get friendOfflineSendVideoFailed =>
+      'Friend is offline. Failed to send video.';
 
   @override
-  String get friendOfflineSendFileFailed => 'Friend is offline. Failed to send file.';
+  String get friendOfflineSendFileFailed =>
+      'Friend is offline. Failed to send file.';
 
   @override
   String get userNotInFriendList => 'User is not in your friend list.';
@@ -502,16 +523,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deleteAccount => 'Delete Account';
 
   @override
-  String get deleteAccountConfirmMessage => 'Your account and all data will be permanently deleted and cannot be recovered. Please proceed with caution.';
+  String get deleteAccountConfirmMessage =>
+      'Your account and all data will be permanently deleted and cannot be recovered. Please proceed with caution.';
 
   @override
   String get delete => 'Delete';
 
   @override
-  String get deleteAccountEnterPasswordToConfirm => 'Enter your account password to confirm deletion.';
+  String get deleteAccountEnterPasswordToConfirm =>
+      'Enter your account password to confirm deletion.';
 
   @override
-  String get deleteAccountTypeWordToConfirm => 'Type the word shown below to confirm deletion.';
+  String get deleteAccountTypeWordToConfirm =>
+      'Type the word shown below to confirm deletion.';
 
   @override
   String deleteAccountConfirmWordPrompt(String word) {
@@ -531,7 +555,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationSound => 'Notification Sound';
 
   @override
-  String get notificationSoundDesc => 'Play sound for new messages, friend requests, and group requests';
+  String get notificationSoundDesc =>
+      'Play sound for new messages, friend requests, and group requests';
 
   @override
   String get downloadsDirectory => 'Downloads Directory';
@@ -543,7 +568,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get changeDownloadsDirectory => 'Change Downloads Directory';
 
   @override
-  String get downloadsDirectoryDesc => 'Set the default directory for file downloads. Received files, audio, and videos will be saved to this directory.';
+  String get downloadsDirectoryDesc =>
+      'Set the default directory for file downloads. Received files, audio, and videos will be saved to this directory.';
 
   @override
   String get downloadsDirectorySet => 'Downloads directory set';
@@ -564,13 +590,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sizeLimitInMB => 'Size Limit (MB)';
 
   @override
-  String get autoDownloadSizeLimitDesc => 'Files smaller than this size and all images will be downloaded automatically. Files larger than this size require manual download via the download button.';
+  String get autoDownloadSizeLimitDesc =>
+      'Files smaller than this size and all images will be downloaded automatically. Files larger than this size require manual download via the download button.';
 
   @override
   String get autoDownloadSizeLimitSet => 'Auto download size limit set to';
 
   @override
-  String get invalidSizeLimit => 'Invalid size limit, please enter a number between 1 and 10000';
+  String get invalidSizeLimit =>
+      'Invalid size limit, please enter a number between 1 and 10000';
 
   @override
   String get save => 'Save';
@@ -588,7 +616,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get canOnlySelectOnlineNode => 'Can only select online nodes';
 
   @override
-  String get canOnlySelectTestedNode => 'Can only select successfully tested nodes, please test the node first';
+  String get canOnlySelectTestedNode =>
+      'Can only select successfully tested nodes, please test the node first';
 
   @override
   String get switchNode => 'Switch Node';
@@ -613,7 +642,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ircChannelApp => 'IRC Channel';
 
   @override
-  String get ircChannelAppDesc => 'Connect IRC channels to Tox groups for message synchronization';
+  String get ircChannelAppDesc =>
+      'Connect IRC channels to Tox groups for message synchronization';
 
   @override
   String get install => 'Install';
@@ -631,7 +661,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uninstallIrcApp => 'Uninstall IRC Channel App';
 
   @override
-  String get uninstallIrcAppConfirm => 'Are you sure you want to uninstall the IRC Channel app? All IRC channels will be removed and you will leave all IRC groups.';
+  String get uninstallIrcAppConfirm =>
+      'Are you sure you want to uninstall the IRC Channel app? All IRC channels will be removed and you will leave all IRC groups.';
 
   @override
   String get addIrcChannel => 'Add Channel';
@@ -652,7 +683,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ircUseSasl => 'Use SASL Authentication';
 
   @override
-  String get ircUseSaslDesc => 'Use Tox public key for SASL authentication (requires NickServ registration)';
+  String get ircUseSaslDesc =>
+      'Use Tox public key for SASL authentication (requires NickServ registration)';
 
   @override
   String get ircServerRequired => 'IRC server address is required';
@@ -694,7 +726,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ircChannelHint => '#channel';
 
   @override
-  String get ircChannelDesc => 'Enter the IRC channel name (e.g., #channel). A Tox group will be created for this channel.';
+  String get ircChannelDesc =>
+      'Enter the IRC channel name (e.g., #channel). A Tox group will be created for this channel.';
 
   @override
   String get enterIrcChannel => 'Please enter IRC channel name';
@@ -706,7 +739,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get join => 'Join';
 
   @override
-  String get ircAppNotInstalled => 'Please install the IRC Channel app from the Applications page first';
+  String get ircAppNotInstalled =>
+      'Please install the IRC Channel app from the Applications page first';
 
   @override
   String get ircChannelPassword => 'Channel Password';
@@ -718,7 +752,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ircCustomNickname => 'Custom IRC Nickname';
 
   @override
-  String get ircCustomNicknameHint => 'Leave empty to use auto-generated nickname';
+  String get ircCustomNicknameHint =>
+      'Leave empty to use auto-generated nickname';
 
   @override
   String deleteAccountFailed(String error) {
@@ -726,7 +761,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get directorySelectionNotSupported => 'Directory selection is not supported on this platform';
+  String get directorySelectionNotSupported =>
+      'Directory selection is not supported on this platform';
 
   @override
   String failedToSendFriendRequest(String error) {
@@ -756,10 +792,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get close => 'Close';
 
   @override
-  String get nodeNotTestedWarning => 'Note: This node has not been tested and may not be connectable.';
+  String get nodeNotTestedWarning =>
+      'Note: This node has not been tested and may not be connectable.';
 
   @override
-  String get nodeTestFailedWarning => 'Note: This node test failed and may not be connectable.';
+  String get nodeTestFailedWarning =>
+      'Note: This node test failed and may not be connectable.';
 
   @override
   String get nicknameTooLong => 'Nickname too long';
@@ -795,10 +833,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nodeTestUnavailableBeforeLogin => 'Test unavailable before login';
 
   @override
-  String get failedToStartBootstrapService => 'Failed to start bootstrap service';
+  String get failedToStartBootstrapService =>
+      'Failed to start bootstrap service';
 
   @override
-  String get invalidNodeInfo => 'Please enter valid node information (host, port, and public key)';
+  String get invalidNodeInfo =>
+      'Please enter valid node information (host, port, and public key)';
 
   @override
   String get nodeSetSuccess => 'Node set as current successfully';
@@ -816,10 +856,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get manualModeDesc => 'Manually specify bootstrap node information';
 
   @override
-  String get autoModeDesc => 'Automatically fetch and use bootstrap nodes from web';
+  String get autoModeDesc =>
+      'Automatically fetch and use bootstrap nodes from web';
 
   @override
-  String get autoModeDescPrefix => 'Automatically fetch and use bootstrap nodes from ';
+  String get autoModeDescPrefix =>
+      'Automatically fetch and use bootstrap nodes from ';
 
   @override
   String get lanMode => 'LAN Mode';
@@ -940,7 +982,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autoLoginDisabled => 'Auto Login: Disabled';
 
   @override
-  String get autoLoginDesc => 'After enabling, you will be automatically logged in when you start the application.';
+  String get autoLoginDesc =>
+      'After enabling, you will be automatically logged in when you start the application.';
 
   @override
   String get disable => 'Disable';
@@ -999,7 +1042,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get exportOptionFullBackup => 'Full Backup (.zip)';
 
   @override
-  String get exportOptionFullBackupSubtitle => 'Profile + chat history + settings';
+  String get exportOptionFullBackupSubtitle =>
+      'Profile + chat history + settings';
 
   @override
   String get importAccount => 'Import Account';
@@ -1068,7 +1112,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountAlreadyExists => 'Account Already Exists';
 
   @override
-  String get accountAlreadyExistsMessage => 'An account with this ID already exists. Do you want to update it?';
+  String get accountAlreadyExistsMessage =>
+      'An account with this ID already exists. Do you want to update it?';
 
   @override
   String get update => 'Update';
@@ -1082,7 +1127,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get savedAccounts => 'Saved Accounts';
 
   @override
-  String get tapToSelectDoubleTapToLogin => 'Tap to select, double-tap to quick login';
+  String get tapToSelectDoubleTapToLogin =>
+      'Tap to select, double-tap to quick login';
 
   @override
   String get tapToLogIn => 'Tap to log in';
@@ -1127,7 +1173,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get thisAccountIsAlreadyLoggedIn => 'This account is already logged in';
+  String get thisAccountIsAlreadyLoggedIn =>
+      'This account is already logged in';
 
   @override
   String get upgradeRequiredTitle => 'Please upgrade the app';
@@ -1159,22 +1206,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conference => 'Conference';
 
   @override
-  String get defaultJoinRequestMessage => 'Hi, please invite me into this group';
+  String get defaultJoinRequestMessage =>
+      'Hi, please invite me into this group';
 
   @override
-  String get userNotFoundPleaseRegister => 'User not found. Please register first.';
+  String get userNotFoundPleaseRegister =>
+      'User not found. Please register first.';
 
   @override
-  String get nicknameDoesNotMatch => 'Nickname does not match. Please use the registered nickname or register a new account.';
+  String get nicknameDoesNotMatch =>
+      'Nickname does not match. Please use the registered nickname or register a new account.';
 
   @override
-  String get accountAlreadyExistsPleaseLogin => 'Account already exists. Please login instead or use a different nickname.';
+  String get accountAlreadyExistsPleaseLogin =>
+      'Account already exists. Please login instead or use a different nickname.';
 
   @override
-  String get profileNotFoundImportRestore => 'Profile not found for this account. Please import or restore backup.';
+  String get profileNotFoundImportRestore =>
+      'Profile not found for this account. Please import or restore backup.';
 
   @override
-  String get failedToInitializeTIMManager => 'Failed to initialize TIMManager SDK';
+  String get failedToInitializeTIMManager =>
+      'Failed to initialize TIMManager SDK';
 
   @override
   String get failedToGetToxId => 'Failed to get Tox ID';
@@ -1183,7 +1236,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get failedToGenerateToxId => 'Failed to generate Tox ID';
 
   @override
-  String get registrationCouldNotCreateProfile => 'Registration could not create a unique profile. Please try again.';
+  String get registrationCouldNotCreateProfile =>
+      'Registration could not create a unique profile. Please try again.';
 
   @override
   String get importedAccount => 'Imported Account';
@@ -1249,16 +1303,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callEnded => 'Call ended';
 
   @override
-  String get callPermissionMicrophoneRequired => 'Microphone permission is required to continue the call.';
+  String get callPermissionMicrophoneRequired =>
+      'Microphone permission is required to continue the call.';
 
   @override
-  String get callPermissionCameraRequired => 'Camera permission is required to continue the call.';
+  String get callPermissionCameraRequired =>
+      'Camera permission is required to continue the call.';
 
   @override
-  String get callPermissionMicrophoneCameraRequired => 'Microphone and camera permissions are required to continue the call.';
+  String get callPermissionMicrophoneCameraRequired =>
+      'Microphone and camera permissions are required to continue the call.';
 
   @override
-  String get callAudioInterrupted => 'Audio output changed or was interrupted during the call.';
+  String get callAudioInterrupted =>
+      'Audio output changed or was interrupted during the call.';
 
   @override
   String get callCalling => 'Calling...';
@@ -1321,7 +1379,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nicknameHintExample => 'e.g. Alice';
 
   @override
-  String get callAudioRouteSystem => 'Audio route managed by system on this platform';
+  String get callAudioRouteSystem =>
+      'Audio route managed by system on this platform';
 
   @override
   String get copyFullToxId => 'Copy full ID';
@@ -1378,7 +1437,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get selectConversationEmptyState => 'Select a conversation to start chatting';
+  String get selectConversationEmptyState =>
+      'Select a conversation to start chatting';
 
   @override
   String get newConversationTooltip => 'New conversation';
@@ -1404,7 +1464,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get firstRunBackupWizardTitle => 'Save your account file';
 
   @override
-  String get firstRunBackupWizardBody => 'Your account lives only on this device. Save the .tox file somewhere safe (cloud storage, password manager, USB stick). Without it, losing this device means losing your account and all your contacts permanently.';
+  String get firstRunBackupWizardBody =>
+      'Your account lives only on this device. Save the .tox file somewhere safe (cloud storage, password manager, USB stick). Without it, losing this device means losing your account and all your contacts permanently.';
 
   @override
   String get firstRunBackupWizardExportNow => 'Export now';
@@ -1416,7 +1477,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get firstRunBackupWizardDismissTitle => 'Skip backup?';
 
   @override
-  String get firstRunBackupWizardDismissBody => 'If you lose this device, you will lose your account and all contacts. There is no recovery.';
+  String get firstRunBackupWizardDismissBody =>
+      'If you lose this device, you will lose your account and all contacts. There is no recovery.';
 
   @override
   String get firstRunBackupWizardDismissConfirm => 'I understand, continue';
@@ -1435,7 +1497,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get restoreFromToxFileInvalidFile => 'This file doesn\'t look like a valid Tox profile.';
+  String get restoreFromToxFileInvalidFile =>
+      'This file doesn\'t look like a valid Tox profile.';
 
   @override
   String get pairDeviceHostTitle => 'Pair another device';
@@ -1444,13 +1507,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pairDeviceClientTitle => 'Pair with another device';
 
   @override
-  String get pairingHostInstructions => 'Open toxee on your other device, choose \"Pair with another device\", and scan this QR code.';
+  String get pairingHostInstructions =>
+      'Open toxee on your other device, choose \"Pair with another device\", and scan this QR code.';
 
   @override
-  String get pairingClientScanInstructions => 'Point your camera at the QR code on your other device.';
+  String get pairingClientScanInstructions =>
+      'Point your camera at the QR code on your other device.';
 
   @override
-  String get pairingClientPasteInstructions => 'Camera scanning isn\'t supported on this device. Paste the pairing URL shown on your other device below.';
+  String get pairingClientPasteInstructions =>
+      'Camera scanning isn\'t supported on this device. Paste the pairing URL shown on your other device below.';
 
   @override
   String get pairingPasteUrlLabel => 'Pairing URL';
@@ -1459,19 +1525,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pairingConnectButton => 'Connect';
 
   @override
-  String get pairingWaitingForPeer => 'Waiting for the other device to connect…';
+  String get pairingWaitingForPeer =>
+      'Waiting for the other device to connect…';
 
   @override
-  String get pairingVerifyCodeHeader => 'Verify both devices show the same code';
+  String get pairingVerifyCodeHeader =>
+      'Verify both devices show the same code';
 
   @override
-  String get pairingVerifyCodeInstructions => 'If the code matches what\'s shown on your other device, tap below. If they differ, cancel — someone may be intercepting the connection.';
+  String get pairingVerifyCodeInstructions =>
+      'If the code matches what\'s shown on your other device, tap below. If they differ, cancel — someone may be intercepting the connection.';
 
   @override
   String get pairingCodesMatch => 'The codes match';
 
   @override
-  String get pairingHostCompleted => 'Account sent. The other device now has your account.';
+  String get pairingHostCompleted =>
+      'Account sent. The other device now has your account.';
 
   @override
   String get pairingClientCompleted => 'Account received. You\'re paired.';
@@ -1498,16 +1568,20 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get pairingDecryptFailed => 'Couldn\'t decrypt the received profile. The pairing may have been tampered with — try again on a network you trust.';
+  String get pairingDecryptFailed =>
+      'Couldn\'t decrypt the received profile. The pairing may have been tampered with — try again on a network you trust.';
 
   @override
-  String get pairingNoLanInterface => 'No LAN network detected. Connect to WiFi or Ethernet and try again.';
+  String get pairingNoLanInterface =>
+      'No LAN network detected. Connect to WiFi or Ethernet and try again.';
 
   @override
-  String get pairThisAccountToAnotherDevice => 'Pair this account to another device';
+  String get pairThisAccountToAnotherDevice =>
+      'Pair this account to another device';
 
   @override
-  String get pairWithAnotherDevice => 'Pair with another device that has my account';
+  String get pairWithAnotherDevice =>
+      'Pair with another device that has my account';
 
   @override
   String get devicesSectionTitle => 'Devices';
@@ -1519,7 +1593,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runtimeForegroundTitle => 'Toxee is running';
 
   @override
-  String get runtimeForegroundBody => 'Staying connected so you can receive messages and calls.';
+  String get runtimeForegroundBody =>
+      'Staying connected so you can receive messages and calls.';
 
   @override
   String get runtimeForegroundSettingsLabel => 'Notification settings';
@@ -1528,7 +1603,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runtimeForegroundCallTitle => 'Call in progress';
 
   @override
-  String get runtimeForegroundCallBody => 'Toxee is keeping your call connected.';
+  String get runtimeForegroundCallBody =>
+      'Toxee is keeping your call connected.';
 
   @override
   String runtimeForegroundCallBodyWithCaller(String name) {

@@ -4,6 +4,7 @@ import '../../i18n/app_localizations.dart';
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 import '../../util/responsive_layout.dart';
+import '../testing/ui_keys.dart';
 
 /// Calculate text length where Chinese characters count as 1, and
 /// letters/numbers count as 0.5.
@@ -74,6 +75,7 @@ class ProfileEditFields extends StatelessWidget {
       children: [
         AppSpacing.verticalMd,
         TextField(
+          key: UiKeys.profileNicknameField,
           controller: nickController,
           textAlignVertical: TextAlignVertical.center,
           decoration: InputDecoration(
@@ -84,6 +86,7 @@ class ProfileEditFields extends StatelessWidget {
         ),
         AppSpacing.verticalMd,
         TextField(
+          key: UiKeys.profileStatusField,
           controller: statusController,
           textAlignVertical: TextAlignVertical.center,
           decoration: InputDecoration(
@@ -106,18 +109,21 @@ class ProfileEditFields extends StatelessWidget {
               child: SizedBox(
                 height: 44,
                 child: FilledButton(
+                  key: UiKeys.profileSaveButton,
                   style: FilledButton.styleFrom(
                     backgroundColor: primaryColor,
                     foregroundColor: onPrimary,
-                    disabledBackgroundColor:
-                        primaryColor.withValues(alpha: 0.4),
+                    disabledBackgroundColor: primaryColor.withValues(
+                      alpha: 0.4,
+                    ),
                     disabledForegroundColor: onPrimary,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppRadii.button),
                     ),
-                    textStyle: theme.textTheme.labelLarge
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    textStyle: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   onPressed: saveDisabled ? null : onSave,
                   child: isSaving
@@ -126,8 +132,9 @@ class ProfileEditFields extends StatelessWidget {
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(onPrimary),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              onPrimary,
+                            ),
                           ),
                         )
                       : Text(saveLabel),
@@ -224,7 +231,9 @@ class ProfileCardTextField extends StatelessWidget {
           onTap: onEnterEditMode,
           child: Container(
             padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md, vertical: AppSpacing.md),
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.md,
+            ),
             decoration: BoxDecoration(
               border: Border.all(color: theme.colorScheme.outlineVariant),
               borderRadius: BorderRadius.circular(AppRadii.input),
@@ -292,10 +301,13 @@ class ProfileToxIdSection extends StatelessWidget {
             ),
             const Spacer(),
             TextButton.icon(
+              key: UiKeys.profileToxIdCopyButton,
               style: TextButton.styleFrom(
                 foregroundColor: primaryColor,
                 padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
                 minimumSize: const Size(0, 44),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadii.button),
@@ -311,10 +323,13 @@ class ProfileToxIdSection extends StatelessWidget {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.md),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.md,
+          ),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest
-                .withValues(alpha: 0.4),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.4,
+            ),
             border: Border.all(color: theme.colorScheme.outlineVariant),
             borderRadius: BorderRadius.circular(AppRadii.input),
           ),
@@ -322,6 +337,7 @@ class ProfileToxIdSection extends StatelessWidget {
           child: Directionality(
             textDirection: TextDirection.ltr,
             child: SelectableText(
+              key: UiKeys.profileToxIdSelectableText,
               userId,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontFamily: 'monospace',
@@ -364,8 +380,8 @@ class ProfileConnectionStatus extends StatelessWidget {
             color: isConnected
                 ? AppThemeConfig.successColor
                 : (theme.brightness == Brightness.dark
-                    ? AppThemeConfig.secondaryTextColorDark
-                    : AppThemeConfig.secondaryTextColorLight),
+                      ? AppThemeConfig.secondaryTextColorDark
+                      : AppThemeConfig.secondaryTextColorLight),
             shape: BoxShape.circle,
           ),
         ),

@@ -204,6 +204,15 @@ class SessionRuntimeCoordinator {
         FakeUIKit.instance.im?.refreshConversations();
         FakeUIKit.instance.im?.refreshUnreadTotal();
       };
+      // After a conversation is marked read via the "mark as read" menu item
+      // (cleanConversationUnreadMessageCount → markConversationRead), refresh
+      // the conversation list + unread badge so the cleared count surfaces in
+      // the sidebar without the user opening the conversation. The unread
+      // ground truth (ffi.getUnreadOf) is already zeroed by markConversationRead.
+      platform.onConversationUnreadCleared = (_) {
+        FakeUIKit.instance.im?.refreshConversations();
+        FakeUIKit.instance.im?.refreshUnreadTotal();
+      };
       AppLogger.debug(
           '[SessionRuntimeCoordinator] Set TencentCloudChatSdkPlatform to Tim2ToxSdkPlatform');
     }
@@ -379,6 +388,10 @@ class SessionRuntimeCoordinator {
       BinaryReplacementHistoryHook.installStandalone(
           service.messageHistoryPersistence, selfId,
           logger: AppLoggerAdapter());
+      // S29: wire the block predicate so the binary-replacement persist path
+      // also drops inbound C2C from a blocked sender (the same guard lives in
+      // FfiChatService._appendHistory, which this direct-persist path bypasses).
+      BinaryReplacementHistoryHook.isBlockedPredicate = service.isBlocked;
       _hookInstalled = true;
       AppLogger.debug(
           '[SessionRuntimeCoordinator] BinaryReplacementHistoryHook installed (standalone, selfId=${selfId.isEmpty ? "<deferred>" : "<set>"})');

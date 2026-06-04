@@ -18,7 +18,7 @@ This document covers the current build and packaging flow for toxee: local devel
 
 ### Core tools
 
-- **Flutter**: use Flutter `3.29.x` or newer compatible with the checked-in lockfile. The current CI workflows use `3.29.0`, and `pubspec.lock` currently requires Flutter `>=3.29.0`.
+- **Flutter**: use Flutter `3.41.x` or newer compatible with the checked-in lockfile. The current CI workflows use `3.41.9`, and `pubspec.lock` currently requires Flutter `>=3.41.9`.
 - **Dart**: use the Dart SDK bundled with the selected Flutter version.
 - **Git**: required for submodules and dependency bootstrap.
 - **CMake**: `3.16+` is the safest baseline. Parts of the tree build with lower minimums, but Tim2Tox and the Windows installer path both use `3.16`.

@@ -1,0 +1,29 @@
+{
+  "id": "L3-group-two-pins",
+  "suite": "group",
+  "description": "Group pin-SET integrity (hermetic, single-instance): create two groups, pin BOTH (l3_set_pinned group_<gid>), prove both enter pinnedConversations, then unpin ONE and prove only it leaves (the other stays pinned). Pinned entries are stored as 'group_<normalizeToxId(gid)>' = 'group_<localGid>', asserted with EXACT containsItem/notContainsItem. Complements l3_pin_group_toggle (single group) by proving the pinned set holds multiple groups independently. Teardown unpins both then leaves both.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "create_group", "name": "L3g2pinA-{{nonce}}", "saveAs": "gidA" },
+    { "action": "create_group", "name": "L3g2pinB-{{nonce}}", "saveAs": "gidB" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gidA}}", "timeoutSecs": 15 },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gidB}}", "timeoutSecs": 15 },
+    { "action": "set_pinned", "conversationId": "group_{{gidA}}", "pinned": true },
+    { "action": "set_pinned", "conversationId": "group_{{gidB}}", "pinned": true },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "pinnedConversations", "containsItem": "group_{{gidA}}", "timeoutSecs": 10 },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "pinnedConversations", "containsItem": "group_{{gidB}}", "timeoutSecs": 10 },
+    { "action": "set_pinned", "conversationId": "group_{{gidA}}", "pinned": false },
+    { "action": "wait_for", "predicate": "state_not_contains_item", "field": "pinnedConversations", "notContainsItem": "group_{{gidA}}", "timeoutSecs": 10 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "pinnedConversations", "notContainsItem": "group_{{gidA}}" },
+    { "type": "state", "field": "pinnedConversations", "containsItem": "group_{{gidB}}" }
+  ],
+  "teardown": [
+    { "action": "set_pinned", "conversationId": "group_{{gidA}}", "pinned": false },
+    { "action": "set_pinned", "conversationId": "group_{{gidB}}", "pinned": false },
+    { "action": "leave_group", "groupId": "{{gidA}}" },
+    { "action": "leave_group", "groupId": "{{gidB}}" }
+  ]
+}

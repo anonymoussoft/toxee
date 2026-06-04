@@ -1,0 +1,21 @@
+{
+  "id": "L3-group-private-send",
+  "suite": "group",
+  "description": "FREEZE-UNBLOCK PROBE + private group send/persist (hermetic, single-instance). The public-group history gates share a live-run blocker: single-instance PUBLIC NGC creation freezes the app UI thread (suspected: the public DHT-announce path). HYPOTHESIS: type='private' is invite-only and skips the public DHT announce, so a private create+send may run where public freezes. This probe creates a PRIVATE group, sends one text on the CONNECTED path, and proves it persists to local group history with isPending==false — the SAME create+send+history flow as l3_group_send_persist but via the private path. If this live-PASSES while the public history gates freeze, the hypothesis holds and the public history gates can be switched to type:private. Self-cleans via teardown leave.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_equals", "field": "isConnected", "equals": true, "timeoutSecs": 30 },
+    { "action": "create_group", "name": "L3gpsend-{{nonce}}", "type": "private", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "send_group_text", "groupId": "{{gid}}", "text": "gpmsg-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "conv": "group_{{gid}}", "text": "gpmsg-{{nonce}}", "isSelf": true, "timeoutSecs": 20 }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "conv": "group_{{gid}}", "text": "gpmsg-{{nonce}}", "isSelf": true, "equals": 1 },
+    { "type": "message_field_contains", "conv": "group_{{gid}}", "text": "gpmsg-{{nonce}}", "isSelf": true, "field": "isPending", "contains": "false" }
+  ],
+  "teardown": [
+    { "action": "leave_group", "groupId": "{{gid}}" }
+  ]
+}

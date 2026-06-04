@@ -10,6 +10,7 @@ import '../../util/logger.dart';
 import '../../util/platform_utils.dart';
 import '../../util/prefs.dart';
 import '../../i18n/app_localizations.dart';
+import '../testing/ui_keys.dart';
 import '../widgets/app_page_route.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/section_header.dart';
@@ -19,11 +20,7 @@ import 'bootstrap_nodes_page.dart';
 /// When [service] is null (e.g. login settings), test and route/scan actions that
 /// require the service are hidden or use Prefs-only behavior.
 class BootstrapSettingsSection extends StatefulWidget {
-  const BootstrapSettingsSection({
-    super.key,
-    this.service,
-    this.colorTheme,
-  });
+  const BootstrapSettingsSection({super.key, this.service, this.colorTheme});
 
   /// When null, test node and "Route selection" / "Scan LAN" use Prefs-only or are hidden.
   final FfiChatService? service;
@@ -32,7 +29,8 @@ class BootstrapSettingsSection extends StatefulWidget {
   final dynamic colorTheme;
 
   @override
-  State<BootstrapSettingsSection> createState() => _BootstrapSettingsSectionState();
+  State<BootstrapSettingsSection> createState() =>
+      _BootstrapSettingsSectionState();
 }
 
 class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
@@ -54,7 +52,8 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
   String? _lanBootstrapServiceIP;
   int? _lanBootstrapServicePort;
   String? _lanBootstrapServicePubkey;
-  final TextEditingController _lanBootstrapPortController = TextEditingController();
+  final TextEditingController _lanBootstrapPortController =
+      TextEditingController();
 
   dynamic get _colorTheme => widget.colorTheme;
 
@@ -129,13 +128,13 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
       // Previously swallowed silently. Users hit "auto mode" and saw nothing
       // happen on failure (e.g. nodes.tox.chat unreachable). Surface it.
       AppLogger.logError(
-          '[BootstrapSettingsSection] _loadAndUseAutoNode failed', e, st);
+        '[BootstrapSettingsSection] _loadAndUseAutoNode failed',
+        e,
+        st,
+      );
       if (!mounted) return;
       // TODO(l10n): key=failedToLoadBootstrapNodes
-      AppSnackBar.showError(
-        context,
-        'Failed to load bootstrap nodes',
-      );
+      AppSnackBar.showError(context, 'Failed to load bootstrap nodes');
     }
   }
 
@@ -161,7 +160,8 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
   Future<void> _loadLanBootstrapServiceState() async {
     final running = await Prefs.getLanBootstrapServiceRunning();
     if (running) {
-      final info = await LanBootstrapServiceManager.instance.getBootstrapServiceInfo();
+      final info = await LanBootstrapServiceManager.instance
+          .getBootstrapServiceInfo();
       if (mounted) {
         setState(() {
           _lanBootstrapServiceRunning = true;
@@ -313,7 +313,9 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${AppLocalizations.of(context)!.nodeTestFailed}: $e'),
+            content: Text(
+              '${AppLocalizations.of(context)!.nodeTestFailed}: $e',
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -326,7 +328,9 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.canOnlySelectTestedNode),
+            content: Text(
+              AppLocalizations.of(context)!.canOnlySelectTestedNode,
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -369,7 +373,9 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.nodeSwitchFailed(e.toString())),
+            content: Text(
+              AppLocalizations.of(context)!.nodeSwitchFailed(e.toString()),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -396,8 +402,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
     // restore it later. Do this BEFORE start so a failed start still leaves
     // the snapshot intact (next stop will roll back to the original node).
     final priorNode = await Prefs.getCurrentBootstrapNode();
-    if (priorNode != null &&
-        await Prefs.getPreLanBootstrapNode() == null) {
+    if (priorNode != null && await Prefs.getPreLanBootstrapNode() == null) {
       await Prefs.setPreLanBootstrapNode(
         priorNode.host,
         priorNode.port,
@@ -405,19 +410,25 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
       );
     }
 
-    final success = await LanBootstrapServiceManager.instance.startLocalBootstrapService(port);
+    final success = await LanBootstrapServiceManager.instance
+        .startLocalBootstrapService(port);
     if (success) {
       // Propagate the LAN node into prefs + live user FfiChatService so the
       // user's Tox handle actually bootstraps off the local service. Without
       // this, the LAN service runs but the user account still tries the prior
       // (auto/manual) public node — which is the very thing LAN mode was
       // meant to replace (e.g. offline networks).
-      final info = await LanBootstrapServiceManager.instance.getBootstrapServiceInfo();
+      final info = await LanBootstrapServiceManager.instance
+          .getBootstrapServiceInfo();
       if (info != null) {
         await Prefs.setCurrentBootstrapNode(info.ip, info.port, info.pubkey);
         if (widget.service != null) {
           try {
-            await widget.service!.addBootstrapNode(info.ip, info.port, info.pubkey);
+            await widget.service!.addBootstrapNode(
+              info.ip,
+              info.port,
+              info.pubkey,
+            );
           } catch (e, st) {
             AppLogger.logError(
               '[BootstrapSettingsSection] failed to apply LAN node to live service',
@@ -443,7 +454,9 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
         content: Text(
           success ? l10n.serviceRunning : l10n.failedToStartBootstrapService,
         ),
-        backgroundColor: success ? theme.colorScheme.primary : theme.colorScheme.error,
+        backgroundColor: success
+            ? theme.colorScheme.primary
+            : theme.colorScheme.error,
       ),
     );
   }
@@ -484,9 +497,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
     await _loadLanBootstrapServiceState();
     await _loadCurrentBootstrapNode();
     if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text(l10n.serviceStopped)),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(l10n.serviceStopped)));
   }
 
   bool _isValidPubkey(String pubkey) {
@@ -552,9 +563,20 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
             ),
             AppSpacing.verticalSm,
             if (PlatformUtils.isDesktop)
-              _buildModeRow(context, l10n, primaryColor, secondaryTextColor, hasService)
+              _buildModeRow(
+                context,
+                l10n,
+                primaryColor,
+                secondaryTextColor,
+                hasService,
+              )
             else
-              _buildModeRowMobile(context, l10n, primaryColor, secondaryTextColor),
+              _buildModeRowMobile(
+                context,
+                l10n,
+                primaryColor,
+                secondaryTextColor,
+              ),
             AppSpacing.verticalSm,
             Divider(height: 1, color: outlineVariant),
             AppSpacing.verticalSm,
@@ -565,7 +587,8 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
             // top would duplicate the info and, when the LAN service is NOT
             // running, expose a stale auto/manual node + an irrelevant test.
             if (_bootstrapNodeMode != 'lan' &&
-                (_bootstrapNodeMode == 'manual' || _currentBootstrapNode != null)) ...[
+                (_bootstrapNodeMode == 'manual' ||
+                    _currentBootstrapNode != null)) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -575,7 +598,9 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           color: secondaryColor.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppThemeConfig.inputBorderRadius,
+                          ),
                           border: Border.all(color: outlineVariant),
                         ),
                         child: Column(
@@ -583,11 +608,16 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                           children: [
                             Row(
                               children: [
-                                Icon(Icons.network_ping, size: 16, color: primaryColor),
+                                Icon(
+                                  Icons.network_ping,
+                                  size: 16,
+                                  color: primaryColor,
+                                ),
                                 AppSpacing.horizontalXs,
                                 Text(
                                   l10n.currentNode,
-                                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
                                         fontWeight: FontWeight.w600,
                                         color: secondaryTextColor,
                                       ),
@@ -597,7 +627,8 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                             AppSpacing.verticalXs,
                             Text(
                               '${_currentBootstrapNode!.host}:${_currentBootstrapNode!.port}',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
                                     color: primaryTextColor,
                                     fontFamily: 'monospace',
                                   ),
@@ -605,7 +636,8 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                             if (_currentBootstrapNode!.pubkey.length > 20)
                               Text(
                                 '${_currentBootstrapNode!.pubkey.substring(0, 20)}...',
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
                                       color: secondaryTextColor,
                                       fontFamily: 'monospace',
                                     ),
@@ -623,13 +655,17 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                                         ? AppThemeConfig.successColor
                                         : Theme.of(context).colorScheme.error,
                                   ),
-                                  if (_nodeLatency != null && _nodeTestResult == 'success') ...[
+                                  if (_nodeLatency != null &&
+                                      _nodeTestResult == 'success') ...[
                                     AppSpacing.horizontalSm,
                                     Text(
                                       '${_nodeLatency}ms',
                                       // Tabular figures so latency numerics
                                       // don't reflow as digits change width.
-                                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
                                             color: secondaryTextColor,
                                             fontFamily: 'monospace',
                                             fontFeatures: const [
@@ -656,46 +692,60 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.speed, size: 18),
                           label: Text(l10n.testNode),
-                          onPressed: !_testingCurrentNode ? _testCurrentNode : null,
+                          onPressed: !_testingCurrentNode
+                              ? _testCurrentNode
+                              : null,
                         ),
                       if (_bootstrapNodeMode == 'auto') ...[
-                        if (_currentBootstrapNode != null) AppSpacing.verticalSm,
+                        if (_currentBootstrapNode != null)
+                          AppSpacing.verticalSm,
                         OutlinedButton.icon(
-                            icon: const Icon(Icons.network_check, size: 18),
-                            label: Text(l10n.routeSelection),
-                            onPressed: () async {
-                              await Navigator.of(context).push(
-                                AppPageRoute<void>(
-                                  page: BootstrapNodesPage(
-                                    service: widget.service,
-                                    onNodeSelected: () async {
-                                      if (mounted) await _loadCurrentBootstrapNode();
-                                    },
-                                  ),
+                          icon: const Icon(Icons.network_check, size: 18),
+                          label: Text(l10n.routeSelection),
+                          onPressed: () async {
+                            await Navigator.of(context).push(
+                              AppPageRoute<void>(
+                                page: BootstrapNodesPage(
+                                  service: widget.service,
+                                  onNodeSelected: () async {
+                                    if (mounted)
+                                      await _loadCurrentBootstrapNode();
+                                  },
                                 ),
-                              );
-                              await Future.delayed(const Duration(milliseconds: 200));
-                              if (mounted) {
-                                await _loadCurrentBootstrapNode();
-                                setState(() {});
-                              }
-                            },
-                          ),
+                              ),
+                            );
+                            await Future.delayed(
+                              const Duration(milliseconds: 200),
+                            );
+                            if (mounted) {
+                              await _loadCurrentBootstrapNode();
+                              setState(() {});
+                            }
+                          },
+                        ),
                       ],
                       if (_bootstrapNodeMode == 'manual') ...[
                         AppSpacing.verticalSm,
                         OutlinedButton.icon(
+                          key: UiKeys.manualNodeInputButton,
                           icon: Icon(
-                            _manualInputExpanded ? Icons.expand_less : Icons.expand_more,
+                            _manualInputExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
                             size: 18,
                           ),
                           label: Text(l10n.manualNodeInput),
                           onPressed: () {
-                            setState(() => _manualInputExpanded = !_manualInputExpanded);
+                            setState(
+                              () =>
+                                  _manualInputExpanded = !_manualInputExpanded,
+                            );
                           },
                         ),
                       ],
@@ -746,9 +796,14 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                         labelText: l10n.nodePort,
                         hintText: '33445',
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppThemeConfig.inputBorderRadius,
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
                       ),
                     ),
                   ),
@@ -796,7 +851,9 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
                     color: secondaryColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppThemeConfig.inputBorderRadius,
+                    ),
                     border: Border.all(color: outlineVariant),
                   ),
                   child: Column(
@@ -805,21 +862,22 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                       Text(
                         '${l10n.ipAddress}: $_lanBootstrapServiceIP',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontFamily: 'monospace',
-                              color: primaryTextColor,
-                            ),
+                          fontFamily: 'monospace',
+                          color: primaryTextColor,
+                        ),
                       ),
                       Text(
                         '${l10n.nodePort}: $_lanBootstrapServicePort',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontFamily: 'monospace',
-                              color: primaryTextColor,
-                            ),
+                          fontFamily: 'monospace',
+                          color: primaryTextColor,
+                        ),
                       ),
                       if (_lanBootstrapServicePubkey != null)
                         Text(
                           '${l10n.nodePublicKey}: ${_lanBootstrapServicePubkey!.substring(0, 16)}...',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
                                 fontFamily: 'monospace',
                                 color: secondaryTextColor,
                               ),
@@ -845,17 +903,21 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                               Expanded(
                                 flex: 3,
                                 child: TextField(
+                                  key: UiKeys.manualNodeHostField,
                                   controller: _manualHostController,
                                   textAlignVertical: TextAlignVertical.center,
                                   decoration: InputDecoration(
                                     labelText: l10n.nodeHost,
                                     hintText: 'example.com',
                                     border: OutlineInputBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                                      borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.inputBorderRadius,
+                                      ),
                                     ),
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.md,
+                                      vertical: AppSpacing.sm,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -863,6 +925,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                               Expanded(
                                 flex: 1,
                                 child: TextField(
+                                  key: UiKeys.manualNodePortField,
                                   controller: _manualPortController,
                                   keyboardType: TextInputType.number,
                                   textAlignVertical: TextAlignVertical.center,
@@ -870,11 +933,14 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                                     labelText: l10n.nodePort,
                                     hintText: '33445',
                                     border: OutlineInputBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                                      borderRadius: BorderRadius.circular(
+                                        AppThemeConfig.inputBorderRadius,
+                                      ),
                                     ),
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.md,
+                                      vertical: AppSpacing.sm,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -882,6 +948,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                           ),
                           AppSpacing.verticalSm,
                           TextField(
+                            key: UiKeys.manualNodePubkeyField,
                             controller: _manualPubkeyController,
                             maxLines: 2,
                             textAlignVertical: TextAlignVertical.center,
@@ -889,16 +956,18 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                               labelText: l10n.nodePublicKey,
                               hintText: 'Public key (hex)',
                               border: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                                borderRadius: BorderRadius.circular(
+                                  AppThemeConfig.inputBorderRadius,
+                                ),
                               ),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.sm,
+                              ),
                               labelStyle: Theme.of(context).textTheme.bodyLarge,
                             ),
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontFamily: 'monospace',
-                            ),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(fontFamily: 'monospace'),
                           ),
                           AppSpacing.verticalMd,
                           if (_manualNodeTestResult != null) ...[
@@ -919,7 +988,10 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                                     '${_manualNodeLatency}ms',
                                     // Tabular figures keep the latency display
                                     // from reflowing when the value updates.
-                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
                                           color: secondaryTextColor,
                                           fontFamily: 'monospace',
                                           fontFeatures: const [
@@ -936,22 +1008,30 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                             children: [
                               Expanded(
                                 child: OutlinedButton.icon(
+                                  key: UiKeys.manualNodeTestButton,
                                   icon: _testingManualNode
                                       ? const SizedBox(
                                           width: 16,
                                           height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
                                         )
                                       : const Icon(Icons.speed, size: 18),
                                   label: Text(l10n.testNode),
-                                  onPressed: !_testingManualNode ? _testManualNode : null,
+                                  onPressed: !_testingManualNode
+                                      ? _testManualNode
+                                      : null,
                                 ),
                               ),
                               if (_manualNodeTestResult == 'success') ...[
                                 AppSpacing.horizontalSm,
                                 Expanded(
                                   child: ElevatedButton.icon(
-                                    icon: const Icon(Icons.check_circle, size: 18),
+                                    icon: const Icon(
+                                      Icons.check_circle,
+                                      size: 18,
+                                    ),
                                     label: Text(l10n.setAsCurrentNode),
                                     onPressed: hasService
                                         ? _setManualNodeAsCurrent
@@ -959,40 +1039,64 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                                             // Pre-capture context-dependent
                                             // handles so use across the prefs
                                             // awaits is not flagged.
-                                            final messenger = ScaffoldMessenger.of(context);
-                                            final scheme = Theme.of(context).colorScheme;
-                                            final host = _manualHostController.text.trim();
-                                            final portText = _manualPortController.text.trim();
-                                            final pubkey = _manualPubkeyController.text.trim();
+                                            final messenger =
+                                                ScaffoldMessenger.of(context);
+                                            final scheme = Theme.of(
+                                              context,
+                                            ).colorScheme;
+                                            final host = _manualHostController
+                                                .text
+                                                .trim();
+                                            final portText =
+                                                _manualPortController.text
+                                                    .trim();
+                                            final pubkey =
+                                                _manualPubkeyController.text
+                                                    .trim();
                                             if (host.isEmpty ||
                                                 portText.isEmpty ||
                                                 pubkey.isEmpty ||
                                                 !_isValidPubkey(pubkey)) {
                                               messenger.showSnackBar(
                                                 SnackBar(
-                                                  content: Text(l10n.invalidNodeInfo),
+                                                  content: Text(
+                                                    l10n.invalidNodeInfo,
+                                                  ),
                                                   backgroundColor: scheme.error,
                                                 ),
                                               );
                                               return;
                                             }
                                             final port = int.tryParse(portText);
-                                            if (port == null || port <= 0 || port > 65535) {
+                                            if (port == null ||
+                                                port <= 0 ||
+                                                port > 65535) {
                                               messenger.showSnackBar(
                                                 SnackBar(
-                                                  content: Text(l10n.invalidNodeInfo),
+                                                  content: Text(
+                                                    l10n.invalidNodeInfo,
+                                                  ),
                                                   backgroundColor: scheme.error,
                                                 ),
                                               );
                                               return;
                                             }
-                                            await Prefs.setCurrentBootstrapNode(host, port, pubkey);
+                                            await Prefs.setCurrentBootstrapNode(
+                                              host,
+                                              port,
+                                              pubkey,
+                                            );
                                             await _loadCurrentBootstrapNode();
                                             if (!mounted) return;
-                                            setState(() => _manualInputExpanded = false);
+                                            setState(
+                                              () =>
+                                                  _manualInputExpanded = false,
+                                            );
                                             messenger.showSnackBar(
                                               SnackBar(
-                                                content: Text(l10n.nodeSetSuccess),
+                                                content: Text(
+                                                  l10n.nodeSetSuccess,
+                                                ),
                                                 backgroundColor: scheme.primary,
                                               ),
                                             );
@@ -1023,11 +1127,15 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
       children: [
         Expanded(
           child: RadioListTile<String>(
+            key: UiKeys.settingsBootstrapModeManual,
             contentPadding: EdgeInsets.zero,
             value: 'manual',
             groupValue: _bootstrapNodeMode,
             title: Text(l10n.manualMode),
-            subtitle: Text(l10n.manualModeDesc, style: Theme.of(context).textTheme.labelSmall),
+            subtitle: Text(
+              l10n.manualModeDesc,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
             onChanged: (v) {
               if (v != null) _setBootstrapNodeMode(v);
             },
@@ -1035,6 +1143,7 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
         ),
         Expanded(
           child: RadioListTile<String>(
+            key: UiKeys.settingsBootstrapModeAuto,
             contentPadding: EdgeInsets.zero,
             value: 'auto',
             groupValue: _bootstrapNodeMode,
@@ -1048,7 +1157,9 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
               },
               child: RichText(
                 text: TextSpan(
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: secondaryTextColor),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: secondaryTextColor),
                   children: [
                     TextSpan(text: l10n.autoModeDescPrefix),
                     TextSpan(
@@ -1069,11 +1180,15 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
         ),
         Expanded(
           child: RadioListTile<String>(
+            key: UiKeys.settingsBootstrapModeLan,
             contentPadding: EdgeInsets.zero,
             value: 'lan',
             groupValue: _bootstrapNodeMode,
             title: Text(l10n.lanMode),
-            subtitle: Text(l10n.lanModeDesc, style: Theme.of(context).textTheme.labelSmall),
+            subtitle: Text(
+              l10n.lanModeDesc,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
             onChanged: (v) {
               if (v != null) _setBootstrapNodeMode(v);
             },
@@ -1128,11 +1243,15 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
                 return theme.colorScheme.onSurfaceVariant;
               }),
               textStyle: WidgetStatePropertyAll(
-                theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+                theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               shape: WidgetStatePropertyAll(
                 RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppThemeConfig.buttonBorderRadius,
+                  ),
                 ),
               ),
               side: WidgetStateProperty.resolveWith((states) {
@@ -1225,4 +1344,3 @@ class _StatusPill extends StatelessWidget {
     );
   }
 }
-

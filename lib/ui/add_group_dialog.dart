@@ -9,6 +9,7 @@ import '../util/prefs.dart';
 import '../util/app_theme_config.dart';
 import '../util/responsive_layout.dart';
 import '../i18n/app_localizations.dart';
+import 'testing/ui_keys.dart';
 
 // Per-form-factor dialog widths. The wider tablet/desktop caps give the two
 // stacked cards (join + create) room to breathe instead of forcing a tall
@@ -296,6 +297,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
               ),
               AppSpacing.verticalMd,
               TextFormField(
+                key: UiKeys.addGroupJoinIdInput,
                 controller: _groupIdController,
                 textAlignVertical: TextAlignVertical.center,
                 // Group IDs are 64-char hex strings — disable iOS autocorrect
@@ -314,6 +316,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                   // Group IDs are long opaque strings; users almost always
                   // paste them rather than type them.
                   suffixIcon: IconButton(
+                    key: UiKeys.addGroupJoinPasteButton,
                     icon: const Icon(Icons.paste),
                     tooltip:
                         _localeText(context, 'paste', fallback: 'Paste'),
@@ -347,6 +350,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
               ),
               AppSpacing.verticalMd,
               TextFormField(
+                key: UiKeys.addGroupJoinMessageInput,
                 controller: _requestController,
                 textAlignVertical: TextAlignVertical.center,
                 decoration: InputDecoration(
@@ -361,6 +365,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
               ),
               AppSpacing.verticalMd,
               TextFormField(
+                key: UiKeys.addGroupAliasInput,
                 controller: _aliasController,
                 textAlignVertical: TextAlignVertical.center,
                 decoration: InputDecoration(
@@ -410,6 +415,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
               ),
               AppSpacing.verticalMd,
               TextFormField(
+                key: UiKeys.addGroupCreateNameInput,
                 controller: _createNameController,
                 textAlignVertical: TextAlignVertical.center,
                 decoration: InputDecoration(
@@ -442,6 +448,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
               // (Public / Private / Conference) scale down on narrow phones
               // (<360pt) instead of overflowing the SegmentedButton.
               SegmentedButton<String>(
+                key: UiKeys.addGroupTypeSelector,
                 segments: [
                   ButtonSegment(
                     value: 'group',
@@ -581,6 +588,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
           ),
           AppSpacing.verticalSm,
           OutlinedButton.icon(
+            key: UiKeys.addGroupCopyIdButton,
             style: OutlinedButton.styleFrom(
               foregroundColor: scheme.primary,
               shape: RoundedRectangleBorder(

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -9,8 +10,29 @@ import 'prefs.dart';
 /// Uses platform path_provider under the hood; use this instead of calling
 /// getApplicationSupportDirectory() and building paths manually.
 abstract final class AppPaths {
+  /// Debug / harness override for the entire application-support root.
+  ///
+  /// Used by local multi-instance spikes so two standalone toxee processes can
+  /// keep disjoint `account_data/`, `profiles/`, `logs/`, `avatars/`, and
+  /// `file_recv/` trees even when they share the same macOS bundle id /
+  /// sandbox. Production never sets this env var.
+  static const _appSupportOverrideEnv = 'TOXEE_APP_SUPPORT_DIR';
+
+  @visibleForTesting
+  static String? debugApplicationSupportOverride;
+
   /// Application support directory (persistent, backed up on iOS).
   static Future<Directory> get applicationSupport async {
+    final override =
+        debugApplicationSupportOverride?.trim() ??
+        Platform.environment[_appSupportOverrideEnv]?.trim();
+    if (override != null && override.isNotEmpty) {
+      final dir = Directory(override);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      return dir;
+    }
     return getApplicationSupportDirectory();
   }
 
@@ -148,7 +170,9 @@ abstract final class AppPaths {
   /// missing) and the legacy `~/.config/toxee/profiles` exists with content,
   /// rename the legacy directory to the new location. Idempotent — skips
   /// when the new root already has any entries.
-  static Future<void> _maybeMigrateLegacyLinuxProfileRoot(String newRoot) async {
+  static Future<void> _maybeMigrateLegacyLinuxProfileRoot(
+    String newRoot,
+  ) async {
     try {
       final home = Platform.environment['HOME'];
       if (home == null || home.isEmpty) return;
@@ -162,9 +186,10 @@ abstract final class AppPaths {
       }
       // New location is empty / missing — migrate.
       AppLogger.warn(
-          '[AppPaths] Migrating legacy Linux profile root '
-          '${legacy.path} -> $newRoot (XDG spec compliance). '
-          'This is a one-time operation.');
+        '[AppPaths] Migrating legacy Linux profile root '
+        '${legacy.path} -> $newRoot (XDG spec compliance). '
+        'This is a one-time operation.',
+      );
       await Directory(p.dirname(newRoot)).create(recursive: true);
       if (await newDir.exists()) {
         // Empty placeholder — remove so rename can succeed.
@@ -175,13 +200,17 @@ abstract final class AppPaths {
       } on FileSystemException catch (e) {
         // Cross-filesystem rename can fail; fall back to recursive copy.
         AppLogger.warn(
-            '[AppPaths] rename() failed ($e); will leave legacy in place '
-            'and not auto-migrate. Manual fix: '
-            '`mv ${legacy.path} $newRoot`');
+          '[AppPaths] rename() failed ($e); will leave legacy in place '
+          'and not auto-migrate. Manual fix: '
+          '`mv ${legacy.path} $newRoot`',
+        );
       }
     } catch (e, st) {
       AppLogger.logError(
-          '[AppPaths] Linux profile migration failed (non-fatal)', e, st);
+        '[AppPaths] Linux profile migration failed (non-fatal)',
+        e,
+        st,
+      );
     }
   }
 
@@ -195,12 +224,15 @@ abstract final class AppPaths {
   /// by hand; with path_provider the bundle-id-suffixed Application Support
   /// directory is used instead, so an in-place rename of the legacy directory
   /// would not be visible to the new resolver.
-  static Future<void> _maybeMigrateLegacyMacOsProfileRoot(String newRoot) async {
+  static Future<void> _maybeMigrateLegacyMacOsProfileRoot(
+    String newRoot,
+  ) async {
     try {
       final home = Platform.environment['HOME'];
       if (home == null || home.isEmpty) return;
-      final legacy =
-          Directory(p.join(home, 'Library', 'Application Support', 'toxee', 'profiles'));
+      final legacy = Directory(
+        p.join(home, 'Library', 'Application Support', 'toxee', 'profiles'),
+      );
       // If path_provider already lands on the legacy path (e.g. unsandboxed
       // build whose Application Support resolves to the same location), do
       // not migrate — there is nothing to move.
@@ -212,9 +244,10 @@ abstract final class AppPaths {
         if (entries.isNotEmpty) return; // already populated
       }
       AppLogger.warn(
-          '[AppPaths] Migrating legacy macOS profile root '
-          '${legacy.path} -> $newRoot (H10 path_provider adoption). '
-          'This is a one-time operation.');
+        '[AppPaths] Migrating legacy macOS profile root '
+        '${legacy.path} -> $newRoot (H10 path_provider adoption). '
+        'This is a one-time operation.',
+      );
       await Directory(p.dirname(newRoot)).create(recursive: true);
       if (await newDir.exists()) {
         await newDir.delete(); // empty placeholder
@@ -224,8 +257,9 @@ abstract final class AppPaths {
       } on FileSystemException catch (e) {
         // Cross-filesystem rename can fail; fall back to per-entry copy.
         AppLogger.warn(
-            '[AppPaths] macOS profile rename() failed ($e); copying entries '
-            'individually.');
+          '[AppPaths] macOS profile rename() failed ($e); copying entries '
+          'individually.',
+        );
         await newDir.create(recursive: true);
         await for (final entry in legacy.list()) {
           final dest = p.join(newRoot, p.basename(entry.path));
@@ -237,16 +271,20 @@ abstract final class AppPaths {
               await entry.copy(dest);
             } else if (entry is Directory) {
               AppLogger.warn(
-                  '[AppPaths] Cannot migrate directory ${entry.path} '
-                  'across filesystems automatically. Manual fix: '
-                  '`mv ${entry.path} $dest`');
+                '[AppPaths] Cannot migrate directory ${entry.path} '
+                'across filesystems automatically. Manual fix: '
+                '`mv ${entry.path} $dest`',
+              );
             }
           }
         }
       }
     } catch (e, st) {
       AppLogger.logError(
-          '[AppPaths] macOS profile migration failed (non-fatal)', e, st);
+        '[AppPaths] macOS profile migration failed (non-fatal)',
+        e,
+        st,
+      );
     }
   }
 
@@ -289,8 +327,12 @@ abstract final class AppPaths {
 
     // 2. Fallback: app support profiles (e.g. when root differed or sandbox path)
     final base = await applicationSupportPath;
-    final appSupportProfile =
-        p.join(base, 'profiles', '$_profileDirPrefix$first16', 'tox_profile.tox');
+    final appSupportProfile = p.join(
+      base,
+      'profiles',
+      '$_profileDirPrefix$first16',
+      'tox_profile.tox',
+    );
     if (await File(appSupportProfile).exists()) return appSupportProfile;
 
     // 3. Legacy: appSupport/tim2tox/tox_profile_<fullToxId>.tox
@@ -358,12 +400,17 @@ abstract final class AppPaths {
 
     final legacyHistoryDir = Directory(legacyHistoryPath);
     if (await legacyHistoryDir.exists()) {
-      final legacyFiles = await legacyHistoryDir.list().where((e) => e is File).toList();
+      final legacyFiles = await legacyHistoryDir
+          .list()
+          .where((e) => e is File)
+          .toList();
       if (legacyFiles.isNotEmpty) {
         await accountHistoryDir.create(recursive: true);
         for (final e in legacyFiles) {
           final file = e as File;
-          final dest = File(p.join(accountHistoryDir.path, p.basename(file.path)));
+          final dest = File(
+            p.join(accountHistoryDir.path, p.basename(file.path)),
+          );
           if (!await dest.exists()) await file.copy(dest.path);
         }
       }
@@ -373,7 +420,8 @@ abstract final class AppPaths {
     if (await legacyQueueFile.exists()) {
       await Directory(accountRoot).create(recursive: true);
       final destQueue = File(accountQueuePath);
-      if (!await destQueue.exists()) await legacyQueueFile.copy(accountQueuePath);
+      if (!await destQueue.exists())
+        await legacyQueueFile.copy(accountQueuePath);
     }
 
     // Migrate avatars from global <appSupport>/avatars/ to per-account directory
@@ -383,7 +431,10 @@ abstract final class AppPaths {
     final globalAvatarsDir = Directory(globalAvatarsPath);
     if (await globalAvatarsDir.exists()) {
       final prefix = _accountPrefix(toxId);
-      final globalFiles = await globalAvatarsDir.list().where((e) => e is File).toList();
+      final globalFiles = await globalAvatarsDir
+          .list()
+          .where((e) => e is File)
+          .toList();
       if (globalFiles.isNotEmpty) {
         await accountAvatarsDir.create(recursive: true);
         for (final e in globalFiles) {
@@ -433,7 +484,8 @@ abstract final class AppPaths {
         return custom;
       } catch (e) {
         AppLogger.warn(
-            '[AppPaths] custom downloads dir $custom create failed, falling back: $e');
+          '[AppPaths] custom downloads dir $custom create failed, falling back: $e',
+        );
       }
     }
 
@@ -447,7 +499,8 @@ abstract final class AppPaths {
         }
       } catch (e) {
         AppLogger.warn(
-            '[AppPaths] path_provider getDownloadsDirectory failed, using manual fallback: $e');
+          '[AppPaths] path_provider getDownloadsDirectory failed, using manual fallback: $e',
+        );
       }
       // Manual fallback
       if (Platform.isMacOS || Platform.isLinux) {
@@ -531,8 +584,7 @@ abstract final class AppPaths {
   // iOS-side: AppDelegate.swift handles the MethodChannel and applies the
   // resource value. Android/macOS/Linux/Windows: no-op.
   // ─────────────────────────────────────────────────────────────────────
-  static const MethodChannel _backupChannel =
-      MethodChannel('toxee/ios_backup');
+  static const MethodChannel _backupChannel = MethodChannel('toxee/ios_backup');
 
   /// Marks a directory or file as excluded from iOS backups. No-op on
   /// non-iOS platforms. Safe to call multiple times; the underlying API
@@ -552,7 +604,9 @@ abstract final class AppPaths {
     if (!Platform.isIOS) return;
     try {
       await _backupChannel.invokeMethod<void>(
-          'markExcludedFromBackup', <String, String>{'path': path});
+        'markExcludedFromBackup',
+        <String, String>{'path': path},
+      );
     } catch (e) {
       // Log but never throw — this is a defensive housekeeping call.
       AppLogger.warn('[AppPaths] markExcludedFromBackup($path) failed: $e');

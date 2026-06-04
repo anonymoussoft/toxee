@@ -1,0 +1,17 @@
+{
+  "id": "L3-delete-message",
+  "suite": "c2c",
+  "feature": ["S15"],
+  "description": "S15/message-action delete: send a self message, confirm it persists, delete it via the message-action hook, confirm it is gone. Hermetic — does not need the echo peer (asserts only on the self message). Maps to test/mcp/S15 (delete item) at the state layer; the menu-surface UI is the separate residual. #18: text carries a per-run {{nonce}} so a cross-run survivor can't satisfy/violate the equals:0 assertion.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "send_text", "text": "delete-me-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "delete-me-{{nonce}}", "isSelf": true, "timeoutSecs": 15 },
+    { "action": "invoke_action", "messageAction": "delete", "text": "delete-me-{{nonce}}", "isSelf": true }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "text": "delete-me-{{nonce}}", "isSelf": true, "equals": 0 }
+  ]
+}

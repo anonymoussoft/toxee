@@ -26,7 +26,7 @@
 
 #### 构建要求
 
-- Xcode 14.0 或更高版本（与 Flutter 3.29 工具链匹配）
+- Xcode 14.0 或更高版本（与 Flutter 3.41 工具链匹配）
 - macOS SDK 10.15 或更高版本
 - Homebrew（用于安装 libsodium）
 - CMake 3.16 或更高版本

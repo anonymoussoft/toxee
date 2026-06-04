@@ -22,6 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import 'package:toxee/i18n/app_localizations.dart';
 import 'package:toxee/ui/settings/global_settings_section.dart';
+import 'package:toxee/ui/testing/ui_keys.dart';
 import 'package:toxee/util/locale_controller.dart';
 import 'package:toxee/util/prefs.dart';
 import 'package:toxee/util/theme_controller.dart';
@@ -44,10 +45,7 @@ Widget _harness({String? toxId}) {
     supportedLocales: const [Locale('en')],
     home: Scaffold(
       body: SingleChildScrollView(
-        child: GlobalSettingsSection(
-          colorTheme: null,
-          toxId: toxId,
-        ),
+        child: GlobalSettingsSection(colorTheme: null, toxId: toxId),
       ),
     ),
   );
@@ -72,25 +70,31 @@ void main() {
   });
 
   group('GlobalSettingsSection - appearance segment', () {
-    testWidgets('renders Appearance card with three theme segments',
-        (tester) async {
+    testWidgets('renders Appearance card with three theme segments', (
+      tester,
+    ) async {
       await _initPrefs();
       await _pumpSettled(tester, _harness(toxId: null));
 
       // System / Light / Dark segment buttons.
-      expect(find.byIcon(Icons.brightness_auto), findsOneWidget,
-          reason: 'System (auto) segment exists');
+      expect(
+        find.byIcon(Icons.brightness_auto),
+        findsOneWidget,
+        reason: 'System (auto) segment exists',
+      );
       expect(find.byIcon(Icons.light_mode), findsOneWidget);
       expect(find.byIcon(Icons.dark_mode), findsOneWidget);
     });
 
-    testWidgets('tapping Light segment updates AppTheme.mode',
-        (tester) async {
+    testWidgets('tapping Light segment updates AppTheme.mode', (tester) async {
       await _initPrefs();
       await _pumpSettled(tester, _harness(toxId: null));
 
-      expect(AppTheme.mode.value, ThemeMode.system,
-          reason: 'Default before user interaction is system mode');
+      expect(
+        AppTheme.mode.value,
+        ThemeMode.system,
+        reason: 'Default before user interaction is system mode',
+      );
 
       // Tap the Light icon — SegmentedButton's children are tappable as a
       // whole; targeting the icon is the most stable affordance.
@@ -98,8 +102,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      expect(AppTheme.mode.value, ThemeMode.light,
-          reason: 'Segment selection flows back through AppTheme.set');
+      expect(
+        AppTheme.mode.value,
+        ThemeMode.light,
+        reason: 'Segment selection flows back through AppTheme.set',
+      );
     });
 
     testWidgets('tapping Dark segment updates AppTheme.mode', (tester) async {
@@ -115,14 +122,17 @@ void main() {
   });
 
   group('GlobalSettingsSection - language picker', () {
-    testWidgets('language row collapsed by default; expand reveals list',
-        (tester) async {
+    testWidgets('language row collapsed by default; expand reveals list', (
+      tester,
+    ) async {
       await _initPrefs();
       await _pumpSettled(tester, _harness(toxId: null));
 
-      expect(find.byIcon(Icons.expand_more), findsWidgets,
-          reason:
-              'Collapsed language row shows expand_more chevron(s) initially');
+      expect(
+        find.byIcon(Icons.expand_more),
+        findsWidgets,
+        reason: 'Collapsed language row shows expand_more chevron(s) initially',
+      );
       // Tap the first expand_more — the language row chevron is the first one
       // in build order (Appearance segment uses fixed icons, not chevrons).
       await tester.tap(find.byIcon(Icons.expand_more).first);
@@ -132,8 +142,11 @@ void main() {
       // After expand we see the radio_button rows for at least the supported
       // languages — English / Simplified Chinese / Traditional Chinese /
       // Japanese / Korean / Arabic = 6 entries.
-      expect(find.byIcon(Icons.radio_button_checked), findsOneWidget,
-          reason: 'Exactly one language is currently selected');
+      expect(
+        find.byIcon(Icons.radio_button_checked),
+        findsOneWidget,
+        reason: 'Exactly one language is currently selected',
+      );
       expect(
         find.byIcon(Icons.radio_button_off),
         findsNWidgets(5),
@@ -157,28 +170,38 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
 
-      expect(AppLocale.locale.value.languageCode, 'ja',
-          reason: 'Selecting a language row writes back to AppLocale.locale');
+      expect(
+        AppLocale.locale.value.languageCode,
+        'ja',
+        reason: 'Selecting a language row writes back to AppLocale.locale',
+      );
     });
   });
 
   group('GlobalSettingsSection - notification sound visibility', () {
-    testWidgets('when toxId is null the notification-sound row is suppressed',
-        (tester) async {
+    testWidgets('when toxId is null the notification-sound row is suppressed', (
+      tester,
+    ) async {
       await _initPrefs();
       await _pumpSettled(tester, _harness(toxId: null));
 
       // The notification sound row is gated on `toxId != null && isNotEmpty`.
       // We assert by looking for the localized title; the en arb maps the key
       // to "Notification Sound". Absence is the contract.
-      expect(find.text('Notification Sound'), findsNothing,
-          reason: 'Login-time settings hide the per-account notification '
-              'sound toggle; this is what makes the section reusable pre-login');
+      expect(
+        find.text('Notification Sound'),
+        findsNothing,
+        reason:
+            'Login-time settings hide the per-account notification '
+            'sound toggle; this is what makes the section reusable pre-login',
+      );
     });
 
-    testWidgets('when toxId is provided the notification-sound row appears',
-        (tester) async {
-      const toxId = 'TESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTEST';
+    testWidgets('when toxId is provided the notification-sound row appears', (
+      tester,
+    ) async {
+      const toxId =
+          'TESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTEST';
       // Row visibility is gated purely on `widget.toxId != null && isNotEmpty`
       // (global_settings_section.dart) — no Prefs lookup decides whether the row
       // renders. The seeded pref below uses the real scoped-key format
@@ -194,8 +217,26 @@ void main() {
       expect(
         find.text('Notification Sound'),
         findsOneWidget,
-        reason: 'Per-account notification-sound row must surface when a '
+        reason:
+            'Per-account notification-sound row must surface when a '
             'logged-in toxId is provided',
+      );
+      expect(
+        find.byKey(UiKeys.settingsNotificationSoundSwitch),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('download limit field and save button expose stable keys', (
+      tester,
+    ) async {
+      await _initPrefs();
+      await _pumpSettled(tester, _harness(toxId: null));
+
+      expect(find.byKey(UiKeys.settingsDownloadLimitField), findsOneWidget);
+      expect(
+        find.byKey(UiKeys.settingsDownloadLimitSaveButton),
+        findsOneWidget,
       );
     });
   });

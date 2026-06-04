@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import '../../i18n/app_localizations.dart';
 import '../../util/app_theme_config.dart';
+import '../testing/ui_keys.dart';
 
 /// New entry button widget (Add Friend / Create Group / Join IRC Channel)
 class NewEntryButton extends StatefulWidget {
@@ -27,9 +28,11 @@ class _NewEntryButtonState extends State<NewEntryButton> {
     required String value,
     required IconData icon,
     required String label,
+    Key? key,
   }) {
     final theme = Theme.of(context);
     return PopupMenuItem<String>(
+      key: key,
       value: value,
       child: ListTile(
         leading: Icon(icon, color: theme.colorScheme.primary),
@@ -71,12 +74,14 @@ class _NewEntryButtonState extends State<NewEntryButton> {
           value: 'add',
           icon: Icons.person_add_alt,
           label: tL10n?.addContact ?? 'Add Contact',
+          key: UiKeys.newEntryAddContactItem,
         ),
         _menuItem(
           context: context,
           value: 'group',
           icon: Icons.group_add,
           label: tL10n?.createGroupChat ?? 'Create Group',
+          key: UiKeys.newEntryCreateGroupItem,
         ),
         if (widget.onJoinIrcChannel != null)
           _menuItem(
@@ -84,6 +89,7 @@ class _NewEntryButtonState extends State<NewEntryButton> {
             value: 'irc',
             icon: Icons.chat_bubble_outline,
             label: appL10n?.joinIrcChannel ?? 'Join IRC Channel',
+            key: UiKeys.newEntryJoinIrcItem,
           ),
       ],
       onSelected: (v) async {
@@ -104,6 +110,7 @@ class _NewEntryButtonState extends State<NewEntryButton> {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
         child: InkWell(
+          key: UiKeys.newEntryMenuButton,
           borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
           onTap: () => _menuKey.currentState?.showButtonMenu(),
           child: Container(

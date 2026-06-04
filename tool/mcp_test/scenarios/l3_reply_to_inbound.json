@@ -1,0 +1,20 @@
+{
+  "id": "L3-reply-to-inbound",
+  "suite": "c2c",
+  "feature": ["S18"],
+  "description": "S18 reply to a RECEIVED message (needs echo_live): send a base; the echo peer mirrors it back INBOUND; then reply to the INBOUND copy (replyToIsSelf:false). Asserts the self reply persists with cloudCustomData whose messageSender is the PEER (not self) — i.e. replying to someone else's message, vs l3_reply_text.json which replies to your own. Warmup establishes the route. Maps to S18 (inbound-reply leg).",
+  "requiresEchoPeer": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "warmup" },
+    { "action": "send_text", "text": "ribase-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "ribase-{{nonce}}", "isSelf": false, "timeoutSecs": 45 },
+    { "action": "reply_text", "text": "rireply-{{nonce}}", "replyToText": "ribase-{{nonce}}", "replyToIsSelf": false },
+    { "action": "wait_for", "predicate": "message_exists", "text": "rireply-{{nonce}}", "isSelf": true, "timeoutSecs": 15 }
+  ],
+  "assertions": [
+    { "type": "message_field_contains", "text": "rireply-{{nonce}}", "isSelf": true, "field": "cloudCustomData", "contains": "messageReply" },
+    { "type": "message_field_contains", "text": "rireply-{{nonce}}", "isSelf": true, "field": "cloudCustomData", "contains": "3116CBE0974181B6" }
+  ]
+}

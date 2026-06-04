@@ -76,6 +76,11 @@ class Prefs {
   // Contact list sorting
   static const _kFriendListSortingMode = 'friend_list_sorting_mode'; // 'name' | 'activity'
   static String _friendActivityKey(String userId) => 'friend_activity_$userId';
+  // Tox IDs of accounts created through the debug-only L3 harness
+  // (l3_register_account). Membership — not the current nickname — is what
+  // marks an account as a disposable test/seed account for the L3 mutating-
+  // tool guard (seed personas may carry realistic display names).
+  static const _kL3SeedToxIds = 'l3_seed_tox_ids'; // List<String>, global
 
   // Per-account settings keys (scoped by account prefix, replacing JSON storage)
   static const _kAccountAutoAcceptFriends = 'acct_auto_accept_friends';
@@ -287,6 +292,58 @@ class Prefs {
     final p = await _getPrefs();
     final key = _scopedKey(_kGroups, current);
     await p.setStringList(key, groups.toList());
+  }
+
+  /// Normalize a Tox ID to its identity key for seed-marker storage: the
+  /// 64-hex public-key prefix, uppercased. A Tox ID may be presented as 64
+  /// (public key) or 76 (public key + nospam + checksum) hex; the trailing
+  /// nospam/checksum is mutable and not part of the identity. Storing,
+  /// checking, and revoking the marker all key on this so a delete using a
+  /// different representation of the same account still revokes the grant
+  /// (codex F2).
+  static String _l3SeedKey(String toxId) {
+    final n = toxId.trim().toUpperCase();
+    return n.length >= 64 ? n.substring(0, 64) : n;
+  }
+
+  /// Public-key prefixes of accounts registered through the debug-only L3
+  /// harness ([_kL3SeedToxIds]). Global (not account-scoped): the guard must
+  /// answer "is the CURRENT account a seed account" and the boot tool "is the
+  /// REQUESTED toxId a seed account" before that account is active.
+  static Future<Set<String>> getL3SeedToxIds() async {
+    final p = await _getPrefs();
+    return p.getStringList(_kL3SeedToxIds)?.toSet() ?? <String>{};
+  }
+
+  /// Record [toxId] as an L3-registered seed account (keyed by public-key
+  /// prefix). No-op for empty input or when already present.
+  static Future<void> addL3SeedToxId(String toxId) async {
+    final key = _l3SeedKey(toxId);
+    if (key.isEmpty) return;
+    final p = await _getPrefs();
+    final ids = p.getStringList(_kL3SeedToxIds)?.toSet() ?? <String>{};
+    if (ids.add(key)) {
+      await p.setStringList(_kL3SeedToxIds, ids.toList());
+    }
+  }
+
+  /// Revoke [toxId]'s seed-account marker. Called when an account is deleted
+  /// so the L3 mutating-tool grant can't outlive the account (codex: the
+  /// marker must not be a permanent "once seeded, always privileged" flag).
+  /// Keyed by public-key prefix so a 64- vs 76-char representation mismatch
+  /// at delete time still revokes the grant.
+  static Future<void> removeL3SeedToxId(String toxId) async {
+    final key = _l3SeedKey(toxId);
+    if (key.isEmpty) return;
+    final p = await _getPrefs();
+    final ids = p.getStringList(_kL3SeedToxIds)?.toSet() ?? <String>{};
+    // Drop the canonical key AND any legacy full-length entry whose public-key
+    // prefix matches (markers written before normalization).
+    final before = ids.length;
+    ids.removeWhere((s) => _l3SeedKey(s) == key);
+    if (ids.length != before) {
+      await p.setStringList(_kL3SeedToxIds, ids.toList());
+    }
   }
 
   static Future<Set<String>> getQuitGroups() async {
@@ -1213,7 +1270,7 @@ class Prefs {
     // 3) Legacy single-account keys: clear when deleting current account, or when
     //    logged out (so deleting an account from login page does not leave stale
     //    nickname/auto-login etc. that startup would still read).
-    if (current == toxId || current == null) {
+    if (current == null || compareToxIds(current, toxId)) {
       keysToRemove.addAll(<String>{
         _kPinned,
         _kMuted,
@@ -1240,7 +1297,7 @@ class Prefs {
       await removeAccountPassword(toxId);
     }
 
-    if (current == toxId) {
+    if (current != null && compareToxIds(current, toxId)) {
       _cachedCurrentAccountToxId = null;
       _accountToxIdCached = false;
     }
@@ -1469,15 +1526,30 @@ class Prefs {
     final accounts = await getAccountList();
     final normalizedNickname = nickname?.trim();
     if (normalizedNickname != null && normalizedNickname.isNotEmpty) {
+      // Use `compareToxIds` here too — after F12 backfill rewrites a row from
+      // 64 to 76 chars, callers (`AccountSwitcher`, `LoginUseCase`) keep
+      // passing the pre-backfill 64-char value. A raw `!=` check then treats
+      // the same account as "another account" and rejects an otherwise valid
+      // nickname update with `Nickname already used by another account`. The
+      // fuzzy comparator matches the same equivalence the existing-row lookup
+      // below uses, so the self-vs-other distinction stays consistent.
       final duplicate = accounts.any((acc) =>
-          acc['toxId'] != toxId &&
+          !compareToxIds(acc['toxId'] ?? '', toxId) &&
           (acc['nickname'] ?? '').trim() == normalizedNickname);
       if (duplicate) {
         throw StateError('Nickname already used by another account');
       }
     }
-    // Find existing account by Tox ID (primary key)
-    final existingIndex = accounts.indexWhere((acc) => acc['toxId'] == toxId);
+    // Find existing account by Tox ID (primary key). Use `compareToxIds`
+    // so the lookup is robust to length differences — after the F12
+    // backfill (`ShortToxIdBackfill`) rewrites an imported account's row
+    // from 64 to 76 chars, callers like `AccountSwitcher` still pass the
+    // pre-backfill 64-char value and an exact-match would silently create
+    // a duplicate row. `compareToxIds` matches when one ID is a 16-char
+    // prefix of the other, or when both normalize to the same 64-char
+    // public-key form — which is exactly the equivalence we want.
+    final existingIndex =
+        accounts.indexWhere((acc) => compareToxIds(acc['toxId'] ?? '', toxId));
     Map<String, String> account;
     
     if (existingIndex >= 0) {
@@ -1583,8 +1655,11 @@ class Prefs {
   /// Remove an account from the list by Tox ID
   static Future<void> removeAccount(String toxId) async {
     final accounts = await getAccountList();
-    accounts.removeWhere((acc) => acc['toxId'] == toxId);
+    accounts.removeWhere((acc) => compareToxIds(acc['toxId'] ?? '', toxId));
     await setAccountList(accounts);
+    // Revoke any L3 seed-account marker so a deleted account can't leave the
+    // debug mutating-tool grant behind for a reused/recreated identity.
+    await removeL3SeedToxId(toxId);
   }
 
   /// Update only the avatar path for an existing account (by toxId).
@@ -1592,7 +1667,8 @@ class Prefs {
   static Future<void> setAccountAvatarPath(String toxId, String? path) async {
     if (toxId.isEmpty) return;
     final accounts = await getAccountList();
-    final index = accounts.indexWhere((acc) => acc['toxId'] == toxId);
+    final index =
+        accounts.indexWhere((acc) => compareToxIds(acc['toxId'] ?? '', toxId));
     if (index < 0) return;
     if (path == null || path.isEmpty) {
       accounts[index].remove('avatarPath');

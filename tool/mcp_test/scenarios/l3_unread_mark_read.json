@@ -1,0 +1,21 @@
+{
+  "id": "L3-unread-mark-read",
+  "suite": "c2c",
+  "feature": ["S19"],
+  "description": "S19 (mark conversation read) at the state layer. Intends: echo peer mirrors a sent message back as INBOUND → unread increments → mark_read (open/activate) drops it to 0. STATUS: nonBlocking/FLAKY. As of 2026-05-30 (#27) the unread is read from the PATH-INDEPENDENT FfiChatService.getC2CUnreadCount (persistence + lastView barrier), so the under-count when the binary-replacement hook persists the inbound first is fixed at the test surface — but the live echo + DHT timing still makes the `unread > 0` observation race-prone across runs, so one pass is not proof and this stays nonBlocking, NOT a stable gate. #18: text carries a per-run {{nonce}} so stragglers can't be miscounted.",
+  "requiresEchoPeer": true,
+  "nonBlocking": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "warmup", "text": "unread-warmup-{{nonce}}", "timeoutSecs": 60 },
+    { "action": "send_text", "text": "unread-probe-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "unread-probe-{{nonce}}", "isSelf": false, "timeoutSecs": 60 },
+    { "action": "wait_for", "predicate": "unread_at_least", "count": 1, "timeoutSecs": 30 },
+    { "action": "mark_read" }
+  ],
+  "assertions": [
+    { "type": "state", "field": "unreadCount", "equals": 0 },
+    { "type": "message_exists", "text": "unread-probe-{{nonce}}", "isSelf": false }
+  ]
+}

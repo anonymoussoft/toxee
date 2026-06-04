@@ -1,0 +1,17 @@
+{
+  "id": "L3-autoaccept-friend-toggle",
+  "suite": "settings",
+  "feature": ["S46"],
+  "description": "S46 write-half (#5, codex-vetted 2026-05-30): drive auto-accept-friend via l3_set_setting and prove it round-trips through l3_dump_state.autoAcceptFriends (false→true→false). Soft precondition (starts false) catches a dirty fixture; ends restored to the seeded default false so the fixture self-cleans even if interrupted. autoAcceptFriends is Prefs-only (no native counterpart). Hermetic — no echo peer.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_contains", "field": "autoAcceptFriends", "contains": "false", "timeoutSecs": 5 },
+    { "action": "set_setting", "key": "autoAcceptFriends", "value": true },
+    { "action": "wait_for", "predicate": "state_contains", "field": "autoAcceptFriends", "contains": "true", "timeoutSecs": 5 },
+    { "action": "set_setting", "key": "autoAcceptFriends", "value": false }
+  ],
+  "assertions": [
+    { "type": "state", "field": "autoAcceptFriends", "equals": false }
+  ]
+}

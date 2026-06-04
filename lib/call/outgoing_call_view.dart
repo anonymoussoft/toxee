@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../i18n/app_localizations.dart';
+import '../ui/testing/ui_keys.dart';
 import 'call_state_notifier.dart';
 import 'ringing_call_manager.dart';
 import 'call_ui_components.dart';
@@ -45,6 +46,7 @@ class OutgoingCallView extends StatelessWidget {
         key: const ValueKey('outgoing-call-actions'),
         actions: [
           CallDockAction(
+            key: UiKeys.callHangupButton,
             icon: Icons.call_end,
             label: l10n.callHangUp,
             destructive: true,

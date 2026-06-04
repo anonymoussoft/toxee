@@ -1,0 +1,12 @@
+{
+  "id": "L3-self-id",
+  "suite": "c2c",
+  "feature": ["S31"],
+  "description": "S31 self-ID surface (coverage-widening, hermetic): assert l3_dump_state exposes the current account's own Tox ID. currentAccountToxId is the persisted self identity the 'copy my ID' UI reads (Prefs.getCurrentAccountToxId). The seeded echo fixture account's ID starts B4C5B0957C662A83 (see tool/mcp_test/fixtures/echo_peer_seeded_manifest.json `prefix`). NOTE: 8895A8D6 is a test-account-guard allowlist prefix, NOT this fixture's account — do not confuse the two. Read-only — no mutation, no peer, no steps. Maps to S31 (self-id copy, data half; the OS-clipboard copy itself is verified out-of-band via pbpaste, like S16).",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [],
+  "assertions": [
+    { "type": "state", "field": "currentAccountToxId", "contains": "B4C5B0957C662A83" }
+  ]
+}

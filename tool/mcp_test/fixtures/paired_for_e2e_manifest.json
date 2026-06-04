@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-05-30T17:32:30Z",
+  "fixture_name": "paired_for_e2e",
+  "format_version": 1,
+  "instances": {
+    "A": {
+      "fixture_dir": "paired_for_e2e_A",
+      "friend_tox_id": "A04B987F8F750EE68C2C932FBAA9B4E2A383AA0D717426B730BF825C3CC8AF10",
+      "nickname": "echo_live_test",
+      "tox_id": "19930F00AC843B327E939BD3736B6AF1C2D71EECF6D37D00E245E099ABDC7532"
+    },
+    "B": {
+      "fixture_dir": "paired_for_e2e_B",
+      "friend_tox_id": "19930F00AC843B327E939BD3736B6AF1C2D71EECF6D37D00E245E099ABDC7532",
+      "nickname": "echo_live_test",
+      "tox_id": "A04B987F8F750EE68C2C932FBAA9B4E2A383AA0D717426B730BF825C3CC8AF10"
+    }
+  },
+  "supported_platforms": [
+    "macos"
+  ],
+  "layout": {
+    "account_data/": "Per-account history, offline queue, received files, and avatars copied into the instance TOXEE_APP_SUPPORT_DIR.",
+    "profiles/": "Tox profile directories copied into the instance TOXEE_APP_SUPPORT_DIR so l3_boot_existing_account can boot without re-registering."
+  }
+}

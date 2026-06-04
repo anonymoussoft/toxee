@@ -32,6 +32,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toxee/i18n/app_localizations.dart';
 import 'package:toxee/ui/login/login_page_controller.dart';
 import 'package:toxee/ui/login_page.dart';
+import 'package:toxee/ui/testing/ui_keys.dart';
 import 'package:toxee/util/feature_flags.dart';
 import 'package:toxee/util/prefs.dart';
 
@@ -71,7 +72,7 @@ void main() {
       // bootstrap node) shouldn't remove this button.
       await tester.pump();
 
-      expect(find.byKey(const Key('loginPage.restoreFromToxFile')), findsOneWidget);
+      expect(find.byKey(UiKeys.loginPageRestoreFromToxFile), findsOneWidget);
       expect(find.text('Restore from .tox file'), findsOneWidget);
     });
   });

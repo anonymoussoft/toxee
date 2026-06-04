@@ -1,0 +1,17 @@
+{
+  "id": "L3-self-profile-toggle",
+  "suite": "c2c",
+  "feature": ["S8"],
+  "description": "S8/B10 edit own profile, statusMessage leg (coverage-widening, hermetic): set the account's own status message via l3_set_self_profile and prove it round-trips through l3_dump_state.statusMessage. statusMessage rides the real FfiChatService.updateSelfProfile + Prefs.setStatusMessage path with the nickname PRESERVED (so the test-account nickname guard stays valid — nickname is intentionally NOT touched). codex P2: the gate ENFORCES an empty-status START invariant (first step asserts statusMessage=='') so restoring to '' is a FAITHFUL restore, not a hard-coded guess — it fails loudly on a dirty/non-empty fixture rather than corrupting it. NOTE: an abort BETWEEN the set and the clear leaves a nonce status; the next run's empty-status precondition then fails loudly (self-detecting, not silent corruption) — so this is self-cleaning on completion but NOT abort-proof. Hermetic — no peer (the avatar leg + paired-peer-observes-change leg are S52). Maps to S8 / B10.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_equals", "field": "statusMessage", "equals": "", "timeoutSecs": 10 },
+    { "action": "set_self_profile", "statusMessage": "L3st-{{nonce}}" },
+    { "action": "wait_for", "predicate": "state_contains", "field": "statusMessage", "contains": "L3st-{{nonce}}", "timeoutSecs": 10 },
+    { "action": "set_self_profile", "statusMessage": "" }
+  ],
+  "assertions": [
+    { "type": "state", "field": "statusMessage", "equals": "" }
+  ]
+}

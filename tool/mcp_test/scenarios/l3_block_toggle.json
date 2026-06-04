@@ -1,0 +1,26 @@
+{
+  "id": "L3-block-toggle",
+  "suite": "c2c",
+  "feature": ["S29"],
+  "description": "S29 block/unblock ENFORCEMENT (needs echo_live): block the echo peer, then send a unique-nonce text. The peer normally mirrors it back inbound — with enforcement that inbound copy must be SUPPRESSED at the call site (no history, no unread, no _messages UI stream, no receipt) while the self-send still persists. Asserts blockedUsers contains the peer, the SELF copy count==1, and the INBOUND copy count==0 (enforcement on BOTH hybrid paths: the 4 FfiChatService inbound call sites + the binary-replacement hook). A WARMUP step first establishes the DHT route (reviewer HIGH #4) so the blocked echo arrives-and-is-dropped well within the 8s window — before the final unblock, closing the late-echo race. Then unblocks so other echo gates aren't left with a blocked peer (self-cleans; step 1 also unblocks defensively). Block is a LOCAL receive-side hide; blocking does NOT stop the outbound send (isSelf is never filtered). Maps to feature S29.",
+  "requiresEchoPeer": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "set_blocked", "blocked": false },
+    { "action": "send_text", "text": "rt-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "rt-{{nonce}}", "isSelf": false, "timeoutSecs": 45 },
+    { "action": "wait_for", "predicate": "state_not_contains", "field": "blockedUsers", "notContains": "3116CBE0974181B6", "timeoutSecs": 10 },
+    { "action": "set_blocked", "blocked": true },
+    { "action": "wait_for", "predicate": "state_contains", "field": "blockedUsers", "contains": "3116CBE0974181B6", "timeoutSecs": 10 },
+    { "action": "send_text", "text": "blk-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "blk-{{nonce}}", "isSelf": true, "timeoutSecs": 30 },
+    { "action": "delay", "ms": 8000 },
+    { "action": "set_blocked", "blocked": false }
+  ],
+  "assertions": [
+    { "type": "state", "field": "blockedUsers", "notContains": "3116CBE0974181B6" },
+    { "type": "message_count_text", "text": "blk-{{nonce}}", "isSelf": true, "equals": 1 },
+    { "type": "message_count_text", "text": "blk-{{nonce}}", "isSelf": false, "equals": 0 }
+  ]
+}

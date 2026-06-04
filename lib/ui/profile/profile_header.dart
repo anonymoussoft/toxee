@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
+import '../testing/ui_keys.dart';
 import 'profile_avatar.dart';
 import 'profile_edit_fields.dart';
 
@@ -104,6 +105,7 @@ class ProfileHeader extends StatelessWidget {
                   ),
                   if (isEditable)
                     IconButton(
+                      key: UiKeys.profileEditToggle,
                       icon: Icon(editMode ? Icons.close : Icons.edit, size: 20),
                       tooltip: editMode ? cancelTooltip : editTooltip,
                       onPressed: onToggleEdit,

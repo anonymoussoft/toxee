@@ -99,6 +99,20 @@ class NotificationService {
   /// Subscribe from the page that knows how to route to a conversation.
   Stream<String> get onSelectStream => _onSelectController.stream;
 
+  /// L3 TEST seam: push a tap [payload] onto [onSelectStream] exactly as the
+  /// OS tap handler [_handleNotificationResponse] does, WITHOUT a real banner
+  /// or OS-level tap. This drives the SAME subscribers production uses
+  /// (`NotificationMessageListener.onConversationTapped` →
+  /// `_routeToNotificationPayload` → `_openChat`), so the in-app routing half
+  /// of S53 is exercised faithfully; only the OS banner/tap surface is bypassed.
+  /// Used by the `l3_simulate_notification_tap` debug tool. No-op on an empty
+  /// payload or a closed controller.
+  void debugInjectNotificationTap(String payload) {
+    if (payload.isEmpty) return;
+    if (_onSelectController.isClosed) return;
+    _onSelectController.add(payload);
+  }
+
   /// Returns true once [init] has completed successfully on this platform.
   bool get isInitialized => _initialized;
 

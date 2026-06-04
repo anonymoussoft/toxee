@@ -1,0 +1,16 @@
+{
+  "id": "L3-notification-sound-toggle",
+  "suite": "settings",
+  "description": "L7 notification-sound toggle (coverage-widening, hermetic): drive l3_set_setting notificationSound and prove it round-trips through l3_dump_state.notificationSound (true->false->true). notificationSound is an account-scoped Prefs bool (the settings 'notification sound' switch) read by the badge/notification path. Uses EXACT-value polling (state_equals) so the mid-state is checked precisely (codex P2). Soft precondition (starts true, the seeded default) catches a dirty fixture; ends restored to true so the fixture self-cleans even if interrupted. Hermetic — no echo peer. Maps to feature L7 (notification-sound half; the auto-accept half is S46/S47).",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_equals", "field": "notificationSound", "equals": true, "timeoutSecs": 5 },
+    { "action": "set_setting", "key": "notificationSound", "value": false },
+    { "action": "wait_for", "predicate": "state_equals", "field": "notificationSound", "equals": false, "timeoutSecs": 5 },
+    { "action": "set_setting", "key": "notificationSound", "value": true }
+  ],
+  "assertions": [
+    { "type": "state", "field": "notificationSound", "equals": true }
+  ]
+}

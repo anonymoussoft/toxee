@@ -1,0 +1,21 @@
+{
+  "id": "L3-settings-autologin-tap",
+  "suite": "settings",
+  "uiDriven": true,
+  "feature": ["S96"],
+  "description": "S96 REAL-UI tap upgrade of the auto-login toggle (NOVEL, UNVALIDATED, nonBlocking): tap the real Settings auto-login Switch (UiKeys.settingsAutoLoginSwitch = 'settings_auto_login_switch' @ lib/ui/settings/settings_page_build.dart:246) via the marionette tap action and prove autoLogin flips in l3_dump_state, then tap again to restore. THREE BLOCKERS make this nonBlocking and OWE live-validation + codex-review: (1) NO existing scenario uses the tap/enter_text actions — this is a novel, never-run pattern; (2) the marionette ext (ext.flutter.marionette.tap) vs working binding is unresolved (MCP_BINDING=skill lacks the marionette ext; MCP_BINDING=marionette can hang startup); (3) the runner has no scroll action and the auto-login Switch sits below the settings-page fold, so the tap may fail to hit a laid-out widget. The PROVEN data-half is l3_session_settings.json (reads autoLogin=true) — that is the gate that actually passes today. The proper executable form may be a flutter test WidgetTester gate (REAL_UI_GATES recipe), not this JSON. CAVEAT: toggling autoLogin off can affect harness auto-login on the NEXT launch, so this toggles->asserts->restores within the single run; the final assertion (autoLogin=true) self-cleans ON SUCCESSFUL COMPLETION only (no `teardown` phase — a mid-run failure/interruption can leave the setting flipped; re-run or restore manually).",
+  "requiresEchoPeer": false,
+  "nonBlocking": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_equals", "field": "autoLogin", "equals": true, "timeoutSecs": 5 },
+    { "action": "tap", "key": "sidebar_settings_tab" },
+    { "action": "delay", "ms": 800 },
+    { "action": "tap", "key": "settings_auto_login_switch" },
+    { "action": "wait_for", "predicate": "state_equals", "field": "autoLogin", "equals": false, "timeoutSecs": 5 },
+    { "action": "tap", "key": "settings_auto_login_switch" }
+  ],
+  "assertions": [
+    { "type": "state", "field": "autoLogin", "equals": true }
+  ]
+}

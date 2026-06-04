@@ -56,6 +56,17 @@ class FakeChatMessageProvider implements ChatMessageProvider {
   // Track file receive progress: msgID -> (received, total, path)
   final Map<String, ({int received, int total, String? path})> _fileProgress = {};
 
+  /// S94/G2: read-only view of in-flight RECEIVE progress, keyed by msgID.
+  /// Values are byte counts (received/total), NOT a 0-100 percent — derive
+  /// percent as received/total*100. Mirrors the live `progressUpdates` recv
+  /// stream that feeds `_onFileProgress`; entries are ADDED per chunk while a
+  /// transfer is in flight and REMOVED on completion, so an empty map means
+  /// "nothing currently mid-flight" — poll it WHILE a large transfer runs.
+  /// SEND-side progress is not tracked here (`_onFileProgress` ignores
+  /// isSend==true); only the receiver observes this curve.
+  Map<String, ({int received, int total, String? path})> get fileProgress =>
+      Map.unmodifiable(_fileProgress);
+
   /// P1-22 (degraded): mirror of FfiChatService.progressUpdates for messages
   /// that are *being sent* (isSend == true), exposed so call-site UI can
   /// optionally subscribe in a future PR. The full UIKit-facing

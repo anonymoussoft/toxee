@@ -1,0 +1,27 @@
+{
+  "id": "L3-block-unblock-redelivery",
+  "suite": "c2c",
+  "feature": ["S29"],
+  "description": "S29 block enforcement + unblock RE-delivery (needs echo_live): a stronger block gate than l3_block_toggle. Block the echo peer, send blk1 — the inbound echo must be SUPPRESSED (count 0). Then UNBLOCK and send blk2 — the inbound echo of blk2 IS delivered (count >=1), proving unblock restores delivery and distinguishing 'block works' from 'messages never arrive at all'. Warmup establishes the DHT route first. Self-cleans (ends unblocked). Maps to S29.",
+  "requiresEchoPeer": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "set_blocked", "blocked": false },
+    { "action": "send_text", "text": "rt-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "rt-{{nonce}}", "isSelf": false, "timeoutSecs": 45 },
+    { "action": "set_blocked", "blocked": true },
+    { "action": "wait_for", "predicate": "state_contains", "field": "blockedUsers", "contains": "3116CBE0974181B6", "timeoutSecs": 10 },
+    { "action": "send_text", "text": "blk1-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "blk1-{{nonce}}", "isSelf": true, "timeoutSecs": 30 },
+    { "action": "delay", "ms": 8000 },
+    { "action": "set_blocked", "blocked": false },
+    { "action": "wait_for", "predicate": "state_not_contains", "field": "blockedUsers", "notContains": "3116CBE0974181B6", "timeoutSecs": 10 },
+    { "action": "send_text", "text": "blk2-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "blk2-{{nonce}}", "isSelf": false, "timeoutSecs": 30 }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "text": "blk1-{{nonce}}", "isSelf": false, "equals": 0 },
+    { "type": "message_count_text", "text": "blk2-{{nonce}}", "isSelf": false, "atLeast": 1 }
+  ]
+}

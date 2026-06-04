@@ -1,0 +1,16 @@
+{
+  "id": "L3-send-echo",
+  "suite": "c2c",
+  "description": "Deterministic send -> live DHT -> echo peer mirrors it back -> persisted exactly once each direction (regression for the cross-path double-write fix). Requires echo_live. #18: text carries a per-run {{nonce}} so a straggler echo from a prior run can't be counted toward this run's assertions.",
+  "requiresEchoPeer": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "send_text", "text": "runner-echo-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "runner-echo-{{nonce}}", "isSelf": false, "timeoutSecs": 45 }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "text": "runner-echo-{{nonce}}", "isSelf": true, "equals": 1 },
+    { "type": "message_count_text", "text": "runner-echo-{{nonce}}", "isSelf": false, "equals": 1 }
+  ]
+}

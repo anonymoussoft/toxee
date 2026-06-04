@@ -18,6 +18,7 @@ import 'home_page.dart';
 import 'widgets/app_page_route.dart';
 import 'widgets/error_banner.dart';
 import 'widgets/first_run_backup_wizard.dart';
+import 'testing/ui_keys.dart';
 
 /// Standalone page for registering a new account (opened from login page).
 /// Mirrors the layout of [LoginSettingsPage]: AppBar with back + title, form in body.
@@ -304,6 +305,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     children: [
                   AppSpacing.verticalLg,
                   TextFormField(
+                    key: UiKeys.registerPageNicknameField,
                     controller: _nicknameController,
                     focusNode: _nicknameFocusNode,
                     textAlignVertical: TextAlignVertical.center,
@@ -356,6 +358,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   AppSpacing.verticalLg,
                   TextFormField(
+                    key: UiKeys.registerPagePasswordField,
                     controller: _passwordController,
                     focusNode: _passwordFocusNode,
                     obscureText: _passwordObscure,
@@ -378,6 +381,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   _buildPasswordStrengthBar(context),
                   AppSpacing.verticalLg,
                   TextFormField(
+                    key: UiKeys.registerPageConfirmPasswordField,
                     controller: _confirmPasswordController,
                     focusNode: _confirmPasswordFocusNode,
                     obscureText: _confirmPasswordObscure,
@@ -436,6 +440,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
+                      key: UiKeys.registerPageRegisterButton,
                       onPressed: (_busy ||
                               calculateTextLength(_nicknameController.text) > 12 ||
                               calculateTextLength(_statusMessageController.text) > 24)

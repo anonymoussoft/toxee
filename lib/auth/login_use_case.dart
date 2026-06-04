@@ -5,6 +5,7 @@ import '../adapters/bootstrap_adapter.dart';
 import '../adapters/logger_adapter.dart';
 import '../adapters/shared_prefs_adapter.dart';
 import '../util/account_service.dart';
+import '../util/placeholder_account_migration.dart';
 import '../util/prefs.dart';
 
 /// Input parameters for [LoginUseCase.execute].
@@ -41,6 +42,19 @@ class LoginUseCase {
     if (nickname.isEmpty) {
       throw Exception('Nickname cannot be empty');
     }
+
+    // TODO(codex-review-3): manual login path also needs the placeholder
+    // migration trigger — auto-login path runs it from `StartupSessionUseCase`
+    // before any account lookup, but a user who toggles off auto-login and
+    // logs in manually never runs it. Calling it here pre-lookup mirrors the
+    // auto-login ordering so the nickname resolves to the migrated record.
+    // Current limitation: `_discoverRealToxId()` opens an unauthenticated
+    // discovery service, so encrypted profiles cannot be decrypted at this
+    // point. The proper fix is to invoke a post-login variant that takes the
+    // live, already-decrypted `FfiChatService` and reads its
+    // `getSelfToxId()` — see `placeholder_account_migration.dart`. For now
+    // this is a best-effort pre-lookup call that no-ops on encrypted state.
+    await PlaceholderAccountMigration.migrateIfNeeded();
 
     final account = await Prefs.getUniqueAccountByNickname(nickname);
     if (account == null) {

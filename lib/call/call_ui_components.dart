@@ -145,6 +145,7 @@ class _CallUserAvatarState extends State<CallUserAvatar> {
 /// fill, white icon) — visually weightier than a normal selected toggle.
 class CallDockAction {
   const CallDockAction({
+    this.key,
     required this.icon,
     required this.label,
     this.destructive = false,
@@ -155,6 +156,7 @@ class CallDockAction {
     this.tooltip,
   });
 
+  final Key? key;
   final IconData icon;
   final String label;
   final bool destructive;
@@ -162,6 +164,7 @@ class CallDockAction {
   final bool selected;
   final bool enabled;
   final VoidCallback? onPressed;
+
   /// Optional hover/long-press tooltip. Useful for disabled actions whose
   /// label alone doesn't explain why they can't be tapped.
   final String? tooltip;
@@ -235,7 +238,8 @@ class CallTopStatusBar extends StatelessWidget {
               icon: Icon(trailingIcon, color: _kCallMutedForeground, size: 22),
               onPressed: onTrailingPressed,
               splashRadius: 22,
-              tooltip: AppLocalizations.of(context)?.callMinimize ?? 'Minimize call',
+              tooltip:
+                  AppLocalizations.of(context)?.callMinimize ?? 'Minimize call',
             ),
         ],
       ),
@@ -250,10 +254,7 @@ class CallTopStatusBar extends StatelessWidget {
 /// solid errorColor surface when destructive. The dock itself has no chrome —
 /// each button sits on the call surface directly, in the Telegram/Meet style.
 class CallActionDock extends StatelessWidget {
-  const CallActionDock({
-    super.key,
-    required this.actions,
-  });
+  const CallActionDock({super.key, required this.actions});
 
   final List<CallDockAction> actions;
 
@@ -284,10 +285,7 @@ class CallActionDock extends StatelessWidget {
 }
 
 class _CallDockButton extends StatefulWidget {
-  const _CallDockButton({
-    required this.action,
-    required this.diameter,
-  });
+  const _CallDockButton({required this.action, required this.diameter});
 
   final CallDockAction action;
   final double diameter;
@@ -349,20 +347,20 @@ class _CallDockButtonState extends State<_CallDockButton> {
 
     // Affirmative actions (accept call) get a 12% size bump so they read as
     // the primary CTA next to the destructive reject button.
-    final double effectiveDiameter =
-        isAffirmative ? widget.diameter * 1.12 : widget.diameter;
+    final double effectiveDiameter = isAffirmative
+        ? widget.diameter * 1.12
+        : widget.diameter;
     // Solid (filled) variants get a subtle drop shadow so they feel raised
     // above the slate-900 surface.
-    final List<BoxShadow>? shadows =
-        (isDestructive || isAffirmative)
-            ? [
-                BoxShadow(
-                  color: backgroundColor.withValues(alpha: 0.35),
-                  blurRadius: 18,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null;
+    final List<BoxShadow>? shadows = (isDestructive || isAffirmative)
+        ? [
+            BoxShadow(
+              color: backgroundColor.withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 4),
+            ),
+          ]
+        : null;
 
     final Widget content = SizedBox(
       width: widget.diameter + 24,
@@ -382,6 +380,10 @@ class _CallDockButtonState extends State<_CallDockButton> {
                 color: Colors.transparent,
                 shape: const CircleBorder(),
                 child: InkWell(
+                  // Automation anchor: a [CallDockAction] may carry a ValueKey
+                  // (e.g. UiKeys.callAcceptButton); attach it to the actual
+                  // tappable so flutter_skill/find.byKey lands the button.
+                  key: a.key,
                   customBorder: const CircleBorder(),
                   onTap: isEnabled ? a.onPressed : null,
                   child: Container(
@@ -418,8 +420,9 @@ class _CallDockButtonState extends State<_CallDockButton> {
       ),
     );
 
-    final Widget tooltipped =
-        a.tooltip != null ? Tooltip(message: a.tooltip!, child: content) : content;
+    final Widget tooltipped = a.tooltip != null
+        ? Tooltip(message: a.tooltip!, child: content)
+        : content;
 
     return Semantics(
       label: a.label,
@@ -597,11 +600,7 @@ class CallCompactCard extends StatelessWidget {
                   child: const SizedBox(
                     width: 36,
                     height: 36,
-                    child: Icon(
-                      Icons.call_end,
-                      color: Colors.white,
-                      size: 18,
-                    ),
+                    child: Icon(Icons.call_end, color: Colors.white, size: 18),
                   ),
                 ),
               ),
@@ -654,9 +653,7 @@ class RingingCallScene extends StatelessWidget {
       ),
       bottomBar: bottomBar,
       child: CallIdentityStage(
-        avatar: disableAnimations
-            ? avatar
-            : _RingingAvatarPulse(child: avatar),
+        avatar: disableAnimations ? avatar : _RingingAvatarPulse(child: avatar),
         title: name,
         subtitle: primarySubtitle,
         secondaryNote: secondaryNote,
@@ -690,9 +687,10 @@ class _RingingAvatarPulseState extends State<_RingingAvatarPulse>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _scale = Tween<double>(begin: 0.97, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: 0.97,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override

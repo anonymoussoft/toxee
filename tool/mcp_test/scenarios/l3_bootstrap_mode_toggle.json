@@ -1,0 +1,16 @@
+{
+  "id": "L3-bootstrap-mode-toggle",
+  "suite": "settings",
+  "description": "C1 bootstrap node mode switch (coverage-widening, hermetic): drive l3_set_setting bootstrapNodeMode and prove it round-trips through l3_dump_state.bootstrapNodeMode (auto->manual->auto). bootstrapNodeMode is a GLOBAL Prefs enum {auto,manual,lan} read by the startup bootstrap path. Uses EXACT-value polling (state_equals) so the mid-state is checked precisely (codex P2). Soft precondition (starts 'auto', the seeded default) catches a dirty fixture; ends restored to 'auto' so the fixture self-cleans even if interrupted. Hermetic — no echo peer, no DHT round-trip (this asserts the SETTING, not live bootstrap behavior, which is the network leg of S82). Maps to feature C1.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_equals", "field": "bootstrapNodeMode", "equals": "auto", "timeoutSecs": 5 },
+    { "action": "set_setting", "key": "bootstrapNodeMode", "value": "manual" },
+    { "action": "wait_for", "predicate": "state_equals", "field": "bootstrapNodeMode", "equals": "manual", "timeoutSecs": 5 },
+    { "action": "set_setting", "key": "bootstrapNodeMode", "value": "auto" }
+  ],
+  "assertions": [
+    { "type": "state", "field": "bootstrapNodeMode", "equals": "auto" }
+  ]
+}

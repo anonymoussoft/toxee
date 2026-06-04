@@ -11,7 +11,6 @@ import '../../util/app_paths.dart';
 import '../../util/ffi_chat_service_account_key.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
-
 import 'dart:async';
 import 'dart:math';
 import '../../util/app_spacing.dart';
@@ -22,6 +21,7 @@ import '../widgets/app_page_route.dart';
 import '../widgets/bottom_sheet_handle.dart';
 import '../widgets/section_header.dart';
 import '../widgets/stagger_list_item.dart';
+import '../testing/ui_keys.dart';
 import '_hoverable_settings_row.dart';
 import '../../i18n/app_localizations.dart';
 import '../../util/account_export_service.dart';
@@ -36,15 +36,32 @@ import '../login_page.dart';
 import 'bootstrap_settings_section.dart';
 import 'global_settings_section.dart';
 import '../pairing/pairing_host_page.dart';
+import '../testing/l3_debug_tools.dart';
 
 part 'settings_page_widgets.dart';
 part 'settings_page_build.dart';
 
 /// English words shown for confirmation when deleting account without password.
 const _kDeleteConfirmWords = <String>[
-  'delete', 'confirm', 'remove', 'account', 'permanent', 'cancel', 'proceed',
-  'warning', 'caution', 'irreversible', 'data', 'erase', 'type', 'word',
-  'verify', 'submit', 'final', 'accept', 'continue',
+  'delete',
+  'confirm',
+  'remove',
+  'account',
+  'permanent',
+  'cancel',
+  'proceed',
+  'warning',
+  'caution',
+  'irreversible',
+  'data',
+  'erase',
+  'type',
+  'word',
+  'verify',
+  'submit',
+  'final',
+  'accept',
+  'continue',
 ];
 
 class SettingsPage extends StatefulWidget {
@@ -58,7 +75,8 @@ class SettingsPage extends StatefulWidget {
     required this.onAutoAcceptGroupInvitesChanged,
   });
   final FfiChatService service;
-  final Stream<bool> connectionStatusStream; // Kept for API compatibility but not used
+  final Stream<bool>
+  connectionStatusStream; // Kept for API compatibility but not used
   final bool autoAcceptFriends;
   final ValueChanged<bool> onAutoAcceptFriendsChanged;
   final bool autoAcceptGroupInvites;
@@ -73,10 +91,11 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _currentNickname; // Current user nickname
   String? _avatarPath; // Current user avatar path
   StreamSubscription<String>? _avatarUpdatedSubscription;
-  
+
   // Account management
   List<Map<String, String>> _accountList = [];
-  String? _currentAccountToxId; // Real Tox ID from Prefs (service.selfId is UIKit placeholder)
+  String?
+  _currentAccountToxId; // Real Tox ID from Prefs (service.selfId is UIKit placeholder)
   bool _accountListExpanded = false;
   static const int _accountListPreviewCount = 3;
   Timer? _lastLoginTimeUpdateTimer;
@@ -89,12 +108,14 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadAvatarPath();
     _loadAccountList();
     _startLastLoginTimeUpdateTimer();
-    _avatarUpdatedSubscription =
-        widget.service.avatarUpdated.listen((updatedUserId) {
+    _avatarUpdatedSubscription = widget.service.avatarUpdated.listen((
+      updatedUserId,
+    ) {
       final selfId = widget.service.selfId;
       if (selfId.isEmpty) return;
-      final normalizedSelf =
-          selfId.length > 64 ? selfId.substring(0, 64) : selfId;
+      final normalizedSelf = selfId.length > 64
+          ? selfId.substring(0, 64)
+          : selfId;
       final normalizedUpdated = updatedUserId.length > 64
           ? updatedUserId.substring(0, 64)
           : updatedUserId;
@@ -126,7 +147,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadAutoLogin() async {
-    final toxId = _currentAccountToxId ?? await Prefs.getCurrentAccountToxId() ?? widget.service.accountKey;
+    final toxId =
+        _currentAccountToxId ??
+        await Prefs.getCurrentAccountToxId() ??
+        widget.service.accountKey;
     if (toxId.isNotEmpty) {
       final enabled = await Prefs.getAutoLogin(toxId);
       if (mounted) {
@@ -138,7 +162,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _setAutoLogin(bool value) async {
-    final toxId = _currentAccountToxId ?? await Prefs.getCurrentAccountToxId() ?? widget.service.accountKey;
+    final toxId =
+        _currentAccountToxId ??
+        await Prefs.getCurrentAccountToxId() ??
+        widget.service.accountKey;
     if (toxId.isNotEmpty) {
       await Prefs.setAutoLogin(value, toxId);
       if (mounted) {
@@ -180,7 +207,9 @@ class _SettingsPageState extends State<SettingsPage> {
   void _startLastLoginTimeUpdateTimer() {
     // Update current account's lastLoginTime every 5 minutes
     _lastLoginTimeUpdateTimer?.cancel();
-    _lastLoginTimeUpdateTimer = Timer.periodic(const Duration(minutes: 5), (timer) async {
+    _lastLoginTimeUpdateTimer = Timer.periodic(const Duration(minutes: 5), (
+      timer,
+    ) async {
       final toxId = widget.service.accountKey;
       if (toxId.isNotEmpty && mounted) {
         final account = await Prefs.getAccountByToxId(toxId);
@@ -197,18 +226,26 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String _formatLastLoginTime(String? isoString, BuildContext context) {
-    if (isoString == null || isoString.isEmpty) return AppLocalizations.of(context)!.never;
+    if (isoString == null || isoString.isEmpty)
+      return AppLocalizations.of(context)!.never;
     try {
       final dateTime = DateTime.parse(isoString);
       final now = DateTime.now();
       final difference = now.difference(dateTime);
-      
+
       if (difference.inDays > 0) {
-        return AppLocalizations.of(context)!.daysAgo(difference.inDays, difference.inDays > 1 ? 's' : '');
+        return AppLocalizations.of(
+          context,
+        )!.daysAgo(difference.inDays, difference.inDays > 1 ? 's' : '');
       } else if (difference.inHours > 0) {
-        return AppLocalizations.of(context)!.hoursAgo(difference.inHours, difference.inHours > 1 ? 's' : '');
+        return AppLocalizations.of(
+          context,
+        )!.hoursAgo(difference.inHours, difference.inHours > 1 ? 's' : '');
       } else if (difference.inMinutes > 0) {
-        return AppLocalizations.of(context)!.minutesAgo(difference.inMinutes, difference.inMinutes > 1 ? 's' : '');
+        return AppLocalizations.of(context)!.minutesAgo(
+          difference.inMinutes,
+          difference.inMinutes > 1 ? 's' : '',
+        );
       } else {
         return AppLocalizations.of(context)!.justNow;
       }
@@ -225,7 +262,11 @@ class _SettingsPageState extends State<SettingsPage> {
     if (compareToxIds(toxId, currentToxId)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.thisAccountIsAlreadyLoggedIn)),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.thisAccountIsAlreadyLoggedIn,
+            ),
+          ),
         );
       }
       return;
@@ -235,13 +276,19 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(AppLocalizations.of(context)!.switchAccount),
-        content: Text(AppLocalizations.of(context)!.switchAccountConfirm(account['nickname'] ?? '')),
+        content: Text(
+          AppLocalizations.of(
+            context,
+          )!.switchAccountConfirm(account['nickname'] ?? ''),
+        ),
         actions: [
           TextButton(
+            key: UiKeys.settingsAccountSwitchCancelButton,
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
+            key: UiKeys.settingsAccountSwitchConfirmButton,
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(AppLocalizations.of(context)!.switchAccount),
           ),
@@ -260,7 +307,11 @@ class _SettingsPageState extends State<SettingsPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLocalizations.of(context)!.failedToSwitchAccount(e.toString())),
+              content: Text(
+                AppLocalizations.of(
+                  context,
+                )!.failedToSwitchAccount(e.toString()),
+              ),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
@@ -287,17 +338,21 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const Divider(height: 1),
         ListTile(
+          key: UiKeys.settingsExportProfileToxOption,
           leading: const Icon(Icons.description),
           title: Text(AppLocalizations.of(ctx)!.exportOptionProfileTox),
-          subtitle:
-              Text(AppLocalizations.of(ctx)!.exportOptionProfileToxSubtitle),
+          subtitle: Text(
+            AppLocalizations.of(ctx)!.exportOptionProfileToxSubtitle,
+          ),
           onTap: () => Navigator.of(ctx).pop('tox'),
         ),
         ListTile(
+          key: UiKeys.settingsExportFullBackupOption,
           leading: const Icon(Icons.archive),
           title: Text(AppLocalizations.of(ctx)!.exportOptionFullBackup),
-          subtitle:
-              Text(AppLocalizations.of(ctx)!.exportOptionFullBackupSubtitle),
+          subtitle: Text(
+            AppLocalizations.of(ctx)!.exportOptionFullBackupSubtitle,
+          ),
           onTap: () => Navigator.of(ctx).pop('zip'),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -328,8 +383,9 @@ class _SettingsPageState extends State<SettingsPage> {
         context: context,
         builder: (ctx) => Dialog(
           shape: RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+            borderRadius: BorderRadius.circular(
+              AppThemeConfig.cardBorderRadius,
+            ),
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
@@ -370,9 +426,13 @@ class _SettingsPageState extends State<SettingsPage> {
         final safeNickname = nickname.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
         final defaultFileName = '${safeNickname}_${toxIdPrefix}_backup.zip';
 
-        outputPath = await FilePicker.platform.saveFile(
+        outputPath = await runL3AwareExportSaveFilePicker(
           dialogTitle: AppLocalizations.of(context)!.exportAccount,
           fileName: defaultFileName,
+          saveFile: (dialogTitle, fileName) => FilePicker.platform.saveFile(
+            dialogTitle: dialogTitle,
+            fileName: fileName,
+          ),
         );
       }
 
@@ -386,7 +446,11 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.accountExportedSuccessfully(filePath)),
+            content: Text(
+              AppLocalizations.of(
+                context,
+              )!.accountExportedSuccessfully(filePath),
+            ),
             backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
@@ -396,7 +460,9 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.failedToExportAccount(e.toString())),
+            content: Text(
+              AppLocalizations.of(context)!.failedToExportAccount(e.toString()),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 5),
           ),
@@ -422,9 +488,11 @@ class _SettingsPageState extends State<SettingsPage> {
     // Check if account has password
     final hasPassword = await Prefs.hasAccountPassword(toxId);
     String? password;
-    
+
     if (hasPassword) {
-      password = await _showConfirmPasswordDialog(AppLocalizations.of(context)!.enterPasswordToExport);
+      password = await _showConfirmPasswordDialog(
+        AppLocalizations.of(context)!.enterPasswordToExport,
+      );
       if (password == null) return;
 
       final isValid = await Prefs.verifyAccountPassword(toxId, password);
@@ -451,10 +519,14 @@ class _SettingsPageState extends State<SettingsPage> {
         final toxIdPrefix = toxId.length >= 8 ? toxId.substring(0, 8) : toxId;
         final safeNickname = nickname.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
         final defaultFileName = '${safeNickname}_$toxIdPrefix.tox';
-        
-        outputPath = await FilePicker.platform.saveFile(
+
+        outputPath = await runL3AwareExportSaveFilePicker(
           dialogTitle: AppLocalizations.of(context)!.exportAccount,
           fileName: defaultFileName,
+          saveFile: (dialogTitle, fileName) => FilePicker.platform.saveFile(
+            dialogTitle: dialogTitle,
+            fileName: fileName,
+          ),
         );
       }
 
@@ -469,7 +541,11 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.accountExportedSuccessfully(filePath)),
+            content: Text(
+              AppLocalizations.of(
+                context,
+              )!.accountExportedSuccessfully(filePath),
+            ),
             backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
@@ -477,11 +553,13 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e, stackTrace) {
       // Log detailed error for debugging
       AppLogger.logError('Export account error', e, stackTrace);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.failedToExportAccount(e.toString())),
+            content: Text(
+              AppLocalizations.of(context)!.failedToExportAccount(e.toString()),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 5),
           ),
@@ -515,7 +593,8 @@ class _SettingsPageState extends State<SettingsPage> {
         }
       } catch (e) {
         AppLogger.warn(
-            '[SettingsPage] pre-import file size probe failed (import will retry and surface the real error): $e');
+          '[SettingsPage] pre-import file size probe failed (import will retry and surface the real error): $e',
+        );
       }
 
       // Import account data (will check encryption and prompt for password if needed)
@@ -523,10 +602,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (isZip) {
         // ZIP: check account collision before any disk writes (importFullBackup writes profile/history/avatars/prefs).
-        final metadata = await AccountExportService.readFullBackupMetadata(filePath);
+        final metadata = await AccountExportService.readFullBackupMetadata(
+          filePath,
+        );
         final metaToxId = metadata['toxId']!;
         final existingAccount = await Prefs.getAccountByToxId(metaToxId);
-        final profileDir = await AppPaths.getProfileDirectoryForToxId(metaToxId);
+        final profileDir = await AppPaths.getProfileDirectoryForToxId(
+          metaToxId,
+        );
         final profileFilePath = AppPaths.profileFileInDirectory(profileDir);
         if (existingAccount != null || await File(profileFilePath).exists()) {
           if (mounted) {
@@ -534,7 +617,9 @@ class _SettingsPageState extends State<SettingsPage> {
               context: context,
               builder: (context) => AlertDialog(
                 title: Text(AppLocalizations.of(context)!.importAccount),
-                content: Text(AppLocalizations.of(context)!.accountAlreadyExists),
+                content: Text(
+                  AppLocalizations.of(context)!.accountAlreadyExists,
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -552,10 +637,11 @@ class _SettingsPageState extends State<SettingsPage> {
             password: password,
           );
         } catch (e) {
-          if (e.toString().contains('Password required') || e.toString().contains('password')) {
+          if (e.toString().contains('Password required') ||
+              e.toString().contains('password')) {
             if (mounted) {
               password = await _showConfirmPasswordDialog(
-                AppLocalizations.of(context)!.enterPasswordToImport
+                AppLocalizations.of(context)!.enterPasswordToImport,
               );
               if (password == null) return;
               accountData = await AccountExportService.importFullBackup(
@@ -576,10 +662,11 @@ class _SettingsPageState extends State<SettingsPage> {
             password: password,
           );
         } catch (e) {
-          if (e.toString().contains('Password required') || e.toString().contains('password')) {
+          if (e.toString().contains('Password required') ||
+              e.toString().contains('password')) {
             if (mounted) {
               password = await _showConfirmPasswordDialog(
-                AppLocalizations.of(context)!.enterPasswordToImport
+                AppLocalizations.of(context)!.enterPasswordToImport,
               );
               if (password == null) return;
               accountData = await AccountExportService.importAccountData(
@@ -610,7 +697,9 @@ class _SettingsPageState extends State<SettingsPage> {
               context: context,
               builder: (context) => AlertDialog(
                 title: Text(AppLocalizations.of(context)!.importAccount),
-                content: Text(AppLocalizations.of(context)!.accountAlreadyExists),
+                content: Text(
+                  AppLocalizations.of(context)!.accountAlreadyExists,
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -658,19 +747,27 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.accountImportedSuccessfully),
+            content: Text(
+              AppLocalizations.of(context)!.accountImportedSuccessfully,
+            ),
             backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
       }
     } catch (e, stackTrace) {
-      AppLogger.logError('[SettingsPage] Import account failed: $e', e, stackTrace);
+      AppLogger.logError(
+        '[SettingsPage] Import account failed: $e',
+        e,
+        stackTrace,
+      );
       if (mounted) {
         await showDialog<void>(
           context: context,
           builder: (context) => AlertDialog(
             title: Text(AppLocalizations.of(context)!.importAccount),
-            content: Text(AppLocalizations.of(context)!.failedToImportAccount(e.toString())),
+            content: Text(
+              AppLocalizations.of(context)!.failedToImportAccount(e.toString()),
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -697,32 +794,61 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    final hasPassword = await Prefs.hasAccountPassword(toxId);
-    
+    // Read the has-password state under the canonical Tox ID (getSelfToxId),
+    // matching the write path below — accountKey can be a placeholder when the
+    // FFI hasn't resolved the address, which would mis-title the dialog.
+    final hasPassword = await Prefs.hasAccountPassword(
+      widget.service.getSelfToxId() ?? toxId,
+    );
+
     // Show password input dialog
     final password = await _showSetPasswordDialog(hasPassword);
     if (password == null) return;
 
     try {
       if (password.isEmpty) {
-        // Remove password
-        await Prefs.removeAccountPassword(toxId);
+        // Remove password — routes through AccountService so the in-memory
+        // session password is cleared too (else logout re-encrypts the
+        // now-unprotected profile → silent next-launch failure).
+        final ok = await AccountService.removeAccountPassword(widget.service);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLocalizations.of(context)!.passwordRemoved),
-              backgroundColor: Theme.of(context).colorScheme.primary,
+              content: Text(
+                ok
+                    ? AppLocalizations.of(context)!.passwordRemoved
+                    : AppLocalizations.of(
+                        context,
+                      )!.failedToSetPassword('could not remove password'),
+              ),
+              backgroundColor: ok
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.error,
             ),
           );
         }
       } else {
-        // Set password
-        await Prefs.setAccountPassword(toxId, password);
+        // Set/change password — routes through AccountService so the in-memory
+        // session password is updated too (else logout encrypts with the stale
+        // login password, corrupting the profile vs the new verifier). A false
+        // return means nothing was persisted — must NOT report success.
+        final ok = await AccountService.setAccountPassword(
+          widget.service,
+          password,
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLocalizations.of(context)!.passwordSetSuccessfully),
-              backgroundColor: Theme.of(context).colorScheme.primary,
+              content: Text(
+                ok
+                    ? AppLocalizations.of(context)!.passwordSetSuccessfully
+                    : AppLocalizations.of(
+                        context,
+                      )!.failedToSetPassword('could not save password'),
+              ),
+              backgroundColor: ok
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.error,
             ),
           );
         }
@@ -731,7 +857,9 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.failedToSetPassword(e.toString())),
+            content: Text(
+              AppLocalizations.of(context)!.failedToSetPassword(e.toString()),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -758,7 +886,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 labelText: AppLocalizations.of(context)!.password,
                 hintText: AppLocalizations.of(context)!.ircChannelPasswordHint,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppThemeConfig.inputBorderRadius,
+                  ),
                 ),
               ),
             ),
@@ -770,7 +900,9 @@ class _SettingsPageState extends State<SettingsPage> {
               decoration: InputDecoration(
                 labelText: AppLocalizations.of(context)!.confirmPassword,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppThemeConfig.inputBorderRadius,
+                  ),
                 ),
               ),
             ),
@@ -787,7 +919,9 @@ class _SettingsPageState extends State<SettingsPage> {
               if (pwd != confirmController.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(AppLocalizations.of(context)!.passwordsDoNotMatch),
+                    content: Text(
+                      AppLocalizations.of(context)!.passwordsDoNotMatch,
+                    ),
                     backgroundColor: Theme.of(context).colorScheme.error,
                   ),
                 );
@@ -805,11 +939,15 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<String?> _showSetPasswordDialog(bool hasPassword) async {
     final passwordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
-    
+
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(hasPassword ? AppLocalizations.of(context)!.changePassword : AppLocalizations.of(context)!.setPassword),
+        title: Text(
+          hasPassword
+              ? AppLocalizations.of(context)!.changePassword
+              : AppLocalizations.of(context)!.setPassword,
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -820,9 +958,13 @@ class _SettingsPageState extends State<SettingsPage> {
               decoration: InputDecoration(
                 labelText: AppLocalizations.of(context)!.newPassword,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppThemeConfig.inputBorderRadius,
+                  ),
                 ),
-                hintText: AppLocalizations.of(context)!.leaveEmptyToRemovePassword,
+                hintText: AppLocalizations.of(
+                  context,
+                )!.leaveEmptyToRemovePassword,
               ),
             ),
             const SizedBox(height: 12),
@@ -833,7 +975,9 @@ class _SettingsPageState extends State<SettingsPage> {
               decoration: InputDecoration(
                 labelText: AppLocalizations.of(context)!.confirmPassword,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppThemeConfig.inputBorderRadius,
+                  ),
                 ),
               ),
             ),
@@ -848,17 +992,19 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: () {
               final password = passwordController.text;
               final confirm = confirmPasswordController.text;
-              
+
               if (password != confirm) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(AppLocalizations.of(context)!.passwordsDoNotMatch),
+                    content: Text(
+                      AppLocalizations.of(context)!.passwordsDoNotMatch,
+                    ),
                     backgroundColor: Theme.of(context).colorScheme.error,
                   ),
                 );
                 return;
               }
-              
+
               Navigator.of(context).pop(password);
             },
             child: Text(AppLocalizations.of(context)!.ok),
@@ -880,6 +1026,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
+            key: UiKeys.settingsLogoutConfirmButton,
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
@@ -913,9 +1060,9 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _startPairingAsHost() async {
     final toxId = widget.service.accountKey;
     if (toxId.isEmpty) return;
-    await Navigator.of(context).push<void>(
-      AppPageRoute<void>(page: PairingHostPage(toxId: toxId)),
-    );
+    await Navigator.of(
+      context,
+    ).push<void>(AppPageRoute<void>(page: PairingHostPage(toxId: toxId)));
   }
 
   @override
@@ -928,7 +1075,9 @@ class _SettingsPageState extends State<SettingsPage> {
       } catch (e) {
         // Per-frame: log at warn so a real failure isn't invisible, but accept
         // that this fires every build. setLocale itself rarely throws.
-        AppLogger.warn('[SettingsPage] TencentCloudChatIntl.setLocale failed: $e');
+        AppLogger.warn(
+          '[SettingsPage] TencentCloudChatIntl.setLocale failed: $e',
+        );
       }
     });
     return ValueListenableBuilder<Locale>(
@@ -941,9 +1090,9 @@ class _SettingsPageState extends State<SettingsPage> {
         return TencentCloudChatThemeWidget(
           build: (context, colorTheme, textStyle) => SafeArea(
             child: ListView(
-            padding: ResponsiveLayout.responsivePadding(context),
-            children: _buildSettingsChildren(context, colorTheme),
-          ),
+              padding: ResponsiveLayout.responsivePadding(context),
+              children: _buildSettingsChildren(context, colorTheme),
+            ),
           ),
         );
       },
@@ -984,7 +1133,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text(AppLocalizations.of(ctx)!.deleteAccountConfirmMessage),
                 const SizedBox(height: 16),
                 if (hasPassword) ...[
-                  Text(AppLocalizations.of(ctx)!.deleteAccountEnterPasswordToConfirm),
+                  Text(
+                    AppLocalizations.of(
+                      ctx,
+                    )!.deleteAccountEnterPasswordToConfirm,
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: inputController,
@@ -993,23 +1146,29 @@ class _SettingsPageState extends State<SettingsPage> {
                     decoration: InputDecoration(
                       labelText: AppLocalizations.of(ctx)!.password,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                        borderRadius: BorderRadius.circular(
+                          AppThemeConfig.inputBorderRadius,
+                        ),
                       ),
                     ),
                   ),
                 ] else ...[
-                  Text(AppLocalizations.of(ctx)!.deleteAccountTypeWordToConfirm),
+                  Text(
+                    AppLocalizations.of(ctx)!.deleteAccountTypeWordToConfirm,
+                  ),
                   const SizedBox(height: 8),
                   Text(
-                    AppLocalizations.of(ctx)!.deleteAccountConfirmWordPrompt(confirmWord!),
+                    AppLocalizations.of(
+                      ctx,
+                    )!.deleteAccountConfirmWordPrompt(confirmWord!),
                     style: Theme.of(ctx).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 4),
                   SelectableText(
                     confirmWord,
                     style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -1017,7 +1176,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     textAlignVertical: TextAlignVertical.center,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                        borderRadius: BorderRadius.circular(
+                          AppThemeConfig.inputBorderRadius,
+                        ),
                       ),
                     ),
                   ),
@@ -1034,12 +1195,17 @@ class _SettingsPageState extends State<SettingsPage> {
               onPressed: () async {
                 if (hasPassword) {
                   final password = inputController.text;
-                  final isValid = await Prefs.verifyAccountPassword(toxId, password);
+                  final isValid = await Prefs.verifyAccountPassword(
+                    toxId,
+                    password,
+                  );
                   if (!isValid) {
                     if (ctx.mounted) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
                         SnackBar(
-                          content: Text(AppLocalizations.of(ctx)!.invalidPassword),
+                          content: Text(
+                            AppLocalizations.of(ctx)!.invalidPassword,
+                          ),
                           backgroundColor: Theme.of(ctx).colorScheme.error,
                         ),
                       );
@@ -1052,7 +1218,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     if (ctx.mounted) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
                         SnackBar(
-                          content: Text(AppLocalizations.of(ctx)!.deleteAccountWrongWord),
+                          content: Text(
+                            AppLocalizations.of(ctx)!.deleteAccountWrongWord,
+                          ),
                           backgroundColor: Theme.of(ctx).colorScheme.error,
                         ),
                       );
@@ -1087,9 +1255,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
@@ -1124,16 +1290,17 @@ class _SettingsPageState extends State<SettingsPage> {
       // Close loading dialog
       if (!mounted) return;
       Navigator.of(context).pop();
-      
+
       // Show error message
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)!.deleteAccountFailed(e.toString())),
+          content: Text(
+            AppLocalizations.of(context)!.deleteAccountFailed(e.toString()),
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
   }
 }
-

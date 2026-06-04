@@ -1,0 +1,19 @@
+{
+  "id": "L3-message-order",
+  "suite": "c2c",
+  "description": "Message ordering (codex Phase-4): send three self messages and assert the persisted dump returns them in timestamp-ascending order (ord-1 before ord-2 before ord-3). Hermetic data-layer check using only send_text + the message_order assertion. No echo peer needed. #18: each text carries a shared per-run {{nonce}} — the three stay distinct from each other (ord-1/ord-2/ord-3 prefixes) AND unique across runs, so a cross-run survivor can't make a text ambiguous.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "send_text", "text": "ord-1-{{nonce}}" },
+    { "action": "delay", "ms": 150 },
+    { "action": "send_text", "text": "ord-2-{{nonce}}" },
+    { "action": "delay", "ms": 150 },
+    { "action": "send_text", "text": "ord-3-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "ord-3-{{nonce}}", "isSelf": true, "timeoutSecs": 15 }
+  ],
+  "assertions": [
+    { "type": "message_order", "isSelf": true, "texts": ["ord-1-{{nonce}}", "ord-2-{{nonce}}", "ord-3-{{nonce}}"] }
+  ]
+}

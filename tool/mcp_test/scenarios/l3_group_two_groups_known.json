@@ -1,0 +1,23 @@
+{
+  "id": "L3-group-two-groups-known",
+  "suite": "group",
+  "description": "Concurrent group MEMBERSHIP tracking (hermetic, single-instance): create TWO groups, prove BOTH appear in knownGroups, then leave ONE and prove only that one is removed (the other stays). Guards against quitGroup over-removing or knownGroups collapsing multiple groups. Uses EXACT containsItem/notContainsItem so a prefix-sharing local id (tox_1 vs tox_10) can't false-match. The first leave is the gated step; teardown leaves both (idempotent) so a mid-scenario failure still leaks nothing.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "create_group", "name": "L3g2kA-{{nonce}}", "saveAs": "gidA" },
+    { "action": "create_group", "name": "L3g2kB-{{nonce}}", "saveAs": "gidB" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gidA}}", "timeoutSecs": 15 },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gidB}}", "timeoutSecs": 15 },
+    { "action": "leave_group", "groupId": "{{gidA}}" },
+    { "action": "wait_for", "predicate": "state_not_contains_item", "field": "knownGroups", "notContainsItem": "{{gidA}}", "timeoutSecs": 15 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "knownGroups", "notContainsItem": "{{gidA}}" },
+    { "type": "state", "field": "knownGroups", "containsItem": "{{gidB}}" }
+  ],
+  "teardown": [
+    { "action": "leave_group", "groupId": "{{gidA}}" },
+    { "action": "leave_group", "groupId": "{{gidB}}" }
+  ]
+}

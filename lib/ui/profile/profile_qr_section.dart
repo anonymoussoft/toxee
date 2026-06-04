@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../i18n/app_localizations.dart';
+import '../testing/ui_keys.dart';
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 
@@ -40,8 +41,10 @@ class ProfileQrSection extends StatelessWidget {
           final availWidth = qrConstraints.maxWidth.isFinite
               ? qrConstraints.maxWidth
               : 300.0;
-          final qrWidth =
-              (availWidth * (isWide ? 0.85 : 0.6)).clamp(160.0, 260.0);
+          final qrWidth = (availWidth * (isWide ? 0.85 : 0.6)).clamp(
+            160.0,
+            260.0,
+          );
           final qrHeight = qrWidth * (860.0 / 640.0); // aspect ratio ~1.344
 
           return FutureBuilder<String>(
@@ -76,9 +79,12 @@ class ProfileQrSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadii.button),
                 ),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-                textStyle: theme.textTheme.labelLarge
-                    ?.copyWith(fontWeight: FontWeight.w500),
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.sm,
+                ),
+                textStyle: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
               );
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -87,12 +93,13 @@ class ProfileQrSection extends StatelessWidget {
                     padding: const EdgeInsets.all(AppSpacing.sm),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
-                      border: Border.all(color: theme.colorScheme.outlineVariant),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant,
+                      ),
                       borderRadius: BorderRadius.circular(AppRadii.card),
                     ),
                     child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(AppRadii.card - 2),
+                      borderRadius: BorderRadius.circular(AppRadii.card - 2),
                       child: Image.file(
                         File(qrPath),
                         width: qrWidth,
@@ -115,6 +122,7 @@ class ProfileQrSection extends StatelessWidget {
                       if (enableCopy) ...[
                         AppSpacing.horizontalSm,
                         OutlinedButton.icon(
+                          key: UiKeys.profileQrCopyButton,
                           style: outlinedStyle,
                           icon: const Icon(Icons.copy_rounded, size: 16),
                           label: Text(appL10n.copy),

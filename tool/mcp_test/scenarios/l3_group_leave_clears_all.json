@@ -1,0 +1,22 @@
+{
+  "id": "L3-group-leave-clears-all",
+  "suite": "group",
+  "description": "Leave removes a group from BOTH surfaces (hermetic, single-instance): a stronger l3_leave_group. Create a group, prove it is present in BOTH knownGroups (FFI layer) AND conversationIds (UIKit sidebar), then leave and prove it is gone from BOTH. Catches a leave that clears the FFI set but orphans the sidebar conversation (or vice-versa). EXACT containsItem/notContainsItem throughout. The leave is the gated step; teardown re-leaves (idempotent) so a failure before the leave still leaks nothing.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "create_group", "name": "L3gclr-{{nonce}}", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "conversationIds", "containsItem": "group_{{gid}}", "timeoutSecs": 20 },
+    { "action": "leave_group", "groupId": "{{gid}}" },
+    { "action": "wait_for", "predicate": "state_not_contains_item", "field": "knownGroups", "notContainsItem": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "wait_for", "predicate": "state_not_contains_item", "field": "conversationIds", "notContainsItem": "group_{{gid}}", "timeoutSecs": 20 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "knownGroups", "notContainsItem": "{{gid}}" },
+    { "type": "state", "field": "conversationIds", "notContainsItem": "group_{{gid}}" }
+  ],
+  "teardown": [
+    { "action": "leave_group", "groupId": "{{gid}}" }
+  ]
+}

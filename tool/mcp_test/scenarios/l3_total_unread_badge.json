@@ -1,0 +1,18 @@
+{
+  "id": "L3-total-unread-badge",
+  "suite": "c2c",
+  "description": "K2 app badge (needs echo_live, nonBlocking): prove the AGGREGATE badge count (l3_dump_state.totalUnreadCount) tracks an inbound message. Warmup + mark_read baseline the count to 0, then send -> the echo mirrors it back INBOUND -> the conversation becomes unread -> totalUnreadCount becomes 1 (the echo is the only seeded conversation). nonBlocking like its sibling l3_unread_mark_read: the live echo + hybrid-unread/DHT timing makes the observation race-prone, so one pass is not proof. Maps to K2 (app badge count half; the OS dock/taskbar pixel is OS-only).",
+  "requiresEchoPeer": true,
+  "nonBlocking": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "warmup" },
+    { "action": "mark_read" },
+    { "action": "send_text", "text": "badge-{{nonce}}" },
+    { "action": "wait_for", "predicate": "state_equals", "field": "totalUnreadCount", "equals": 1, "timeoutSecs": 45 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "totalUnreadCount", "equals": 1 }
+  ]
+}

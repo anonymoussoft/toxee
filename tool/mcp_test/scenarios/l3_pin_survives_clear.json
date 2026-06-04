@@ -1,0 +1,22 @@
+{
+  "id": "L3-pin-survives-clear",
+  "suite": "c2c",
+  "description": "F2/E4 independence (hermetic): pinning a conversation must SURVIVE clearing its message history — l3_clear_history clears messages but must NOT unpin (only deleteConversation unpins). Pin the echo-peer conv, send a message, clear history, then a wait_for step asserts the conv is STILL pinned (throws if clear wrongly unpinned it), then unpin (self-clean). Final assertions: the pin set is restored (unpinned) and the history is empty. Hermetic — local Prefs + history state, no echo round-trip (the send persists locally). Maps to F2 + E4.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "set_pinned", "conversationId": "c2c_3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244", "pinned": true },
+    { "action": "wait_for", "predicate": "state_contains", "field": "pinnedConversations", "contains": "3116CBE0974181B6", "timeoutSecs": 10 },
+    { "action": "send_text", "text": "pinclr-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "pinclr-{{nonce}}", "isSelf": true, "timeoutSecs": 10 },
+    { "action": "clear_history" },
+    { "action": "delay", "ms": 800 },
+    { "action": "wait_for", "predicate": "state_contains", "field": "pinnedConversations", "contains": "3116CBE0974181B6", "timeoutSecs": 10 },
+    { "action": "set_pinned", "conversationId": "c2c_3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244", "pinned": false }
+  ],
+  "assertions": [
+    { "type": "state", "field": "pinnedConversations", "notContains": "3116CBE0974181B6" },
+    { "type": "message_count_text", "text": "pinclr-{{nonce}}", "isSelf": true, "equals": 0 }
+  ]
+}

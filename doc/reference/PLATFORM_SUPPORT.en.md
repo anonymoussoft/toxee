@@ -26,7 +26,7 @@ This document details toxee's multi-operating system and multi-platform support.
 
 #### Build requirements
 
-- Xcode 14.0 or higher (matches the Flutter 3.29 toolchain)
+- Xcode 14.0 or higher (matches the Flutter 3.41 toolchain)
 - macOS SDK 10.15 or higher
 - Homebrew (for installing libsodium)
 - CMake 3.16 or higher

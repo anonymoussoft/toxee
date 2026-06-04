@@ -1,0 +1,19 @@
+{
+  "id": "L3-group-private-leave",
+  "suite": "group",
+  "description": "FREEZE-UNBLOCK PROBE + private create/leave (hermetic, single-instance). Mirrors l3_leave_group but via type='private' (invite-only — skips the public DHT announce suspected of freezing the app on PUBLIC create). Create a PRIVATE group, prove its local id enters knownGroups, leave it, prove knownGroups no longer contains it (EXACT membership — no tox_1 ⊂ tox_10 trap). If this live-PASSES while public create freezes, the type:private unblock hypothesis holds for the create+leave flow too. The leave is the gated step; teardown re-leaves (idempotent) so a pre-leave failure leaks no dangling group.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "create_group", "name": "L3gplv-{{nonce}}", "type": "private", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "leave_group", "groupId": "{{gid}}" },
+    { "action": "wait_for", "predicate": "state_not_contains_item", "field": "knownGroups", "notContainsItem": "{{gid}}", "timeoutSecs": 15 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "knownGroups", "notContainsItem": "{{gid}}" }
+  ],
+  "teardown": [
+    { "action": "leave_group", "groupId": "{{gid}}" }
+  ]
+}

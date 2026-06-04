@@ -1,0 +1,38 @@
+# S92 — LAN bootstrap service start/stop (desktop) + LAN node scan
+
+**Layer**: L3 (MCP playbook) — desktop-only, infra-heavy, L3-manual
+**Fixture vector**: `accounts=1 current=A autoLogin=on network=online(real-LAN) platform=desktop bootstrapMode=lan`
+**Harness mode**: peerHarness=none (single instance; C4 is self-contained, C5 needs a second LAN advertiser)
+**Promotion target**: NOT promotable to the hermetic runner. C4 spins up a SECOND native Tox instance bound to a real LAN UDP port (`createTestInstanceNative` + `startPolling`); C5's scan is UDP-broadcast-on-a-real-network. Neither runs in the offline, single-endpoint CI sandbox.
+**Status**: C4 L3-manual (start/stop driveable on a desktop dev box); C5 blocked (UI not wired — scan is l10n-only today). Features **C4 + C5** (LAN Bootstrap 服务启停（桌面）+ LAN 节点扫描 UDP 广播; `lib/util/lan_bootstrap_service.dart`).
+
+## Precondition
+- Desktop only. `LanBootstrapServiceManager.startLocalBootstrapService` early-returns false on mobile (`lan_bootstrap_service.dart:172-175`); the settings `lan` radio is desktop-gated (`bootstrap_settings_section.dart:554` shows the 3-mode row only `if (PlatformUtils.isDesktop)`).
+- A real LAN interface exists — `getLocalIPAddress` must find a non-virtual `192.168.*/10.*/172.16-31.*` (or link-local `169.254.*`) address (`lan_bootstrap_service.dart:95-143`). On a sandboxed/offline CI host this returns null and start fails.
+- Account A signed in, online, test/seed account.
+- `Prefs.bootstrapNodeMode == 'lan'` so the LAN start/stop panel renders (`bootstrap_settings_section.dart:707-831`). Set via `l3_set_setting {key:'bootstrapNodeMode', value:'lan'}` (`l3_debug_tools.dart:1281-1296`) — note: mobile downgrades `lan`→`auto` (`prefs_bootstrap.dart:53-60`), so this is desktop-only.
+- Locale pinned to `en`; `MCP_BINDING=marionette`.
+
+## Driver (C4 — start/stop, L3-manual)
+1. Connect; confirm sidebar `<nicknameA>\nOnline`; capture `get_runtime_errors({})` baseline and the current `Prefs.getCurrentBootstrapNode()` (the pre-LAN public node).
+2. Settings → Bootstrap → `lan` mode panel; the port TextField defaults to `33445` (`bootstrap_settings_section.dart:741-753`). Tap the start button (`ElevatedButton.icon`, label `startLocalBootstrapService`, `bootstrap_settings_section.dart:756-768` → `_startLanBootstrapService`, line 380).
+3. Wait for the status row to flip to `serviceRunning` (`bootstrap_settings_section.dart:778-788`) and the IP/port/pubkey card to appear (`bootstrap_settings_section.dart:791-830`).
+4. Tap the same button again (now labelled `stopLocalBootstrapService`) → `_stopLanBootstrapService` (`bootstrap_settings_section.dart:451`) → status returns to `serviceStopped`.
+
+## Assertions (C4)
+- A1: baseline `get_runtime_errors` empty.
+- A2: after Step 2/3, log contains `[LanBootstrapService] Bootstrap service started at <lanIP>:<udpPort>` (`lan_bootstrap_service.dart:287`); `Prefs.getLanBootstrapServiceRunning()` is true (`lan_bootstrap_service.dart:285`).
+- A3: while running, `Prefs.getCurrentBootstrapNode()` now points at the LOCAL service `{ip,port,pubkey}` and the pre-LAN node is saved (`Prefs.setPreLanBootstrapNode`, `bootstrap_settings_section.dart:398-406/417`).
+- A4: after Step 4, log contains `[LanBootstrapService] Bootstrap service stopped` (`lan_bootstrap_service.dart:352`); running flag is false; the pre-LAN public node is restored from `getPreLanBootstrapNode` (`bootstrap_settings_section.dart:456-462`, cleared at line 478).
+- A5 (instance hygiene): the user's Tox handle is restored after the temporary bootstrap instance is created — `setCurrentInstance(previousInstance)` in the `finally` (`lan_bootstrap_service.dart:291-294`); no history/profile ops leak onto the bootstrap instance. No `Failed to start bootstrap service` (`lan_bootstrap_service.dart:198`).
+- A6 (crash-recovery, optional): kill the app while the service runs, then cold-start → `PrefsBootstrap.initialize` resets the stale running flag and restores the pre-LAN node (`prefs_bootstrap.dart:30-46`); also covered by `recoverFromCrashedSession` (`lan_bootstrap_service.dart:379-404`).
+
+## C5 — LAN node scan (blocked: UI not wired)
+- The feature-inventory lists C5 (LAN 节点扫描 / UDP 广播), and the data layer has the shapes for it: `LanBootstrapService` + `ProbeResult` value types (`lan_bootstrap_service.dart:31-54`) and the `scanLanBootstrapServices` / `scanLanBootstrapServicesTitle` l10n keys (`app_en.arb:782/786`).
+- **But there is NO Dart code that consumes them**: `ProbeResult` is constructed nowhere, and `scanLanBootstrapServices` has zero non-l10n references (grep `lib/` → only `*.arb` + generated `app_localizations_*.dart`). There is no scan button, no `RawDatagramSocket`/broadcast probe loop, and no scan page. So C5 is a STUB — assert it as not-yet-implemented, do NOT write a scan gate.
+
+## Notes
+- **Why C4 isn't in the hermetic runner**: it binds a second real Tox instance to a real LAN UDP port and `startPolling`s it (`lan_bootstrap_service.dart:233/259-283`). The MCP runner's sandbox is offline with a single endpoint; there is no second LAN advertiser to discover, and `getLocalIPAddress` returns null without a physical LAN interface. C4 is runnable as L3-manual on a desktop dev box on a real network.
+- No UiKey on the LAN start/stop button or port field — tap by semantic ref (`fmt_tap_widget`) matching the `startLocalBootstrapService` / `nodePort` labels.
+- A genuine two-instance C4+C5 cross-check (instance A runs the LAN service; instance B scans + bootstraps off it) is the real end-to-end shape, but C5's scan UI must be built first, and it needs the two-process Fixture-C harness extended for LAN discovery — out of scope until the scan path exists.
+- Reset between runs: ensure the service is stopped (re-tap stop, or rely on A6 crash-recovery) and `l3_set_setting {key:'bootstrapNodeMode', value:'auto'}` so the fixture self-cleans; `killall cfprefsd` before shell reads of Prefs.

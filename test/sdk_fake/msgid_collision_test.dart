@@ -15,11 +15,13 @@
 // anchoring on the `P1-1:` comment the fix introduced — that's the most
 // stable marker; the line number drifts as `ffi_chat_service.dart` evolves.
 //
-// Scoping notes (deliberate non-coverage):
-// - The text-send path (`sendText`) currently uses a sequence-free msgID
-//   template too. That's a separate latent bug, NOT P1-1; this test does
-//   not assert on it. Filing or fixing that is out of scope here — adding
-//   it would make this regression guard fail today on master.
+// Scoping notes:
+// - The text-send path (`sendText`) was ALSO sequence-free until 2026-05-29,
+//   when the same collision class was found via the L3 multi-send runner and
+//   fixed (anchor comment `P1-1 (text-send):`). The second test below now
+//   guards it. Both anchors use the `P1-1` tag but differ after it
+//   (`P1-1:` for file-send, `P1-1 (text-send):` for text-send), so the two
+//   tests pin distinct construction sites.
 // - The legacy fallback in `deleteMessages` reconstructs msgIDs from
 //   `msg.timestamp.millisecondsSinceEpoch` + `msg.fromUserId` *intentionally*
 //   without a sequence (so it can match pre-sequence on-disk records).
@@ -100,6 +102,65 @@ void main() {
             'P1-1 regression: outbound file-send msgID template no longer '
             'uses millisecondsSinceEpoch as the wall-clock component — '
             'verify the fix is still doing what it claims to do.',
+      );
+    },
+  );
+
+  test(
+    'outbound text-send msgID includes _msgIDSequence (P1-1 text-send fix)',
+    () async {
+      // Sibling of the file-send guard above. The online `sendText` path used
+      // a sequence-free `${ms}_$_selfId` msgID until 2026-05-29; two C2C texts
+      // in the same millisecond collided and the second was deduped out of
+      // history. Anchor on the distinct `P1-1 (text-send):` comment.
+      final src = await File(ffiChatServicePath).readAsString();
+      final lines = src.split('\n');
+
+      var anchorIdx = -1;
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].contains('P1-1 (text-send):')) {
+          anchorIdx = i;
+          break;
+        }
+      }
+
+      expect(
+        anchorIdx,
+        isNonNegative,
+        reason:
+            'P1-1 text-send comment marker missing from ffi_chat_service.dart. '
+            'The online sendText msgID collision fix was reverted or moved. '
+            'Look for "P1-1 (text-send): include the monotonic _msgIDSequence".',
+      );
+
+      // The construction must follow the comment within a few lines and carry
+      // the same three components as the inbound/file templates.
+      const lookahead = 8;
+      final end = (anchorIdx + lookahead).clamp(0, lines.length);
+      final window = lines.sublist(anchorIdx, end).join('\n');
+
+      expect(
+        window,
+        contains('_msgIDSequence'),
+        reason:
+            'P1-1 text-send regression: online sendText msgID near the '
+            'P1-1 (text-send) comment no longer references _msgIDSequence. '
+            'Back-to-back text sends in the same millisecond will collide and '
+            'the second will be deduped out of history.',
+      );
+      expect(
+        window,
+        contains(r'$_selfId'),
+        reason:
+            'P1-1 text-send regression: sendText msgID template no longer '
+            'interpolates \$_selfId after the P1-1 (text-send) comment.',
+      );
+      expect(
+        window,
+        contains('millisecondsSinceEpoch'),
+        reason:
+            'P1-1 text-send regression: sendText msgID template no longer '
+            'uses millisecondsSinceEpoch as the wall-clock component.',
       );
     },
   );

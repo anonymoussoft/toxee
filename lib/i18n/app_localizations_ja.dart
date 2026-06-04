@@ -255,7 +255,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get privateGroup => 'プライベート';
 
   @override
-  String get publicGroupHint => '公開グループ — DHT で検出可能で、チャット ID を知っている人なら誰でも参加できます。';
+  String get publicGroupHint =>
+      '公開グループ — DHT で検出可能で、チャット ID を知っている人なら誰でも参加できます。';
 
   @override
   String get privateGroupHint => 'プライベートグループ — 招待制で、DHT には公開されません。';
@@ -285,7 +286,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get enterId => 'Tox IDを入力してください';
 
   @override
-  String get invalidLength => 'IDは64または76文字の16進数である必要があります';
+  String get invalidLength => 'IDの長さが正しくありません';
 
   @override
   String get invalidCharacters => '16進数の文字のみを含めることができます';
@@ -294,7 +295,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get paste => '貼り付け';
 
   @override
-  String get addContactHint => '友達のTox ID（64または76文字の16進数）を入力してください。';
+  String get addContactHint => '相手のToxアドレスを入力してください。';
+
+  @override
+  String get addFriendInvalidToxIdHint => 'Toxアドレスは76文字の16進数である必要があります';
 
   @override
   String get verificationMessage => '確認メッセージ';
@@ -447,7 +451,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get reconnectWithThisNode => 'このノードで再接続';
 
   @override
-  String get friendOfflineCannotSendFile => '友達がオフラインです。ファイルを送信できません。オンラインになるまでお待ちください。';
+  String get friendOfflineCannotSendFile =>
+      '友達がオフラインです。ファイルを送信できません。オンラインになるまでお待ちください。';
 
   @override
   String get friendOfflineSendCardFailed => '友達がオフラインです。名刺の送信に失敗しました';
@@ -502,16 +507,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get deleteAccount => 'アカウント削除';
 
   @override
-  String get deleteAccountConfirmMessage => 'アカウントとすべてのデータは永久に削除され、復元できません。慎重に操作してください。';
+  String get deleteAccountConfirmMessage =>
+      'アカウントとすべてのデータは永久に削除され、復元できません。慎重に操作してください。';
 
   @override
   String get delete => '削除';
 
   @override
-  String get deleteAccountEnterPasswordToConfirm => '削除を確認するには、現在のアカウントのパスワードを入力してください。';
+  String get deleteAccountEnterPasswordToConfirm =>
+      '削除を確認するには、現在のアカウントのパスワードを入力してください。';
 
   @override
-  String get deleteAccountTypeWordToConfirm => '削除を確認するには、下に表示されている英単語を正しく入力してください。';
+  String get deleteAccountTypeWordToConfirm =>
+      '削除を確認するには、下に表示されている英単語を正しく入力してください。';
 
   @override
   String deleteAccountConfirmWordPrompt(String word) {
@@ -543,7 +551,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get changeDownloadsDirectory => 'ダウンロードディレクトリを変更';
 
   @override
-  String get downloadsDirectoryDesc => 'ファイルダウンロードのデフォルトディレクトリを設定します。受信したファイル、オーディオ、ビデオはこのディレクトリに保存されます。';
+  String get downloadsDirectoryDesc =>
+      'ファイルダウンロードのデフォルトディレクトリを設定します。受信したファイル、オーディオ、ビデオはこのディレクトリに保存されます。';
 
   @override
   String get downloadsDirectorySet => 'ダウンロードディレクトリが設定されました';
@@ -564,7 +573,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sizeLimitInMB => 'サイズ制限 (MB)';
 
   @override
-  String get autoDownloadSizeLimitDesc => 'このサイズより小さいファイルとすべての画像は自動的にダウンロードされます。このサイズより大きいファイルは手動でダウンロードボタンをクリックする必要があります。';
+  String get autoDownloadSizeLimitDesc =>
+      'このサイズより小さいファイルとすべての画像は自動的にダウンロードされます。このサイズより大きいファイルは手動でダウンロードボタンをクリックする必要があります。';
 
   @override
   String get autoDownloadSizeLimitSet => '自動ダウンロードサイズ制限が設定されました';
@@ -631,7 +641,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get uninstallIrcApp => 'IRCチャンネルアプリをアンインストール';
 
   @override
-  String get uninstallIrcAppConfirm => 'IRCチャンネルアプリをアンインストールしてもよろしいですか？すべてのIRCチャンネルが削除され、すべてのIRCグループから退出します。';
+  String get uninstallIrcAppConfirm =>
+      'IRCチャンネルアプリをアンインストールしてもよろしいですか？すべてのIRCチャンネルが削除され、すべてのIRCグループから退出します。';
 
   @override
   String get addIrcChannel => 'チャンネルを追加';
@@ -694,7 +705,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get ircChannelHint => '#チャンネル';
 
   @override
-  String get ircChannelDesc => 'IRCチャンネル名を入力してください（例：#channel）。このチャンネル用にToxグループが作成されます。';
+  String get ircChannelDesc =>
+      'IRCチャンネル名を入力してください（例：#channel）。このチャンネル用にToxグループが作成されます。';
 
   @override
   String get enterIrcChannel => 'IRCチャンネル名を入力してください';
@@ -726,7 +738,8 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get directorySelectionNotSupported => 'このプラットフォームではディレクトリ選択がサポートされていません';
+  String get directorySelectionNotSupported =>
+      'このプラットフォームではディレクトリ選択がサポートされていません';
 
   @override
   String failedToSendFriendRequest(String error) {
@@ -999,7 +1012,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get exportOptionFullBackup => 'Full Backup (.zip)';
 
   @override
-  String get exportOptionFullBackupSubtitle => 'Profile + chat history + settings';
+  String get exportOptionFullBackupSubtitle =>
+      'Profile + chat history + settings';
 
   @override
   String get importAccount => 'アカウントインポート';
@@ -1159,22 +1173,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get conference => 'Conference';
 
   @override
-  String get defaultJoinRequestMessage => 'Hi, please invite me into this group';
+  String get defaultJoinRequestMessage =>
+      'Hi, please invite me into this group';
 
   @override
-  String get userNotFoundPleaseRegister => 'User not found. Please register first.';
+  String get userNotFoundPleaseRegister =>
+      'User not found. Please register first.';
 
   @override
-  String get nicknameDoesNotMatch => 'Nickname does not match. Please use the registered nickname or register a new account.';
+  String get nicknameDoesNotMatch =>
+      'Nickname does not match. Please use the registered nickname or register a new account.';
 
   @override
-  String get accountAlreadyExistsPleaseLogin => 'Account already exists. Please login instead or use a different nickname.';
+  String get accountAlreadyExistsPleaseLogin =>
+      'Account already exists. Please login instead or use a different nickname.';
 
   @override
-  String get profileNotFoundImportRestore => 'Profile not found for this account. Please import or restore backup.';
+  String get profileNotFoundImportRestore =>
+      'Profile not found for this account. Please import or restore backup.';
 
   @override
-  String get failedToInitializeTIMManager => 'Failed to initialize TIMManager SDK';
+  String get failedToInitializeTIMManager =>
+      'Failed to initialize TIMManager SDK';
 
   @override
   String get failedToGetToxId => 'Failed to get Tox ID';
@@ -1183,7 +1203,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get failedToGenerateToxId => 'Failed to generate Tox ID';
 
   @override
-  String get registrationCouldNotCreateProfile => 'Registration could not create a unique profile. Please try again.';
+  String get registrationCouldNotCreateProfile =>
+      'Registration could not create a unique profile. Please try again.';
 
   @override
   String get importedAccount => 'Imported Account';
@@ -1255,7 +1276,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get callPermissionCameraRequired => '通話を続けるにはカメラへのアクセス許可が必要です。';
 
   @override
-  String get callPermissionMicrophoneCameraRequired => '通話を続けるにはマイクとカメラへのアクセス許可が必要です。';
+  String get callPermissionMicrophoneCameraRequired =>
+      '通話を続けるにはマイクとカメラへのアクセス許可が必要です。';
 
   @override
   String get callAudioInterrupted => '通話中に音声出力が変更されたか、中断されました。';
@@ -1321,7 +1343,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nicknameHintExample => 'e.g. Alice';
 
   @override
-  String get callAudioRouteSystem => 'Audio route managed by system on this platform';
+  String get callAudioRouteSystem =>
+      'Audio route managed by system on this platform';
 
   @override
   String get copyFullToxId => 'Copy full ID';
@@ -1378,7 +1401,8 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get selectConversationEmptyState => 'Select a conversation to start chatting';
+  String get selectConversationEmptyState =>
+      'Select a conversation to start chatting';
 
   @override
   String get newConversationTooltip => 'New conversation';
@@ -1404,7 +1428,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get firstRunBackupWizardTitle => 'Save your account file';
 
   @override
-  String get firstRunBackupWizardBody => 'Your account lives only on this device. Save the .tox file somewhere safe (cloud storage, password manager, USB stick). Without it, losing this device means losing your account and all your contacts permanently.';
+  String get firstRunBackupWizardBody =>
+      'Your account lives only on this device. Save the .tox file somewhere safe (cloud storage, password manager, USB stick). Without it, losing this device means losing your account and all your contacts permanently.';
 
   @override
   String get firstRunBackupWizardExportNow => 'Export now';
@@ -1416,7 +1441,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get firstRunBackupWizardDismissTitle => 'Skip backup?';
 
   @override
-  String get firstRunBackupWizardDismissBody => 'If you lose this device, you will lose your account and all contacts. There is no recovery.';
+  String get firstRunBackupWizardDismissBody =>
+      'If you lose this device, you will lose your account and all contacts. There is no recovery.';
 
   @override
   String get firstRunBackupWizardDismissConfirm => 'I understand, continue';
@@ -1435,7 +1461,8 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get restoreFromToxFileInvalidFile => 'This file doesn\'t look like a valid Tox profile.';
+  String get restoreFromToxFileInvalidFile =>
+      'This file doesn\'t look like a valid Tox profile.';
 
   @override
   String get pairDeviceHostTitle => 'Pair another device';
@@ -1444,13 +1471,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get pairDeviceClientTitle => 'Pair with another device';
 
   @override
-  String get pairingHostInstructions => 'Open toxee on your other device, choose \"Pair with another device\", and scan this QR code.';
+  String get pairingHostInstructions =>
+      'Open toxee on your other device, choose \"Pair with another device\", and scan this QR code.';
 
   @override
-  String get pairingClientScanInstructions => 'Point your camera at the QR code on your other device.';
+  String get pairingClientScanInstructions =>
+      'Point your camera at the QR code on your other device.';
 
   @override
-  String get pairingClientPasteInstructions => 'Camera scanning isn\'t supported on this device. Paste the pairing URL shown on your other device below.';
+  String get pairingClientPasteInstructions =>
+      'Camera scanning isn\'t supported on this device. Paste the pairing URL shown on your other device below.';
 
   @override
   String get pairingPasteUrlLabel => 'Pairing URL';
@@ -1459,19 +1489,23 @@ class AppLocalizationsJa extends AppLocalizations {
   String get pairingConnectButton => 'Connect';
 
   @override
-  String get pairingWaitingForPeer => 'Waiting for the other device to connect…';
+  String get pairingWaitingForPeer =>
+      'Waiting for the other device to connect…';
 
   @override
-  String get pairingVerifyCodeHeader => 'Verify both devices show the same code';
+  String get pairingVerifyCodeHeader =>
+      'Verify both devices show the same code';
 
   @override
-  String get pairingVerifyCodeInstructions => 'If the code matches what\'s shown on your other device, tap below. If they differ, cancel — someone may be intercepting the connection.';
+  String get pairingVerifyCodeInstructions =>
+      'If the code matches what\'s shown on your other device, tap below. If they differ, cancel — someone may be intercepting the connection.';
 
   @override
   String get pairingCodesMatch => 'The codes match';
 
   @override
-  String get pairingHostCompleted => 'Account sent. The other device now has your account.';
+  String get pairingHostCompleted =>
+      'Account sent. The other device now has your account.';
 
   @override
   String get pairingClientCompleted => 'Account received. You\'re paired.';
@@ -1498,16 +1532,20 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get pairingDecryptFailed => 'Couldn\'t decrypt the received profile. The pairing may have been tampered with — try again on a network you trust.';
+  String get pairingDecryptFailed =>
+      'Couldn\'t decrypt the received profile. The pairing may have been tampered with — try again on a network you trust.';
 
   @override
-  String get pairingNoLanInterface => 'No LAN network detected. Connect to WiFi or Ethernet and try again.';
+  String get pairingNoLanInterface =>
+      'No LAN network detected. Connect to WiFi or Ethernet and try again.';
 
   @override
-  String get pairThisAccountToAnotherDevice => 'Pair this account to another device';
+  String get pairThisAccountToAnotherDevice =>
+      'Pair this account to another device';
 
   @override
-  String get pairWithAnotherDevice => 'Pair with another device that has my account';
+  String get pairWithAnotherDevice =>
+      'Pair with another device that has my account';
 
   @override
   String get devicesSectionTitle => 'Devices';

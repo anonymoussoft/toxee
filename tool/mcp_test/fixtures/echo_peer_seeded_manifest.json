@@ -1,0 +1,20 @@
+{
+  "created_at": "2026-05-30T17:31:32Z",
+  "format_version": 1,
+  "key_count_expected": 11,
+  "min_zstd_version": "1.5.0",
+  "peer_id": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B58724444EC6CD72EAF",
+  "peer_id_format": "address76",
+  "prefix": "B4C5B0957C662A83",
+  "supported_platforms": [
+    "macos"
+  ],
+  "tar_layout": {
+    "disk/account_data/": "Chat history + friend list + avatars; restore to .../account_data/",
+    "disk/profiles/": "Tox profile blobs; restore to ~/Library/Containers/com.toxee.app/Data/Library/Application Support/com.toxee.app/profiles/",
+    "manifest.json": "Self-describing manifest; sibling-copy at tool/mcp_test/fixtures/echo_peer_seeded_manifest.json for git-diff visibility",
+    "prefs/prefs_dump.json": "Serialized NSUserDefaults flutter.* keys; restore via defaults write loop"
+  },
+  "tim2tox_sha": "b7af201b9ff2fb066731a97df7a33715850c0a22",
+  "toxee_version": "v0.1.16-124-g6262139-dirty"
+}

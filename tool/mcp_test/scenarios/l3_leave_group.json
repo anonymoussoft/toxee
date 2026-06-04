@@ -1,0 +1,20 @@
+{
+  "id": "L3-leave-group",
+  "suite": "group",
+  "order": 90,
+  "feature": ["S35"],
+  "description": "S35 leave-group (hermetic, single-instance): create a PUBLIC NGC group, prove its LOCAL group id appears in l3_dump_state.knownGroups, then leave it via l3_leave_group (FfiChatService.quitGroup -> native tox_group_leave) and prove knownGroups is EMPTY again. The creator leaving its OWN group resolves group_number locally, so NO second peer is needed (unlike S37 kick). Robustness (reviewer MEDIUM): the start + end assert knownGroups=='[]' (empty), which avoids the tox_1-vs-tox_10 substring false-match of a bare gid check and detects a dirty fixture loudly; the mid-step asserts the captured {{gid}} is present. Self-cleaning: the group is left at the end. knownGroups holds the LOCAL id (e.g. tox_1), captured via create_group/saveAs. Maps to feature S35.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_contains", "field": "knownGroups", "contains": "[]", "timeoutSecs": 10 },
+    { "action": "create_group", "name": "L3leave-{{nonce}}", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains", "field": "knownGroups", "contains": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "leave_group", "groupId": "{{gid}}" },
+    { "action": "wait_for", "predicate": "state_contains", "field": "knownGroups", "contains": "[]", "timeoutSecs": 15 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "knownGroups", "contains": "[]" },
+    { "type": "state", "field": "knownGroups", "notContains": "{{gid}}" }
+  ]
+}

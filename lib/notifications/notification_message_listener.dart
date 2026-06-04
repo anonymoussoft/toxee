@@ -9,6 +9,7 @@ import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
 import '../sdk_fake/fake_uikit_core.dart';
 import '../sdk_fake/uikit_data_facade.dart';
+import '../sdk_fake/c2c_recv_opt_cache.dart';
 import '../util/logger.dart';
 import '../util/prefs.dart';
 import '../util/tox_utils.dart';
@@ -188,6 +189,13 @@ class NotificationMessageListener {
         normalizeToxId(sender) == normalizeToxId(_service.selfId)) {
       return true;
     }
+    // S29: a blocked sender must never ring a notification. This listener fires
+    // (via the binary-replacement path) before the hook's block guard, so check
+    // here too — `isBlocked` normalizes, so a 76-char sender matches a 64-char
+    // stored id.
+    if (sender.isNotEmpty && _service.isBlocked(sender)) {
+      return true;
+    }
 
     // Skip control-signal text messages that bubble up as plain text but
     // shouldn't trigger a notification (revoke / face / custom / location).
@@ -211,12 +219,16 @@ class NotificationMessageListener {
       return true;
     }
 
-    // Mute guard — best-effort. The conversation list cached by UIKit
-    // exposes `recvOpt` (0 = receive, 1 = no notify, 2 = block); when it's
-    // not 0 we suppress the banner. The conversation may not be in the
-    // cache yet for a brand-new contact, in which case we err on the side
-    // of notifying.
+    // Mute guard — best-effort. Prefer the C2C recv-opt projection cache, which
+    // is updated SYNCHRONOUSLY by the native SetC2CReceiveMessageOpt push: it
+    // reflects a mute immediately, closing the "message arrives right after mute,
+    // before the next ~5s conversation rebuild" race that the conversation-list
+    // recvOpt (updated only on rebuild) would otherwise leave open. Fall back to
+    // the UIKit conversation-list recvOpt (covers any path the cache missed).
     try {
+      if (sender.isNotEmpty && C2CRecvOptCache.isMuted(sender)) {
+        return true;
+      }
       if (messageConvId != null) {
         final convs = UikitDataFacade.conversationList;
         for (final c in convs) {

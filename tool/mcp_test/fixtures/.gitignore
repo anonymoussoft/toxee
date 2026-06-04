@@ -1,0 +1,9 @@
+.cache/
+
+# Seeded two-instance fixtures: these contain tox_profile.tox secret-key blobs
+# and must never be committed. Only the two manifest JSONs at this fixtures/
+# root stay committable (paired_for_e2e_manifest.json,
+# echo_peer_seeded_manifest.json). Directory rules below, so the JSONs are
+# unaffected.
+paired_for_e2e_A/
+paired_for_e2e_B/

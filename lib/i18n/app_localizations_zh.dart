@@ -285,7 +285,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get enterId => '请输入 Tox ID';
 
   @override
-  String get invalidLength => 'ID 必须为 64 或 76 位十六进制字符';
+  String get invalidLength => 'ID 长度不正确';
 
   @override
   String get invalidCharacters => '只能包含十六进制字符';
@@ -294,7 +294,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get paste => '粘贴';
 
   @override
-  String get addContactHint => '输入好友的 Tox ID（64 或 76 位十六进制字符）。';
+  String get addContactHint => '请输入对方的 Tox 地址。';
+
+  @override
+  String get addFriendInvalidToxIdHint => 'Tox 地址必须是 76 位十六进制字符';
 
   @override
   String get verificationMessage => '验证信息';
@@ -564,7 +567,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sizeLimitInMB => '大小限制 (MB)';
 
   @override
-  String get autoDownloadSizeLimitDesc => '小于此大小的文件和所有图片将自动下载。大于此大小的文件需要手动点击下载按钮。';
+  String get autoDownloadSizeLimitDesc =>
+      '小于此大小的文件和所有图片将自动下载。大于此大小的文件需要手动点击下载按钮。';
 
   @override
   String get autoDownloadSizeLimitSet => '自动下载大小限制已设置为';
@@ -999,7 +1003,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get exportOptionFullBackup => 'Full Backup (.zip)';
 
   @override
-  String get exportOptionFullBackupSubtitle => 'Profile + chat history + settings';
+  String get exportOptionFullBackupSubtitle =>
+      'Profile + chat history + settings';
 
   @override
   String get importAccount => '导入账号';
@@ -1159,22 +1164,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get conference => 'Conference';
 
   @override
-  String get defaultJoinRequestMessage => 'Hi, please invite me into this group';
+  String get defaultJoinRequestMessage =>
+      'Hi, please invite me into this group';
 
   @override
-  String get userNotFoundPleaseRegister => 'User not found. Please register first.';
+  String get userNotFoundPleaseRegister =>
+      'User not found. Please register first.';
 
   @override
-  String get nicknameDoesNotMatch => 'Nickname does not match. Please use the registered nickname or register a new account.';
+  String get nicknameDoesNotMatch =>
+      'Nickname does not match. Please use the registered nickname or register a new account.';
 
   @override
-  String get accountAlreadyExistsPleaseLogin => 'Account already exists. Please login instead or use a different nickname.';
+  String get accountAlreadyExistsPleaseLogin =>
+      'Account already exists. Please login instead or use a different nickname.';
 
   @override
-  String get profileNotFoundImportRestore => 'Profile not found for this account. Please import or restore backup.';
+  String get profileNotFoundImportRestore =>
+      'Profile not found for this account. Please import or restore backup.';
 
   @override
-  String get failedToInitializeTIMManager => 'Failed to initialize TIMManager SDK';
+  String get failedToInitializeTIMManager =>
+      'Failed to initialize TIMManager SDK';
 
   @override
   String get failedToGetToxId => 'Failed to get Tox ID';
@@ -1183,7 +1194,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get failedToGenerateToxId => 'Failed to generate Tox ID';
 
   @override
-  String get registrationCouldNotCreateProfile => 'Registration could not create a unique profile. Please try again.';
+  String get registrationCouldNotCreateProfile =>
+      'Registration could not create a unique profile. Please try again.';
 
   @override
   String get importedAccount => 'Imported Account';
@@ -1404,7 +1416,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get firstRunBackupWizardTitle => '保存你的账户文件';
 
   @override
-  String get firstRunBackupWizardBody => '你的账户仅存在于这台设备。请将 .tox 文件保存到安全的位置（云盘、密码管理器、U 盘）。一旦丢失这台设备而又没有备份，账户和所有联系人都将无法恢复。';
+  String get firstRunBackupWizardBody =>
+      '你的账户仅存在于这台设备。请将 .tox 文件保存到安全的位置（云盘、密码管理器、U 盘）。一旦丢失这台设备而又没有备份，账户和所有联系人都将无法恢复。';
 
   @override
   String get firstRunBackupWizardExportNow => '立即导出';
@@ -1416,7 +1429,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get firstRunBackupWizardDismissTitle => '跳过备份？';
 
   @override
-  String get firstRunBackupWizardDismissBody => '如果丢失此设备，你将失去账户和所有联系人。没有任何恢复方式。';
+  String get firstRunBackupWizardDismissBody =>
+      '如果丢失此设备，你将失去账户和所有联系人。没有任何恢复方式。';
 
   @override
   String get firstRunBackupWizardDismissConfirm => '我已了解，继续';
@@ -1444,13 +1458,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pairDeviceClientTitle => '与另一台设备配对';
 
   @override
-  String get pairingHostInstructions => '在另一台设备上打开 toxee，选择“与另一台设备配对”，然后扫描此二维码。';
+  String get pairingHostInstructions =>
+      '在另一台设备上打开 toxee，选择“与另一台设备配对”，然后扫描此二维码。';
 
   @override
   String get pairingClientScanInstructions => '将摄像头对准另一台设备上显示的二维码。';
 
   @override
-  String get pairingClientPasteInstructions => '此设备不支持摄像头扫描。请将另一台设备显示的配对链接粘贴到下方。';
+  String get pairingClientPasteInstructions =>
+      '此设备不支持摄像头扫描。请将另一台设备显示的配对链接粘贴到下方。';
 
   @override
   String get pairingPasteUrlLabel => '配对链接';
@@ -1465,7 +1481,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pairingVerifyCodeHeader => '请确认两台设备显示的验证码相同';
 
   @override
-  String get pairingVerifyCodeInstructions => '如果验证码与另一台设备显示的一致，请点击下方按钮。如果不一致，请取消——可能有人在拦截连接。';
+  String get pairingVerifyCodeInstructions =>
+      '如果验证码与另一台设备显示的一致，请点击下方按钮。如果不一致，请取消——可能有人在拦截连接。';
 
   @override
   String get pairingCodesMatch => '验证码一致';
@@ -1538,7 +1555,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
 class AppLocalizationsZhHans extends AppLocalizationsZh {
-  AppLocalizationsZhHans(): super('zh_Hans');
+  AppLocalizationsZhHans() : super('zh_Hans');
 
   @override
   String get chats => '聊天';
@@ -1817,7 +1834,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get enterId => '请输入 Tox ID';
 
   @override
-  String get invalidLength => 'ID 必须为 64 或 76 位十六进制字符';
+  String get invalidLength => 'ID 长度不正确';
 
   @override
   String get invalidCharacters => '只能包含十六进制字符';
@@ -1826,7 +1843,10 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get paste => '粘贴';
 
   @override
-  String get addContactHint => '输入好友的 Tox ID（64 或 76 位十六进制字符）。';
+  String get addContactHint => '请输入对方的 Tox 地址。';
+
+  @override
+  String get addFriendInvalidToxIdHint => 'Tox 地址必须是 76 位十六进制字符';
 
   @override
   String get verificationMessage => '验证信息';
@@ -2096,7 +2116,8 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get sizeLimitInMB => '大小限制 (MB)';
 
   @override
-  String get autoDownloadSizeLimitDesc => '小于此大小的文件和所有图片将自动下载。大于此大小的文件需要手动点击下载按钮。';
+  String get autoDownloadSizeLimitDesc =>
+      '小于此大小的文件和所有图片将自动下载。大于此大小的文件需要手动点击下载按钮。';
 
   @override
   String get autoDownloadSizeLimitSet => '自动下载大小限制已设置为';
@@ -2258,7 +2279,8 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   }
 
   @override
-  String get directorySelectionNotSupported => 'Directory selection is not supported on this platform';
+  String get directorySelectionNotSupported =>
+      'Directory selection is not supported on this platform';
 
   @override
   String failedToSendFriendRequest(String error) {
@@ -2841,7 +2863,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
 class AppLocalizationsZhHant extends AppLocalizationsZh {
-  AppLocalizationsZhHant(): super('zh_Hant');
+  AppLocalizationsZhHant() : super('zh_Hant');
 
   @override
   String get chats => '聊天';
@@ -3120,7 +3142,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get enterId => '請輸入 Tox ID';
 
   @override
-  String get invalidLength => 'ID 必須為 64 或 76 位十六進位字元';
+  String get invalidLength => 'ID 長度不正確';
 
   @override
   String get invalidCharacters => '只能包含十六進位字元';
@@ -3129,7 +3151,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get paste => '貼上';
 
   @override
-  String get addContactHint => '輸入好友的 Tox ID（64 或 76 位十六進位字元）。';
+  String get addContactHint => '請輸入對方的 Tox 地址。';
+
+  @override
+  String get addFriendInvalidToxIdHint => 'Tox 地址必須是 76 位十六進位字元';
 
   @override
   String get verificationMessage => '驗證訊息';
@@ -3399,7 +3424,8 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get sizeLimitInMB => '大小限制 (MB)';
 
   @override
-  String get autoDownloadSizeLimitDesc => '小於此大小的文件和所有圖片將自動下載。大於此大小的文件需要手動點擊下載按鈕。';
+  String get autoDownloadSizeLimitDesc =>
+      '小於此大小的文件和所有圖片將自動下載。大於此大小的文件需要手動點擊下載按鈕。';
 
   @override
   String get autoDownloadSizeLimitSet => '自動下載大小限制已設置為';

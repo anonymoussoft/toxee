@@ -101,4 +101,77 @@ void main() {
       expect(prefs.getKeys().where((k) => k.startsWith('foo_')), isEmpty);
     });
   });
+
+  // Codex Round 6 / A1-P1 regression: after the F12 short-toxId backfill
+  // rewrites an account row from a 64-char public key to the 76-char full
+  // Tox ID, subsequent addAccount() calls from `AccountSwitcher` or
+  // `LoginUseCase` keep passing the pre-backfill 64-char form alongside a
+  // (possibly unchanged) nickname. The old raw `acc['toxId'] != toxId`
+  // dup-detection would then see "another account with the same nickname"
+  // because the stored toxId is 76 chars and the incoming one is 64. The
+  // fix swaps in `compareToxIds`, which normalizes both forms to the
+  // 64-char public-key prefix before comparing.
+  group('addAccount nickname-dup uses compareToxIds (A1-P1)', () {
+    const String pubKey64 =
+        'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
+    // 76-char full Tox ID: public key + 8-char nospam + 4-char checksum.
+    // The first 64 chars must match `pubKey64` so `compareToxIds` treats
+    // them as the same identity.
+    const String fullId76 = '${pubKey64}1234567800AB';
+
+    test(
+        'same-account update with shorter toxId + same nickname does not throw',
+        () async {
+      // Simulate the post-backfill state: account_list row carries the
+      // 76-char form, but the caller still has only the 64-char public key
+      // (e.g. AccountSwitcher reads its argument from the sidebar tile,
+      // which was captured before the running session triggered backfill).
+      await Prefs.setAccountList(<Map<String, String>>[
+        <String, String>{
+          'toxId': fullId76,
+          'nickname': 'Alice',
+        },
+      ]);
+
+      // Same nickname, shorter toxId → must update in place, not throw.
+      await Prefs.addAccount(toxId: pubKey64, nickname: 'Alice');
+
+      final accounts = await Prefs.getAccountList();
+      expect(accounts.length, 1,
+          reason:
+              'addAccount should update the existing row, not duplicate it');
+      expect(accounts.first['nickname'], 'Alice');
+    });
+
+    test(
+        'genuine nickname collision against a different account still throws',
+        () async {
+      // Two unrelated accounts. Adding a third with a fresh toxId but a
+      // nickname that collides with one of them must still be rejected —
+      // we only want the fuzzy match to suppress *self*-collisions.
+      const String otherId64 =
+          'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD';
+      await Prefs.setAccountList(<Map<String, String>>[
+        <String, String>{'toxId': fullId76, 'nickname': 'Alice'},
+        <String, String>{'toxId': otherId64, 'nickname': 'Bob'},
+      ]);
+      const String newId64 =
+          'EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE';
+      expect(
+        () => Prefs.addAccount(toxId: newId64, nickname: 'Alice'),
+        throwsStateError,
+      );
+    });
+
+    test('same-account 64-char + 64-char path is unaffected', () async {
+      // Sanity check the unchanged-shape path: stored 64-char, incoming
+      // 64-char, identical strings → updateLastLogin path, no throw.
+      await Prefs.setAccountList(<Map<String, String>>[
+        <String, String>{'toxId': pubKey64, 'nickname': 'Alice'},
+      ]);
+      await Prefs.addAccount(toxId: pubKey64, nickname: 'Alice');
+      final accounts = await Prefs.getAccountList();
+      expect(accounts.length, 1);
+    });
+  });
 }

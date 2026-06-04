@@ -12,12 +12,14 @@ import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_common/widgets/avatar/tencent_cloud_chat_avatar.dart';
 import 'package:tencent_cloud_chat_common/widgets/dialog/tencent_cloud_chat_dialog.dart';
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_group_profile.dart';
+import 'package:tencent_cloud_chat_message/group_profile_widgets/tencent_cloud_chat_group_profile_body.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
 
 import '../../sdk_fake/fake_uikit_core.dart';
 import '../../util/app_paths.dart';
 import '../../util/logger.dart';
 import '../../util/prefs.dart';
+import '../testing/ui_keys.dart';
 
 /// Capture+install+restore for toxee's group-profile builder overrides.
 ///
@@ -41,24 +43,37 @@ class GroupProfileBuilderOverrideHandle {
 
   void installOverrides() {
     TencentCloudChatGroupProfileManager.builder.setBuilders(
-      groupProfileAvatarBuilder: ({
-        required V2TimGroupInfo groupInfo,
-        required List<V2TimGroupMemberFullInfo> groupMember,
-      }) =>
-          _ToxeeGroupProfileAvatar(groupInfo: groupInfo),
-      groupProfileChatButtonBuilder: ({
-        required V2TimGroupInfo groupInfo,
-        VoidCallback? startVideoCall,
-        VoidCallback? startVoiceCall,
-      }) =>
-          _ToxeeGroupProfileChatButton(groupInfo: groupInfo),
+      groupProfileAvatarBuilder:
+          ({
+            required V2TimGroupInfo groupInfo,
+            required List<V2TimGroupMemberFullInfo> groupMember,
+          }) => _ToxeeGroupProfileAvatar(groupInfo: groupInfo),
+      groupProfileChatButtonBuilder:
+          ({
+            required V2TimGroupInfo groupInfo,
+            VoidCallback? startVideoCall,
+            VoidCallback? startVoiceCall,
+          }) => _ToxeeGroupProfileChatButton(groupInfo: groupInfo),
       groupProfileContentBuilder: ({required V2TimGroupInfo groupInfo}) =>
           _ToxeeGroupProfileContent(groupInfo: groupInfo),
-      groupProfileDeleteButtonBuilder: ({
-        required V2TimGroupInfo groupInfo,
-        required List<V2TimGroupMemberFullInfo> groupMemberList,
-      }) =>
-          _ToxeeGroupProfileDeleteButton(
+      groupProfileMemberBuilder:
+          ({
+            required V2TimGroupInfo groupInfo,
+            required List<V2TimGroupMemberFullInfo> groupMember,
+            required List<V2TimFriendInfo> contactList,
+          }) => KeyedSubtree(
+            key: UiKeys.groupProfileMembersEntry,
+            child: TencentCloudChatGroupProfileGroupMember(
+              groupInfo: groupInfo,
+              groupMembersInfo: groupMember,
+              contactList: contactList,
+            ),
+          ),
+      groupProfileDeleteButtonBuilder:
+          ({
+            required V2TimGroupInfo groupInfo,
+            required List<V2TimGroupMemberFullInfo> groupMemberList,
+          }) => _ToxeeGroupProfileDeleteButton(
             groupInfo: groupInfo,
             groupMemberList: groupMemberList,
           ),
@@ -122,8 +137,7 @@ class _ToxeeGroupProfileAvatarState extends State<_ToxeeGroupProfileAvatar> {
     if (_saving) return;
     setState(() => _saving = true);
     try {
-      final result =
-          await FilePicker.platform.pickFiles(type: FileType.image);
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
       final pickedPath = result?.files.single.path;
       if (pickedPath == null) return; // user cancelled
 
@@ -132,10 +146,9 @@ class _ToxeeGroupProfileAvatarState extends State<_ToxeeGroupProfileAvatar> {
       // matching the self/friend avatar layout from
       // `pickAndPersistAvatar`.
       final currentToxId = await Prefs.getCurrentAccountToxId();
-      final avatarsDirPath =
-          (currentToxId != null && currentToxId.isNotEmpty)
-              ? await AppPaths.getAccountAvatarsPath(currentToxId)
-              : (await AppPaths.avatars).path;
+      final avatarsDirPath = (currentToxId != null && currentToxId.isNotEmpty)
+          ? await AppPaths.getAccountAvatarsPath(currentToxId)
+          : (await AppPaths.avatars).path;
       final avatarsDir = Directory(avatarsDirPath);
       if (!await avatarsDir.exists()) {
         await avatarsDir.create(recursive: true);
@@ -155,7 +168,8 @@ class _ToxeeGroupProfileAvatarState extends State<_ToxeeGroupProfileAvatar> {
               await entity.delete();
             } catch (e) {
               AppLogger.warn(
-                  '[GroupAvatar] delete stale ${entity.path} failed: $e');
+                '[GroupAvatar] delete stale ${entity.path} failed: $e',
+              );
             }
           }
         }
@@ -174,9 +188,9 @@ class _ToxeeGroupProfileAvatarState extends State<_ToxeeGroupProfileAvatar> {
     } catch (e, st) {
       AppLogger.logError('[GroupAvatar] pick failed', e, st);
       if (!mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('Failed to update avatar: $e')),
-      );
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('Failed to update avatar: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -202,7 +216,8 @@ class _ToxeeGroupProfileAvatarState extends State<_ToxeeGroupProfileAvatar> {
               // this, callers caching by image bytes can show stale art.
               KeyedSubtree(
                 key: ValueKey(
-                    'group_avatar_${widget.groupInfo.groupID}_$_version'),
+                  'group_avatar_${widget.groupInfo.groupID}_$_version',
+                ),
                 child: TencentCloudChatCommonBuilders.getCommonAvatarBuilder(
                   scene: TencentCloudChatAvatarScene.groupProfile,
                   imageList: [_faceUrl],
@@ -229,8 +244,9 @@ class _ToxeeGroupProfileAvatarState extends State<_ToxeeGroupProfileAvatar> {
                         padding: EdgeInsets.all(6),
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Icon(
@@ -259,8 +275,13 @@ class _ToxeeGroupProfileChatButton extends StatefulWidget {
 class _ToxeeGroupProfileChatButtonState
     extends TencentCloudChatState<_ToxeeGroupProfileChatButton> {
   Future<void> _navigateToChat() async {
-    await TencentCloudChat.instance.dataInstance.contact.contactEventHandlers
-        ?.uiEventHandlers.onNavigateToChat
+    await TencentCloudChat
+        .instance
+        .dataInstance
+        .contact
+        .contactEventHandlers
+        ?.uiEventHandlers
+        .onNavigateToChat
         ?.call(userID: null, groupID: widget.groupInfo.groupID);
   }
 
@@ -403,8 +424,9 @@ class _ToxeeGroupProfileContentState
 
     if (prefs != null) {
       try {
-        final realGroupName =
-            await prefs.getGroupName(widget.groupInfo.groupID);
+        final realGroupName = await prefs.getGroupName(
+          widget.groupInfo.groupID,
+        );
         if (realGroupName != null &&
             realGroupName.isNotEmpty &&
             realGroupName != widget.groupInfo.groupID) {
@@ -433,8 +455,13 @@ class _ToxeeGroupProfileContentState
     }
 
     if (ffiService != null) {
-      unawaited(_tryGetConferenceIdWithRetry(ffiService,
-          maxRetries: 5, retryDelay: const Duration(seconds: 1)));
+      unawaited(
+        _tryGetConferenceIdWithRetry(
+          ffiService,
+          maxRetries: 5,
+          retryDelay: const Duration(seconds: 1),
+        ),
+      );
     }
 
     safeSetState(() {
@@ -458,8 +485,9 @@ class _ToxeeGroupProfileContentState
     for (int attempt = 0; attempt < maxRetries; attempt++) {
       if (_disposed) return;
       try {
-        final retrievedChatId =
-            (ffiService as dynamic).getGroupChatId(widget.groupInfo.groupID);
+        final retrievedChatId = (ffiService as dynamic).getGroupChatId(
+          widget.groupInfo.groupID,
+        );
         if (retrievedChatId != null &&
             retrievedChatId is String &&
             retrievedChatId.isNotEmpty) {
@@ -497,9 +525,10 @@ class _ToxeeGroupProfileContentState
   Future<void> _onChangeGroupName(String value) async {
     final res = await TencentCloudChat.instance.chatSDKInstance.groupSDK
         .setGroupInfo(
-            groupID: widget.groupInfo.groupID,
-            groupType: widget.groupInfo.groupType,
-            groupName: value);
+          groupID: widget.groupInfo.groupID,
+          groupType: widget.groupInfo.groupType,
+          groupName: value,
+        );
     if (res.code == 0) {
       safeSetState(() {
         groupName = value;
@@ -669,8 +698,9 @@ class _ToxeeGroupProfileDeleteButtonState
     final res = await TencentCloudChat.instance.chatSDKInstance.groupSDK
         .clearGroupHistoryMessage(groupID: groupID);
     if (res.code == 0) {
-      TencentCloudChat.instance.dataInstance.messageData
-          .clearMessageList(groupID: groupID);
+      TencentCloudChat.instance.dataInstance.messageData.clearMessageList(
+        groupID: groupID,
+      );
       // The binary-replacement path above clears in-memory view caches and
       // C++ state, but the Platform path owns the persisted JSON. Wipe history
       // directly without going through deleteConversation, which would also
@@ -680,14 +710,16 @@ class _ToxeeGroupProfileDeleteButtonState
         if (ffi != null) {
           await ffi.clearGroupHistory(groupID);
         }
-        FakeUIKit.instance.messageProvider
-            ?.clearMessageBuffer('group_$groupID');
+        FakeUIKit.instance.messageProvider?.clearMessageBuffer(
+          'group_$groupID',
+        );
         await FakeUIKit.instance.im?.refreshConversations();
       } catch (e, st) {
         AppLogger.logError(
-            '[GroupProfile] _onClearChatHistory: persistence cleanup failed',
-            e,
-            st);
+          '[GroupProfile] _onClearChatHistory: persistence cleanup failed',
+          e,
+          st,
+        );
       }
     }
   }
@@ -733,16 +765,21 @@ class _ToxeeGroupProfileDeleteButtonState
         await Prefs.addQuitGroup(gid);
       } catch (e, st) {
         AppLogger.logError(
-            '[GroupProfile] _handleQuitGroup: addQuitGroup failed', e, st);
+          '[GroupProfile] _handleQuitGroup: addQuitGroup failed',
+          e,
+          st,
+        );
       }
       try {
-        await FakeUIKit.instance.conversationManager
-            ?.deleteConversation('group_$gid');
+        await FakeUIKit.instance.conversationManager?.deleteConversation(
+          'group_$gid',
+        );
       } catch (e, st) {
         AppLogger.logError(
-            '[GroupProfile] _handleQuitGroup: deleteConversation failed',
-            e,
-            st);
+          '[GroupProfile] _handleQuitGroup: deleteConversation failed',
+          e,
+          st,
+        );
       }
       if (mounted) {
         unawaited(Navigator.of(context).maybePop());
@@ -755,13 +792,16 @@ class _ToxeeGroupProfileDeleteButtonState
     return TencentCloudChatThemeWidget(
       build: (context, colorTheme, textStyle) => Column(
         children: [
-          Container(
-            width: double.infinity,
-            color: colorTheme.groupProfileTabBackground,
-            padding: EdgeInsets.symmetric(
-                vertical: getHeight(10), horizontal: getWidth(16)),
-            child: GestureDetector(
-              onTap: _showClearChatHistoryDialog,
+          GestureDetector(
+            key: UiKeys.groupProfileClearHistoryButton,
+            onTap: _showClearChatHistoryDialog,
+            child: Container(
+              width: double.infinity,
+              color: colorTheme.groupProfileTabBackground,
+              padding: EdgeInsets.symmetric(
+                vertical: getHeight(10),
+                horizontal: getWidth(16),
+              ),
               child: Text(
                 tL10n.deleteAllMessages,
                 style: TextStyle(
@@ -772,14 +812,17 @@ class _ToxeeGroupProfileDeleteButtonState
               ),
             ),
           ),
-          Container(
-            margin: EdgeInsets.only(top: getHeight(1)),
-            color: colorTheme.groupProfileTabBackground,
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(
-                vertical: getHeight(10), horizontal: getWidth(16)),
-            child: GestureDetector(
-              onTap: _showQuitGroupDialog,
+          GestureDetector(
+            key: UiKeys.groupProfileLeaveButton,
+            onTap: _showQuitGroupDialog,
+            child: Container(
+              margin: EdgeInsets.only(top: getHeight(1)),
+              color: colorTheme.groupProfileTabBackground,
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(
+                vertical: getHeight(10),
+                horizontal: getWidth(16),
+              ),
               child: Text(
                 quitGroup ? tL10n.quit : tL10n.dissolve,
                 style: TextStyle(

@@ -108,10 +108,14 @@
   "copied": "クリップボードにコピーしました",
   "addFailed": "追加に失敗しました",
   "enterId": "Tox IDを入力してください",
-  "invalidLength": "IDは64または76文字の16進数である必要があります",
+  "invalidLength": "IDの長さが正しくありません",
   "invalidCharacters": "16進数の文字のみを含めることができます",
   "paste": "貼り付け",
-  "addContactHint": "友達のTox ID（64または76文字の16進数）を入力してください。",
+  "addContactHint": "相手のToxアドレスを入力してください。",
+  "addFriendInvalidToxIdHint": "Toxアドレスは76文字の16進数である必要があります",
+  "@addFriendInvalidToxIdHint": {
+    "description": "Validator error shown in AddFriend dialog when input is not exactly 76 hex chars"
+  },
   "verificationMessage": "確認メッセージ",
   "defaultFriendRequestMessage": "こんにちは、友達として追加したいです。",
   "friendRequestMessageTooLong": "友達リクエストメッセージは921文字を超えることはできません",

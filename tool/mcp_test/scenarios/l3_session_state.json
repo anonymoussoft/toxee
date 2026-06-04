@@ -1,0 +1,12 @@
+{
+  "id": "L3-session-state",
+  "suite": "session",
+  "description": "App is logged in, connected, on the echo_seeded test account. State-only — no echo peer required.",
+  "requiresEchoPeer": false,
+  "steps": [],
+  "assertions": [
+    { "type": "state", "field": "sessionReady", "equals": true },
+    { "type": "state", "field": "isConnected", "equals": true },
+    { "type": "state", "field": "nickname", "contains": "echo" }
+  ]
+}

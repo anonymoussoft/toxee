@@ -15,6 +15,7 @@ import '../../util/prefs.dart';
 import '../../util/responsive_layout.dart';
 import '../../i18n/app_localizations.dart';
 import '../profile_page.dart';
+import '../testing/ui_keys.dart';
 
 /// 临时屏蔽 sidebar 的「应用」入口，改为 true 可恢复显示
 const bool _showApplicationsEntry = false;
@@ -52,124 +53,144 @@ Future<void> showSelfProfile(
   // UIKit boundary. Fall back to `service.selfId` only if Prefs hasn't been
   // populated yet (login race — rare).
   final storedToxId = await Prefs.getCurrentAccountToxId();
-  final resolvedUserId =
-      (storedToxId != null && storedToxId.isNotEmpty)
-          ? storedToxId
-          : service.accountKey;
+  final resolvedUserId = (storedToxId != null && storedToxId.isNotEmpty)
+      ? storedToxId
+      : service.accountKey;
 
   if (!context.mounted) return;
 
   ProfilePage buildProfile() => ProfilePage(
-        userId: resolvedUserId,
-        nickName: nickName,
-        statusMessage: statusMessage,
-        isEditable: true,
-        online: initialOnline,
-        connectionStatusStream: connectionStatusStream,
-        onSave: (newNickname, newStatusMessage) async {
-          await service.updateSelfProfile(
-            nickname: newNickname,
-            statusMessage: newStatusMessage,
-          );
-          await Prefs.setNickname(newNickname);
-          await Prefs.setStatusMessage(newStatusMessage);
-          if (onProfileSaved != null) {
-            await onProfileSaved(newNickname, newStatusMessage);
-          }
-        },
-        onAvatarChanged: (path) async {
-          if (path != null && path.isNotEmpty) {
-            await FileImage(File(path)).evict();
-            await Prefs.setAvatarPath(path);
-            await service.updateAvatar(path);
-          } else {
-            await Prefs.setAvatarPath(null);
-            await service.updateAvatar(null);
-          }
-          onAvatarChanged?.call(path);
-        },
+    userId: resolvedUserId,
+    nickName: nickName,
+    statusMessage: statusMessage,
+    isEditable: true,
+    online: initialOnline,
+    connectionStatusStream: connectionStatusStream,
+    onSave: (newNickname, newStatusMessage) async {
+      await service.updateSelfProfile(
+        nickname: newNickname,
+        statusMessage: newStatusMessage,
       );
+      await Prefs.setNickname(newNickname);
+      await Prefs.setStatusMessage(newStatusMessage);
+      // Mirror into account_list so AccountSwitcher / cold-start auto-login
+      // don't re-apply the stale nickname/statusMessage on next switch.
+      await Prefs.addAccount(
+        toxId: resolvedUserId,
+        nickname: newNickname,
+        statusMessage: newStatusMessage,
+        updateLastLogin: false,
+      );
+      if (onProfileSaved != null) {
+        await onProfileSaved(newNickname, newStatusMessage);
+      }
+    },
+    onAvatarChanged: (path) async {
+      if (path != null && path.isNotEmpty) {
+        await FileImage(File(path)).evict();
+        await Prefs.setAvatarPath(path);
+        await service.updateAvatar(path);
+      } else {
+        await Prefs.setAvatarPath(null);
+        await service.updateAvatar(null);
+      }
+      // Same reason as onSave: account_list must track per-account avatar
+      // or AccountSwitcher will restore the stale path on switch. Stored
+      // as '' for "no avatar" — isNotEmpty check on read normalizes back.
+      await Prefs.addAccount(
+        toxId: resolvedUserId,
+        avatarPath: path ?? '',
+        updateLastLogin: false,
+      );
+      onAvatarChanged?.call(path);
+    },
+  );
 
   if (ResponsiveLayout.shouldShowBottomNav(context)) {
     final title =
         TencentCloudChatLocalizations.of(context)?.profile ?? 'Profile';
-    unawaited(Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (routeContext) => Scaffold(
-          appBar: AppBar(
-            title: Text(title),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              tooltip:
-                  AppLocalizations.of(routeContext)?.close ?? 'Close',
-              onPressed: () => Navigator.of(routeContext).maybePop(),
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (routeContext) => Scaffold(
+            appBar: AppBar(
+              title: Text(title),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: AppLocalizations.of(routeContext)?.close ?? 'Close',
+                onPressed: () => Navigator.of(routeContext).maybePop(),
+              ),
             ),
-          ),
-          body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: buildProfile(),
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: buildProfile(),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     return;
   }
 
-  unawaited(showDialog<void>(
-    context: context,
-    builder: (dialogContext) {
-      final size = MediaQuery.sizeOf(dialogContext);
-      final isWide = size.width > 900;
-      // Wide screens get a dialog wide enough to host the 2-column profile
-      // layout (form + QR card side-by-side); narrow screens keep the
-      // single-column dialog at ~480.
-      final maxW = (size.width - 32).clamp(280.0, isWide ? 880.0 : 500.0);
-      final maxH = (size.height - 100).clamp(400.0, 800.0);
-      return Dialog(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
-          // `ConstrainedBox` (vs `SizedBox`) so the dialog hugs the profile
-          // content when it's shorter than `maxH` — the previous fixed-height
-          // `SizedBox` left ~300px of empty space below the form on normal
-          // desktop windows. The `Stack` sizes to its largest non-Positioned
-          // child (the profile content), and the close-button `Positioned`
-          // still overlays correctly. Content taller than `maxH` scrolls via
-          // `ProfileLayout`'s internal `SingleChildScrollView`.
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xl),
-                  // Inner width caps the profile column at the dialog's
-                  // ceiling minus padding; no fixed `height:` so the column
-                  // collapses to its intrinsic size when content is shorter
-                  // than the dialog ceiling.
-                  child: SizedBox(
-                    width: (maxW - 48).clamp(256.0, 840.0),
-                    child: buildProfile(),
+  unawaited(
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final size = MediaQuery.sizeOf(dialogContext);
+        final isWide = size.width > 900;
+        // Wide screens get a dialog wide enough to host the 2-column profile
+        // layout (form + QR card side-by-side); narrow screens keep the
+        // single-column dialog at ~480.
+        final maxW = (size.width - 32).clamp(280.0, isWide ? 880.0 : 500.0);
+        final maxH = (size.height - 100).clamp(400.0, 800.0);
+        return Dialog(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(
+              AppThemeConfig.cardBorderRadius,
+            ),
+            // `ConstrainedBox` (vs `SizedBox`) so the dialog hugs the profile
+            // content when it's shorter than `maxH` — the previous fixed-height
+            // `SizedBox` left ~300px of empty space below the form on normal
+            // desktop windows. The `Stack` sizes to its largest non-Positioned
+            // child (the profile content), and the close-button `Positioned`
+            // still overlays correctly. Content taller than `maxH` scrolls via
+            // `ProfileLayout`'s internal `SingleChildScrollView`.
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    // Inner width caps the profile column at the dialog's
+                    // ceiling minus padding; no fixed `height:` so the column
+                    // collapses to its intrinsic size when content is shorter
+                    // than the dialog ceiling.
+                    child: SizedBox(
+                      width: (maxW - 48).clamp(256.0, 840.0),
+                      child: buildProfile(),
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip:
-                        AppLocalizations.of(dialogContext)?.close ?? 'Close',
-                    onPressed: () => Navigator.of(dialogContext).pop(),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip:
+                          AppLocalizations.of(dialogContext)?.close ?? 'Close',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      );
-    },
-  ));
+        );
+      },
+    ),
+  );
 }
 
 Widget buildSidebar({
@@ -208,7 +229,7 @@ Widget buildSidebar({
             Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
             AppSpacing.verticalSm,
             _SidebarItem(
-              key: const ValueKey('sidebar_chats'),
+              key: UiKeys.sidebarChats,
               context: context,
               selected: selectedIndex == 0,
               icon: Icons.chat_bubble_outline,
@@ -218,31 +239,34 @@ Widget buildSidebar({
               showUnreadCount: true,
             ),
             _ContactSidebarItem(
-              key: const ValueKey('sidebar_contacts'),
+              key: UiKeys.sidebarContacts,
               context: context,
               selected: selectedIndex == 1,
               icon: Icons.contacts,
-              label: TencentCloudChatLocalizations.of(context)?.contacts ??
+              label:
+                  TencentCloudChatLocalizations.of(context)?.contacts ??
                   'Contacts',
               onTap: () => onTap(1),
             ),
             if (_showApplicationsEntry)
               _SidebarItem(
-                key: const ValueKey('sidebar_applications'),
+                key: UiKeys.sidebarApplications,
                 context: context,
                 selected: selectedIndex == 2,
                 icon: Icons.apps,
-                label: AppLocalizations.of(context)?.applications ??
+                label:
+                    AppLocalizations.of(context)?.applications ??
                     'Applications',
                 onTap: () => onTap(2),
               ),
             const Spacer(),
             _SidebarItem(
-              key: const ValueKey('sidebar_settings'),
+              key: UiKeys.sidebarSettings,
               context: context,
               selected: selectedIndex == 3,
               icon: Icons.settings,
-              label: TencentCloudChatLocalizations.of(context)?.settings ??
+              label:
+                  TencentCloudChatLocalizations.of(context)?.settings ??
                   'Settings',
               onTap: () => onTap(3),
             ),
@@ -282,12 +306,14 @@ class _UserAvatarState extends State<_UserAvatar> {
   void initState() {
     super.initState();
     _loadProfile();
-    _avatarUpdatedSubscription =
-        widget.service.avatarUpdated.listen((updatedUserId) {
+    _avatarUpdatedSubscription = widget.service.avatarUpdated.listen((
+      updatedUserId,
+    ) {
       final selfId = widget.service.selfId;
       if (selfId.isEmpty) return;
-      final normalizedSelf =
-          selfId.length > 64 ? selfId.substring(0, 64) : selfId;
+      final normalizedSelf = selfId.length > 64
+          ? selfId.substring(0, 64)
+          : selfId;
       final normalizedUpdated = updatedUserId.length > 64
           ? updatedUserId.substring(0, 64)
           : updatedUserId;
@@ -328,36 +354,37 @@ class _UserAvatarState extends State<_UserAvatar> {
   void _openProfile(BuildContext context) {
     // `showSelfProfile` is async because it resolves the real Tox ID from
     // Prefs before opening the dialog; the tap handler is fire-and-forget.
-    unawaited(showSelfProfile(
-      context,
-      widget.service,
-      widget.connectionStatusStream,
-      nickName: _nickname,
-      statusMessage: _statusController.text,
-      onProfileSaved: (nickname, statusMessage) async {
-        if (mounted) {
-          setState(() {
-            _nickname = nickname;
-            _nickController.text = nickname;
-            _statusController.text = statusMessage;
-          });
-        }
-      },
-      onAvatarChanged: (path) async {
-        // Re-check existence on the new path so the avatar existence cache
-        // stays accurate.
-        final exists = path != null &&
-            path.isNotEmpty &&
-            await File(path).exists();
-        if (mounted) {
-          setState(() {
-            _avatarPath = path;
-            _avatarFileExists = exists;
-            _avatarVersion++;
-          });
-        }
-      },
-    ));
+    unawaited(
+      showSelfProfile(
+        context,
+        widget.service,
+        widget.connectionStatusStream,
+        nickName: _nickname,
+        statusMessage: _statusController.text,
+        onProfileSaved: (nickname, statusMessage) async {
+          if (mounted) {
+            setState(() {
+              _nickname = nickname;
+              _nickController.text = nickname;
+              _statusController.text = statusMessage;
+            });
+          }
+        },
+        onAvatarChanged: (path) async {
+          // Re-check existence on the new path so the avatar existence cache
+          // stays accurate.
+          final exists =
+              path != null && path.isNotEmpty && await File(path).exists();
+          if (mounted) {
+            setState(() {
+              _avatarPath = path;
+              _avatarFileExists = exists;
+              _avatarVersion++;
+            });
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -370,119 +397,128 @@ class _UserAvatarState extends State<_UserAvatar> {
           child: Tooltip(
             message: _nickname ?? '',
             child: InkWell(
-          onTap: () => _openProfile(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-              vertical: AppSpacing.lg,
-              horizontal: AppSpacing.sm,
-            ),
-            child: StreamBuilder<bool>(
-              stream: widget.connectionStatusStream,
-              initialData: widget.service
-                  .isConnected, // Use current connection status as initial data
-              builder: (context, snapshot) {
-                final isConnected = snapshot.data ?? widget.service.isConnected;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.none,
+              key: UiKeys.sidebarUserAvatar,
+              onTap: () => _openProfile(context),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppSpacing.lg,
+                  horizontal: AppSpacing.sm,
+                ),
+                child: StreamBuilder<bool>(
+                  stream: widget.connectionStatusStream,
+                  initialData: widget
+                      .service
+                      .isConnected, // Use current connection status as initial data
+                  builder: (context, snapshot) {
+                    final isConnected =
+                        snapshot.data ?? widget.service.isConnected;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Use CircleAvatar; when no avatar, use same default as chat (UIKit)
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: colorTheme.primaryColor,
-                          child: _avatarPath != null &&
-                                  _avatarPath!.isNotEmpty &&
-                                  _avatarFileExists
-                              ? ClipOval(
-                                  child: Image.file(
-                                    File(_avatarPath!),
-                                    key: ValueKey(
-                                        'sidebar-avatar-${_avatarPath!}-$_avatarVersion'),
-                                    width: 56,
-                                    height: 56,
-                                    fit: BoxFit.cover,
-                                    // 56pt × 3× DPR = 168px raster — caps the
-                                    // decoded buffer instead of decoding the
-                                    // source avatar file at full resolution.
-                                    cacheWidth: 168,
-                                    cacheHeight: 168,
-                                  ),
-                                )
-                              : ClipOval(
-                                  child: Image.asset(
-                                    'images/default_user_icon.png',
-                                    package: 'tencent_cloud_chat_common',
-                                    width: 56,
-                                    height: 56,
-                                    fit: BoxFit.cover,
+                        Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
+                          children: [
+                            // Use CircleAvatar; when no avatar, use same default as chat (UIKit)
+                            CircleAvatar(
+                              radius: 28,
+                              backgroundColor: colorTheme.primaryColor,
+                              child:
+                                  _avatarPath != null &&
+                                      _avatarPath!.isNotEmpty &&
+                                      _avatarFileExists
+                                  ? ClipOval(
+                                      child: Image.file(
+                                        File(_avatarPath!),
+                                        key: ValueKey(
+                                          'sidebar-avatar-${_avatarPath!}-$_avatarVersion',
+                                        ),
+                                        width: 56,
+                                        height: 56,
+                                        fit: BoxFit.cover,
+                                        // 56pt × 3× DPR = 168px raster — caps the
+                                        // decoded buffer instead of decoding the
+                                        // source avatar file at full resolution.
+                                        cacheWidth: 168,
+                                        cacheHeight: 168,
+                                      ),
+                                    )
+                                  : ClipOval(
+                                      child: Image.asset(
+                                        'images/default_user_icon.png',
+                                        package: 'tencent_cloud_chat_common',
+                                        width: 56,
+                                        height: 56,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                            ),
+                            // Status indicator — sits on the bottom-right edge of
+                            // the avatar. Avatar radius is 28 (diameter 56); the
+                            // 12px dot is offset so its center lands on the rim.
+                            // Color goes through AppThemeConfig semantic tokens:
+                            // emerald for connected, muted secondary for offline.
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: isConnected
+                                      ? AppThemeConfig.successColor
+                                      : colorTheme.secondaryTextColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: colorTheme.backgroundColor,
+                                    width: 2,
                                   ),
                                 ),
+                              ),
+                            ),
+                          ],
                         ),
-                        // Status indicator — sits on the bottom-right edge of
-                        // the avatar. Avatar radius is 28 (diameter 56); the
-                        // 12px dot is offset so its center lands on the rim.
-                        // Color goes through AppThemeConfig semantic tokens:
-                        // emerald for connected, muted secondary for offline.
-                        Positioned(
-                          right: -2,
-                          bottom: -2,
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
+                        // Display nickname below avatar
+                        if (_nickname != null && _nickname!.isNotEmpty) ...[
+                          AppSpacing.verticalSm,
+                          SizedBox(
+                            width: double.infinity,
+                            child: Text(
+                              _nickname!,
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: colorTheme.primaryTextColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          AppSpacing.verticalXs,
+                          Text(
+                            isConnected
+                                ? (AppLocalizations.of(context)?.statusOnline ??
+                                      'Online')
+                                : (AppLocalizations.of(
+                                        context,
+                                      )?.statusOffline ??
+                                      'Offline'),
+                            style: theme.textTheme.labelSmall?.copyWith(
                               color: isConnected
                                   ? AppThemeConfig.successColor
                                   : colorTheme.secondaryTextColor,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: colorTheme.backgroundColor,
-                                width: 2,
-                              ),
+                              fontWeight: FontWeight.w500,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
+                        ],
                       ],
-                    ),
-                    // Display nickname below avatar
-                    if (_nickname != null && _nickname!.isNotEmpty) ...[
-                      AppSpacing.verticalSm,
-                      SizedBox(
-                        width: double.infinity,
-                        child: Text(
-                          _nickname!,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: colorTheme.primaryTextColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      AppSpacing.verticalXs,
-                      Text(
-                        isConnected
-                            ? (AppLocalizations.of(context)?.statusOnline ?? 'Online')
-                            : (AppLocalizations.of(context)?.statusOffline ?? 'Offline'),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: isConnected
-                              ? AppThemeConfig.successColor
-                              : colorTheme.secondaryTextColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ),
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         );
@@ -493,6 +529,7 @@ class _UserAvatarState extends State<_UserAvatar> {
 
 class _SidebarItem extends StatefulWidget {
   const _SidebarItem({
+    super.key,
     required this.context,
     required this.selected,
     required this.icon,
@@ -529,8 +566,8 @@ class _SidebarItemState extends State<_SidebarItem> {
         final bg = widget.selected
             ? colorTheme.primaryColor.withValues(alpha: 0.10)
             : (_isHovered
-                ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
-                : Colors.transparent);
+                  ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
+                  : Colors.transparent);
         return MouseRegion(
           cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _isHovered = true),
@@ -583,15 +620,20 @@ class _SidebarItemState extends State<_SidebarItem> {
                                 // badge in home_page.dart and lets text
                                 // scale gracefully.
                                 return Semantics(
-                                  label: AppLocalizations.of(context)
-                                          ?.unreadMessagesSemantics(totalUnreadCount) ??
+                                  label:
+                                      AppLocalizations.of(
+                                        context,
+                                      )?.unreadMessagesSemantics(
+                                        totalUnreadCount,
+                                      ) ??
                                       'Unread messages: $totalUnreadCount',
                                   container: true,
                                   child: ExcludeSemantics(
                                     child: UnconstrainedBox(
                                       child: Container(
-                                        constraints:
-                                            const BoxConstraints(minWidth: 16),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                        ),
                                         height: 16,
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: AppSpacing.xs,
@@ -599,7 +641,8 @@ class _SidebarItemState extends State<_SidebarItem> {
                                         decoration: BoxDecoration(
                                           color: AppThemeConfig.errorColor,
                                           borderRadius: BorderRadius.circular(
-                                              AppThemeConfig.badgeBorderRadius),
+                                            AppThemeConfig.badgeBorderRadius,
+                                          ),
                                         ),
                                         child: Center(
                                           child: Text(
@@ -608,14 +651,14 @@ class _SidebarItemState extends State<_SidebarItem> {
                                             overflow: TextOverflow.ellipsis,
                                             style: theme.textTheme.labelSmall
                                                 ?.copyWith(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w600,
-                                              height: 1.0,
-                                              fontSize: 10,
-                                              fontFeatures: const [
-                                                FontFeature.tabularFigures(),
-                                              ],
-                                            ),
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w600,
+                                                  height: 1.0,
+                                                  fontSize: 10,
+                                                  fontFeatures: const [
+                                                    FontFeature.tabularFigures(),
+                                                  ],
+                                                ),
                                             textAlign: TextAlign.center,
                                           ),
                                         ),
@@ -634,8 +677,9 @@ class _SidebarItemState extends State<_SidebarItem> {
                     widget.label,
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: widget.selected ? selColor : baseColor,
-                      fontWeight:
-                          widget.selected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: widget.selected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                     ),
                   ),
                 ],
@@ -650,6 +694,7 @@ class _SidebarItemState extends State<_SidebarItem> {
 
 class _ContactSidebarItem extends StatefulWidget {
   const _ContactSidebarItem({
+    super.key,
     required this.context,
     required this.selected,
     required this.icon,
@@ -679,7 +724,8 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
     // Listen to contact data changes to get application unread count
     final contactDataStream = TencentCloudChat.instance.eventBusInstance
         .on<TencentCloudChatContactData<dynamic>>(
-            "TencentCloudChatContactData");
+          "TencentCloudChatContactData",
+        );
     _contactDataSub = contactDataStream?.listen((data) {
       if (data.currentUpdatedFields ==
               TencentCloudChatContactDataKeys.applicationCount ||
@@ -712,8 +758,8 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
         final bg = widget.selected
             ? colorTheme.primaryColor.withValues(alpha: 0.10)
             : (_isHovered
-                ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
-                : Colors.transparent);
+                  ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
+                  : Colors.transparent);
         return MouseRegion(
           cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _isHovered = true),
@@ -759,15 +805,19 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
                                     ? "99+"
                                     : "$_applicationUnreadCount";
                                 return Semantics(
-                                  label: AppLocalizations.of(context)
-                                          ?.unreadMessagesSemantics(
-                                              _applicationUnreadCount) ??
+                                  label:
+                                      AppLocalizations.of(
+                                        context,
+                                      )?.unreadMessagesSemantics(
+                                        _applicationUnreadCount,
+                                      ) ??
                                       'Unread messages: $_applicationUnreadCount',
                                   container: true,
                                   child: ExcludeSemantics(
                                     child: Container(
-                                      constraints:
-                                          const BoxConstraints(minWidth: 16),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 16,
+                                      ),
                                       height: 16,
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: AppSpacing.xs,
@@ -775,7 +825,8 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
                                       decoration: BoxDecoration(
                                         color: AppThemeConfig.errorColor,
                                         borderRadius: BorderRadius.circular(
-                                            AppThemeConfig.badgeBorderRadius),
+                                          AppThemeConfig.badgeBorderRadius,
+                                        ),
                                       ),
                                       child: Center(
                                         child: Text(
@@ -784,11 +835,11 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
                                           overflow: TextOverflow.ellipsis,
                                           style: theme.textTheme.labelSmall
                                               ?.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                            height: 1.0,
-                                            fontSize: 10,
-                                          ),
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                                height: 1.0,
+                                                fontSize: 10,
+                                              ),
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
@@ -806,8 +857,9 @@ class _ContactSidebarItemState extends State<_ContactSidebarItem> {
                     widget.label,
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: widget.selected ? selColor : baseColor,
-                      fontWeight:
-                          widget.selected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: widget.selected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                     ),
                   ),
                 ],

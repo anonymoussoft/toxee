@@ -38,3 +38,14 @@ lib/ui/settings/sidebar.dart
 lib/util/account_service.dart
 lib/util/app_paths.dart
 lib/util/prefs.dart
+# Appended 2026-06-04 (bulk landing of the L3/real-UI automation campaigns):
+# - l3_debug_tools.dart: debug-build-gated L3 MCP tool registry; one cohesive
+#   dispatch table validated by tool/mcp_test/run_l3_scenarios.dart. Split is
+#   planned alongside the L3 tool taxonomy work, not as commit churn.
+# - placeholder_account_migration.dart: transactional one-shot migration with
+#   an ordered rollback stack — intentionally a single auditable unit.
+# - settings_page_build.dart: grew 500→570 with the settings actions-row
+#   rework; next settings refactor should re-split it.
+lib/ui/settings/settings_page_build.dart
+lib/ui/testing/l3_debug_tools.dart
+lib/util/placeholder_account_migration.dart

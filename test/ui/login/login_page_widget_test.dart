@@ -27,6 +27,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tencent_cloud_chat_sdk/native_im/bindings/native_library_manager.dart';
@@ -35,6 +36,7 @@ import 'package:toxee/auth/login_use_case.dart';
 import 'package:toxee/i18n/app_localizations.dart';
 import 'package:toxee/ui/login/login_page_controller.dart';
 import 'package:toxee/ui/login_page.dart';
+import 'package:toxee/ui/testing/ui_keys.dart';
 import 'package:toxee/util/prefs.dart';
 import 'package:tim2tox_dart/ffi/tim2tox_ffi.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
@@ -130,6 +132,24 @@ class _RestoringLoginPageController extends LoginPageController {
   }
 }
 
+class _RecordingLoginPageController extends LoginPageController {
+  LoginParams? lastLoginParams;
+
+  @override
+  Future<LoginControllerResult> login({
+    required String nickname,
+    required String statusMessage,
+    String? password,
+  }) async {
+    lastLoginParams = LoginParams(
+      nickname: nickname,
+      statusMessage: statusMessage,
+      password: password,
+    );
+    return const LoginControllerFailure('stop after recording');
+  }
+}
+
 /// Stub that never resolves — useful for asserting the "busy" UI state where
 /// the user has tapped Login and the controller is still in flight. Not used
 /// yet, but available if a future test wants to pin down the busy spinner.
@@ -149,7 +169,8 @@ Widget _pumpableLoginPage({
   Future<void> Function({
     required FfiChatService service,
     bool reEncryptProfile,
-  })? teardownSession,
+  })?
+  teardownSession,
 }) {
   return MaterialApp(
     localizationsDelegates: const [
@@ -237,12 +258,18 @@ Future<void> _initPrefsWithSavedAccount({
 }) async {
   SharedPreferences.setMockInitialValues({
     'account_list': jsonEncode([
-      {
-        'toxId': toxId,
-        'nickname': nickname,
-        'statusMessage': statusMessage,
-      },
+      {'toxId': toxId, 'nickname': nickname, 'statusMessage': statusMessage},
     ]),
+  });
+  final prefs = await SharedPreferences.getInstance();
+  await Prefs.initialize(prefs);
+}
+
+Future<void> _initPrefsWithSavedAccounts(
+  List<Map<String, String>> accounts,
+) async {
+  SharedPreferences.setMockInitialValues({
+    'account_list': jsonEncode(accounts),
   });
   final prefs = await SharedPreferences.getInstance();
   await Prefs.initialize(prefs);
@@ -251,20 +278,68 @@ Future<void> _initPrefsWithSavedAccount({
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // flutter_secure_storage has no platform implementation under `flutter
+  // test`, and an unmocked plugin channel's reply only arrives via the REAL
+  // event loop — which the FakeAsync test zone never yields to. Any flow that
+  // awaits `Prefs.hasAccountPassword` (e.g. saved-account quick login on an
+  // account with no cached verified password) would therefore suspend forever
+  // and the test would observe stale state with no exception. Mirror the
+  // in-memory channel mock used by account_password_lifecycle_test.dart.
+  final secureStore = <String, String>{};
+  const secureChannel =
+      MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+
+  setUp(() {
+    secureStore.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureChannel, (MethodCall call) async {
+          final args =
+              (call.arguments as Map?)?.cast<String, dynamic>() ?? const {};
+          switch (call.method) {
+            case 'write':
+              secureStore[args['key'] as String] = args['value'] as String;
+              return null;
+            case 'read':
+              return secureStore[args['key'] as String];
+            case 'delete':
+              secureStore.remove(args['key'] as String);
+              return null;
+            case 'containsKey':
+              return secureStore.containsKey(args['key'] as String);
+            case 'readAll':
+              return Map<String, String>.from(secureStore);
+            case 'deleteAll':
+              secureStore.clear();
+              return null;
+            default:
+              return null;
+          }
+        });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureChannel, null);
+  });
+
   group('LoginPage - empty prefs (first-run)', () {
-    testWidgets('renders welcome state with shield icon and primary actions',
-        (tester) async {
+    testWidgets('renders welcome state with shield icon and primary actions', (
+      tester,
+    ) async {
       await _initEmptyPrefs();
       await _pumpAndLoad(tester, _pumpableLoginPage());
 
       // First-run welcome: shield icon + appTitle + tagline.
-      expect(find.byIcon(Icons.shield_outlined), findsOneWidget,
-          reason: 'First-run welcome icon must be present when no accounts');
+      expect(
+        find.byIcon(Icons.shield_outlined),
+        findsOneWidget,
+        reason: 'First-run welcome icon must be present when no accounts',
+      );
 
       // Restore-from-.tox is a peer-prominence primary action; identified by
       // the documented Key on the LoginPage state class.
       expect(
-        find.byKey(const Key('loginPage.restoreFromToxFile')),
+        find.byKey(UiKeys.loginPageRestoreFromToxFile),
         findsOneWidget,
         reason:
             'Restore action must be a top-level affordance, not buried under '
@@ -278,82 +353,110 @@ void main() {
       expect(find.text('Saved Accounts'), findsNothing);
     });
 
-    testWidgets('Settings icon button is rendered in the app bar',
-        (tester) async {
+    testWidgets('Settings icon button is rendered in the app bar', (
+      tester,
+    ) async {
       await _initEmptyPrefs();
       await _pumpAndLoad(tester, _pumpableLoginPage());
 
       // The AppBar action is an IconButton with Icons.settings — find by icon
       // rather than tooltip to avoid coupling to the localized string.
-      expect(find.byIcon(Icons.settings), findsOneWidget,
-          reason: 'Settings entry must be reachable from the login page');
-    });
-
-    testWidgets('welcome action cards fit on a 360dp-wide screen without overflow',
-        (tester) async {
-      await _initEmptyPrefs();
-      final exception =
-          await _pumpAndLoadStrictNarrow(tester, _pumpableLoginPage());
-
-      expect(exception, isNull,
-          reason:
-              'The first-run login actions must render on a narrow phone width '
-              'without throwing a RenderFlex overflow.');
       expect(
-        find.byKey(const Key('loginPage.restoreFromToxFile')),
+        find.byIcon(Icons.settings),
         findsOneWidget,
-        reason:
-            'The restore action must remain visible on narrow screens after layout settles.',
+        reason: 'Settings entry must be reachable from the login page',
       );
     });
 
     testWidgets(
-        'restore success lets the restored password flow into the next account login without re-prompting',
-        (tester) async {
-      await _initPrefsWithSavedAccount(
-        nickname: 'Recovered',
-        toxId: _RestoringLoginPageController.toxId,
-        statusMessage: 'Back from backup',
-      );
-      final controller = _RestoringLoginPageController();
-      await _pumpAndLoad(
-        tester,
-        _pumpableLoginPage(
-          loginPageController: controller,
-        ),
-      );
+      'welcome action cards fit on a 360dp-wide screen without overflow',
+      (tester) async {
+        await _initEmptyPrefs();
+        final exception = await _pumpAndLoadStrictNarrow(
+          tester,
+          _pumpableLoginPage(),
+        );
 
-      await tester.tap(find.byKey(const Key('loginPage.restoreFromToxFile')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+        expect(
+          exception,
+          isNull,
+          reason:
+              'The first-run login actions must render on a narrow phone width '
+              'without throwing a RenderFlex overflow.',
+        );
+        expect(
+          find.byKey(UiKeys.loginPageRestoreFromToxFile),
+          findsOneWidget,
+          reason:
+              'The restore action must remain visible on narrow screens after layout settles.',
+        );
+      },
+    );
 
-      final recoveredFinder = find.text('Recovered');
-      expect(recoveredFinder, findsOneWidget,
-          reason: 'The restored account should already be present in the picker.');
+    testWidgets(
+      'restore success lets the restored password flow into the next account login without re-prompting',
+      (tester) async {
+        await _initPrefsWithSavedAccount(
+          nickname: 'Recovered',
+          toxId: _RestoringLoginPageController.toxId,
+          statusMessage: 'Back from backup',
+        );
+        final controller = _RestoringLoginPageController();
+        await _pumpAndLoad(
+          tester,
+          _pumpableLoginPage(loginPageController: controller),
+        );
 
-      final recoveredCard = find.ancestor(
-        of: recoveredFinder,
-        matching: find.byType(InkWell),
-      );
-      tester.widget<InkWell>(recoveredCard).onTap!.call();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+        await tester.tap(find.byKey(UiKeys.loginPageRestoreFromToxFile));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
 
-      expect(find.byType(AlertDialog), findsNothing,
+        final recoveredFinder = find.text('Recovered');
+        expect(
+          recoveredFinder,
+          findsOneWidget,
+          reason:
+              'The restored account should already be present in the picker.',
+        );
+
+        final recoveredCard = find.byKey(
+          UiKeys.loginPageAccountCard(_RestoringLoginPageController.toxId),
+        );
+        expect(
+          tester.widget<InkWell>(recoveredCard).onTap,
+          isNotNull,
+          reason:
+              'The saved-account automation key must live on the tappable card affordance.',
+        );
+        await tester.tap(recoveredCard);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+
+        expect(
+          find.byType(AlertDialog),
+          findsNothing,
           reason:
               'The restored password should be reusable for the next tap-to-login '
-              'instead of prompting the user again immediately.');
-      expect(controller.lastLoginParams, isNotNull,
-          reason: 'Tapping the restored account should proceed into login.');
-      expect(controller.lastLoginParams?.password,
-          _RestoringLoginPageController.password);
-      expect(controller.lastLoginParams?.nickname, 'Recovered');
-    });
+              'instead of prompting the user again immediately.',
+        );
+        expect(
+          controller.lastLoginParams,
+          isNotNull,
+          reason: 'Tapping the restored account should proceed into login.',
+        );
+        expect(
+          controller.lastLoginParams?.password,
+          _RestoringLoginPageController.password,
+        );
+        expect(controller.lastLoginParams?.nickname, 'Recovered');
+      },
+    );
   });
 
   group('LoginPage - saved-account picker', () {
-    testWidgets('renders Saved accounts header + entry from prefs',
-        (tester) async {
+    testWidgets('renders Saved accounts header + entry from prefs', (
+      tester,
+    ) async {
       await _initPrefsWithSavedAccount(
         nickname: 'Alice',
         toxId: 'A' * 64,
@@ -361,22 +464,85 @@ void main() {
       );
       await _pumpAndLoad(tester, _pumpableLoginPage());
 
-      expect(find.text('Saved Accounts'), findsOneWidget,
-          reason: 'Section header must show when at least one account exists');
-      expect(find.text('Alice'), findsOneWidget,
-          reason: 'Picker must render the saved nickname');
-      expect(find.text('hello world'), findsOneWidget,
-          reason: 'Status message renders under the nickname');
+      expect(
+        find.text('Saved Accounts'),
+        findsOneWidget,
+        reason: 'Section header must show when at least one account exists',
+      );
+      expect(
+        find.text('Alice'),
+        findsOneWidget,
+        reason: 'Picker must render the saved nickname',
+      );
+      expect(
+        find.text('hello world'),
+        findsOneWidget,
+        reason: 'Status message renders under the nickname',
+      );
     });
 
-    testWidgets('unnamed account falls back to placeholder label',
-        (tester) async {
+    testWidgets('saved-account cards expose stable per-account keys', (
+      tester,
+    ) async {
+      final aliceToxId = 'A' * 64;
+      final bobToxId = 'B' * 64;
+      await _initPrefsWithSavedAccounts([
+        {'toxId': aliceToxId, 'nickname': 'Alice', 'statusMessage': 'alpha'},
+        {'toxId': bobToxId, 'nickname': 'Bob', 'statusMessage': 'beta'},
+      ]);
+      await _pumpAndLoad(tester, _pumpableLoginPage());
+
+      final aliceCard = find.byKey(Key('login_page_account_card:$aliceToxId'));
+      final bobCard = find.byKey(Key('login_page_account_card:$bobToxId'));
+
+      expect(aliceCard, findsOneWidget);
+      expect(bobCard, findsOneWidget);
+      expect(tester.widget<InkWell>(aliceCard).onTap, isNotNull);
+      expect(tester.widget<InkWell>(bobCard).onTap, isNotNull);
+      expect(
+        find.descendant(of: aliceCard, matching: find.text('Alice')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: bobCard, matching: find.text('Bob')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('saved-account card key targets the matching account login', (
+      tester,
+    ) async {
+      final aliceToxId = 'A' * 64;
+      final bobToxId = 'B' * 64;
+      final controller = _RecordingLoginPageController();
+      await _initPrefsWithSavedAccounts([
+        {'toxId': aliceToxId, 'nickname': 'Alice', 'statusMessage': 'alpha'},
+        {'toxId': bobToxId, 'nickname': 'Bob', 'statusMessage': 'beta'},
+      ]);
+      await _pumpAndLoad(
+        tester,
+        _pumpableLoginPage(loginPageController: controller),
+      );
+
+      // Saved-account rows animate into place; wait until the Bob row is at
+      // rest so the gesture lands on the keyed affordance rather than a
+      // still-sliding transition target.
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.byKey(Key('login_page_account_card:$bobToxId')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(controller.lastLoginParams, isNotNull);
+      expect(controller.lastLoginParams?.nickname, 'Bob');
+      expect(controller.lastLoginParams?.statusMessage, 'beta');
+    });
+
+    testWidgets('unnamed account falls back to placeholder label', (
+      tester,
+    ) async {
       // Empty nickname goes through `nickname.isNotEmpty ? nickname :
       // l10n.unnamedAccount` in the picker row.
-      await _initPrefsWithSavedAccount(
-        nickname: '',
-        toxId: 'B' * 64,
-      );
+      await _initPrefsWithSavedAccount(nickname: '', toxId: 'B' * 64);
       await _pumpAndLoad(tester, _pumpableLoginPage());
 
       // The en arb maps `unnamedAccount` to "Unnamed account"; matching the
@@ -388,11 +554,52 @@ void main() {
         reason: 'Picker must show a non-empty label even for blank nicknames',
       );
     });
+
+    testWidgets(
+      'many saved accounts are scrollable and expose the last entry',
+      (tester) async {
+        await _initPrefsWithSavedAccounts(
+          List.generate(8, (i) {
+            final ch = String.fromCharCode('A'.codeUnitAt(0) + i);
+            return {
+              'toxId': ch * 64,
+              'nickname': 'User $i',
+              'statusMessage': 'status $i',
+            };
+          }),
+        );
+        await tester.binding.setSurfaceSize(const Size(1024, 700));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await _pumpAndLoad(tester, _pumpableLoginPage());
+
+        expect(
+          find.byType(Scrollbar),
+          findsOneWidget,
+          reason:
+              'Saved accounts list should advertise scrollability when long.',
+        );
+        expect(
+          find.text('User 7'),
+          findsNothing,
+          reason: 'Last entry should start off-screen in the constrained list.',
+        );
+
+        await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('User 7'),
+          findsOneWidget,
+          reason: 'The last saved account must become reachable via scrolling.',
+        );
+      },
+    );
   });
 
   group('LoginPage - controller injection', () {
-    testWidgets('accepts a custom LoginUseCase without crashing',
-        (tester) async {
+    testWidgets('accepts a custom LoginUseCase without crashing', (
+      tester,
+    ) async {
       // The controller wiring is the seam used by every login-flow test —
       // verify the page tolerates a custom use case being injected.
       await _initEmptyPrefs();
@@ -404,45 +611,53 @@ void main() {
       expect(find.byIcon(Icons.shield_outlined), findsOneWidget);
     });
 
-    testWidgets('successful login tears the session down when injected boot fails',
-        (tester) async {
-      if (!_ffiAvailable()) return;
-      await _initPrefsWithSavedAccount(
-        nickname: 'Alice',
-        toxId: 'A' * 64,
-      );
-      final service = _StubFfiChatService();
-      final tornDown = <FfiChatService>[];
-      final controller = _SuccessfulLoginPageController(service);
-      await _pumpAndLoad(
-        tester,
-        _pumpableLoginPage(
-          loginPageController: controller,
-          bootSession: (_) async => throw Exception('boot failed'),
-          teardownSession: ({required service, reEncryptProfile = true}) async {
-            tornDown.add(service);
-          },
-        ),
-      );
+    testWidgets(
+      'successful login tears the session down when injected boot fails',
+      (tester) async {
+        if (!_ffiAvailable()) return;
+        await _initPrefsWithSavedAccount(nickname: 'Alice', toxId: 'A' * 64);
+        final service = _StubFfiChatService();
+        final tornDown = <FfiChatService>[];
+        final controller = _SuccessfulLoginPageController(service);
+        await _pumpAndLoad(
+          tester,
+          _pumpableLoginPage(
+            loginPageController: controller,
+            bootSession: (_) async => throw Exception('boot failed'),
+            teardownSession:
+                ({required service, reEncryptProfile = true}) async {
+                  tornDown.add(service);
+                },
+          ),
+        );
 
-      final dynamic state = tester.state(find.byType(LoginPage));
-      state.debugPrimeVerifiedPasswordForTest(
-        toxId: 'A' * 64,
-        password: 'primed-password',
-      );
-      await state.debugQuickLoginForTest({
-        'toxId': 'A' * 64,
-        'nickname': 'Alice',
-        'statusMessage': '',
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+        final dynamic state = tester.state(find.byType(LoginPage));
+        state.debugPrimeVerifiedPasswordForTest(
+          toxId: 'A' * 64,
+          password: 'primed-password',
+        );
+        await state.debugQuickLoginForTest({
+          'toxId': 'A' * 64,
+          'nickname': 'Alice',
+          'statusMessage': '',
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
 
-      expect(controller.loginCalls, 1,
-          reason: 'Saved-account tap should invoke the injected login controller.');
-      expect(tornDown, [service],
+        expect(
+          controller.loginCalls,
+          1,
           reason:
-              'LoginPage must tear down a live session when boot fails after login succeeded.');
-    }, skip: !_ffiAvailable());
+              'Saved-account tap should invoke the injected login controller.',
+        );
+        expect(
+          tornDown,
+          [service],
+          reason:
+              'LoginPage must tear down a live session when boot fails after login succeeded.',
+        );
+      },
+      skip: !_ffiAvailable(),
+    );
   });
 }

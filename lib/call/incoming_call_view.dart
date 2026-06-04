@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../i18n/app_localizations.dart';
+import '../ui/testing/ui_keys.dart';
 import 'call_state_notifier.dart';
 import 'ringing_call_manager.dart';
 import 'call_ui_components.dart';
@@ -44,6 +45,7 @@ class IncomingCallView extends StatelessWidget {
         key: const ValueKey('incoming-call-actions'),
         actions: [
           CallDockAction(
+            key: UiKeys.callDeclineButton,
             icon: Icons.call_end,
             label: l10n.callReject,
             destructive: true,
@@ -53,6 +55,7 @@ class IncomingCallView extends StatelessWidget {
             },
           ),
           CallDockAction(
+            key: UiKeys.callAcceptButton,
             icon: Icons.call,
             label: l10n.callAccept,
             affirmative: true,

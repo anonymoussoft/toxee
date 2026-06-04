@@ -32,6 +32,7 @@ import 'package:tencent_cloud_chat_common/tuicore/tencent_cloud_chat_core.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation_controller.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation.dart'
     as conv_pkg;
+import 'package:tencent_cloud_chat_conversation/widgets/tencent_cloud_chat_conversation_item.dart';
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message.dart'
     as msg_pkg;
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_input/tencent_cloud_chat_message_input.dart';
@@ -40,6 +41,8 @@ import 'package:tencent_cloud_chat_common/components/components_definition/tence
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart'
     as contact_pkg;
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart';
+import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_contact_item.dart';
+import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_contact_group_list.dart';
 import 'contact/contact_builder_override.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile_body.dart';
@@ -102,13 +105,123 @@ import 'widgets/app_snackbar.dart';
 import 'package:window_manager/window_manager.dart';
 import '../notifications/notification_message_listener.dart';
 import '../notifications/notification_service.dart';
+import 'testing/ui_keys.dart';
+import 'testing/l3_debug_tools.dart';
 
 part 'home_page_plugins.dart';
 part 'home_page_bootstrap.dart';
 
 enum _MediaPickType { image, video }
 
+@visibleForTesting
+List<PopupMenuEntry<String>> buildConversationContextMenuItems({
+  required AppLocalizations l10n,
+  required ColorScheme scheme,
+  required bool isPinned,
+  required bool hasUnread,
+}) {
+  return <PopupMenuEntry<String>>[
+    PopupMenuItem<String>(
+      key: isPinned
+          ? UiKeys.conversationContextMenuUnpinItem
+          : UiKeys.conversationContextMenuPinItem,
+      value: 'pin',
+      child: Row(
+        children: [
+          Icon(
+            isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+            size: 18,
+            color: scheme.onSurface,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(isPinned ? l10n.unpinConversation : l10n.pinConversation),
+        ],
+      ),
+    ),
+    PopupMenuItem<String>(
+      key: UiKeys.conversationContextMenuMarkReadItem,
+      value: 'mark_read',
+      enabled: hasUnread,
+      child: Row(
+        children: [
+          Icon(
+            Icons.mark_email_read_outlined,
+            size: 18,
+            color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(l10n.markConversationAsRead),
+        ],
+      ),
+    ),
+    const PopupMenuDivider(),
+    PopupMenuItem<String>(
+      key: UiKeys.conversationContextMenuDeleteItem,
+      value: 'delete',
+      child: Row(
+        children: [
+          Icon(Icons.delete_outline, size: 18, color: scheme.error),
+          const SizedBox(width: AppSpacing.sm),
+          Text(l10n.delete, style: TextStyle(color: scheme.error)),
+        ],
+      ),
+    ),
+  ];
+}
+
+@visibleForTesting
+AlertDialog buildDeleteConversationDialog({
+  required BuildContext dialogCtx,
+  required AppLocalizations l10n,
+  required ColorScheme scheme,
+  required String conversationLabel,
+}) {
+  // Pop ONLY while this dialog is still the topmost route. Without this guard a
+  // double-invocation of the button — a fast real double-click, or a test
+  // harness that both dispatches a synthetic pointer AND directly calls
+  // `onPressed` — fires `pop` twice: the first closes the dialog, the second
+  // unwinds the root HomePage route, emptying the Navigator and blanking the
+  // whole window. `ModalRoute.isCurrent` flips to false synchronously inside
+  // the first `pop`, so the second call is a no-op. This dialog is shown
+  // directly over HomePage (the only route), which is exactly the case where
+  // the extra pop has nothing left to land on.
+  void dismiss(bool result) {
+    final route = ModalRoute.of(dialogCtx);
+    if (route != null && route.isCurrent) {
+      Navigator.of(dialogCtx).pop(result);
+    }
+  }
+
+  return AlertDialog(
+    title: Text(l10n.deleteConversationTitle),
+    content: Text(l10n.deleteConversationBody(conversationLabel)),
+    actions: [
+      TextButton(
+        onPressed: () => dismiss(false),
+        child: Text(l10n.cancel),
+      ),
+      TextButton(
+        key: UiKeys.deleteConversationConfirmButton,
+        onPressed: () => dismiss(true),
+        style: TextButton.styleFrom(foregroundColor: scheme.error),
+        child: Text(l10n.delete),
+      ),
+    ],
+  );
+}
+
 class HomePage extends StatefulWidget {
+  // NOTE: an `initAfterSessionReadyOverride` constructor seam used to live
+  // here. It only skipped `_initAfterSessionReady()` but `build()` still
+  // bound UIKit globals via `initGlobalAdapterInBuildPhase()` and built
+  // `TencentCloudChatConversation` / `Contact` / `SettingsPage` inside the
+  // IndexedStack — so callers couldn't actually hermetic-pump HomePage,
+  // they'd just hit the UIKit globals via a different path. Removed
+  // 2026-05-28 per HYBRID_ARCHITECTURE Layer 2/3 split (see
+  // doc/architecture/UI_TEST_LAYERING.en.md): tests that need HomePage
+  // belong in `integration_test/` against a host bundle, not in `test/`
+  // pumped against a fake binding. If you need finer per-piece control,
+  // use `SessionRuntimeCoordinator.debugInitBodyOverride`.
   const HomePage({super.key, required this.service});
   final FfiChatService service;
   @override
@@ -121,7 +234,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   StreamSubscription? _friendsSub;
   StreamSubscription? _appsSub;
   List<({String userId, String nickName, bool online, String status})>
-      _friends = [];
+  _friends = [];
   Timer? _refreshTimer;
   Set<String> _localFriends = {};
   bool _autoAcceptFriends = false;
@@ -146,10 +259,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // conn:success.
   Timer? _noConnectionBannerTimer;
   StreamSubscription<TencentCloudChatConversationData<dynamic>>?
-      _conversationDataSub;
+  _conversationDataSub;
   StreamSubscription<TencentCloudChatContactData<dynamic>>? _contactDataSub;
   StreamSubscription<TencentCloudChatGroupProfileData<dynamic>>?
-      _groupProfileDataSub;
+  _groupProfileDataSub;
   StreamSubscription<List<V2TimConversation>>? _convProviderSub;
   StreamSubscription<int>? _unreadProviderSub;
   // Track last membersChange event time per groupID to prevent loops
@@ -209,7 +322,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // - History queries to use Platform interface (Tim2ToxSdkPlatform -> FfiChatService -> MessageHistoryPersistence)
     // This ensures history messages are loaded from persistence service instead of returning empty list from C++ layer
 
-    // Session runtime (FakeUIKit, platform, CallServiceManager) via coordinator
+    // Session runtime (FakeUIKit, platform, CallServiceManager) via coordinator.
     unawaited(_initAfterSessionReady());
     // React to locale changes once, instead of scheduling a post-frame
     // setLocale in every `build()`. Listener fires only on value change.
@@ -224,47 +337,54 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!mounted) return;
       try {
         conv_pkg
-            .TencentCloudChatConversationManager.eventHandlers.uiEventHandlers
+            .TencentCloudChatConversationManager
+            .eventHandlers
+            .uiEventHandlers
             .setEventHandlers(
-          onSecondaryTapConversationItem: ({
-            required V2TimConversation conversation,
-            required Offset position,
-          }) async {
-            if (!mounted) return false;
-            await _showConversationContextMenu(conversation, position);
-            return true;
-          },
-          onLongPressConversationItem: ({
-            required V2TimConversation conversation,
-            required Offset position,
-          }) async {
-            if (!mounted) return false;
-            await _showConversationContextMenu(conversation, position);
-            return true;
-          },
-        );
+              onSecondaryTapConversationItem:
+                  ({
+                    required V2TimConversation conversation,
+                    required Offset position,
+                  }) async {
+                    if (!mounted) return false;
+                    await _showConversationContextMenu(conversation, position);
+                    return true;
+                  },
+              onLongPressConversationItem:
+                  ({
+                    required V2TimConversation conversation,
+                    required Offset position,
+                  }) async {
+                    if (!mounted) return false;
+                    await _showConversationContextMenu(conversation, position);
+                    return true;
+                  },
+            );
         _bag.add(() {
           // Tear down the handler closure on dispose so it can't fire
           // against a stale State context. There's no "clear" API, so set
           // it back to a no-op that returns false (default behavior).
           try {
-            conv_pkg.TencentCloudChatConversationManager.eventHandlers
+            conv_pkg
+                .TencentCloudChatConversationManager
+                .eventHandlers
                 .uiEventHandlers
                 .setEventHandlers(
-              onSecondaryTapConversationItem: ({
-                required V2TimConversation conversation,
-                required Offset position,
-              }) async =>
-                  false,
-              onLongPressConversationItem: ({
-                required V2TimConversation conversation,
-                required Offset position,
-              }) async =>
-                  false,
-            );
+                  onSecondaryTapConversationItem:
+                      ({
+                        required V2TimConversation conversation,
+                        required Offset position,
+                      }) async => false,
+                  onLongPressConversationItem:
+                      ({
+                        required V2TimConversation conversation,
+                        required Offset position,
+                      }) async => false,
+                );
           } catch (e) {
             AppLogger.warn(
-                '[HomePage] failed to restore onSecondaryTapConversationItem no-op: $e');
+              '[HomePage] failed to restore onSecondaryTapConversationItem no-op: $e',
+            );
           }
         });
       } catch (e, st) {
@@ -352,15 +472,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final requestMessage =
         AppLocalizations.of(context)?.defaultFriendRequestMessage ?? 'Hello';
     try {
-      await widget.service.addFriend(userID, requestMessage: requestMessage);
-      // Show success message
-      if (mounted) {
+      final result = await widget.service.addFriend(
+        userID,
+        requestMessage: requestMessage,
+      );
+      if (!mounted) return;
+      if (result.isSuccess) {
         AppSnackBar.show(
           context,
           AppLocalizations.of(context)!.friendRequestSent,
         );
         // Refresh contacts to update UI
         FakeUIKit.instance.im?.refreshContacts();
+      } else {
+        // Async-failure path (e.g. result_code=6770 "Friend add requires full
+        // Tox address"). Surface the V2TIM detail so users see the actual
+        // reason instead of a silent close.
+        final detail = result.resultInfo.isNotEmpty
+            ? result.resultInfo
+            : 'result_code=${result.resultCode}';
+        AppSnackBar.showError(
+          context,
+          AppLocalizations.of(context)!.failedToSendFriendRequest(detail),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -377,8 +511,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     final running = await Prefs.getLanBootstrapServiceRunning();
     if (running) {
-      final info =
-          await LanBootstrapServiceManager.instance.getBootstrapServiceInfo();
+      final info = await LanBootstrapServiceManager.instance
+          .getBootstrapServiceInfo();
       if (!mounted) return;
       // Only call setState if anything actually changed — this method is
       // driven by a 2-second periodic timer; without the equality gate we
@@ -547,8 +681,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     unawaited(_updateTray());
   }
 
-  Future<void> _sendMedia(BuildContext context,
-      {String? userId, String? groupId, required _MediaPickType type}) async {
+  Future<void> _sendMedia(
+    BuildContext context, {
+    String? userId,
+    String? groupId,
+    required _MediaPickType type,
+  }) async {
     final appL10n = AppLocalizations.of(context)!;
     final label = type == _MediaPickType.image ? appL10n.photo : appL10n.video;
     String? pickedPath;
@@ -584,8 +722,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               : appL10n.friendOfflineSendVideoFailed;
           final mgr = FakeUIKit.instance.messageManager;
           if (mgr != null) {
-            final text =
-                pickedPath == null ? failureMsg : '$failureMsg\n$pickedPath';
+            final text = pickedPath == null
+                ? failureMsg
+                : '$failureMsg\n$pickedPath';
             await mgr.sendText('c2c_$userId', text);
           }
         }
@@ -625,10 +764,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // value; if Prefs hasn't been populated yet (login race) fall back to
     // `accountKey` which itself resolves to the real Tox address via FFI.
     final storedToxId = await Prefs.getCurrentAccountToxId();
-    final resolvedSelfId =
-        (storedToxId != null && storedToxId.isNotEmpty)
-            ? storedToxId
-            : widget.service.accountKey;
+    final resolvedSelfId = (storedToxId != null && storedToxId.isNotEmpty)
+        ? storedToxId
+        : widget.service.accountKey;
     final displayName = (nick != null && nick.trim().isNotEmpty)
         ? nick.trim()
         : resolvedSelfId;
@@ -638,7 +776,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       userId: resolvedSelfId,
       displayName: displayName,
       locale: locale,
-      bottomText: appL10n?.scanQrCodeToAddContact ??
+      bottomText:
+          appL10n?.scanQrCodeToAddContact ??
           'Scan QR code to add me as contact',
       primaryColor: AppThemeConfig.primaryColor,
       avatarPath: avatarPath,
@@ -646,9 +785,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   List<TencentCloudChatMessageGeneralOptionItem> _buildDesktopInputOptions(
-      BuildContext context,
-      {String? userID,
-      String? groupID}) {
+    BuildContext context, {
+    String? userID,
+    String? groupID,
+  }) {
     final appL10n = AppLocalizations.of(context)!;
     final photoLabel = appL10n.photo;
     final videoLabel = appL10n.video;
@@ -661,16 +801,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         icon: Icons.photo_outlined,
         label: photoLabel,
         onTap: ({Offset? offset}) async {
-          await _sendMedia(context,
-              userId: userID, groupId: groupID, type: _MediaPickType.image);
+          await _sendMedia(
+            context,
+            userId: userID,
+            groupId: groupID,
+            type: _MediaPickType.image,
+          );
         },
       ),
       TencentCloudChatMessageGeneralOptionItem(
         icon: Icons.videocam_outlined,
         label: videoLabel,
         onTap: ({Offset? offset}) async {
-          await _sendMedia(context,
-              userId: userID, groupId: groupID, type: _MediaPickType.video);
+          await _sendMedia(
+            context,
+            userId: userID,
+            groupId: groupID,
+            type: _MediaPickType.video,
+          );
         },
       ),
     ];
@@ -729,7 +877,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   final mgr = FakeUIKit.instance.messageManager;
                   if (mgr != null) {
                     await mgr.sendText(
-                        'c2c_$userID', appL10n.friendOfflineSendCardFailed);
+                      'c2c_$userID',
+                      appL10n.friendOfflineSendCardFailed,
+                    );
                   }
                 }
                 userMsg = appL10n.friendOfflineCannotSendFile;
@@ -749,8 +899,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   final colonIndex = errorText.indexOf(':');
                   if (colonIndex > 0) {
                     final beforeColon = errorText.substring(0, colonIndex);
-                    final afterColon =
-                        errorText.substring(colonIndex + 1).trim();
+                    final afterColon = errorText
+                        .substring(colonIndex + 1)
+                        .trim();
                     // Check if after colon looks like a file path
                     if (afterColon.startsWith('/') ||
                         afterColon.contains('\\')) {
@@ -790,8 +941,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final applicationUnreadCount = UikitDataFacade.applicationUnreadCount;
     // Total count = conversation unread + friend applications
     final totalCount = uikitUnreadCount + applicationUnreadCount;
-    await AppTray.instance
-        .update(count: totalCount, online: widget.service.isConnected);
+    await AppTray.instance.update(
+      count: totalCount,
+      online: widget.service.isConnected,
+    );
   }
 
   @override
@@ -808,8 +961,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       try {
         // Set contact event handlers for navigation
         // Note: onNavigateToChat is an alias for onTapContactItem (getter that returns _onTapContactItem)
-        UikitDataFacade.contactEventHandlers =
-            TencentCloudChatContactEventHandlers(
+        UikitDataFacade
+            .contactEventHandlers = TencentCloudChatContactEventHandlers(
           uiEventHandlers: TencentCloudChatContactUIEventHandlers(
             onTapContactItem: ({String? userID, String? groupID}) async {
               // Handle navigation from contact list and profile page "Send Message" button.
@@ -850,7 +1003,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _globalAdapterInited = true;
       } catch (e, st) {
         AppLogger.logError(
-            '[HomePage] initGlobalAdapterInBuildPhase failed', e, st);
+          '[HomePage] initGlobalAdapterInBuildPhase failed',
+          e,
+          st,
+        );
       }
     }
     return TencentCloudChatThemeWidget(
@@ -864,8 +1020,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             // jumping to a sidebar. `useSidebar` is its inverse.
             final useBottomNav = ResponsiveLayout.shouldShowBottomNav(context);
             final useSidebar = !useBottomNav;
-            final showMasterDetail =
-                ResponsiveLayout.shouldShowMasterDetail(context);
+            final showMasterDetail = ResponsiveLayout.shouldShowMasterDetail(
+              context,
+            );
 
             // Drive UIKit's master-detail layout from toxee's responsive
             // breakpoint. UIKit only renders desktop-mode automatically on
@@ -880,7 +1037,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 try {
                   UikitDataFacade.setConversationConfig(
-                      forceDesktopLayout: showMasterDetail);
+                    forceDesktopLayout: showMasterDetail,
+                  );
                 } catch (_) {
                   // Config object may not exist yet on the very first frame
                   // (UIKit init is async); next layout pass will pick it up.
@@ -922,8 +1080,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   return;
                 }
                 _lastBackPressTime = now;
-                AppSnackBar.show(_scaffoldMessengerContext ?? context,
-                    AppLocalizations.of(context)!.pressBackAgainToExit);
+                AppSnackBar.show(
+                  _scaffoldMessengerContext ?? context,
+                  AppLocalizations.of(context)!.pressBackAgainToExit,
+                );
               },
               child: Scaffold(
                 // Drawer removed: there was no AppBar and no `openDrawer()`
@@ -937,7 +1097,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           if (useSidebar) ...[
                             SizedBox(
                               width: ResponsiveLayout.responsiveSidebarWidth(
-                                  context),
+                                context,
+                              ),
                               child: Column(
                                 children: [
                                   // macOS traffic-light reservation — without this
@@ -955,13 +1116,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             VerticalDivider(
                               width: 1,
                               thickness: 1,
-                              color:
-                                  Theme.of(context).colorScheme.outlineVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
                             ),
                           ],
-                          Expanded(
-                            child: _buildMainPane(context),
-                          ),
+                          Expanded(child: _buildMainPane(context)),
                         ],
                       ),
                       // Bootstrap service status banner — show on native desktop
@@ -984,8 +1144,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 : const Duration(milliseconds: 250),
                             reverseDuration:
                                 MediaQuery.disableAnimationsOf(context)
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 150),
+                                ? Duration.zero
+                                : const Duration(milliseconds: 150),
                             switchInCurve: Curves.easeOut,
                             switchOutCurve: Curves.easeIn,
                             transitionBuilder: (child, animation) {
@@ -1001,7 +1161,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ),
                               );
                             },
-                            child: (_lanBootstrapServiceRunning &&
+                            child:
+                                (_lanBootstrapServiceRunning &&
                                     _lanBootstrapServiceIP != null &&
                                     _lanBootstrapServicePort != null)
                                 ? Material(
@@ -1011,8 +1172,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                         .withValues(alpha: 0.08),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: AppSpacing.lg,
-                                          vertical: AppSpacing.sm),
+                                        horizontal: AppSpacing.lg,
+                                        vertical: AppSpacing.sm,
+                                      ),
                                       decoration: BoxDecoration(
                                         border: Border(
                                           bottom: BorderSide(
@@ -1032,8 +1194,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                           const SizedBox(width: AppSpacing.sm),
                                           Expanded(
                                             child: Text(
-                                              AppLocalizations.of(context)!
-                                                  .bootstrapServiceRunning(
+                                              AppLocalizations.of(
+                                                context,
+                                              )!.bootstrapServiceRunning(
                                                 _lanBootstrapServiceIP!,
                                                 _lanBootstrapServicePort!,
                                               ),
@@ -1041,22 +1204,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                   .textTheme
                                                   .bodySmall
                                                   ?.copyWith(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurface,
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
                                                     fontWeight: FontWeight.w500,
                                                   ),
                                             ),
                                           ),
                                           IconButton(
-                                            icon: const Icon(Icons.close,
-                                                size: 18),
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
+                                            icon: const Icon(
+                                              Icons.close,
+                                              size: 18,
+                                            ),
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
                                             // 44x44 minimum tap area for mobile (Apple HIG / Material 48dp).
                                             constraints: const BoxConstraints(
-                                                minWidth: 44, minHeight: 44),
+                                              minWidth: 44,
+                                              minHeight: 44,
+                                            ),
                                             padding: EdgeInsets.zero,
                                             visualDensity:
                                                 VisualDensity.compact,
@@ -1066,9 +1233,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                     false;
                                               });
                                             },
-                                            tooltip:
-                                                AppLocalizations.of(context)!
-                                                    .hide,
+                                            tooltip: AppLocalizations.of(
+                                              context,
+                                            )!.hide,
                                           ),
                                         ],
                                       ),
@@ -1076,14 +1243,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   )
                                 : const SizedBox.shrink(
                                     key: ValueKey(
-                                        'lan-bootstrap-banner-hidden')),
+                                      'lan-bootstrap-banner-hidden',
+                                    ),
+                                  ),
                           ),
                         ),
                     ],
                   ),
                 ),
-                bottomNavigationBar:
-                    useBottomNav ? _buildBottomNavigationBar() : null,
+                bottomNavigationBar: useBottomNav
+                    ? _buildBottomNavigationBar()
+                    : null,
               ),
             );
             // Desktop keyboard shortcuts — meta+/ctrl+ comma/N/W/F.
@@ -1092,14 +1262,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             if (PlatformUtils.isDesktop) {
               content = Shortcuts(
                 shortcuts: const <ShortcutActivator, Intent>{
-                  SingleActivator(LogicalKeyboardKey.comma,
-                      meta: true, control: true): _OpenSettingsIntent(),
-                  SingleActivator(LogicalKeyboardKey.keyN,
-                      meta: true, control: true): _NewConversationIntent(),
-                  SingleActivator(LogicalKeyboardKey.keyW,
-                      meta: true, control: true): _CloseWindowIntent(),
-                  SingleActivator(LogicalKeyboardKey.keyF,
-                      meta: true, control: true): _OpenSearchIntent(),
+                  SingleActivator(
+                    LogicalKeyboardKey.comma,
+                    meta: true,
+                    control: true,
+                  ): _OpenSettingsIntent(),
+                  SingleActivator(
+                    LogicalKeyboardKey.keyN,
+                    meta: true,
+                    control: true,
+                  ): _NewConversationIntent(),
+                  SingleActivator(
+                    LogicalKeyboardKey.keyW,
+                    meta: true,
+                    control: true,
+                  ): _CloseWindowIntent(),
+                  SingleActivator(
+                    LogicalKeyboardKey.keyF,
+                    meta: true,
+                    control: true,
+                  ): _OpenSearchIntent(),
                 },
                 child: Actions(
                   actions: <Type, Action<Intent>>{
@@ -1111,11 +1293,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                     _NewConversationIntent:
                         CallbackAction<_NewConversationIntent>(
-                      onInvoke: (_) {
-                        unawaited(_showAddFriendDialog());
-                        return null;
-                      },
-                    ),
+                          onInvoke: (_) {
+                            unawaited(_showAddFriendDialog());
+                            return null;
+                          },
+                        ),
                     _CloseWindowIntent: CallbackAction<_CloseWindowIntent>(
                       onInvoke: (_) {
                         if (PlatformUtils.isDesktop) {
@@ -1161,9 +1343,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
-        border: Border(
-          top: BorderSide(color: scheme.outlineVariant, width: 1),
-        ),
+        border: Border(top: BorderSide(color: scheme.outlineVariant, width: 1)),
       ),
       child: SafeArea(
         top: false,
@@ -1225,19 +1405,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               : "$totalUnreadCount";
                           final isLargeText = displayText.length > 2;
                           return Semantics(
-                            label: AppLocalizations.of(context)!
-                                .unreadMessagesSemantics(totalUnreadCount),
+                            label: AppLocalizations.of(
+                              context,
+                            )!.unreadMessagesSemantics(totalUnreadCount),
                             container: true,
                             child: UnconstrainedBox(
                               child: Container(
                                 constraints: const BoxConstraints(minWidth: 16),
                                 height: 16,
                                 padding: EdgeInsets.symmetric(
-                                    horizontal: isLargeText ? 5 : 4),
+                                  horizontal: isLargeText ? 5 : 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppThemeConfig.errorColor,
                                   borderRadius: BorderRadius.circular(
-                                      AppThemeConfig.badgeBorderRadius),
+                                    AppThemeConfig.badgeBorderRadius,
+                                  ),
                                   border: Border.all(
                                     color: theme.scaffoldBackgroundColor,
                                     width: 1.5,
@@ -1249,16 +1432,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       displayText,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style:
-                                          theme.textTheme.labelSmall?.copyWith(
-                                        color: scheme.onError,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.0,
-                                        fontSize: 10,
-                                        fontFeatures: const [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            color: scheme.onError,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.0,
+                                            fontSize: 10,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          ),
                                       textAlign: TextAlign.center,
                                     ),
                                   ),
@@ -1304,10 +1487,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// every frame. Wrapping the IndexedStack in another Row here would create
   /// nested master-detail; collapse to the simple stack and let UIKit decide.
   Widget _buildMainPane(BuildContext context) {
-    return IndexedStack(
-      index: _index,
-      children: _buildTabChildren(),
-    );
+    return IndexedStack(index: _index, children: _buildTabChildren());
   }
 
   /// The IndexedStack children corresponding to the bottom-nav / sidebar
@@ -1322,6 +1502,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           // `initState` — no per-build scheduling needed here.
           return TencentCloudChatConversation(
             key: ValueKey('uikit-conversation-${locale.languageCode}'),
+            builders: conv_pkg.TencentCloudChatConversationManager.builder,
           );
         },
       ),
@@ -1351,7 +1532,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   // through the if branch, preserving the override.
                   return TencentCloudChatContact(
                     key: ValueKey(
-                        'uikit-contact-${locale.languageCode}-${themeMode.name}'),
+                      'uikit-contact-${locale.languageCode}-${themeMode.name}',
+                    ),
                     builders:
                         contact_pkg.TencentCloudChatContactManager.builder,
                   );
@@ -1421,52 +1603,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         overlay.size.width - position.dx,
         overlay.size.height - position.dy,
       ),
-      items: <PopupMenuEntry<String>>[
-        PopupMenuItem<String>(
-          value: 'pin',
-          child: Row(
-            children: [
-              Icon(
-                isPinned ? Icons.push_pin_outlined : Icons.push_pin,
-                size: 18,
-                color: scheme.onSurface,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(isPinned ? l10n.unpinConversation : l10n.pinConversation),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'mark_read',
-          enabled: hasUnread,
-          child: Row(
-            children: [
-              Icon(
-                Icons.mark_email_read_outlined,
-                size: 18,
-                color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(l10n.markConversationAsRead),
-            ],
-          ),
-        ),
-        const PopupMenuDivider(),
-        PopupMenuItem<String>(
-          value: 'delete',
-          child: Row(
-            children: [
-              Icon(
-                Icons.delete_outline,
-                size: 18,
-                color: scheme.error,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(l10n.delete, style: TextStyle(color: scheme.error)),
-            ],
-          ),
-        ),
-      ],
+      items: buildConversationContextMenuItems(
+        l10n: l10n,
+        scheme: scheme,
+        isPinned: isPinned,
+        hasUnread: hasUnread,
+      ),
     );
     if (!mounted || selected == null) return;
 
@@ -1476,13 +1618,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         try {
           await TencentImSDKPlugin.v2TIMManager
               .getConversationManager()
-              .pinConversation(
-                conversationID: convId,
-                isPinned: !isPinned,
-              );
+              .pinConversation(conversationID: convId, isPinned: !isPinned);
         } catch (e, st) {
           AppLogger.logError(
-              '[HomePage] pinConversation failed for $convId', e, st);
+            '[HomePage] pinConversation failed for $convId',
+            e,
+            st,
+          );
         }
         break;
       case 'mark_read':
@@ -1499,30 +1641,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               );
         } catch (e, st) {
           AppLogger.logError(
-              '[HomePage] cleanConversationUnreadMessageCount failed for $convId',
-              e,
-              st);
+            '[HomePage] cleanConversationUnreadMessageCount failed for $convId',
+            e,
+            st,
+          );
         }
         break;
       case 'delete':
-        final confirmed = await showDialog<bool>(
+        final confirmed =
+            await showDialog<bool>(
               context: context,
-              builder: (dialogCtx) => AlertDialog(
-                title: Text(l10n.deleteConversationTitle),
-                content: Text(
-                  l10n.deleteConversationBody(conv.showName ?? convId),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogCtx).pop(false),
-                    child: Text(l10n.cancel),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogCtx).pop(true),
-                    style: TextButton.styleFrom(foregroundColor: scheme.error),
-                    child: Text(l10n.delete),
-                  ),
-                ],
+              builder: (dialogCtx) => buildDeleteConversationDialog(
+                dialogCtx: dialogCtx,
+                l10n: l10n,
+                scheme: scheme,
+                conversationLabel: conv.showName ?? convId,
               ),
             ) ??
             false;
@@ -1533,7 +1666,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               .deleteConversation(conversationID: convId);
         } catch (e, st) {
           AppLogger.logError(
-              '[HomePage] deleteConversation failed for $convId', e, st);
+            '[HomePage] deleteConversation failed for $convId',
+            e,
+            st,
+          );
         }
         break;
     }
@@ -1556,11 +1692,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // navigateTo returns dynamic; coerce to Future so we can clear the flag
     // when the user dismisses the profile via normal back navigation.
     if (future is Future) {
-      unawaited(future.whenComplete(() {
-        if (mounted) {
-          _inContactProfileContext = false;
-        }
-      }));
+      unawaited(
+        future.whenComplete(() {
+          if (mounted) {
+            _inContactProfileContext = false;
+          }
+        }),
+      );
     }
   }
 
@@ -1604,7 +1742,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     if (value && _pendingFriendApps.isNotEmpty) {
       await _acceptFriendApplications(
-          List<V2TimFriendApplication>.from(_pendingFriendApps));
+        List<V2TimFriendApplication>.from(_pendingFriendApps),
+      );
     }
   }
 
@@ -1620,7 +1759,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _acceptFriendApplications(
-      List<V2TimFriendApplication> apps) async {
+    List<V2TimFriendApplication> apps,
+  ) async {
     for (final app in apps) {
       final uid = app.userID;
       if (uid.isEmpty) continue;
@@ -1628,7 +1768,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await widget.service.acceptFriendRequest(uid);
       } catch (e, st) {
         AppLogger.logError(
-            '[HomePage] acceptFriendRequest failed for $uid', e, st);
+          '[HomePage] acceptFriendRequest failed for $uid',
+          e,
+          st,
+        );
       }
     }
     _pendingFriendApps = [];
@@ -1642,6 +1785,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _handleFriendAdded(String friendId) async {
     final trimmed = friendId.trim();
     if (trimmed.isEmpty) return;
+    // X9: mark the friend as pending before the refresh poll runs. This keeps
+    // Prefs.localFriends from racing the Tox-side accept propagation during
+    // seed generation and ordinary add-friend flows.
+    FakeUIKit.instance.im?.registerPendingFriendAdd(trimmed);
     // Don't write to Prefs here — FakeIM._emitContactsWithFriendsImpl is the
     // single authority for Prefs.localFriends. It will persist the Tox friend list
     // on the next refresh cycle. Writing here risks re-adding stale friends from
@@ -1737,8 +1884,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         password: result.password,
       );
       if (groupId != null) {
-        await _handleGroupChanged(groupId,
-            displayName: 'IRC: ${result.channel}');
+        await _handleGroupChanged(
+          groupId,
+          displayName: 'IRC: ${result.channel}',
+        );
         final appL10n = AppLocalizations.of(context)!;
         _showSnackBar(appL10n.ircChannelAdded(result.channel));
       } else {
@@ -1767,7 +1916,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _showMessageReceiversDialog(
-      BuildContext context, String msgID, String groupID) async {
+    BuildContext context,
+    String msgID,
+    String groupID,
+  ) async {
     final manager = FakeUIKit.instance.messageManager;
     if (manager == null) return;
 
@@ -1789,8 +1941,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
         ),
-        title: Text(AppLocalizations.of(context)!
-            .messageReceivers(receivers.length.toString())),
+        title: Text(
+          AppLocalizations.of(
+            context,
+          )!.messageReceivers(receivers.length.toString()),
+        ),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
@@ -1809,22 +1964,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ? nickname.substring(0, 1).toUpperCase()
                         : '?',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 title: Text(
                   nickname.isNotEmpty ? nickname : userId,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                 ),
                 subtitle: Text(
                   userId,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               );
             },

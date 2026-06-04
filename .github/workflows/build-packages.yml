@@ -35,7 +35,7 @@ defaults:
 
 env:
   BUILD_MODE: release
-  FLUTTER_VERSION: 3.29.0
+  FLUTTER_VERSION: 3.41.9
 
 jobs:
   linux:
@@ -53,12 +53,13 @@ jobs:
             package_arch: x86_64
             flutter_setup: action
             experimental: false
-          # subosito/flutter-action@v2 does NOT publish Flutter 3.29.0 for
-          # linux/arm64 ("Unable to determine Flutter version for channel:
-          # stable version: 3.29.0 architecture: arm64") — Flutter's CDN
-          # only ships the linux x64 tarball for this version, and the
-          # action falls over instead of falling back to git clone. So we
-          # keep the manual git-clone path for arm64 with verbose diags.
+          # subosito/flutter-action@v2 historically did NOT publish some
+          # Flutter versions for linux/arm64 ("Unable to determine Flutter
+          # version for channel: stable version: <X> architecture: arm64") —
+          # Flutter's CDN only shipped the linux x64 tarball, and the action
+          # falls over instead of falling back to git clone. We keep the
+          # manual git-clone path for arm64 with verbose diags; harmless
+          # overhead even if the action now publishes the current pin.
           - runner: ubuntu-24.04-arm
             package_arch: aarch64
             flutter_setup: manual

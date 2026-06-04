@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../i18n/app_localizations.dart';
+import '../ui/testing/ui_keys.dart';
 import '../util/app_spacing.dart';
 import '../util/app_theme_config.dart';
 import 'call_audio_platform.dart';
@@ -75,11 +76,7 @@ const List<BoxShadow> kCallPipShadow = [
 
 /// Full-screen in-call UI using shared shell: top bar, video/identity stage, action dock.
 class InCallView extends StatelessWidget {
-  const InCallView({
-    super.key,
-    required this.callState,
-    required this.manager,
-  });
+  const InCallView({super.key, required this.callState, required this.manager});
 
   final CallStateNotifier callState;
   final InCallManager manager;
@@ -160,8 +157,9 @@ class InCallView extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             color: accent.withValues(alpha: 0.16),
-            borderRadius:
-                BorderRadius.circular(AppThemeConfig.badgeBorderRadius),
+            borderRadius: BorderRadius.circular(
+              AppThemeConfig.badgeBorderRadius,
+            ),
             border: Border.all(color: accent.withValues(alpha: 0.4)),
           ),
           child: Text(
@@ -179,12 +177,16 @@ class InCallView extends StatelessWidget {
   }
 
   List<CallDockAction> _buildDockActions(
-      BuildContext context, AppLocalizations l10n, bool isVideo) {
+    BuildContext context,
+    AppLocalizations l10n,
+    bool isVideo,
+  ) {
     final showSpeakerToggle = CallMediaCapabilities.supportsSpeakerToggle();
     final supportsRouteSelection =
         CallMediaCapabilities.supportsAudioRouteSelection();
     final actions = <CallDockAction>[
       CallDockAction(
+        key: UiKeys.callMicMuteButton,
         icon: callState.isMuted ? Icons.mic_off : Icons.mic,
         label: callState.isMuted ? l10n.callUnmute : l10n.callMute,
         selected: callState.isMuted,
@@ -192,9 +194,11 @@ class InCallView extends StatelessWidget {
       ),
       if (isVideo)
         CallDockAction(
+          key: UiKeys.callCameraToggleButton,
           icon: callState.isVideoEnabled ? Icons.videocam : Icons.videocam_off,
-          label:
-              callState.isVideoEnabled ? l10n.callVideoOff : l10n.callVideoOn,
+          label: callState.isVideoEnabled
+              ? l10n.callVideoOff
+              : l10n.callVideoOn,
           selected: !callState.isVideoEnabled,
           onPressed: () async => manager.toggleVideo(),
         ),
@@ -216,6 +220,7 @@ class InCallView extends StatelessWidget {
           tooltip: l10n.callAudioRouteSystem,
         ),
       CallDockAction(
+        key: UiKeys.callHangupButton,
         icon: Icons.call_end,
         label: l10n.callHangUp,
         destructive: true,
@@ -273,8 +278,7 @@ class InCallView extends StatelessWidget {
                     _iconForRoute(route.kind),
                     color: route.selected
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface
-                            .withValues(alpha: 0.7),
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                   title: Text(
                     route.label,
@@ -282,8 +286,9 @@ class InCallView extends StatelessWidget {
                       color: route.selected
                           ? theme.colorScheme.primary
                           : theme.colorScheme.onSurface,
-                      fontWeight:
-                          route.selected ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: route.selected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                     ),
                   ),
                   trailing: route.selected
@@ -413,10 +418,9 @@ class InCallView extends StatelessWidget {
                 boxShadow: kCallPipShadow,
               ),
               clipBehavior: Clip.antiAlias,
-              child: preview ??
-                  const ColoredBox(
-                    color: _kCallLocalPreviewPlaceholder,
-                  ),
+              child:
+                  preview ??
+                  const ColoredBox(color: _kCallLocalPreviewPlaceholder),
             ),
           ),
         );

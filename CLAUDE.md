@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common commands
 
-CI pins Flutter **3.29.0** stable (see `.github/workflows/analyze.yml`); match that locally to avoid analyzer/lint drift.
+CI pins Flutter **3.41.9** stable (see `.github/workflows/analyze.yml`); match that locally to avoid analyzer/lint drift. Bumped from 3.29.0 on 2026-05-28 because `mcp_toolkit ^3.0.0` requires Dart 3.11+ (Flutter 3.32+).
 
 Run all commands from the repo root.
 
@@ -103,3 +103,16 @@ Authoritative deep dive: `doc/architecture/HYBRID_ARCHITECTURE.en.md`. Maintaine
 - **`startPolling` is explicit**: nothing on the native side will pump file requests, connection status, or ToxAV events until `FfiChatService.startPolling()` is called after login. Don't move it earlier or later without checking `AppBootstrapCoordinator.boot()`.
 - **Singleton flow**: toxee uses Tim2Tox's default singleton model. Multi-instance support exists for Tim2Tox auto tests, not for clients — don't design around it.
 - **No Tencent Cloud IM**: backend is Tox P2P. Anything that assumes a Tencent IM server is wrong for this repo.
+- **Mobile parity is mandatory** (移动端兼容). toxee targets iOS/Android as well as desktop — every solution/design MUST work on mobile, and **every bugfix MUST explicitly check whether the same bug exists on mobile** (and fix it there too, or state why it can't apply). When a fix lives in shared Dart (e.g. `lib/util/`, `lib/sdk_fake/`, `third_party/tim2tox/dart/`, fork widgets), it already covers mobile — say so. When a fix is platform-specific (desktop Enter-to-send `..._input_desktop.dart`, window/tray, native pickers, the raw-launch test harness), find and address the mobile counterpart (`..._input_mobile.dart`, mobile call/notification surfaces) or call out the gap. Default reviewer question for any change: "does mobile hit this too?"
+
+## Working agreement (standing directives)
+
+These are durable expectations for how work is done in this repo, not one-off instructions.
+
+- **Deep root-cause fixes only.** Every problem found gets a real underlying fix at the correct layer (native/FFI, framework, or app), never a perfunctory surface patch or a workaround that hides the symptom. If the true fix is large, scope and state it — don't paper over it. "底层修复，不敷衍。"
+- **Codex review is mandatory on every change** (code, FFI, fork, harness). Workflow: draft → codex second opinion → apply findings → proceed. Bundle diffs and have codex verify correctness, ABI byte-matching, memory/ownership, and mobile parity. Codex telemetry-off launch: `env -u OTEL_EXPORTER_OTLP_ENDPOINT codex exec -c otel.exporter=none -c otel.log_user_prompt=false …` (per-process; never edit `~/.codex/config.toml`).
+- **Codex edits plan docs directly after confirmation** (user directive 2026-06-03). For 方案/plan documents: codex reviews read-only first → Claude vets/confirms the findings → codex is re-run with `--sandbox workspace-write` and the confirmed findings list, applying the edits to the plan file in place (appending a change-log section). Claude re-reads and stays responsible for the final content.
+- **If codex is unavailable** (provider down / TLS errors): skip the review for now, explicitly declare the skip, self-validate (e.g. `feature-dev:code-reviewer` agent + tests/analyzer), and record that a codex review is still owed.
+- **Use codex to resolve uncertainty — don't block on the user.** When unsure about a fix approach, or a decision needs confirmation, discuss it with codex first and follow the joint conclusion. Only if it's still unresolved after that discussion, proceed with your own recommendation and state it. Reserve user questions for genuine product/scope forks.
+- **Test campaigns ("process Sxx–Syy until all pass").** Drive each scenario, prefer real-UI two-process driving where the request calls for it (直接驱动 UI 控件), fix the root cause of anything a scenario surfaces, and only **skip** a scenario whose environment genuinely cannot be constructed — naming which and why. The real-UI harness must tolerate exception startup states (e.g. `sc_load_account_fail`); see `tool/mcp_test/REAL_UI_TWO_PROCESS.md` and `drive_real_ui_pair.dart`.
+- **ABI is sacred.** Any `dart_compat_*.cpp` change must byte-match `native_imsdk_bindings_generated.dart` — arg count, pointer-vs-scalar, AND integer width/signedness (`int` vs `uint64`/`uint32`). `tool/mcp_test/abi_audit.py` catches count/ptr drift only; width/signedness drift needs codex/code-reviewer.

@@ -60,3 +60,40 @@ dist/
 # Canonical docs live in `doc/` (singular). Block accidental writes to the
 # plural variant so scratch design notes (CEO plans, audits) don't sneak in.
 docs/
+
+# Research / investigation notes (session handoffs, comparison runs, spike
+# results, improvement plans). Working material, not shipped documentation —
+# keep local only.
+doc/research/
+
+# L3 / MCP test scratch: one-off probes, codex review transcripts, state dumps.
+# Not part of the committed harness (that lives in tool/mcp_test/ proper).
+tool/mcp_test/_scratch/
+
+# MCP / L3 harness runtime state, secrets, and outputs. These must never be
+# committed: the *.tox blobs under echo_peer_state/ are real Tox secret keys,
+# .multi_instance_runtime/ holds per-run app copies (ToxeeB.app) + runtime
+# state, artifacts/ holds driver screenshots/dumps, and a stray sticker/community
+# plugin writes a CWD-relative community_data.db + sc_*.png screenshots land at
+# the repo root. (echo_peer*.log is also caught by the global *.log rule above,
+# but is listed here for intent.) See doc/research/TEST_CASE_ORGANIZATION_PLAN.en.md §3.7.
+/community_data.db
+/sc_*.png
+tool/mcp_test/artifacts/
+tool/mcp_test/.multi_instance_runtime/
+tool/mcp_test/echo_peer_state/
+tool/mcp_test/echo_peer*.log
+tool/mcp_test/echo_peer_src/build/
+# Live-process descriptor written by ensure_echo_peer.sh (pid, local paths,
+# timestamps) — regenerated on every launch. The static fixture contract
+# (echo_peer_contract.json) IS committed.
+tool/mcp_test/echo_peer.json
+
+# Product-screenshot pipeline (tool/screenshots/): raw full-res captures land
+# in screenshot/ and the persistent reusable seed runtime (Shot* accounts,
+# .app copies, generated media) lives under _seed_runtime/ — both are
+# regenerable local state. The CURATED page copies under doc/product/assets/
+# ARE committed.
+/screenshot/
+tool/screenshots/_seed_runtime/
+.gstack/

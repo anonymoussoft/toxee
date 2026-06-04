@@ -24,7 +24,6 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:tencent_cloud_chat_common/external/chat_data_provider.dart';
-import 'package:tencent_cloud_chat_common/models/tencent_cloud_chat_models.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 
 import '../../sdk_fake/fake_provider.dart';
@@ -74,8 +73,14 @@ class GroupSyncOps {
       clearMessageList: (gid) => UikitDataFacade.clearMessageList(groupID: gid),
       getGroupListSnapshot: () =>
           List<V2TimGroupInfo>.from(UikitDataFacade.groupList),
-      deleteGroupInfoFromJoinedGroupList:
-          UikitDataFacade.deleteGroupInfoFromJoinedGroupList,
+      // SILENT reconcile delete: handleGroupChanged STEP 2 removes the group
+      // from the UIKit joined-list only to force buildGroupList to rebuild from
+      // the SDK snapshot — it is NOT a real quit, so fireQuitEvent:false stops
+      // the spurious quitGroup event (which used to remove the group from Prefs
+      // + clear its conversation, then had to be manually counteracted).
+      deleteGroupInfoFromJoinedGroupList: (gid) =>
+          UikitDataFacade.deleteGroupInfoFromJoinedGroupList(gid,
+              fireQuitEvent: false),
       fetchSdkGroupListSnapshot: () async {
         await TencentCloudChat.instance.chatSDKInstance.contactSDK.getGroupList();
         return List<V2TimGroupInfo>.from(UikitDataFacade.groupList);
@@ -138,9 +143,13 @@ class HomeGroupController {
     }
 
     // ── STEP 2 ──────────────────────────────────────────────────────────
-    // Delete the group from UIKit's joined-list. SIDE-EFFECT: fires a
-    // UIKit-internal quitGroup event that adds `group_<id>` to
-    // FakeChatDataProvider._sdkDeletedConvIds. Step 3 counteracts this.
+    // Delete the group from UIKit's joined-list so buildGroupList (which wipes
+    // the whole list and keeps only SDK-returned groups) can rebuild it from the
+    // merged snapshot below. This is a SILENT reconcile delete — the ops wiring
+    // passes fireQuitEvent:false, so it NO LONGER fires a spurious quitGroup
+    // event (which previously removed the group from Prefs + cleared its
+    // conversation, requiring the manual counteractions that used to live here).
+    // Real quit/dismiss/leave still fire the event via their own call sites.
     _ops.deleteGroupInfoFromJoinedGroupList(groupId);
 
     // Refresh the SDK list and merge with the snapshot.
@@ -203,8 +212,10 @@ class HomeGroupController {
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
     // ── STEP 3 ──────────────────────────────────────────────────────────
-    // Unblock the conversation in FakeChatDataProvider — counteracts the
-    // quitGroup side-effect from step 2. MUST run before step 4.
+    // Unblock the conversation in FakeChatDataProvider. With STEP 2 now silent
+    // this no longer counteracts a self-inflicted event; it clears any block
+    // left by a PRIOR REAL quit/dismiss of this group id, so a re-join/re-create
+    // shows its conversation again. MUST run before step 4.
     _ops.unblockConversation('group_$groupId');
 
     // ── STEP 4 ──────────────────────────────────────────────────────────

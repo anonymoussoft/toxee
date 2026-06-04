@@ -24,7 +24,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get settings => 'الإعدادات';
 
   @override
-  String get searchConversations => 'البحث بالاسم المستعار / المجموعة / الرسالة';
+  String get searchConversations =>
+      'البحث بالاسم المستعار / المجموعة / الرسالة';
 
   @override
   String get searchContacts => 'البحث في جهات الاتصال';
@@ -180,13 +181,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get autoAcceptFriendRequests => 'قبول طلبات الصداقة تلقائياً';
 
   @override
-  String get autoAcceptFriendRequestsDesc => 'قبول طلبات الصداقة الواردة تلقائياً';
+  String get autoAcceptFriendRequestsDesc =>
+      'قبول طلبات الصداقة الواردة تلقائياً';
 
   @override
   String get autoAcceptGroupInvites => 'قبول دعوات المجموعة تلقائياً';
 
   @override
-  String get autoAcceptGroupInvitesDesc => 'قبول دعوات المجموعة الواردة تلقائياً';
+  String get autoAcceptGroupInvitesDesc =>
+      'قبول دعوات المجموعة الواردة تلقائياً';
 
   @override
   String get bootstrapNodes => 'عقد Bootstrap';
@@ -198,7 +201,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get viewAndTestNodes => 'عرض واختبار العقد';
 
   @override
-  String get currentlyOnlineNoReconnect => 'متصل حالياً، لا حاجة لإعادة الاتصال';
+  String get currentlyOnlineNoReconnect =>
+      'متصل حالياً، لا حاجة لإعادة الاتصال';
 
   @override
   String get addOrCreateGroup => 'إضافة / إنشاء مجموعة';
@@ -240,10 +244,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get createFailed => 'فشل إنشاء المجموعة';
 
   @override
-  String get joinQueued => 'غير متصل — سيتم إرسال طلب الانضمام عند إعادة الاتصال';
+  String get joinQueued =>
+      'غير متصل — سيتم إرسال طلب الانضمام عند إعادة الاتصال';
 
   @override
-  String get offlineBanner => 'غير متصل — سيتم وضع عمليات المجموعة في قائمة الانتظار ومعالجتها عند إعادة الاتصال.';
+  String get offlineBanner =>
+      'غير متصل — سيتم وضع عمليات المجموعة في قائمة الانتظار ومعالجتها عند إعادة الاتصال.';
 
   @override
   String get groupType => 'نوع المجموعة';
@@ -255,13 +261,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get privateGroup => 'خاص';
 
   @override
-  String get publicGroupHint => 'مجموعة عامة — قابلة للاكتشاف على DHT ويمكن لأي شخص لديه معرف المحادثة الانضمام إليها.';
+  String get publicGroupHint =>
+      'مجموعة عامة — قابلة للاكتشاف على DHT ويمكن لأي شخص لديه معرف المحادثة الانضمام إليها.';
 
   @override
-  String get privateGroupHint => 'مجموعة خاصة — بالدعوة فقط، غير معلنة على DHT.';
+  String get privateGroupHint =>
+      'مجموعة خاصة — بالدعوة فقط، غير معلنة على DHT.';
 
   @override
-  String get conferenceHint => 'مؤتمر قديم — بروتوكول قديم، بدون أدوار أو استمرارية.';
+  String get conferenceHint =>
+      'مؤتمر قديم — بروتوكول قديم، بدون أدوار أو استمرارية.';
 
   @override
   String get searchHintBody => 'ابحث عن جهات الاتصال والمجموعات والرسائل';
@@ -285,7 +294,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get enterId => 'يرجى إدخال Tox ID';
 
   @override
-  String get invalidLength => 'يجب أن يكون المعرف 64 أو 76 حرفاً سداسياً عشرياً';
+  String get invalidLength => 'طول المعرف غير صالح';
 
   @override
   String get invalidCharacters => 'يمكن أن يحتوي فقط على أحرف سداسية عشرية';
@@ -294,7 +303,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paste => 'لصق';
 
   @override
-  String get addContactHint => 'أدخل Tox ID للصديق (64 أو 76 حرفاً سداسياً عشرياً).';
+  String get addContactHint => 'أدخل عنوان Tox الخاص بالطرف الآخر.';
+
+  @override
+  String get addFriendInvalidToxIdHint =>
+      'يجب أن يكون عنوان Tox 76 حرفاً سداسياً عشرياً';
 
   @override
   String get verificationMessage => 'رسالة التحقق';
@@ -303,7 +316,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get defaultFriendRequestMessage => 'مرحباً، أود إضافتك كصديق.';
 
   @override
-  String get friendRequestMessageTooLong => 'لا يمكن أن تتجاوز رسالة طلب الصداقة 921 حرفاً';
+  String get friendRequestMessageTooLong =>
+      'لا يمكن أن تتجاوز رسالة طلب الصداقة 921 حرفاً';
 
   @override
   String get enterMessage => 'يرجى إدخال رسالة';
@@ -312,7 +326,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get noGroupMembers => 'لا يوجد أعضاء بعد';
 
   @override
-  String get autoAcceptedNewFriendRequest => 'تم قبول طلب الصداقة الجديد تلقائياً';
+  String get autoAcceptedNewFriendRequest =>
+      'تم قبول طلب الصداقة الجديد تلقائياً';
 
   @override
   String get scanQrCodeToAddContact => 'امسح رمز QR لإضافتي كجهة اتصال';
@@ -438,25 +453,31 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reconnect => 'إعادة الاتصال';
 
   @override
-  String get reconnectConfirmMessage => 'سيتم إعادة الاتصال باستخدام عقدة Bootstrap المحددة. هل تريد المتابعة؟';
+  String get reconnectConfirmMessage =>
+      'سيتم إعادة الاتصال باستخدام عقدة Bootstrap المحددة. هل تريد المتابعة؟';
 
   @override
-  String get reconnectedWaiting => 'تم تسجيل الدخول مرة أخرى، في انتظار الاتصال...';
+  String get reconnectedWaiting =>
+      'تم تسجيل الدخول مرة أخرى، في انتظار الاتصال...';
 
   @override
   String get reconnectWithThisNode => 'إعادة الاتصال بهذه العقدة';
 
   @override
-  String get friendOfflineCannotSendFile => 'الصديق غير متصل. لا يمكن إرسال الملف. يرجى الانتظار حتى يكون متصلاً.';
+  String get friendOfflineCannotSendFile =>
+      'الصديق غير متصل. لا يمكن إرسال الملف. يرجى الانتظار حتى يكون متصلاً.';
 
   @override
-  String get friendOfflineSendCardFailed => 'الصديق غير متصل. فشل إرسال البطاقة الشخصية.';
+  String get friendOfflineSendCardFailed =>
+      'الصديق غير متصل. فشل إرسال البطاقة الشخصية.';
 
   @override
-  String get friendOfflineSendImageFailed => 'الصديق غير متصل. فشل إرسال الصورة.';
+  String get friendOfflineSendImageFailed =>
+      'الصديق غير متصل. فشل إرسال الصورة.';
 
   @override
-  String get friendOfflineSendVideoFailed => 'الصديق غير متصل. فشل إرسال الفيديو.';
+  String get friendOfflineSendVideoFailed =>
+      'الصديق غير متصل. فشل إرسال الفيديو.';
 
   @override
   String get friendOfflineSendFileFailed => 'الصديق غير متصل. فشل إرسال الملف.';
@@ -502,16 +523,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get deleteAccount => 'حذف الحساب';
 
   @override
-  String get deleteAccountConfirmMessage => 'سيتم حذف حسابك وجميع البيانات نهائياً ولا يمكن استردادها. يرجى المتابعة بحذر.';
+  String get deleteAccountConfirmMessage =>
+      'سيتم حذف حسابك وجميع البيانات نهائياً ولا يمكن استردادها. يرجى المتابعة بحذر.';
 
   @override
   String get delete => 'حذف';
 
   @override
-  String get deleteAccountEnterPasswordToConfirm => 'أدخل كلمة مرور حسابك لتأكيد الحذف.';
+  String get deleteAccountEnterPasswordToConfirm =>
+      'أدخل كلمة مرور حسابك لتأكيد الحذف.';
 
   @override
-  String get deleteAccountTypeWordToConfirm => 'أدخل الكلمة الإنجليزية المعروضة أدناه بشكل صحيح لتأكيد الحذف.';
+  String get deleteAccountTypeWordToConfirm =>
+      'أدخل الكلمة الإنجليزية المعروضة أدناه بشكل صحيح لتأكيد الحذف.';
 
   @override
   String deleteAccountConfirmWordPrompt(String word) {
@@ -531,7 +555,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get notificationSound => 'صوت الإشعارات';
 
   @override
-  String get notificationSoundDesc => 'تشغيل الصوت عند تلقي رسائل جديدة وطلبات الصداقة وطلبات المجموعة';
+  String get notificationSoundDesc =>
+      'تشغيل الصوت عند تلقي رسائل جديدة وطلبات الصداقة وطلبات المجموعة';
 
   @override
   String get downloadsDirectory => 'مجلد التنزيلات';
@@ -543,13 +568,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get changeDownloadsDirectory => 'تغيير مجلد التنزيلات';
 
   @override
-  String get downloadsDirectoryDesc => 'قم بتعيين المجلد الافتراضي لتنزيل الملفات. سيتم حفظ الملفات والصوتيات والفيديوهات المستلمة في هذا المجلد.';
+  String get downloadsDirectoryDesc =>
+      'قم بتعيين المجلد الافتراضي لتنزيل الملفات. سيتم حفظ الملفات والصوتيات والفيديوهات المستلمة في هذا المجلد.';
 
   @override
   String get downloadsDirectorySet => 'تم تعيين مجلد التنزيلات';
 
   @override
-  String get downloadsDirectoryReset => 'تم إعادة تعيين مجلد التنزيلات إلى الافتراضي';
+  String get downloadsDirectoryReset =>
+      'تم إعادة تعيين مجلد التنزيلات إلى الافتراضي';
 
   @override
   String get failedToSelectDirectory => 'فشل في اختيار المجلد';
@@ -564,13 +591,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get sizeLimitInMB => 'حد الحجم (MB)';
 
   @override
-  String get autoDownloadSizeLimitDesc => 'سيتم تنزيل الملفات الأصغر من هذا الحجم وجميع الصور تلقائياً. تتطلب الملفات الأكبر من هذا الحجم التنزيل اليدوي عبر زر التنزيل.';
+  String get autoDownloadSizeLimitDesc =>
+      'سيتم تنزيل الملفات الأصغر من هذا الحجم وجميع الصور تلقائياً. تتطلب الملفات الأكبر من هذا الحجم التنزيل اليدوي عبر زر التنزيل.';
 
   @override
   String get autoDownloadSizeLimitSet => 'تم تعيين حد حجم التنزيل التلقائي إلى';
 
   @override
-  String get invalidSizeLimit => 'حد حجم غير صالح، يرجى إدخال رقم بين 1 و 10000';
+  String get invalidSizeLimit =>
+      'حد حجم غير صالح، يرجى إدخال رقم بين 1 و 10000';
 
   @override
   String get save => 'حفظ';
@@ -588,7 +617,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get canOnlySelectOnlineNode => 'يمكن اختيار العقد المتصلة فقط';
 
   @override
-  String get canOnlySelectTestedNode => 'يمكن اختيار العقد التي تم اختبارها بنجاح فقط، يرجى اختبار العقدة أولاً';
+  String get canOnlySelectTestedNode =>
+      'يمكن اختيار العقد التي تم اختبارها بنجاح فقط، يرجى اختبار العقدة أولاً';
 
   @override
   String get switchNode => 'تبديل العقدة';
@@ -631,7 +661,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get uninstallIrcApp => 'إلغاء تثبيت تطبيق قناة IRC';
 
   @override
-  String get uninstallIrcAppConfirm => 'هل أنت متأكد أنك تريد إلغاء تثبيت تطبيق قناة IRC؟ سيتم إزالة جميع قنوات IRC وستغادر جميع مجموعات IRC.';
+  String get uninstallIrcAppConfirm =>
+      'هل أنت متأكد أنك تريد إلغاء تثبيت تطبيق قناة IRC؟ سيتم إزالة جميع قنوات IRC وستغادر جميع مجموعات IRC.';
 
   @override
   String get addIrcChannel => 'إضافة قناة';
@@ -652,7 +683,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get ircUseSasl => 'استخدام مصادقة SASL';
 
   @override
-  String get ircUseSaslDesc => 'استخدام المفتاح العام لـ Tox لمصادقة SASL (يتطلب تسجيل NickServ)';
+  String get ircUseSaslDesc =>
+      'استخدام المفتاح العام لـ Tox لمصادقة SASL (يتطلب تسجيل NickServ)';
 
   @override
   String get ircServerRequired => 'عنوان خادم IRC مطلوب';
@@ -694,7 +726,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get ircChannelHint => '#قناة';
 
   @override
-  String get ircChannelDesc => 'أدخل اسم قناة IRC (مثلاً: #channel). سيتم إنشاء مجموعة Tox لهذه القناة.';
+  String get ircChannelDesc =>
+      'أدخل اسم قناة IRC (مثلاً: #channel). سيتم إنشاء مجموعة Tox لهذه القناة.';
 
   @override
   String get enterIrcChannel => 'يرجى إدخال اسم قناة IRC';
@@ -706,7 +739,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get join => 'انضمام';
 
   @override
-  String get ircAppNotInstalled => 'يرجى تثبيت تطبيق قناة IRC من صفحة التطبيقات أولاً';
+  String get ircAppNotInstalled =>
+      'يرجى تثبيت تطبيق قناة IRC من صفحة التطبيقات أولاً';
 
   @override
   String get ircChannelPassword => 'كلمة مرور القناة';
@@ -718,7 +752,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get ircCustomNickname => 'اسم مستعار مخصص لـ IRC';
 
   @override
-  String get ircCustomNicknameHint => 'اتركه فارغاً لاستخدام الاسم المستعار المُنشأ تلقائياً';
+  String get ircCustomNicknameHint =>
+      'اتركه فارغاً لاستخدام الاسم المستعار المُنشأ تلقائياً';
 
   @override
   String deleteAccountFailed(String error) {
@@ -726,7 +761,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get directorySelectionNotSupported => 'اختيار المجلد غير مدعوم على هذه المنصة';
+  String get directorySelectionNotSupported =>
+      'اختيار المجلد غير مدعوم على هذه المنصة';
 
   @override
   String failedToSendFriendRequest(String error) {
@@ -756,10 +792,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get close => 'إغلاق';
 
   @override
-  String get nodeNotTestedWarning => 'ملاحظة: لم يتم اختبار هذه العقدة وقد لا تكون قابلة للاتصال.';
+  String get nodeNotTestedWarning =>
+      'ملاحظة: لم يتم اختبار هذه العقدة وقد لا تكون قابلة للاتصال.';
 
   @override
-  String get nodeTestFailedWarning => 'ملاحظة: فشل اختبار هذه العقدة وقد لا تكون قابلة للاتصال.';
+  String get nodeTestFailedWarning =>
+      'ملاحظة: فشل اختبار هذه العقدة وقد لا تكون قابلة للاتصال.';
 
   @override
   String get nicknameTooLong => 'الاسم المستعار طويل جداً';
@@ -792,13 +830,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get nodeTestFailed => 'فشل اختبار العقدة';
 
   @override
-  String get nodeTestUnavailableBeforeLogin => 'لا يمكن اختبار العقدة قبل تسجيل الدخول';
+  String get nodeTestUnavailableBeforeLogin =>
+      'لا يمكن اختبار العقدة قبل تسجيل الدخول';
 
   @override
   String get failedToStartBootstrapService => 'فشل بدء خدمة الإقلاع';
 
   @override
-  String get invalidNodeInfo => 'يرجى إدخال معلومات عقدة صالحة (الخادم والمنفذ والمفتاح العام)';
+  String get invalidNodeInfo =>
+      'يرجى إدخال معلومات عقدة صالحة (الخادم والمنفذ والمفتاح العام)';
 
   @override
   String get nodeSetSuccess => 'تم تعيين العقدة كعقدة حالية بنجاح';
@@ -940,7 +980,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get autoLoginDisabled => 'تسجيل الدخول التلقائي: معطّل';
 
   @override
-  String get autoLoginDesc => 'بعد التفعيل، سيتم تسجيل الدخول تلقائياً عند بدء التطبيق.';
+  String get autoLoginDesc =>
+      'بعد التفعيل، سيتم تسجيل الدخول تلقائياً عند بدء التطبيق.';
 
   @override
   String get disable => 'تعطيل';
@@ -999,7 +1040,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get exportOptionFullBackup => 'Full Backup (.zip)';
 
   @override
-  String get exportOptionFullBackupSubtitle => 'Profile + chat history + settings';
+  String get exportOptionFullBackupSubtitle =>
+      'Profile + chat history + settings';
 
   @override
   String get importAccount => 'استيراد الحساب';
@@ -1068,7 +1110,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get accountAlreadyExists => 'الحساب موجود بالفعل';
 
   @override
-  String get accountAlreadyExistsMessage => 'يوجد حساب بهذا المعرف بالفعل. هل تريد تحديثه؟';
+  String get accountAlreadyExistsMessage =>
+      'يوجد حساب بهذا المعرف بالفعل. هل تريد تحديثه؟';
 
   @override
   String get update => 'تحديث';
@@ -1082,7 +1125,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get savedAccounts => 'الحسابات المحفوظة';
 
   @override
-  String get tapToSelectDoubleTapToLogin => 'اضغط للاختيار، اضغط مرتين لتسجيل الدخول السريع';
+  String get tapToSelectDoubleTapToLogin =>
+      'اضغط للاختيار، اضغط مرتين لتسجيل الدخول السريع';
 
   @override
   String get tapToLogIn => 'اضغط لتسجيل الدخول';
@@ -1159,22 +1203,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get conference => 'Conference';
 
   @override
-  String get defaultJoinRequestMessage => 'Hi, please invite me into this group';
+  String get defaultJoinRequestMessage =>
+      'Hi, please invite me into this group';
 
   @override
-  String get userNotFoundPleaseRegister => 'User not found. Please register first.';
+  String get userNotFoundPleaseRegister =>
+      'User not found. Please register first.';
 
   @override
-  String get nicknameDoesNotMatch => 'Nickname does not match. Please use the registered nickname or register a new account.';
+  String get nicknameDoesNotMatch =>
+      'Nickname does not match. Please use the registered nickname or register a new account.';
 
   @override
-  String get accountAlreadyExistsPleaseLogin => 'Account already exists. Please login instead or use a different nickname.';
+  String get accountAlreadyExistsPleaseLogin =>
+      'Account already exists. Please login instead or use a different nickname.';
 
   @override
-  String get profileNotFoundImportRestore => 'Profile not found for this account. Please import or restore backup.';
+  String get profileNotFoundImportRestore =>
+      'Profile not found for this account. Please import or restore backup.';
 
   @override
-  String get failedToInitializeTIMManager => 'Failed to initialize TIMManager SDK';
+  String get failedToInitializeTIMManager =>
+      'Failed to initialize TIMManager SDK';
 
   @override
   String get failedToGetToxId => 'Failed to get Tox ID';
@@ -1183,7 +1233,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get failedToGenerateToxId => 'Failed to generate Tox ID';
 
   @override
-  String get registrationCouldNotCreateProfile => 'Registration could not create a unique profile. Please try again.';
+  String get registrationCouldNotCreateProfile =>
+      'Registration could not create a unique profile. Please try again.';
 
   @override
   String get importedAccount => 'Imported Account';
@@ -1249,16 +1300,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get callEnded => 'انتهت المكالمة';
 
   @override
-  String get callPermissionMicrophoneRequired => 'يلزم إذن الميكروفون لمتابعة المكالمة.';
+  String get callPermissionMicrophoneRequired =>
+      'يلزم إذن الميكروفون لمتابعة المكالمة.';
 
   @override
-  String get callPermissionCameraRequired => 'يلزم إذن الكاميرا لمتابعة المكالمة.';
+  String get callPermissionCameraRequired =>
+      'يلزم إذن الكاميرا لمتابعة المكالمة.';
 
   @override
-  String get callPermissionMicrophoneCameraRequired => 'يلزم إذن الميكروفون والكاميرا لمتابعة المكالمة.';
+  String get callPermissionMicrophoneCameraRequired =>
+      'يلزم إذن الميكروفون والكاميرا لمتابعة المكالمة.';
 
   @override
-  String get callAudioInterrupted => 'تم تغيير إخراج الصوت أو انقطاعه أثناء المكالمة.';
+  String get callAudioInterrupted =>
+      'تم تغيير إخراج الصوت أو انقطاعه أثناء المكالمة.';
 
   @override
   String get callCalling => 'جارٍ الاتصال...';
@@ -1404,7 +1459,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get firstRunBackupWizardTitle => 'Save your account file';
 
   @override
-  String get firstRunBackupWizardBody => 'Your account lives only on this device. Save the .tox file somewhere safe (cloud storage, password manager, USB stick). Without it, losing this device means losing your account and all your contacts permanently.';
+  String get firstRunBackupWizardBody =>
+      'Your account lives only on this device. Save the .tox file somewhere safe (cloud storage, password manager, USB stick). Without it, losing this device means losing your account and all your contacts permanently.';
 
   @override
   String get firstRunBackupWizardExportNow => 'Export now';
@@ -1416,7 +1472,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get firstRunBackupWizardDismissTitle => 'Skip backup?';
 
   @override
-  String get firstRunBackupWizardDismissBody => 'If you lose this device, you will lose your account and all contacts. There is no recovery.';
+  String get firstRunBackupWizardDismissBody =>
+      'If you lose this device, you will lose your account and all contacts. There is no recovery.';
 
   @override
   String get firstRunBackupWizardDismissConfirm => 'I understand, continue';
@@ -1435,7 +1492,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get restoreFromToxFileInvalidFile => 'This file doesn\'t look like a valid Tox profile.';
+  String get restoreFromToxFileInvalidFile =>
+      'This file doesn\'t look like a valid Tox profile.';
 
   @override
   String get pairDeviceHostTitle => 'Pair another device';
@@ -1444,13 +1502,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pairDeviceClientTitle => 'Pair with another device';
 
   @override
-  String get pairingHostInstructions => 'Open toxee on your other device, choose \"Pair with another device\", and scan this QR code.';
+  String get pairingHostInstructions =>
+      'Open toxee on your other device, choose \"Pair with another device\", and scan this QR code.';
 
   @override
-  String get pairingClientScanInstructions => 'Point your camera at the QR code on your other device.';
+  String get pairingClientScanInstructions =>
+      'Point your camera at the QR code on your other device.';
 
   @override
-  String get pairingClientPasteInstructions => 'Camera scanning isn\'t supported on this device. Paste the pairing URL shown on your other device below.';
+  String get pairingClientPasteInstructions =>
+      'Camera scanning isn\'t supported on this device. Paste the pairing URL shown on your other device below.';
 
   @override
   String get pairingPasteUrlLabel => 'Pairing URL';
@@ -1459,19 +1520,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pairingConnectButton => 'Connect';
 
   @override
-  String get pairingWaitingForPeer => 'Waiting for the other device to connect…';
+  String get pairingWaitingForPeer =>
+      'Waiting for the other device to connect…';
 
   @override
-  String get pairingVerifyCodeHeader => 'Verify both devices show the same code';
+  String get pairingVerifyCodeHeader =>
+      'Verify both devices show the same code';
 
   @override
-  String get pairingVerifyCodeInstructions => 'If the code matches what\'s shown on your other device, tap below. If they differ, cancel — someone may be intercepting the connection.';
+  String get pairingVerifyCodeInstructions =>
+      'If the code matches what\'s shown on your other device, tap below. If they differ, cancel — someone may be intercepting the connection.';
 
   @override
   String get pairingCodesMatch => 'The codes match';
 
   @override
-  String get pairingHostCompleted => 'Account sent. The other device now has your account.';
+  String get pairingHostCompleted =>
+      'Account sent. The other device now has your account.';
 
   @override
   String get pairingClientCompleted => 'Account received. You\'re paired.';
@@ -1498,16 +1563,20 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get pairingDecryptFailed => 'Couldn\'t decrypt the received profile. The pairing may have been tampered with — try again on a network you trust.';
+  String get pairingDecryptFailed =>
+      'Couldn\'t decrypt the received profile. The pairing may have been tampered with — try again on a network you trust.';
 
   @override
-  String get pairingNoLanInterface => 'No LAN network detected. Connect to WiFi or Ethernet and try again.';
+  String get pairingNoLanInterface =>
+      'No LAN network detected. Connect to WiFi or Ethernet and try again.';
 
   @override
-  String get pairThisAccountToAnotherDevice => 'Pair this account to another device';
+  String get pairThisAccountToAnotherDevice =>
+      'Pair this account to another device';
 
   @override
-  String get pairWithAnotherDevice => 'Pair with another device that has my account';
+  String get pairWithAnotherDevice =>
+      'Pair with another device that has my account';
 
   @override
   String get devicesSectionTitle => 'Devices';
@@ -1519,7 +1588,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get runtimeForegroundTitle => 'Toxee قيد التشغيل';
 
   @override
-  String get runtimeForegroundBody => 'البقاء متصلاً لاستقبال الرسائل والمكالمات.';
+  String get runtimeForegroundBody =>
+      'البقاء متصلاً لاستقبال الرسائل والمكالمات.';
 
   @override
   String get runtimeForegroundSettingsLabel => 'إعدادات الإشعارات';

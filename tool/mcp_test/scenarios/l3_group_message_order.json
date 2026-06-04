@@ -1,0 +1,23 @@
+{
+  "id": "L3-group-message-order",
+  "suite": "group",
+  "description": "Group message ORDERING (hermetic, single-instance): create a group, send three distinct texts into it, and prove the group's LOCAL history returns them in timestamp-ascending send order (the message_order assertion over conv='group_{{gid}}'). Group self-sends each get a unique sequenced msgID, so they persist as three rows in send order. isSelf:true scopes the order check to the sent rows. Asserts on the LIVE group; leave is deferred to teardown (quitGroup wipes group history). Group analog of l3_message_order (S64 ordering half).",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_equals", "field": "isConnected", "equals": true, "timeoutSecs": 30 },
+    { "action": "create_group", "name": "L3gord-{{nonce}}", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "send_group_text", "groupId": "{{gid}}", "text": "gord1-{{nonce}}" },
+    { "action": "send_group_text", "groupId": "{{gid}}", "text": "gord2-{{nonce}}" },
+    { "action": "send_group_text", "groupId": "{{gid}}", "text": "gord3-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "conv": "group_{{gid}}", "text": "gord3-{{nonce}}", "isSelf": true, "timeoutSecs": 20 }
+  ],
+  "assertions": [
+    { "type": "message_order", "conv": "group_{{gid}}", "isSelf": true, "texts": ["gord1-{{nonce}}", "gord2-{{nonce}}", "gord3-{{nonce}}"] },
+    { "type": "message_field_contains", "conv": "group_{{gid}}", "text": "gord1-{{nonce}}", "isSelf": true, "field": "isPending", "contains": "false" }
+  ],
+  "teardown": [
+    { "action": "leave_group", "groupId": "{{gid}}" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "L3-group-private-create",
+  "suite": "group",
+  "description": "PRIVATE NGC group create-path SMOKE (hermetic, single-instance): drive l3_create_group with type='private' (groupType 'Private') and prove the private-create branch COMPLETES WITHOUT ERROR and the group is tracked in knownGroups. HONEST SCOPE (codex P2): this is a path smoke — it exercises the private branch of FfiChatService.createGroup that the public-only gates never reach (guarding against a crash/throw/regression there), but it does NOT assert a privacy-SPECIFIC observable: a private group enters knownGroups IDENTICALLY to a public one, and the read model does not surface privacy_state, so 'private vs public' is not distinguished here. A true privacy assertion (e.g. not DHT-announced / invite-only) needs a privacy/joinability field added to l3_dump_state — deferred. Self-cleans via teardown leave.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "create_group", "name": "L3gpriv-{{nonce}}", "type": "private", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains_item", "field": "knownGroups", "containsItem": "{{gid}}", "timeoutSecs": 15 }
+  ],
+  "assertions": [
+    { "type": "state", "field": "knownGroups", "containsItem": "{{gid}}" }
+  ],
+  "teardown": [
+    { "action": "leave_group", "groupId": "{{gid}}" }
+  ]
+}

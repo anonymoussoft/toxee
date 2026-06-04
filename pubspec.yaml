@@ -4,7 +4,9 @@ publish_to: "none"
 version: 0.1.0+1
 license: GPL-3.0
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  # mcp_toolkit ^3.0.0 requires Dart 3.11+. Without this floor, pub gives a
+  # confusing dependency-resolution error instead of a clean SDK version error.
+  sdk: ">=3.11.0 <4.0.0"
 dependencies:
   flutter:
     sdk: flutter
@@ -65,9 +67,25 @@ dependencies:
   # the Dart VM service. Gated by kDebugMode in lib/main.dart so the call is
   # tree-shaken from profile/release builds.
   flutter_skill: ^0.9.36
+  # Debug-only: marionette_flutter (LeanCode) — alternative Flutter MCP that
+  # REPLACES WidgetsFlutterBinding with MarionetteBinding. Activated via
+  # --dart-define=MCP_BINDING=marionette. See lib/main.dart for the switch
+  # between flutter_skill and marionette (the two cannot coexist).
+  marionette_flutter: ^0.5.0
+  # Debug-only: mcp_toolkit (Arenukvern/mcp_flutter) — additive MCP layer that
+  # does NOT install its own binding, so it can run alongside either
+  # flutter_skill or marionette. Gated by kDebugMode in lib/main.dart.
+  mcp_toolkit: ^3.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Host-side PNG/asset generation for the product-screenshot seed pipeline
+  # (tool/screenshots/). Kept DIRECT so the tool doesn't depend on the package
+  # staying transitively resolvable (screenshots plan F13).
+  image: ^4.8.0
+  # Pairs with marionette_flutter — provides the `marionette_mcp` CLI that
+  # Claude Code talks to over stdio (registered in ~/.claude.json).
+  marionette_mcp: ^0.5.0
   # Provides the `integration_test` package so the smoke under
   # `integration_test/` can use `IntegrationTestWidgetsFlutterBinding` (the
   # current smoke uses `TestWidgetsFlutterBinding` for hermeticity — see

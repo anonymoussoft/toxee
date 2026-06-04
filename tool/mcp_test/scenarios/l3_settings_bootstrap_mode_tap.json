@@ -1,0 +1,21 @@
+{
+  "id": "L3-settings-bootstrap-mode-tap",
+  "suite": "settings",
+  "uiDriven": true,
+  "feature": ["S99"],
+  "description": "S99 REAL-UI tap upgrade of the bootstrap-node-mode segmented control (NOVEL, UNVALIDATED, nonBlocking): tap the real Settings bootstrap-mode RadioListTile segments (UiKeys.settingsBootstrapModeManual/Auto = 'settings_bootstrap_mode_manual' @ lib/ui/settings/bootstrap_settings_section.dart:1130 / 'settings_bootstrap_mode_auto' @ :1146) via the marionette tap action and prove bootstrapNodeMode flips in l3_dump_state (auto->manual), then tap Auto to restore. THREE BLOCKERS make this nonBlocking and OWE live-validation + codex-review: (1) NO existing scenario uses the tap/enter_text actions — this is a novel, never-run pattern; (2) the marionette ext (ext.flutter.marionette.tap) vs working binding is unresolved (MCP_BINDING=skill lacks the marionette ext; MCP_BINDING=marionette can hang startup); (3) the runner has no scroll action and the bootstrap-mode row sits below the settings-page fold (Bootstrap Nodes section), so the tap may fail to hit a laid-out widget. The PROVEN data-half is l3_bootstrap_mode_toggle.json (S85) — that hard gate drives l3_set_setting bootstrapNodeMode and is what actually passes today. The proper executable form may be a flutter test WidgetTester gate (REAL_UI_GATES recipe), not this JSON. NOTE: the manual/auto segments use the same _setBootstrapNodeMode handler (Prefs.setBootstrapNodeMode) the data-half exercises, but tapping 'auto' triggers a live BootstrapNodesService.fetchNodes() side-effect (network) at :96-97 — harmless to the SETTING assertion but means a tap-restore is not purely hermetic. Soft precondition (starts 'auto', the seeded default) catches a dirty fixture; ends restored to 'auto' so the fixture self-cleans ON SUCCESSFUL COMPLETION only (no `teardown` phase — a mid-run failure/interruption can leave the setting flipped; re-run or restore manually). The 'lan' segment (settings_bootstrap_mode_lan @ :1183) is desktop-only and not exercised here.",
+  "requiresEchoPeer": false,
+  "nonBlocking": true,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "wait_for", "predicate": "state_equals", "field": "bootstrapNodeMode", "equals": "auto", "timeoutSecs": 5 },
+    { "action": "tap", "key": "sidebar_settings_tab" },
+    { "action": "delay", "ms": 800 },
+    { "action": "tap", "key": "settings_bootstrap_mode_manual" },
+    { "action": "wait_for", "predicate": "state_equals", "field": "bootstrapNodeMode", "equals": "manual", "timeoutSecs": 5 },
+    { "action": "tap", "key": "settings_bootstrap_mode_auto" }
+  ],
+  "assertions": [
+    { "type": "state", "field": "bootstrapNodeMode", "equals": "auto" }
+  ]
+}

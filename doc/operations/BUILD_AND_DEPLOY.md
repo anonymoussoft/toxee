@@ -18,7 +18,7 @@
 
 ### 核心工具
 
-- **Flutter**：建议使用 `3.29.x` 或与当前 lockfile 兼容的更高版本。当前 CI workflow 固定使用 `3.29.0`，`pubspec.lock` 当前也要求 Flutter `>=3.29.0`。
+- **Flutter**：建议使用 `3.41.x` 或与当前 lockfile 兼容的更高版本。当前 CI workflow 固定使用 `3.41.9`，`pubspec.lock` 当前也要求 Flutter `>=3.41.9`。
 - **Dart**：使用所选 Flutter 自带的 Dart SDK。
 - **Git**：bootstrap、submodule 与依赖拉取都需要。
 - **CMake**：建议 `3.16+`。仓库中有些路径最低要求更低，但 Tim2Tox 和 Windows 安装包链路都使用到 `3.16`。

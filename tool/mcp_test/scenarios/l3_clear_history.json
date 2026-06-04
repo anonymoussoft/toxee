@@ -1,0 +1,21 @@
+{
+  "id": "L3-clear-history",
+  "suite": "c2c",
+  "description": "clear_history behavior as a standalone hermetic gate (codex Phase-4): send 3 self messages, confirm they persist, clear the conversation, confirm all gone. Exercises the per-scenario reset primitive directly rather than only as setup. No echo peer needed. #18: the three texts carry a per-run {{nonce}} so the per-text equals:0 assertions are robust to a cross-run survivor; the conversation-wide messageCount:0 assertion still depends on the explicit clear achieving true emptiness (self-only, no echo straggler).",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "send_text", "text": "clr-a1-{{nonce}}" },
+    { "action": "send_text", "text": "clr-b2-{{nonce}}" },
+    { "action": "send_text", "text": "clr-c3-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "clr-c3-{{nonce}}", "isSelf": true, "timeoutSecs": 15 },
+    { "action": "clear_history" }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "text": "clr-a1-{{nonce}}", "isSelf": true, "equals": 0 },
+    { "type": "message_count_text", "text": "clr-b2-{{nonce}}", "isSelf": true, "equals": 0 },
+    { "type": "message_count_text", "text": "clr-c3-{{nonce}}", "isSelf": true, "equals": 0 },
+    { "type": "state", "field": "messageCount", "equals": 0 }
+  ]
+}

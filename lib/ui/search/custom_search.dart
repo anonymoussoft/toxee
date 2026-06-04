@@ -7,6 +7,7 @@ import 'package:toxee/i18n/app_localizations.dart';
 import 'package:toxee/ui/search/search_chat_history_window.dart';
 import 'package:toxee/ui/widgets/search_utils.dart';
 import 'package:toxee/util/responsive_layout.dart';
+import 'package:toxee/ui/testing/ui_keys.dart';
 import '../widgets/app_page_route.dart';
 import '../widgets/empty_state_widget.dart';
 import '../widgets/loading_shimmer.dart';
@@ -71,21 +72,35 @@ class _CustomSearchState extends State<CustomSearch> {
   }
 
   // Delegate to shared utilities in SearchUtils.
-  static Widget _avatarWidget(String? url, Widget defaultChild) => SearchUtils.avatarWidget(url, defaultChild);
-  static Widget _buildHighlightedText(String text, String keyword, TextStyle baseStyle, {bool isDark = false}) =>
-      SearchUtils.buildHighlightedText(text, keyword, baseStyle, isDark: isDark);
+  static Widget _avatarWidget(String? url, Widget defaultChild) =>
+      SearchUtils.avatarWidget(url, defaultChild);
+  static Widget _buildHighlightedText(
+    String text,
+    String keyword,
+    TextStyle baseStyle, {
+    bool isDark = false,
+  }) => SearchUtils.buildHighlightedText(
+    text,
+    keyword,
+    baseStyle,
+    isDark: isDark,
+  );
 
   /// Page size when loading history for search; total per conversation is capped by [_maxHistoryMessagesPerConversation].
   static const int _historySearchPageSize = 200;
+
   /// Max messages to load per conversation so that older history can be searched.
   static const int _maxHistoryMessagesPerConversation = 2000;
+
   /// Tighter cap for global search across many conversations: 5 pages × 200 = 1000
   /// per conversation, keeping peak memory bounded when scanning every chat.
   static const int _maxHistoryMessagesPerConversationGlobal = 1000;
 
   /// Search message content: in-memory first, then paginated persisted history so that older messages are included.
   /// Returns result items for conversations that have at least one message whose text/summary contains [keyword] (case-insensitive).
-  Future<List<TencentCloudChatSearchResultItemData>> _searchLocalMessageContent(String keyword) async {
+  Future<List<TencentCloudChatSearchResultItemData>> _searchLocalMessageContent(
+    String keyword,
+  ) async {
     final result = <TencentCloudChatSearchResultItemData>[];
     final conversationList = UikitDataFacade.conversationList;
     final messageSDK = TencentCloudChat.instance.chatSDKInstance.messageSDK;
@@ -94,7 +109,10 @@ class _CustomSearchState extends State<CustomSearch> {
     bool messageMatches(V2TimMessage msg) {
       final text = msg.textElem?.text ?? '';
       if (text.toLowerCase().contains(lowerKeyword)) return true;
-      final summary = TencentCloudChatUtils.getMessageSummary(message: msg, needStatus: false);
+      final summary = TencentCloudChatUtils.getMessageSummary(
+        message: msg,
+        needStatus: false,
+      );
       return summary.toLowerCase().contains(lowerKeyword);
     }
 
@@ -108,8 +126,11 @@ class _CustomSearchState extends State<CustomSearch> {
       bool foundMatchEarly = false;
       if (c.userID != null || c.groupID != null) {
         try {
-          String? lastMsgID = allMessages.isEmpty ? null : allMessages.last.msgID;
-          while (allMessages.length < _maxHistoryMessagesPerConversationGlobal) {
+          String? lastMsgID = allMessages.isEmpty
+              ? null
+              : allMessages.last.msgID;
+          while (allMessages.length <
+              _maxHistoryMessagesPerConversationGlobal) {
             final res = await messageSDK.getHistoryMessageList(
               userID: c.userID,
               groupID: c.groupID,
@@ -130,7 +151,8 @@ class _CustomSearchState extends State<CustomSearch> {
           }
         } catch (e) {
           AppLogger.warn(
-              '[CustomSearch] global history pagination failed; keeping partial allMessages: $e');
+            '[CustomSearch] global history pagination failed; keeping partial allMessages: $e',
+          );
         }
       }
       final matching = allMessages.where(messageMatches).toList();
@@ -138,15 +160,19 @@ class _CustomSearchState extends State<CustomSearch> {
       // variable to make the optimization intent visible to future readers.
       assert(!foundMatchEarly || matching.isNotEmpty);
       if (matching.isNotEmpty) {
-        result.add(TencentCloudChatSearchResultItemData(
-          showName: TencentCloudChatUtils.checkString(c.showName) ?? c.conversationID,
-          conversationID: c.conversationID,
-          userID: c.userID,
-          groupID: c.groupID,
-          messageList: matching,
-          totalCount: matching.length,
-          avatarUrl: c.faceUrl,
-        ));
+        result.add(
+          TencentCloudChatSearchResultItemData(
+            showName:
+                TencentCloudChatUtils.checkString(c.showName) ??
+                c.conversationID,
+            conversationID: c.conversationID,
+            userID: c.userID,
+            groupID: c.groupID,
+            messageList: matching,
+            totalCount: matching.length,
+            avatarUrl: c.faceUrl,
+          ),
+        );
         if (result.length >= 50) break;
       }
     }
@@ -167,7 +193,8 @@ class _CustomSearchState extends State<CustomSearch> {
   void didUpdateWidget(CustomSearch oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Clear cache when search scope changes (e.g. switching between global and scoped search).
-    if (widget.userID != oldWidget.userID || widget.groupID != oldWidget.groupID) {
+    if (widget.userID != oldWidget.userID ||
+        widget.groupID != oldWidget.groupID) {
       _lastSearchedKeyword = '';
       _cachedRawContacts = [];
       _cachedRawGroups = [];
@@ -198,7 +225,8 @@ class _CustomSearchState extends State<CustomSearch> {
   bool get _isGlobalSearch => widget.userID == null && widget.groupID == null;
 
   /// When true, the parent (conversation list) provides the search bar and keyWord; we only show results and must not show a second search field.
-  bool get _isEmbeddedWithParentSearchBar => _isGlobalSearch && widget.keyWord != null;
+  bool get _isEmbeddedWithParentSearchBar =>
+      _isGlobalSearch && widget.keyWord != null;
 
   Future<void> _performSearch() async {
     if (_searchKeyword.trim().isEmpty) {
@@ -222,11 +250,14 @@ class _CustomSearchState extends State<CustomSearch> {
         final searchSDK = TencentCloudChat.instance.chatSDKInstance.searchSDK;
 
         // Use cached contacts/groups when refining an existing query (incremental typing).
-        final bool canFilterLocally = _lastSearchedKeyword.isNotEmpty && keyword.startsWith(_lastSearchedKeyword);
+        final bool canFilterLocally =
+            _lastSearchedKeyword.isNotEmpty &&
+            keyword.startsWith(_lastSearchedKeyword);
 
         List<V2TimFriendInfoResult> rawContacts;
         List<V2TimGroupInfo> rawGroups;
-        (int?, String?, List<TencentCloudChatSearchResultItemData>, String?) messageResult;
+        (int?, String?, List<TencentCloudChatSearchResultItemData>, String?)
+        messageResult;
 
         if (canFilterLocally) {
           rawContacts = _cachedRawContacts;
@@ -240,7 +271,14 @@ class _CustomSearchState extends State<CustomSearch> {
           ]);
           rawContacts = results[0] as List<V2TimFriendInfoResult>;
           rawGroups = results[1] as List<V2TimGroupInfo>;
-          messageResult = results[2] as (int?, String?, List<TencentCloudChatSearchResultItemData>, String?);
+          messageResult =
+              results[2]
+                  as (
+                    int?,
+                    String?,
+                    List<TencentCloudChatSearchResultItemData>,
+                    String?,
+                  );
           _cachedRawContacts = rawContacts;
           _cachedRawGroups = rawGroups;
         }
@@ -292,24 +330,28 @@ class _CustomSearchState extends State<CustomSearch> {
             : (widget.userID != null ? 'c2c_${widget.userID}' : '');
 
         if (conversationID.isNotEmpty) {
-          final searchMessagesResult = await TencentCloudChat.instance.chatSDKInstance.searchSDK
-              .searchMessages(
-            keyword: keyword,
-            conversationID: conversationID,
-          );
+          final searchMessagesResult = await TencentCloudChat
+              .instance
+              .chatSDKInstance
+              .searchSDK
+              .searchMessages(keyword: keyword, conversationID: conversationID);
           var messages = searchMessagesResult.$3;
 
           // Fallback: search in-memory + paginated persisted history when SDK returns no results.
           if (messages.isEmpty) {
             final key = widget.userID ?? widget.groupID ?? '';
-            final messageSDK = TencentCloudChat.instance.chatSDKInstance.messageSDK;
+            final messageSDK =
+                TencentCloudChat.instance.chatSDKInstance.messageSDK;
             final lowerKeyword = keyword.toLowerCase();
             List<V2TimMessage> list = UikitDataFacade.getMessageList(key: key);
             List<V2TimMessage> allMessages = List<V2TimMessage>.from(list);
             if (widget.userID != null || widget.groupID != null) {
               try {
-                String? lastMsgID = allMessages.isEmpty ? null : allMessages.last.msgID;
-                while (allMessages.length < _maxHistoryMessagesPerConversation) {
+                String? lastMsgID = allMessages.isEmpty
+                    ? null
+                    : allMessages.last.msgID;
+                while (allMessages.length <
+                    _maxHistoryMessagesPerConversation) {
                   final res = await messageSDK.getHistoryMessageList(
                     userID: widget.userID,
                     groupID: widget.groupID,
@@ -323,18 +365,28 @@ class _CustomSearchState extends State<CustomSearch> {
                 }
               } catch (e) {
                 AppLogger.warn(
-                    '[CustomSearch] history pagination failed mid-scan: $e');
+                  '[CustomSearch] history pagination failed mid-scan: $e',
+                );
               }
             }
             final matching = allMessages.where((msg) {
               final text = msg.textElem?.text ?? '';
               if (text.toLowerCase().contains(lowerKeyword)) return true;
-              final summary = TencentCloudChatUtils.getMessageSummary(message: msg, needStatus: false);
+              final summary = TencentCloudChatUtils.getMessageSummary(
+                message: msg,
+                needStatus: false,
+              );
               return summary.toLowerCase().contains(lowerKeyword);
             }).toList();
             if (matching.isNotEmpty) {
-              final conv = await TencentCloudChat.instance.chatSDKInstance.conversationSDK
-                  .getConversation(userID: widget.userID, groupID: widget.groupID);
+              final conv = await TencentCloudChat
+                  .instance
+                  .chatSDKInstance
+                  .conversationSDK
+                  .getConversation(
+                    userID: widget.userID,
+                    groupID: widget.groupID,
+                  );
               messages = [
                 TencentCloudChatSearchResultItemData(
                   showName: conv.showName ?? conversationID,
@@ -414,7 +466,9 @@ class _CustomSearchState extends State<CustomSearch> {
     if (targetMessage != null) {
       UikitDataFacade.currentTargetMessage = targetMessage;
     }
-    if (UikitDataFacade.usedComponents.contains(TencentCloudChatComponentsEnum.message)) {
+    if (UikitDataFacade.usedComponents.contains(
+      TencentCloudChatComponentsEnum.message,
+    )) {
       if (!_isDesktop(context)) {
         navigateToMessage(
           context: context,
@@ -425,7 +479,10 @@ class _CustomSearchState extends State<CustomSearch> {
           ),
         );
       } else {
-        final conv = await TencentCloudChat.instance.chatSDKInstance.conversationSDK
+        final conv = await TencentCloudChat
+            .instance
+            .chatSDKInstance
+            .conversationSDK
             .getConversation(userID: userID, groupID: groupID);
         if (targetMessage != null) {
           UikitDataFacade.currentTargetMessage = targetMessage;
@@ -456,7 +513,9 @@ class _CustomSearchState extends State<CustomSearch> {
                     tooltip: l10n.close,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                SizedBox(width: ResponsiveLayout.responsiveHorizontalPadding(context)),
+                SizedBox(
+                  width: ResponsiveLayout.responsiveHorizontalPadding(context),
+                ),
               ],
             )
           : AppBar(
@@ -464,6 +523,7 @@ class _CustomSearchState extends State<CustomSearch> {
               title: Padding(
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 child: TextField(
+                  key: UiKeys.messageSearchField,
                   controller: _searchController,
                   autofocus: true,
                   // iOS keyboard shows a "Search" return key instead of the
@@ -480,21 +540,29 @@ class _CustomSearchState extends State<CustomSearch> {
                     ),
                     isDense: true,
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    fillColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.md,
                       vertical: AppSpacing.sm,
                     ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppThemeConfig.inputBorderRadius,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppThemeConfig.inputBorderRadius,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppThemeConfig.inputBorderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppThemeConfig.inputBorderRadius,
+                      ),
                       borderSide: BorderSide(
                         color: Theme.of(context).colorScheme.primary,
                         width: 1.5,
@@ -506,7 +574,10 @@ class _CustomSearchState extends State<CustomSearch> {
                       _searchKeyword = value;
                     });
                     _debounceTimer?.cancel();
-                    _debounceTimer = Timer(const Duration(milliseconds: 300), _performSearch);
+                    _debounceTimer = Timer(
+                      const Duration(milliseconds: 300),
+                      _performSearch,
+                    );
                   },
                   onSubmitted: (_) => _performSearch(),
                 ),
@@ -524,7 +595,9 @@ class _CustomSearchState extends State<CustomSearch> {
                     tooltip: l10n.close,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                SizedBox(width: ResponsiveLayout.responsiveHorizontalPadding(context)),
+                SizedBox(
+                  width: ResponsiveLayout.responsiveHorizontalPadding(context),
+                ),
               ],
             ),
       body: SafeArea(child: _buildBody(l10n)),
@@ -574,31 +647,49 @@ class _CustomSearchState extends State<CustomSearch> {
         if (_errorMessage != null) _buildErrorBanner(l10n),
         if (_isGlobalSearch && (hasContacts || hasGroups || hasMessages))
           Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              0,
+            ),
             child: Text(
-              l10n.searchSummary(_contactsList.length, _groupsList.length, _messageSearchResults.length),
+              l10n.searchSummary(
+                _contactsList.length,
+                _groupsList.length,
+                _messageSearchResults.length,
+              ),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         if (hasContacts) _buildSectionHeader(l10n.contacts),
         if (hasContacts)
           ..._contactsList.map((e) {
-            final name = TencentCloudChatUtils.checkString(e.friendInfo?.friendRemark) ??
-                TencentCloudChatUtils.checkString(e.friendInfo?.userProfile?.nickName) ??
+            final name =
+                TencentCloudChatUtils.checkString(e.friendInfo?.friendRemark) ??
+                TencentCloudChatUtils.checkString(
+                  e.friendInfo?.userProfile?.nickName,
+                ) ??
                 TencentCloudChatUtils.checkString(e.friendInfo?.userID) ??
                 '';
             final uid = e.friendInfo?.userID ?? '';
             final faceUrl = e.friendInfo?.userProfile?.faceUrl;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final titleStyle = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
+            final titleStyle =
+                Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
             return Semantics(
               label: l10n.searchResultContactSemantics(name),
               button: true,
               child: ListTile(
                 leading: _avatarWidget(faceUrl, const Icon(Icons.person)),
-                title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
+                title: _buildHighlightedText(
+                  name,
+                  _searchKeyword.trim(),
+                  titleStyle,
+                  isDark: isDark,
+                ),
                 subtitle: Text('${l10n.idLabel} ${_truncateIdForDisplay(uid)}'),
                 onTap: () => _navigateToMessage(userID: uid, groupID: null),
               ),
@@ -607,18 +698,27 @@ class _CustomSearchState extends State<CustomSearch> {
         if (hasGroups) _buildSectionHeader(l10n.groups),
         if (hasGroups)
           ..._groupsList.map((e) {
-            final name = TencentCloudChatUtils.checkString(e.groupName) ?? e.groupID;
+            final name =
+                TencentCloudChatUtils.checkString(e.groupName) ?? e.groupID;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final titleStyle = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
+            final titleStyle =
+                Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
             return Semantics(
               label: l10n.searchResultGroupSemantics(name),
               button: true,
               child: ListTile(
                 leading: _avatarWidget(e.faceUrl, const Icon(Icons.group)),
-                title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
-                subtitle:
-                    Text('${l10n.idLabel} ${_truncateIdForDisplay(e.groupID)}'),
-                onTap: () => _navigateToMessage(userID: null, groupID: e.groupID),
+                title: _buildHighlightedText(
+                  name,
+                  _searchKeyword.trim(),
+                  titleStyle,
+                  isDark: isDark,
+                ),
+                subtitle: Text(
+                  '${l10n.idLabel} ${_truncateIdForDisplay(e.groupID)}',
+                ),
+                onTap: () =>
+                    _navigateToMessage(userID: null, groupID: e.groupID),
               ),
             );
           }),
@@ -627,34 +727,46 @@ class _CustomSearchState extends State<CustomSearch> {
           ..._messageSearchResults.map((result) {
             final count = result.totalCount ?? result.messageList.length;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final titleStyle = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
+            final titleStyle =
+                Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
             return Semantics(
               label: l10n.searchResultMessageSemantics(result.showName),
               button: true,
               child: ListTile(
-                leading: _avatarWidget(result.avatarUrl, const Icon(Icons.chat)),
-                title: _buildHighlightedText(result.showName, _searchKeyword.trim(), titleStyle, isDark: isDark),
+                key: UiKeys.searchResultMessage(result.conversationID),
+                leading: _avatarWidget(
+                  result.avatarUrl,
+                  const Icon(Icons.chat),
+                ),
+                title: _buildHighlightedText(
+                  result.showName,
+                  _searchKeyword.trim(),
+                  titleStyle,
+                  isDark: isDark,
+                ),
                 subtitle: Text(l10n.messageCount(count)),
                 onTap: () {
-                  Navigator.of(context).push<String>(
-                    AppPageRoute<String>(
-                      page: SearchChatHistoryWindow(
-                        initialKeyword: _searchKeyword.trim(),
-                        messageSearchResults: _messageSearchResults,
-                        initialSelectedResult: result,
-                        onNavigateToMessage: _navigateToMessage,
-                      ),
-                    ),
-                  ).then((value) {
-                    if (!mounted || value == null) return;
-                    final keyword = value.trim();
-                    if (keyword.isEmpty) return;
-                    setState(() {
-                      _searchKeyword = keyword;
-                      _searchController.text = keyword;
-                    });
-                    _performSearch();
-                  });
+                  Navigator.of(context)
+                      .push<String>(
+                        AppPageRoute<String>(
+                          page: SearchChatHistoryWindow(
+                            initialKeyword: _searchKeyword.trim(),
+                            messageSearchResults: _messageSearchResults,
+                            initialSelectedResult: result,
+                            onNavigateToMessage: _navigateToMessage,
+                          ),
+                        ),
+                      )
+                      .then((value) {
+                        if (!mounted || value == null) return;
+                        final keyword = value.trim();
+                        if (keyword.isEmpty) return;
+                        setState(() {
+                          _searchKeyword = keyword;
+                          _searchController.text = keyword;
+                        });
+                        _performSearch();
+                      });
                 },
               ),
             );
@@ -662,20 +774,32 @@ class _CustomSearchState extends State<CustomSearch> {
         if (hasFallback) _buildSectionHeader(l10n.searchSectionConversations),
         if (hasFallback)
           ..._conversationFallbackList.map((c) {
-            final name = TencentCloudChatUtils.checkString(c.showName) ?? c.conversationID;
+            final name =
+                TencentCloudChatUtils.checkString(c.showName) ??
+                c.conversationID;
             final id = (c.userID != null && c.userID!.isNotEmpty)
                 ? c.userID!
                 : (c.groupID ?? c.conversationID);
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final titleStyle = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
+            final titleStyle =
+                Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
             return Semantics(
               label: l10n.searchResultConversationSemantics(name),
               button: true,
               child: ListTile(
-                leading: _avatarWidget(c.faceUrl, const Icon(Icons.chat_bubble_outline)),
-                title: _buildHighlightedText(name, _searchKeyword.trim(), titleStyle, isDark: isDark),
+                leading: _avatarWidget(
+                  c.faceUrl,
+                  const Icon(Icons.chat_bubble_outline),
+                ),
+                title: _buildHighlightedText(
+                  name,
+                  _searchKeyword.trim(),
+                  titleStyle,
+                  isDark: isDark,
+                ),
                 subtitle: Text('${l10n.idLabel} ${_truncateIdForDisplay(id)}'),
-                onTap: () => _navigateToMessage(userID: c.userID, groupID: c.groupID),
+                onTap: () =>
+                    _navigateToMessage(userID: c.userID, groupID: c.groupID),
               ),
             );
           }),
@@ -693,14 +817,18 @@ class _CustomSearchState extends State<CustomSearch> {
       color: Theme.of(context).colorScheme.errorContainer,
       child: Row(
         children: [
-          Icon(Icons.warning_amber_rounded, size: 18, color: Theme.of(context).colorScheme.onErrorContainer),
+          Icon(
+            Icons.warning_amber_rounded,
+            size: 18,
+            color: Theme.of(context).colorScheme.onErrorContainer,
+          ),
           AppSpacing.horizontalSm,
           Expanded(
             child: Text(
               _errorMessage ?? l10n.searchFailed,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                  ),
+                color: Theme.of(context).colorScheme.onErrorContainer,
+              ),
             ),
           ),
           TextButton(
@@ -735,10 +863,10 @@ class _CustomSearchState extends State<CustomSearch> {
       child: Text(
         title.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.6,
-            ),
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.6,
+        ),
       ),
     );
   }
@@ -749,15 +877,19 @@ class CustomSearchManager {
   /// Manually declares the usage of the CustomSearch component.
   /// During the `initUIKit` call, add `CustomSearchManager.register` in `usedComponentsRegister` within `components`
   /// if you plan to use this component.
-  static ({TencentCloudChatComponentsEnum componentEnum, TencentCloudChatWidgetBuilder widgetBuilder}) register() {
+  static ({
+    TencentCloudChatComponentsEnum componentEnum,
+    TencentCloudChatWidgetBuilder widgetBuilder,
+  })
+  register() {
     return (
       componentEnum: TencentCloudChatComponentsEnum.search,
       widgetBuilder: ({required Map<String, dynamic> options}) => CustomSearch(
-            userID: options["userID"] as String?,
-            groupID: options["groupID"] as String?,
-            keyWord: options["keyWord"] as String?,
-            closeFunc: options["closeFunc"] as VoidCallback?,
-          ),
+        userID: options["userID"] as String?,
+        groupID: options["groupID"] as String?,
+        keyWord: options["keyWord"] as String?,
+        closeFunc: options["closeFunc"] as VoidCallback?,
+      ),
     );
   }
 }

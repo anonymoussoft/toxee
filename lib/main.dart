@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_skill/flutter_skill.dart';
+import 'package:marionette_flutter/marionette_flutter.dart';
+import 'package:mcp_toolkit/mcp_toolkit.dart';
 
 import 'ui/widgets/app_page_route.dart';
 import 'package:tencent_cloud_chat_common/widgets/material_app.dart';
@@ -16,6 +18,7 @@ import 'ui/login_page.dart';
 import 'ui/home_page.dart';
 import 'ui/startup_loading_screen.dart';
 import 'ui/upgrade_required_screen.dart';
+import 'ui/testing/l3_debug_tools.dart';
 import 'sdk_fake/fake_uikit_core.dart';
 import 'util/theme_controller.dart';
 import 'util/locale_controller.dart';
@@ -23,6 +26,7 @@ import 'i18n/app_localizations.dart';
 import 'util/logger.dart';
 import 'call/call_overlay.dart';
 import 'call/call_effects_listener.dart';
+import 'navigation/app_navigation.dart';
 import 'util/app_theme_config.dart';
 import 'util/app_component_themes.dart';
 import 'util/account_service.dart';
@@ -40,8 +44,8 @@ import 'bootstrap/app_bootstrap_result.dart';
 void _routePrintToLogger(String line) {
   // TCCF:2026-02-11 03:48:47 PM:TencentCloudChatMessageSDK:debug:{ addUIKitListener 1770796127319 }
   final tccfMatch = RegExp(
-          r'^TCCF:(?:\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2} [AP]M):([^:]+):(debug|info|error|all):\{ (.*) \}$')
-      .firstMatch(line);
+    r'^TCCF:(?:\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2} [AP]M):([^:]+):(debug|info|error|all):\{ (.*) \}$',
+  ).firstMatch(line);
   if (tccfMatch != null) {
     final component = tccfMatch.group(1)!.trim();
     final level = tccfMatch.group(2)!;
@@ -66,17 +70,75 @@ void _routePrintToLogger(String line) {
   AppLogger.info(line);
 }
 
+/// Selects which Flutter MCP binding to install at startup. Compile-time
+/// const so unused branches tree-shake out of release builds. Values:
+///   skill     — flutter_skill (default; additive, layered on stock binding)
+///   marionette — MarionetteBinding (REPLACES WidgetsFlutterBinding; exclusive)
+///   stock     — plain Flutter (no flutter_skill, useful for isolating mcp_toolkit)
+/// mcp_toolkit (Arenukvern) is always layered on top in debug mode regardless,
+/// because it does not install its own binding.
+/// Pass with: flutter run --dart-define=MCP_BINDING=marionette
+const _mcpBinding = String.fromEnvironment(
+  'MCP_BINDING',
+  defaultValue: 'skill',
+);
+
 Future<void> main() async {
   await runZonedGuarded(
     () async {
-      WidgetsFlutterBinding.ensureInitialized();
+      // Step 1: install the binding. Marionette REPLACES WidgetsFlutterBinding
+      // and must be the first ensureInitialized() call in the process; any
+      // prior WidgetsFlutterBinding.ensureInitialized() trips the binding
+      // singleton assertion. Other modes use the stock binding.
+      if (kDebugMode && _mcpBinding == 'marionette') {
+        MarionetteBinding.ensureInitialized(
+          MarionetteConfiguration(
+            // Custom toxee/UIKit widgets that marionette's builtin list does
+            // not know about. String-based matching keeps main.dart from
+            // importing 60+ classes; the agent harness only needs enough
+            // coverage to drive the chat flow.
+            isInteractiveWidget: (type) {
+              final n = type.toString();
+              return n.startsWith('TencentCloudChat') ||
+                  n.startsWith('TUIKit') ||
+                  n.endsWith('Button') ||
+                  n.endsWith('Item') ||
+                  n.endsWith('Dialog') ||
+                  n.endsWith('Tile') ||
+                  n.contains('LoginActionCard');
+            },
+          ),
+        );
+      } else {
+        WidgetsFlutterBinding.ensureInitialized();
+      }
 
-      // Debug-only: expose the running app to Claude Code via the flutter_skill
-      // MCP server (tap / enter_text / screenshot / hot_reload). kDebugMode is
-      // a compile-time const false in profile/release builds, so the call is
-      // tree-shaken out of non-debug binaries.
+      // Step 2: additive MCP layers — both register `dart:developer` service
+      // extensions in their own namespaces, so they can coexist with any
+      // binding (or with each other). kDebugMode tree-shakes these out of
+      // profile/release builds.
+      if (kDebugMode && _mcpBinding == 'skill') {
+        // autoEnableIndicators:false — the visual tap-indicator overlay (the
+        // animated particle/character effect flutter_skill draws on each tap)
+        // is a human-watching debug aid the automated harness never needs, AND
+        // it can throw mid-paint: its _ParticleEffectPainter feeds an
+        // out-of-[0,1] value to Color.withOpacity, which asserts during the
+        // paint phase and aborts the ENTIRE frame — blanking the whole window
+        // (sidebar included) until restart. Leaving the overlay off removes
+        // that whole failure mode; the service extensions (tap/enterText/…)
+        // are unaffected. Re-enable at runtime via
+        // `ext.flutter.flutter_skill.enableIndicators` if a visual trace is
+        // ever wanted.
+        FlutterSkillBinding.ensureInitialized(autoEnableIndicators: false);
+      }
       if (kDebugMode) {
-        FlutterSkillBinding.ensureInitialized();
+        MCPToolkitBinding.instance
+          ..initialize()
+          ..initializeFlutterToolkit();
+        // L3 test-only debug MCP tools (deterministic send, state dump).
+        // No-op unless TOXEE_L3_TEST is set (injected by run_toxee.sh on the
+        // canonical L3 launch). See lib/ui/testing/l3_debug_tools.dart.
+        registerL3DebugToolsIfEnabled();
       }
 
       final result = await AppBootstrap.initialize();
@@ -114,19 +176,24 @@ Future<void> main() async {
 
       ui.PlatformDispatcher.instance.onError =
           (Object error, StackTrace stack) {
-        AppLogger.logError('Uncaught async error', error, stack);
-        return true;
-      };
+            AppLogger.logError('Uncaught async error', error, stack);
+            return true;
+          };
 
       switch (result) {
         case AppBootstrapSuccess():
           AppLogger.log('Running app...');
           runApp(const EchoUIKitApp());
-        case AppBootstrapUpgradeRequired(:final storedVersion, :final currentVersion):
-          runApp(UpgradeRequiredApp(
-            storedVersion: storedVersion,
-            currentVersion: currentVersion,
-          ));
+        case AppBootstrapUpgradeRequired(
+          :final storedVersion,
+          :final currentVersion,
+        ):
+          runApp(
+            UpgradeRequiredApp(
+              storedVersion: storedVersion,
+              currentVersion: currentVersion,
+            ),
+          );
       }
     },
     (Object error, StackTrace stack) {
@@ -161,7 +228,10 @@ class _AppScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildScrollbar(
-      BuildContext context, Widget child, ScrollableDetails details) {
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
     if (details.controller == null) {
       return child;
     }
@@ -175,7 +245,8 @@ class EchoUIKitApp extends StatefulWidget {
   State<EchoUIKitApp> createState() => _EchoUIKitAppState();
 }
 
-class _EchoUIKitAppState extends State<EchoUIKitApp> with WidgetsBindingObserver {
+class _EchoUIKitAppState extends State<EchoUIKitApp>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -191,8 +262,9 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> with WidgetsBindingObserver
 
   void _syncUIKitThemeBrightness() {
     final mode = AppTheme.mode.value;
-    final brightness =
-        mode == ThemeMode.dark ? Brightness.dark : Brightness.light;
+    final brightness = mode == ThemeMode.dark
+        ? Brightness.dark
+        : Brightness.light;
     TencentCloudChatTheme.init(brightness: brightness);
   }
 
@@ -204,7 +276,10 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> with WidgetsBindingObserver
         FakeUIKit.instance.im?.refreshUnreadTotal();
       } catch (e, st) {
         AppLogger.logError(
-            '[EchoUIKitApp] refreshUnreadTotal on resume failed', e, st);
+          '[EchoUIKitApp] refreshUnreadTotal on resume failed',
+          e,
+          st,
+        );
       }
     }
   }
@@ -236,6 +311,7 @@ class _EchoUIKitAppState extends State<EchoUIKitApp> with WidgetsBindingObserver
             }
             return TencentCloudChatMaterialApp(
               title: 'Toxee',
+              navigatorKey: appNavigatorKey,
               // Hand the ScaffoldMessenger key to the root app so SDK
               // callbacks (which live outside the widget tree) can surface
               // send-failure toasts via [SendFailureNotifier].
@@ -342,61 +418,72 @@ ThemeData _applyAppTheming(ThemeData base) {
     // theme so M3's brightness-aware colors (onSurface for titles/body,
     // onSurfaceVariant for labels) are preserved while we override only
     // font size/weight/tracking/leading.
-    textTheme: base.textTheme.merge(const TextTheme(
-      headlineSmall: TextStyle(
+    textTheme: base.textTheme.merge(
+      const TextTheme(
+        headlineSmall: TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
-          height: 1.25),
-      titleLarge: TextStyle(
+          height: 1.25,
+        ),
+        titleLarge: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           letterSpacing: -0.3,
-          height: 1.3),
-      titleMedium: TextStyle(
+          height: 1.3,
+        ),
+        titleMedium: TextStyle(
           fontSize: 17,
           fontWeight: FontWeight.w600,
           letterSpacing: -0.2,
-          height: 1.35),
-      titleSmall: TextStyle(
+          height: 1.35,
+        ),
+        titleSmall: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w600,
           letterSpacing: -0.1,
-          height: 1.4),
-      bodyLarge: TextStyle(fontSize: 16, height: 1.5),
-      bodyMedium: TextStyle(fontSize: 15, height: 1.5),
-      bodySmall:
-          TextStyle(fontSize: 13, letterSpacing: 0.1, height: 1.45),
-      labelLarge: TextStyle(
+          height: 1.4,
+        ),
+        bodyLarge: TextStyle(fontSize: 16, height: 1.5),
+        bodyMedium: TextStyle(fontSize: 15, height: 1.5),
+        bodySmall: TextStyle(fontSize: 13, letterSpacing: 0.1, height: 1.45),
+        labelLarge: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          letterSpacing: 0.1),
-      labelMedium: TextStyle(
+          letterSpacing: 0.1,
+        ),
+        labelMedium: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w500,
-          letterSpacing: 0.2),
-      labelSmall: TextStyle(
+          letterSpacing: 0.2,
+        ),
+        labelSmall: TextStyle(
           // 12pt floor for Material 3 (bottom-nav labels use
           // labelSmall — anything below 12 fails the legibility
           // bar on small phone screens).
           fontSize: 12,
           fontWeight: FontWeight.w500,
-          letterSpacing: 0.4),
-    )),
+          letterSpacing: 0.4,
+        ),
+      ),
+    ),
     // Component themes: the base values come from [AppComponentThemes];
     // any prior manual overrides are reapplied via `copyWith` so existing
     // behavior (e.g. Card elevation: 1, AppBar centerTitle: false) wins.
-    appBarTheme: AppComponentThemes.appBarTheme(cs, brightness).copyWith(
-      centerTitle: false,
-    ),
+    appBarTheme: AppComponentThemes.appBarTheme(
+      cs,
+      brightness,
+    ).copyWith(centerTitle: false),
     elevatedButtonTheme: AppComponentThemes.elevatedButtonTheme(cs),
     filledButtonTheme: AppComponentThemes.filledButtonTheme(cs),
     outlinedButtonTheme: AppComponentThemes.outlinedButtonTheme(cs),
     textButtonTheme: AppComponentThemes.textButtonTheme(cs),
     dialogTheme: AppComponentThemes.dialogTheme(cs),
     bottomSheetTheme: AppComponentThemes.bottomSheetTheme(cs),
-    inputDecorationTheme:
-        AppComponentThemes.inputDecorationTheme(cs, brightness),
+    inputDecorationTheme: AppComponentThemes.inputDecorationTheme(
+      cs,
+      brightness,
+    ),
     cardTheme: AppComponentThemes.cardTheme(cs).copyWith(
       // Preserve the prior soft single-layer elevation on cards.
       elevation: 1,
@@ -425,6 +512,7 @@ ThemeData _applyAppTheming(ThemeData base) {
 
 class _StartupGate extends StatefulWidget {
   const _StartupGate();
+
   @override
   State<_StartupGate> createState() => _StartupGateState();
 }
@@ -437,12 +525,13 @@ class _StartupGateState extends State<_StartupGate> {
   StreamSubscription<bool>? _connectionSub;
   StartupStep _currentStep = StartupStep.checkingUserInfo;
   FfiChatService? _serviceWaitingForConnection;
-  late final StartupSessionUseCase _startupUseCase;
+  final StartupSessionUseCase _startupUseCase = StartupSessionUseCase();
+
+  Widget _buildHomePage(FfiChatService service) => HomePage(service: service);
 
   @override
   void initState() {
     super.initState();
-    _startupUseCase = StartupSessionUseCase();
     _runStartup();
   }
 
@@ -451,10 +540,12 @@ class _StartupGateState extends State<_StartupGate> {
     _timeoutTimer?.cancel();
     _connectionSub?.cancel();
     if (_serviceWaitingForConnection != null) {
-      unawaited(AccountService.teardownCurrentSession(
-        service: _serviceWaitingForConnection,
-        reEncryptProfile: true,
-      ));
+      unawaited(
+        AccountService.teardownCurrentSession(
+          service: _serviceWaitingForConnection,
+          reEncryptProfile: true,
+        ),
+      );
     }
     super.dispose();
   }
@@ -485,9 +576,11 @@ class _StartupGateState extends State<_StartupGate> {
         break;
       case StartupOpenHome(:final service):
         unawaited(HapticFeedback.lightImpact());
-        unawaited(Navigator.of(context).pushReplacement(
-          AppPageRoute(page: HomePage(service: service)),
-        ).then((_) {}));
+        unawaited(
+          Navigator.of(context)
+              .pushReplacement(AppPageRoute(page: _buildHomePage(service)))
+              .then((_) {}),
+        );
         break;
       case StartupWaitForConnection(:final service):
         setState(() {
@@ -504,13 +597,17 @@ class _StartupGateState extends State<_StartupGate> {
       if (!mounted) return;
       _connectionSub?.cancel();
       _updateStep(StartupStep.completed);
-      unawaited(Future.delayed(const Duration(milliseconds: 500), () {
-        if (!mounted) return;
-        _serviceWaitingForConnection = null;
-        unawaited(Navigator.of(context).pushReplacement(
-          AppPageRoute(page: HomePage(service: service)),
-        ).then((_) {}));
-      }));
+      unawaited(
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted) return;
+          _serviceWaitingForConnection = null;
+          unawaited(
+            Navigator.of(context)
+                .pushReplacement(AppPageRoute(page: _buildHomePage(service)))
+                .then((_) {}),
+          );
+        }),
+      );
     });
 
     _connectionSub = service.connectionStatusStream.listen((isConnected) {
@@ -530,9 +627,11 @@ class _StartupGateState extends State<_StartupGate> {
     if (!mounted) return;
     _serviceWaitingForConnection = null;
     unawaited(HapticFeedback.lightImpact());
-    unawaited(Navigator.of(context).pushReplacement(
-      AppPageRoute(page: HomePage(service: service)),
-    ).then((_) {}));
+    unawaited(
+      Navigator.of(context)
+          .pushReplacement(AppPageRoute(page: _buildHomePage(service)))
+          .then((_) {}),
+    );
   }
 
   Future<void> _loadFriendsInfo(FfiChatService service) async {
@@ -573,7 +672,8 @@ class _StartupGateState extends State<_StartupGate> {
           if (hasOnlineStatus || attempt >= maxAttempts - 1) {
             // We have online status or we've waited long enough
             AppLogger.log(
-                '[StartupGate] Friends info loaded: ${friends.length} friends, ${friends.where((f) => f.online).length} online');
+              '[StartupGate] Friends info loaded: ${friends.length} friends, ${friends.where((f) => f.online).length} online',
+            );
             // Refresh contacts one more time to ensure UI has latest status
             if (FakeUIKit.instance.im != null) {
               await FakeUIKit.instance.im!.refreshContacts();
@@ -589,7 +689,10 @@ class _StartupGateState extends State<_StartupGate> {
     } catch (e) {
       // Log error but don't block startup
       AppLogger.logError(
-          '[StartupGate] Error loading friends info: $e', e, null);
+        '[StartupGate] Error loading friends info: $e',
+        e,
+        null,
+      );
     }
   }
 
@@ -602,9 +705,9 @@ class _StartupGateState extends State<_StartupGate> {
         onRetry: _error != null ? _runStartup : null,
         onGoToLogin: _error != null
             ? () {
-                Navigator.of(context).pushReplacement(
-                  AppPageRoute(page: const LoginPage()),
-                );
+                Navigator.of(
+                  context,
+                ).pushReplacement(AppPageRoute(page: const LoginPage()));
               }
             : null,
       );
@@ -615,9 +718,9 @@ class _StartupGateState extends State<_StartupGate> {
         errorMessage: _error,
         onRetry: _runStartup,
         onGoToLogin: () {
-          Navigator.of(context).pushReplacement(
-            AppPageRoute(page: const LoginPage()),
-          );
+          Navigator.of(
+            context,
+          ).pushReplacement(AppPageRoute(page: const LoginPage()));
         },
       );
     }
@@ -625,4 +728,3 @@ class _StartupGateState extends State<_StartupGate> {
     return const LoginPage();
   }
 }
-

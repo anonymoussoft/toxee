@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_bootstrap_result.dart';
@@ -11,8 +13,14 @@ import '../util/prefs_upgrader.dart';
 class PrefsBootstrap {
   PrefsBootstrap._();
 
+  static const _sharedPrefsPrefixEnv = 'TOXEE_SHARED_PREFS_PREFIX';
+
   /// Returns null on success; [AppBootstrapUpgradeRequired] when upgrade required.
   static Future<AppBootstrapUpgradeRequired?> initialize() async {
+    final prefix = Platform.environment[_sharedPrefsPrefixEnv]?.trim();
+    if (prefix != null && prefix.isNotEmpty) {
+      SharedPreferences.setPrefix(prefix);
+    }
     final prefs = await SharedPreferences.getInstance();
     await Prefs.initialize(prefs);
     // The LAN bootstrap service is purely in-process state; if we crashed
@@ -47,14 +55,16 @@ class PrefsBootstrap {
       if (mode == 'lan') {
         await Prefs.setBootstrapNodeMode('auto');
         AppLogger.log(
-            '[PrefsBootstrap] Downgraded persisted LAN bootstrap mode to auto on mobile');
+          '[PrefsBootstrap] Downgraded persisted LAN bootstrap mode to auto on mobile',
+        );
       }
     }
     try {
       await PrefsUpgrader.run(prefs);
     } on PrefsStorageNewerThanAppException catch (e) {
       AppLogger.log(
-          'Prefs stored by newer app (${e.storedVersion} > ${e.currentVersion}), showing upgrade required');
+        'Prefs stored by newer app (${e.storedVersion} > ${e.currentVersion}), showing upgrade required',
+      );
       return AppBootstrapUpgradeRequired(
         storedVersion: e.storedVersion,
         currentVersion: e.currentVersion,

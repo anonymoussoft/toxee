@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toxee — Serverless. Private. Yours.</title>
+<meta name="description" content="Toxee is a modern chat client for the Tox P2P network. No servers, no phone numbers, no data mining — end-to-end encrypted by design.">
+<link rel="icon" type="image/png" href="assets/app_icon.png">
+<style>
+/* ————————————————————————————————————————————————————————————————
+   Toxee landing — "the void where servers should be"
+   Self-contained: system font stacks only, zero external requests.
+   Display: system serif (editorial counterpoint) · UI: system sans
+   Protocol chrome: ui-monospace. Single accent: Toxee blue.
+   ———————————————————————————————————————————————————————————————— */
+:root{
+  --ink:#070b14;
+  --ink-2:#0b1220;
+  --ink-3:#101a2e;
+  --line:rgba(148,163,184,.14);
+  --line-strong:rgba(148,163,184,.28);
+  --text:#e6ecf7;
+  --text-dim:#8fa0b8;
+  --text-faint:#5b6b84;
+  --blue:#3b82f6;
+  --blue-deep:#2563eb;
+  --cyan:#67e8f9;
+  --glow:rgba(59,130,246,.35);
+  --serif:ui-serif,"New York","Iowan Old Style",Georgia,"Times New Roman",serif;
+  --sans:ui-sans-serif,-apple-system,"SF Pro Text","Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --frame-r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--ink);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:17px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+::selection{background:var(--blue-deep);color:#fff}
+
+/* —— DHT constellation backdrop (pure CSS, no assets) —— */
+.mesh{
+  position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(1200px 800px at 78% -10%, rgba(37,99,235,.16), transparent 60%),
+    radial-gradient(900px 700px at -10% 40%, rgba(8,47,112,.25), transparent 55%),
+    radial-gradient(700px 500px at 50% 110%, rgba(103,232,249,.05), transparent 60%),
+    var(--ink);
+}
+.mesh::before{
+  content:"";position:absolute;inset:0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 22%, rgba(103,232,249,.8), transparent 100%),
+    radial-gradient(1.5px 1.5px at 28% 64%, rgba(59,130,246,.7), transparent 100%),
+    radial-gradient(2px 2px   at 41% 15%, rgba(148,163,184,.55), transparent 100%),
+    radial-gradient(1.5px 1.5px at 57% 42%, rgba(103,232,249,.5), transparent 100%),
+    radial-gradient(2px 2px   at 66% 81%, rgba(59,130,246,.6), transparent 100%),
+    radial-gradient(1.5px 1.5px at 78% 27%, rgba(148,163,184,.6), transparent 100%),
+    radial-gradient(2px 2px   at 89% 58%, rgba(103,232,249,.55), transparent 100%),
+    radial-gradient(1.5px 1.5px at 94% 12%, rgba(59,130,246,.6), transparent 100%),
+    radial-gradient(1.5px 1.5px at 8%  85%, rgba(59,130,246,.5), transparent 100%),
+    radial-gradient(1.5px 1.5px at 47% 93%, rgba(148,163,184,.45), transparent 100%);
+  animation:twinkle 9s ease-in-out infinite alternate;
+}
+.mesh::after{ /* faint connective hairlines */
+  content:"";position:absolute;inset:0;opacity:.5;
+  background:
+    linear-gradient(107deg, transparent 49.85%, rgba(59,130,246,.10) 50%, transparent 50.15%),
+    linear-gradient(63deg,  transparent 49.88%, rgba(103,232,249,.07) 50%, transparent 50.12%),
+    linear-gradient(151deg, transparent 49.9%,  rgba(148,163,184,.08) 50%, transparent 50.1%);
+}
+@keyframes twinkle{from{opacity:.55}to{opacity:1}}
+@media (prefers-reduced-motion: reduce){
+  .mesh::before{animation:none}
+  *{animation-duration:.001s !important;transition-duration:.001s !important}
+}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+
+/* —— nav —— */
+nav{
+  position:sticky;top:0;z-index:50;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  background:rgba(7,11,20,.72);
+  border-bottom:1px solid var(--line);
+}
+.nav-in{display:flex;align-items:center;gap:14px;height:64px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.2px;text-decoration:none;color:var(--text)}
+.brand img{width:30px;height:30px;border-radius:8px;display:block}
+.brand span{font-size:19px}
+.nav-spacer{flex:1}
+.nav-a{color:var(--text-dim);text-decoration:none;font-size:14.5px;padding:8px 10px;border-radius:8px}
+.nav-a:hover{color:var(--text);background:rgba(148,163,184,.08)}
+.lang-toggle{
+  font-family:var(--mono);font-size:13px;color:var(--cyan);
+  background:transparent;border:1px solid var(--line-strong);border-radius:999px;
+  padding:6px 14px;cursor:pointer;transition:.18s;
+}
+.lang-toggle:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(103,232,249,.18)}
+.gh{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--text);color:var(--ink);font-weight:600;font-size:14.5px;
+  border-radius:999px;padding:8px 16px;text-decoration:none;transition:.18s;
+}
+.gh:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(230,236,247,.18)}
+
+/* —— shared chrome —— */
+.eyebrow{
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;
+  color:var(--cyan);text-transform:uppercase;
+}
+.eyebrow::before{content:"// ";color:var(--text-faint)}
+h1,h2,.display{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
+.windowframe{
+  border-radius:var(--frame-r);
+  border:1px solid var(--line-strong);
+  background:var(--ink-2);
+  box-shadow:0 24px 80px rgba(2,6,16,.7), 0 0 0 1px rgba(2,6,16,.4);
+  overflow:hidden;
+}
+.windowframe .bar{
+  display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;
+  background:linear-gradient(180deg,#141d31,#0e1626);
+  border-bottom:1px solid var(--line);
+}
+.windowframe .bar i{width:11px;height:11px;border-radius:50%;display:block;opacity:.9}
+.windowframe .bar i:nth-child(1){background:#ff5f57}
+.windowframe .bar i:nth-child(2){background:#febc2e}
+.windowframe .bar i:nth-child(3){background:#28c840}
+.windowframe .bar b{
+  margin-left:10px;font-family:var(--mono);font-weight:400;font-size:11.5px;color:var(--text-faint)
+}
+.windowframe img{display:block;width:100%;height:auto}
+
+/* —— hero —— */
+.hero{padding:84px 0 40px;position:relative}
+.hero-grid{display:grid;grid-template-columns:minmax(0,46fr) minmax(0,54fr);gap:48px;align-items:center}
+.hero h1{font-size:clamp(44px,5.6vw,72px);line-height:1.04;margin:18px 0 22px}
+.hero h1 em{font-style:italic;color:var(--blue);text-shadow:0 0 34px var(--glow)}
+.hero p.lead{font-size:19px;color:var(--text-dim);max-width:34em}
+.cta-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+.btn{
+  display:inline-flex;align-items:center;gap:10px;border-radius:12px;
+  padding:13px 24px;font-size:16px;font-weight:600;text-decoration:none;transition:.18s;
+}
+.btn-blue{background:linear-gradient(180deg,var(--blue),var(--blue-deep));color:#fff;
+  box-shadow:0 10px 30px rgba(37,99,235,.35), inset 0 1px 0 rgba(255,255,255,.18)}
+.btn-blue:hover{transform:translateY(-2px);box-shadow:0 16px 40px rgba(37,99,235,.5)}
+.btn-ghost{border:1px solid var(--line-strong);color:var(--text)}
+.btn-ghost:hover{border-color:var(--blue);color:#fff;background:rgba(37,99,235,.12)}
+.hero-shot{position:relative}
+.hero-shot .windowframe{
+  transform:rotate(-1.4deg) translateY(6px);
+  transition:transform .5s cubic-bezier(.2,.8,.2,1);
+}
+.hero-shot:hover .windowframe{transform:rotate(0) translateY(0)}
+.hero-shot::before{
+  content:"";position:absolute;inset:-8% -6% -14% -6%;z-index:-1;border-radius:32px;
+  background:radial-gradient(60% 60% at 60% 40%, rgba(37,99,235,.28), transparent 70%);
+  filter:blur(8px);
+}
+.hexline{
+  margin-top:30px;font-family:var(--mono);font-size:12px;color:var(--text-faint);
+  letter-spacing:.08em;word-break:break-all;
+}
+.hexline b{color:var(--cyan);font-weight:400}
+
+/* page-load stagger */
+.rise{opacity:0;transform:translateY(18px);animation:rise .8s cubic-bezier(.2,.8,.2,1) forwards}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}.d4{animation-delay:.38s}.d5{animation-delay:.52s}
+@keyframes rise{to{opacity:1;transform:none}}
+
+/* —— stat strip —— */
+.stats{
+  margin:74px 0 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(16,26,46,.5), rgba(16,26,46,.15));
+}
+.stats-in{
+  display:grid;grid-template-columns:repeat(4,1fr);
+}
+.stat{
+  padding:30px 26px;border-left:1px solid var(--line);
+}
+.stat:first-child{border-left:none}
+.stat .n{font-family:var(--serif);font-size:36px;line-height:1.1;color:#fff}
+.stat .n sup{font-size:16px;color:var(--blue)}
+.stat .l{font-family:var(--mono);font-size:12.5px;color:var(--text-dim);margin-top:6px;letter-spacing:.06em}
+
+/* —— sections —— */
+section{padding:96px 0 0}
+.sec-head{max-width:760px}
+.sec-head h2{font-size:clamp(30px,3.6vw,44px);line-height:1.12;margin:14px 0 14px}
+.sec-head p{color:var(--text-dim);font-size:18px}
+
+/* why cards */
+.why{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:46px}
+.card{
+  position:relative;border:1px solid var(--line);border-radius:18px;
+  background:linear-gradient(180deg, rgba(16,26,46,.65), rgba(11,18,32,.4));
+  padding:30px 28px;overflow:hidden;transition:.25s;
+}
+.card:hover{border-color:rgba(59,130,246,.45);transform:translateY(-4px)}
+.card::after{
+  content:"";position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(103,232,249,.6),transparent);
+  opacity:0;transition:.25s;
+}
+.card:hover::after{opacity:1}
+.card .ic{
+  width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:rgba(37,99,235,.16);border:1px solid rgba(59,130,246,.35);margin-bottom:18px;
+}
+.card .ic svg{width:22px;height:22px;stroke:var(--cyan)}
+.card h3{font-size:19px;margin-bottom:9px;font-weight:650}
+.card p{color:var(--text-dim);font-size:15.5px}
+.card .tag{
+  position:absolute;top:24px;right:22px;font-family:var(--mono);
+  font-size:11px;color:var(--text-faint);letter-spacing:.1em;
+}
+
+/* feature showcases */
+.feat{
+  display:grid;grid-template-columns:minmax(0,38fr) minmax(0,62fr);
+  gap:54px;align-items:center;margin-top:64px;
+}
+.feat.flip{grid-template-columns:minmax(0,62fr) minmax(0,38fr)}
+.feat.flip .feat-copy{order:2}
+.feat-copy h3{font-family:var(--serif);font-size:30px;line-height:1.15;margin:12px 0 14px}
+.feat-copy p{color:var(--text-dim);font-size:16.5px}
+.feat-copy ul{list-style:none;margin-top:18px;display:grid;gap:9px}
+.feat-copy li{
+  padding-left:24px;position:relative;color:var(--text-dim);font-size:15.5px;
+}
+.feat-copy li::before{
+  content:"▸";position:absolute;left:0;color:var(--blue);
+}
+.shot-duo{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.shot-duo .windowframe:nth-child(2){transform:translateY(22px)}
+
+/* themes comparison */
+.theme-pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:46px}
+.theme-pair figure{margin:0}
+.theme-pair figcaption{
+  font-family:var(--mono);font-size:12.5px;color:var(--text-faint);
+  margin-top:12px;text-align:center;letter-spacing:.08em;
+}
+
+/* platforms */
+.plats{display:flex;flex-wrap:wrap;gap:13px;margin-top:38px}
+.plat{
+  font-family:var(--mono);font-size:14px;color:var(--text);
+  border:1px solid var(--line-strong);border-radius:999px;padding:10px 22px;
+  background:rgba(16,26,46,.4);
+}
+.plat small{color:var(--text-faint);font-size:12px}
+
+/* build block */
+.build{
+  margin-top:46px;border:1px solid var(--line-strong);border-radius:16px;overflow:hidden;
+  background:#04070f;box-shadow:0 24px 70px rgba(2,6,16,.6);
+}
+.build .bhead{
+  display:flex;align-items:center;gap:10px;padding:12px 18px;
+  border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--text-faint);
+}
+.build pre{
+  padding:24px 26px;font-family:var(--mono);font-size:14.5px;line-height:1.9;
+  color:#c7d4ea;overflow-x:auto;
+}
+.build pre b{color:var(--cyan);font-weight:400}
+.build pre i{color:var(--text-faint);font-style:normal}
+
+/* footer */
+footer{
+  margin-top:110px;border-top:1px solid var(--line);
+  padding:40px 0 56px;color:var(--text-faint);font-size:14px;
+}
+.foot-in{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+.foot-in .sp{flex:1}
+footer a{color:var(--text-dim);text-decoration:none}
+footer a:hover{color:var(--cyan)}
+.foot-hex{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--text-faint);opacity:.7}
+
+/* responsive */
+@media (max-width: 980px){
+  .hero-grid{grid-template-columns:1fr;gap:42px}
+  .stats-in{grid-template-columns:repeat(2,1fr)}
+  .stat:nth-child(3){border-left:none}
+  .why{grid-template-columns:1fr}
+  .feat,.feat.flip{grid-template-columns:1fr;gap:30px}
+  .feat.flip .feat-copy{order:0}
+  .theme-pair{grid-template-columns:1fr}
+  .shot-duo .windowframe:nth-child(2){transform:none}
+}
+</style>
+</head>
+<body>
+<div class="mesh" aria-hidden="true"></div>
+
+<nav>
+  <div class="wrap nav-in">
+    <a class="brand" href="#"><img src="assets/app_icon.png" alt="Toxee icon"><span>Toxee</span></a>
+    <div class="nav-spacer"></div>
+    <a class="nav-a" href="#features" data-i18n="nav_features">Features</a>
+    <a class="nav-a" href="#build" data-i18n="nav_build">Build</a>
+    <button class="lang-toggle" id="langBtn" aria-label="切换到中文">中文</button>
+    <a class="gh" href="https://github.com/anonymoussoft/toxee">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow rise d1" data-i18n="hero_eyebrow">peer-to-peer messenger — no middlemen</div>
+      <h1 class="rise d2" data-i18n-html="hero_title">Serverless.<br>Private.<br><em>Yours.</em></h1>
+      <p class="lead rise d3" data-i18n="hero_lead">Toxee is a modern chat client for the Tox P2P network. Messages travel directly between devices, end-to-end encrypted — there is no server to breach, subpoena, or shut down.</p>
+      <div class="cta-row rise d4">
+        <a class="btn btn-blue" href="https://github.com/anonymoussoft/toxee" data-i18n="cta_get">Get Toxee on GitHub</a>
+        <a class="btn btn-ghost" href="#features" data-i18n="cta_tour">See it in action ↓</a>
+      </div>
+      <div class="hexline rise d5"><b>tox-id</b> 97DCCAACE012BE66A5EED8089F6FBB6381C8EF7D27F9…<span data-i18n="hero_hexnote"> — your identity is a keypair, not an account</span></div>
+    </div>
+    <div class="hero-shot rise d3">
+      <div class="windowframe">
+        <div class="bar"><i></i><i></i><i></i><b>Toxee.app</b></div>
+        <img src="assets/01_conversations.png" alt="Toxee main window: conversation list with unread badges and a rich chat with photos and files" width="1280" height="768">
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="wrap stats-in">
+      <div class="stat"><div class="n">0</div><div class="l" data-i18n="stat_servers">servers, ever</div></div>
+      <div class="stat"><div class="n">0</div><div class="l" data-i18n="stat_phone">phone numbers or emails</div></div>
+      <div class="stat"><div class="n">E2E<sup>✓</sup></div><div class="l" data-i18n="stat_e2e">encrypted by the Tox protocol</div></div>
+      <div class="stat"><div class="n">GPL-3.0</div><div class="l" data-i18n="stat_oss">free &amp; open source</div></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="why">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="eyebrow" data-i18n="why_eyebrow">01 — why toxee</div>
+        <h2 data-i18n="why_title">Privacy isn't a setting. It's the architecture.</h2>
+        <p data-i18n="why_lead">Most "private" messengers still route everything through their own machines. Toxee can't read your messages, because Toxee isn't in the middle of them.</p>
+      </div>
+      <div class="why">
+        <div class="card">
+          <span class="tag">DHT</span>
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="5" r="2.2"/><circle cx="12" cy="19" r="2.2"/><circle cx="20" cy="15" r="2.2"/><path d="M7 7l4 10M17.2 6.2L13.5 17M14 18.6l4.2-2.6"/></svg></div>
+          <h3 data-i18n="why1_t">Pure peer-to-peer</h3>
+          <p data-i18n="why1_p">Peers find each other through a distributed hash table and talk directly. No accounts, no cloud inbox, no company between you and your friends.</p>
+        </div>
+        <div class="card">
+          <span class="tag">NaCl</span>
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg></div>
+          <h3 data-i18n="why2_t">Encrypted end-to-end</h3>
+          <p data-i18n="why2_p">Every message, call, and file is encrypted by toxcore's NaCl cryptography. Only the recipient's keypair can open it — by design, not by policy.</p>
+        </div>
+        <div class="card">
+          <span class="tag">76-HEX</span>
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="3" height="3"/><rect x="17" y="7" width="3" height="3"/><rect x="4" y="13" width="3" height="3"/><rect x="7" y="17" width="3" height="3"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg></div>
+          <h3 data-i18n="why3_t">Identity without sign-up</h3>
+          <p data-i18n="why3_p">Your Tox ID is a cryptographic key you can share as a QR card. No phone number, no email, nothing to leak — bring your identity to any device.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="eyebrow" data-i18n="feat_eyebrow">02 — the client</div>
+        <h2 data-i18n="feat_title">A serverless network deserves a first-class client.</h2>
+        <p data-i18n="feat_lead">Toxee pairs the Tox protocol with a polished, modern chat experience — these screenshots are the real app, seeded with a real weekend-hike plan.</p>
+      </div>
+
+      <div class="feat">
+        <div class="feat-copy">
+          <div class="eyebrow" data-i18n="f1_eyebrow">rich messaging</div>
+          <h3 data-i18n="f1_t">Photos, files, replies — over the mesh.</h3>
+          <p data-i18n="f1_p">Full-fidelity conversations without a server in sight: inline image thumbnails, file transfers with auto-accept, quoted replies, emoji, read receipts, and offline queueing.</p>
+          <ul>
+            <li data-i18n="f1_l1">Drag-and-drop photo &amp; file transfer</li>
+            <li data-i18n="f1_l2">Quoted replies and message search</li>
+            <li data-i18n="f1_l3">Delivery states &amp; unread tracking</li>
+          </ul>
+        </div>
+        <div class="windowframe">
+          <div class="bar"><i></i><i></i><i></i><b>chat — Alex Chen</b></div>
+          <img src="assets/02_chat_c2c.png" alt="A rich Toxee chat: photo thumbnail, PDF file tile, emoji and delivery ticks" loading="lazy" width="1280" height="768">
+        </div>
+      </div>
+
+      <div class="feat flip">
+        <div class="windowframe">
+          <div class="bar"><i></i><i></i><i></i><b>group — Weekend Hikers 🏔</b></div>
+          <img src="assets/03_chat_group.png" alt="Toxee group chat with multiple senders planning a hike" loading="lazy" width="1280" height="768">
+        </div>
+        <div class="feat-copy">
+          <div class="eyebrow" data-i18n="f2_eyebrow">groups</div>
+          <h3 data-i18n="f2_t">Group chats with no group server.</h3>
+          <p data-i18n="f2_p">Tox NGC groups are hosted by their members — create one, share it, pin it. The conversation belongs to the people in it, literally.</p>
+          <ul>
+            <li data-i18n="f2_l1">Member-hosted, invite or join by chat ID</li>
+            <li data-i18n="f2_l2">Pinned conversations &amp; per-chat muting</li>
+            <li data-i18n="f2_l3">Roster, kick &amp; moderation tools</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="feat">
+        <div class="feat-copy">
+          <div class="eyebrow" data-i18n="f3_eyebrow">voice &amp; video</div>
+          <h3 data-i18n="f3_t">Calls that dial a key, not a server.</h3>
+          <p data-i18n="f3_p">Audio and video calls ride the same encrypted peer link as your messages — full-screen call UI, mute and camera controls, picture-in-picture.</p>
+          <ul>
+            <li data-i18n="f3_l1">1:1 encrypted audio &amp; video (ToxAV)</li>
+            <li data-i18n="f3_l2">Incoming-call overlay on every screen</li>
+            <li data-i18n="f3_l3">Call records right in the conversation</li>
+          </ul>
+        </div>
+        <div class="shot-duo">
+          <div class="windowframe">
+            <div class="bar"><i></i><i></i><i></i><b>incoming</b></div>
+            <img src="assets/09_incoming_call.png" alt="Toxee incoming call screen with accept and reject buttons" loading="lazy" width="1280" height="768">
+          </div>
+          <div class="windowframe">
+            <div class="bar"><i></i><i></i><i></i><b>calling…</b></div>
+            <img src="assets/10_outgoing_call.png" alt="Toxee outgoing call screen" loading="lazy" width="1280" height="768">
+          </div>
+        </div>
+      </div>
+
+      <div class="feat flip">
+        <div class="shot-duo">
+          <div class="windowframe">
+            <div class="bar"><i></i><i></i><i></i><b>search</b></div>
+            <img src="assets/12_search.png" alt="Toxee message search finding results across conversations" loading="lazy" width="1280" height="768">
+          </div>
+          <div class="windowframe">
+            <div class="bar"><i></i><i></i><i></i><b>中文界面</b></div>
+            <img src="assets/11_locale_zh.png" alt="Toxee interface in Chinese" loading="lazy" width="1280" height="768">
+          </div>
+        </div>
+        <div class="feat-copy">
+          <div class="eyebrow" data-i18n="f4_eyebrow">everyday details</div>
+          <h3 data-i18n="f4_t">Search everything. Speak anything.</h3>
+          <p data-i18n="f4_p">Instant message search across every conversation, QR identity cards, desktop notifications — localized into English, 中文, 日本語, 한국어 and العربية.</p>
+          <ul>
+            <li data-i18n="f4_l1">Cross-conversation message search</li>
+            <li data-i18n="f4_l2">QR code identity sharing</li>
+            <li data-i18n="f4_l3">5 languages, RTL included</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="sec-head" style="margin-top:88px">
+        <div class="eyebrow" data-i18n="themes_eyebrow">03 — day &amp; night</div>
+        <h2 data-i18n="themes_title">Two themes, equally at home.</h2>
+      </div>
+      <div class="theme-pair">
+        <figure>
+          <div class="windowframe">
+            <div class="bar"><i></i><i></i><i></i><b>light</b></div>
+            <img src="assets/01_conversations.png" alt="Toxee light theme" loading="lazy" width="1280" height="768">
+          </div>
+          <figcaption data-i18n="themes_light">light — crisp &amp; airy</figcaption>
+        </figure>
+        <figure>
+          <div class="windowframe">
+            <div class="bar"><i></i><i></i><i></i><b>dark</b></div>
+            <img src="assets/08_dark_chat.png" alt="Toxee dark theme" loading="lazy" width="1280" height="768">
+          </div>
+          <figcaption data-i18n="themes_dark">dark — easy on the eyes</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="build">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="eyebrow" data-i18n="build_eyebrow">04 — run it</div>
+        <h2 data-i18n="build_title">Yours to build, audit, and own.</h2>
+        <p data-i18n="build_lead">Toxee is GPL-3.0 open source, built with Flutter on top of toxcore. One repo, every platform.</p>
+      </div>
+      <div class="plats">
+        <span class="plat">macOS</span>
+        <span class="plat">Linux</span>
+        <span class="plat">Windows</span>
+        <span class="plat">iOS</span>
+        <span class="plat">Android</span>
+        <span class="plat" style="border-style:dashed"><small data-i18n="plat_note">build from source</small></span>
+      </div>
+      <div class="build">
+        <div class="bhead"><span>●</span><span>terminal</span></div>
+        <pre><i data-i18n="build_c1"># clone with submodules (tim2tox + chat-uikit)</i>
+<b>git clone</b> --recursive https://github.com/anonymoussoft/toxee
+<b>cd</b> toxee
+
+<i data-i18n="build_c2"># fetch deps, vendor the SDK, apply patches</i>
+<b>dart run</b> tool/bootstrap_deps.dart
+<b>flutter</b> pub get
+
+<i data-i18n="build_c3"># build &amp; launch (macOS shown — see doc/ for all platforms)</i>
+<b>./build_all.sh</b> --platform macos --mode release</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-in">
+    <a class="brand" href="#"><img src="assets/app_icon.png" alt=""><span>Toxee</span></a>
+    <span data-i18n="foot_tag">— a client for the Tox network</span>
+    <div class="sp"></div>
+    <a href="https://github.com/anonymoussoft/toxee">GitHub</a>
+    <a href="https://tox.chat" rel="noopener">tox.chat</a>
+    <span>GPL-3.0</span>
+  </div>
+  <div class="wrap foot-hex" style="margin-top:18px">3A4F…C8EF7D27F98D385E49E0AE8F76944940657A5B017C <span data-i18n="foot_hexnote">// no servers were involved in delivering this page’s screenshots</span></div>
+</footer>
+
+<script>
+(function(){
+  var zh = {
+    nav_features:"功能", nav_build:"构建",
+    hero_eyebrow:"点对点通讯 — 没有中间人",
+    hero_title:"无服务器。<br>真隐私。<br><em>属于你。</em>",
+    hero_lead:"Toxee 是 Tox P2P 网络的现代聊天客户端。消息在设备之间直接传输并端到端加密——没有任何服务器可被入侵、传唤或关停。",
+    cta_get:"在 GitHub 获取 Toxee", cta_tour:"看看实际效果 ↓",
+    hero_hexnote:" — 你的身份是一对密钥，而不是一个账号",
+    stat_servers:"服务器数量，永远为零", stat_phone:"无需手机号或邮箱",
+    stat_e2e:"Tox 协议端到端加密", stat_oss:"自由开源软件",
+    why_eyebrow:"01 — 为什么选 toxee",
+    why_title:"隐私不是一个开关，而是架构本身。",
+    why_lead:"大多数“私密”通讯软件仍把一切路由到自家机器。Toxee 读不到你的消息——因为 Toxee 根本不在你们中间。",
+    why1_t:"纯粹的点对点", why1_p:"节点通过分布式哈希表互相发现并直接通话。没有账号、没有云端收件箱，你和朋友之间没有任何公司。",
+    why2_t:"端到端加密", why2_p:"每条消息、每次通话、每个文件都由 toxcore 的 NaCl 加密。只有对方的密钥能解开——这是设计使然，而非政策承诺。",
+    why3_t:"无需注册的身份", why3_p:"你的 Tox ID 是一把可以用二维码名片分享的加密密钥。没有手机号、没有邮箱、没有可泄露的东西——身份随你带到任何设备。",
+    feat_eyebrow:"02 — 客户端",
+    feat_title:"无服务器的网络，配得上一流的客户端。",
+    feat_lead:"Toxee 将 Tox 协议与精致现代的聊天体验结合——下面的截图都来自真实运行的应用，预置了一场真实的周末徒步计划。",
+    f1_eyebrow:"富消息", f1_t:"照片、文件、引用回复——全部走网状网络。",
+    f1_p:"没有服务器，也有完整保真的对话：内联图片缩略图、自动接收的文件传输、引用回复、表情、回执与离线队列。",
+    f1_l1:"拖拽即传的照片与文件", f1_l2:"引用回复与消息搜索", f1_l3:"投递状态与未读管理",
+    f2_eyebrow:"群组", f2_t:"没有群服务器的群聊。",
+    f2_p:"Tox NGC 群由成员共同承载——创建、分享、置顶。对话真正属于参与的人。",
+    f2_l1:"成员承载，可邀请或凭群 ID 加入", f2_l2:"会话置顶与单聊静音", f2_l3:"成员名单、踢人与管理工具",
+    f3_eyebrow:"语音与视频", f3_t:"拨给密钥的通话，而不是拨给服务器。",
+    f3_p:"音视频通话与消息走同一条加密对等链路——全屏通话界面、静音与摄像头控制、画中画。",
+    f3_l1:"1:1 加密音视频（ToxAV）", f3_l2:"任意界面的来电浮层", f3_l3:"通话记录直接留在会话里",
+    f4_eyebrow:"日常细节", f4_t:"搜索一切，畅说任何语言。",
+    f4_p:"跨会话的即时消息搜索、二维码身份名片、桌面通知——已本地化为 English、中文、日本語、한국어 与 العربية。",
+    f4_l1:"跨会话消息搜索", f4_l2:"二维码身份分享", f4_l3:"5 种语言，含 RTL",
+    themes_eyebrow:"03 — 日与夜", themes_title:"两套主题，同样得体。",
+    themes_light:"浅色 — 清爽明快", themes_dark:"深色 — 护眼舒适",
+    build_eyebrow:"04 — 跑起来", build_title:"可构建、可审计、真正属于你。",
+    build_lead:"Toxee 以 GPL-3.0 开源，基于 Flutter 与 toxcore 构建。一个仓库，覆盖全平台。",
+    plat_note:"从源码构建",
+    build_c1:"# 连同子模块一起克隆（tim2tox + chat-uikit）",
+    build_c2:"# 拉取依赖、vendor SDK、应用补丁",
+    build_c3:"# 构建并启动（此处为 macOS——其他平台见 doc/）",
+    foot_tag:"— Tox 网络的客户端",
+    foot_hexnote:"// 本页截图的传输过程同样没有用到任何服务器"
+  };
+  var en = {};           // captured from the DOM on first toggle
+  var cur = "en";
+  var btn = document.getElementById("langBtn");
+
+  function capture(){
+    document.querySelectorAll("[data-i18n]").forEach(function(el){
+      en[el.getAttribute("data-i18n")] = el.innerHTML;
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach(function(el){
+      en[el.getAttribute("data-i18n-html")] = el.innerHTML;
+    });
+  }
+  function apply(lang){
+    var dict = lang === "zh" ? zh : en;
+    document.querySelectorAll("[data-i18n]").forEach(function(el){
+      var k = el.getAttribute("data-i18n");
+      if (dict[k] !== undefined) el.innerHTML = dict[k];
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach(function(el){
+      var k = el.getAttribute("data-i18n-html");
+      if (dict[k] !== undefined) el.innerHTML = dict[k];
+    });
+    document.documentElement.lang = lang === "zh" ? "zh-Hans" : "en";
+    btn.textContent = lang === "zh" ? "EN" : "中文";
+    btn.setAttribute("aria-label", lang === "zh" ? "Switch to English" : "切换到中文");
+    cur = lang;
+    try { localStorage.setItem("toxee_lang", lang); } catch(e){}
+  }
+  capture();
+  btn.addEventListener("click", function(){ apply(cur === "en" ? "zh" : "en"); });
+  try {
+    var saved = localStorage.getItem("toxee_lang");
+    if (saved === "zh") apply("zh");
+  } catch(e){}
+})();
+</script>
+</body>
+</html>

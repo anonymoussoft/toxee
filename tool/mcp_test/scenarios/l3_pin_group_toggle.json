@@ -1,0 +1,19 @@
+{
+  "id": "L3-pin-group-toggle",
+  "suite": "group",
+  "description": "F2 conversation pin/unpin — GROUP leg (hermetic): create a group, pin its conversation via l3_set_pinned(group_<gid>), assert the gid enters l3_dump_state.pinnedConversations, unpin, assert it's gone, then leave the group (self-clean). Complements S84 (the C2C pin leg) — pinning is valid for both C2C and group conversations and the pinned set stores 'group_<normalizedGid>'. Hermetic — local Prefs state, no peer. Maps to feature F2 (group leg).",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "steps": [
+    { "action": "create_group", "name": "L3pingrp-{{nonce}}", "saveAs": "gid" },
+    { "action": "wait_for", "predicate": "state_contains", "field": "knownGroups", "contains": "{{gid}}", "timeoutSecs": 15 },
+    { "action": "set_pinned", "conversationId": "group_{{gid}}", "pinned": true },
+    { "action": "wait_for", "predicate": "state_contains", "field": "pinnedConversations", "contains": "{{gid}}", "timeoutSecs": 10 },
+    { "action": "set_pinned", "conversationId": "group_{{gid}}", "pinned": false },
+    { "action": "wait_for", "predicate": "state_not_contains", "field": "pinnedConversations", "notContains": "{{gid}}", "timeoutSecs": 10 },
+    { "action": "leave_group", "groupId": "{{gid}}" }
+  ],
+  "assertions": [
+    { "type": "state", "field": "pinnedConversations", "notContains": "{{gid}}" }
+  ]
+}

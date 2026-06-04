@@ -1,0 +1,17 @@
+{
+  "id": "L3-copy-message",
+  "suite": "c2c",
+  "feature": ["S16"],
+  "description": "S16 copy side-effect (state layer): send a self message, invoke the copy action, confirm it succeeds and is NON-destructive (message still present). The actual OS-clipboard byte check (pbpaste) is cross-process and asserted live during the run, not by this runner. Hermetic — no echo peer needed. #18: text carries a per-run {{nonce}} so the invoke_action text resolver finds a UNIQUE match even if a prior run left residue.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "send_text", "text": "copy-me-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "copy-me-{{nonce}}", "isSelf": true, "timeoutSecs": 15 },
+    { "action": "invoke_action", "messageAction": "copy", "text": "copy-me-{{nonce}}", "isSelf": true }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "text": "copy-me-{{nonce}}", "isSelf": true, "equals": 1 }
+  ]
+}

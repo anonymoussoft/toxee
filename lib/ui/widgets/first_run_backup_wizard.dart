@@ -200,6 +200,7 @@ class _FirstRunBackupWizardState extends State<FirstRunBackupWizard> {
             // proceed with care" without claiming the visual weight a
             // FilledButton would (which is reserved for the safe path).
             OutlinedButton(
+              key: const Key('firstRunBackupWizard.confirmDismissButton'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: cs.error,
                 side: BorderSide(color: cs.error),

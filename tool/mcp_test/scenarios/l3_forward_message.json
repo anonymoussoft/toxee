@@ -1,0 +1,18 @@
+{
+  "id": "L3-forward-message",
+  "suite": "c2c",
+  "feature": ["S17"],
+  "description": "S17 forward (hermetic): send a unique source message, forward it via l3_forward_message (resolve the source message + re-send its text to the same conversation), and prove a SECOND self copy of the text exists — i.e. the forward resolved the source and re-sent it. sourceIsSelf:true disambiguates if a running echo peer mirrored the source back inbound. toxee individual-forward is clone + re-send (NO forward metadata, matching the product — deliberately not faked with a marker). Hermetic — sender-side. Maps to S17.",
+  "requiresEchoPeer": false,
+  "target": "3116CBE0974181B6EC4B32555413655B42C7456A93C6AF98A23E95127B587244",
+  "reset": true,
+  "steps": [
+    { "action": "send_text", "text": "S17src-{{nonce}}" },
+    { "action": "wait_for", "predicate": "message_exists", "text": "S17src-{{nonce}}", "isSelf": true, "timeoutSecs": 15 },
+    { "action": "forward_message", "sourceText": "S17src-{{nonce}}", "sourceIsSelf": true },
+    { "action": "delay", "ms": 500 }
+  ],
+  "assertions": [
+    { "type": "message_count_text", "text": "S17src-{{nonce}}", "isSelf": true, "atLeast": 2 }
+  ]
+}

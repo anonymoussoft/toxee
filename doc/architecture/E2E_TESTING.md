@@ -3,6 +3,8 @@
 > 语言 / Language: [中文](E2E_TESTING.md) | [English](E2E_TESTING.en.md)
 >
 > 生成于 2026-05-20。兄弟文档：`HYBRID_ARCHITECTURE.md`、`MAINTAINER_ARCHITECTURE.md`，以及协议层测试套件 `third_party/tim2tox/auto_tests/README.md`。
+>
+> 另见：[`TESTING_OVERVIEW.md`](TESTING_OVERVIEW.md) — toxee 所有测试资产的一站式地图（清单、执行类分类法、便宜→昂贵的运行顺序、CI 状态）。
 
 ## 一、执行摘要
 
@@ -139,7 +141,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.29.0', channel: 'stable' }
+        with: { flutter-version: '3.41.9', channel: 'stable' }
       - run: dart run tool/bootstrap_deps.dart
       - run: flutter pub get
       - run: ./build_all.sh --platform macos --mode debug
@@ -151,7 +153,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.29.0', channel: 'stable' }
+        with: { flutter-version: '3.41.9', channel: 'stable' }
       - run: sudo apt-get update && sudo apt-get install -y xvfb libsodium-dev libopus-dev libvpx-dev libsqlite3-dev ninja-build libgtk-3-dev
       - run: dart run tool/bootstrap_deps.dart
       - run: flutter pub get
@@ -196,7 +198,7 @@ patrol test --target integration_test/native/permissions_test.dart -d <device>
 4. **单例流程下的测试隔离**。`CLAUDE.md` 指出 toxee 使用 Tim2Tox 默认的单例模式。双进程方案通过运行**两个 OS 进程**而非一个进程内两实例来绕开这一约束。任何想偷懒在一个进程里复用两个 peer 的做法都会撞上 `ToxManager not initialized` 之类的错。务必在 harness 脚本注释里大声标明这一约定。
 5. **Patrol 在 macOS 桌面**。Patrol 的 pub.dev tag 写了 macOS，但调研期间没有发现一个与 toxee 同形态的开源项目在 CI 上跑 Patrol-macOS。视为未经验证；只要桌面没有需要自动化原生对话框的需求，桌面端就只用官方 `integration_test`。
 6. **与 `auto_tests/` 的覆盖重叠**。我们落定一条边界：`auto_tests/` 证明**协议**正确，新 E2E 层证明**UI** 正确驱动协议。任何能用"两个 TIM SDK 对话"表达的场景就该在 `auto_tests/`，不该出现在这里。
-7. **Flutter 版本钉死**。本计划沿用 `analyze.yml` 里 3.29.0 stable 的钉法。Patrol 4.5 支持当前 stable Flutter，安装时复核即可。如果未来 Patrol 要求高于 CI 的 Flutter 版本，宁可把 Patrol 降级为"本地可选工具"，也不为单一工具而升级 CI。
+7. **Flutter 版本钉死**。本计划沿用 `analyze.yml` 里 3.41.9 stable 的钉法。Patrol 4.5 支持当前 stable Flutter，安装时复核即可。如果未来 Patrol 要求高于 CI 的 Flutter 版本，宁可把 Patrol 降级为"本地可选工具"，也不为单一工具而升级 CI。
 
 ## 来源
 

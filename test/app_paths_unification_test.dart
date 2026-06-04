@@ -24,30 +24,33 @@ void main() {
     // test/account_export/test_support.dart.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (MethodCall methodCall) async {
-        switch (methodCall.method) {
-          case 'getApplicationSupportDirectory':
-            return tempRoot.path;
-          case 'getApplicationDocumentsDirectory':
-            return tempRoot.path;
-          case 'getApplicationCacheDirectory':
-            return p.join(tempRoot.path, 'cache');
-          case 'getTemporaryDirectory':
-            return p.join(tempRoot.path, 'temp');
-          case 'getDownloadsDirectory':
-            return p.join(tempRoot.path, 'Downloads');
-          default:
-            return null;
-        }
-      },
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (MethodCall methodCall) async {
+            switch (methodCall.method) {
+              case 'getApplicationSupportDirectory':
+                return tempRoot.path;
+              case 'getApplicationDocumentsDirectory':
+                return tempRoot.path;
+              case 'getApplicationCacheDirectory':
+                return p.join(tempRoot.path, 'cache');
+              case 'getTemporaryDirectory':
+                return p.join(tempRoot.path, 'temp');
+              case 'getDownloadsDirectory':
+                return p.join(tempRoot.path, 'Downloads');
+              default:
+                return null;
+            }
+          },
+        );
   });
 
   tearDown(() async {
+    AppPaths.debugApplicationSupportOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('plugins.flutter.io/path_provider'), null);
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
     if (await tempRoot.exists()) {
       await tempRoot.delete(recursive: true);
     }
@@ -60,8 +63,7 @@ void main() {
     expect(p.dirname(p.dirname(got)), tempRoot.path);
   });
 
-  test(
-      'logFilePath uses timestamped path under <appSupport>/logs/, '
+  test('logFilePath uses timestamped path under <appSupport>/logs/, '
       'no longer the flat flutter_client.log', () async {
     final got = await AppPaths.logFilePath;
     expect(p.basename(p.dirname(got)), 'logs');
@@ -70,4 +72,23 @@ void main() {
     expect(p.basename(got), endsWith('.log'));
     expect(p.basename(got), isNot(equals('flutter_client.log')));
   });
+
+  test(
+    'TOXEE_APP_SUPPORT_DIR override wins over path_provider roots',
+    () async {
+      final overrideDir = Directory(p.join(tempRoot.path, 'override_root'));
+      await overrideDir.create(recursive: true);
+      AppPaths.debugApplicationSupportOverride = overrideDir.path;
+
+      final got = await AppPaths.applicationSupportPath;
+      expect(got, overrideDir.path);
+
+      final history = await AppPaths.chatHistoryPath;
+      final avatars = await AppPaths.avatarsPath;
+      final recv = await AppPaths.fileRecvPath;
+      expect(p.dirname(history), overrideDir.path);
+      expect(p.dirname(avatars), overrideDir.path);
+      expect(p.dirname(recv), overrideDir.path);
+    },
+  );
 }
