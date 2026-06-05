@@ -1,5 +1,5 @@
 {
-  "_comment": "Machine-readable index of the Fixture C two-process gates (plan doc/research/TEST_CASE_ORGANIZATION_PLAN.en.md section 3.4). One entry per run_fixture_c_*.sh wrapper (28). Ordered: non-media non-destructive first, then media (real ToxAV calls), destructive last (network_drop, kick). Scenario S-numbers come from each driver's header/source - never invented. class: 2proc-l3 (driven via l3_* debug tools) or 2proc-ui (real widgets + osascript). media=true for real ToxAV call flows. destructive=true for network_drop + kick. costSecs is a rough typical wall-clock budget (pair launch+boot ~30-40s + driver convergence; retry-loop and multi-phase scripts cost more); it is a planning hint, NOT a hard timeout. The drive_real_ui_pair.dart entry has NO .sh wrapper (class 2proc-ui) and is SKIPPED by run_fixture_c_suite.sh - see its launchNote.",
+  "_comment": "Machine-readable index of the unified Fixture C / real-UI two-process gates (plan doc/research/TEST_CASE_ORGANIZATION_PLAN.en.md section 3.4). Ordered: reusable paired non-media first, fresh isolated next, media after that, destructive last. Each entry now declares its runner metadata directly: class, base, driver, optional driverArgs, and whether the legacy shell wrapper must stay in the loop. costSecs is a planning hint, not a timeout. The 2proc-ui entry remains in the same manifest and now participates in planning via scenarioCommands instead of being skipped.",
   "entries": [
     {
       "script": "run_fixture_c_non_media.sh",
@@ -7,7 +7,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_pair.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_accept.sh",
@@ -15,7 +19,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "fresh",
+      "driver": "drive_fixture_c_accept.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_decline.sh",
@@ -23,7 +31,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "fresh",
+      "driver": "drive_fixture_c_decline.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_custom_message.sh",
@@ -31,7 +43,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "fresh",
+      "driver": "drive_fixture_c_custom_message.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_autoaccept_friend.sh",
@@ -39,7 +55,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "fresh",
+      "driver": "drive_fixture_c_autoaccept_friend.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_contact_search.sh",
@@ -47,7 +67,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 90
+      "costSecs": 90,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_contact_search.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_concurrent.sh",
@@ -55,7 +79,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_concurrent.dart",
+      "driverArgs": ["--n", "10"],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_receipt.sh",
@@ -63,7 +91,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_receipt.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_typing.sh",
@@ -71,7 +103,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_typing.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_window.sh",
@@ -79,7 +115,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_window.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_notification_tap.sh",
@@ -87,7 +127,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 90
+      "costSecs": 90,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_notification_tap.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_mute.sh",
@@ -95,7 +139,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 90
+      "costSecs": 90,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_mute.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_self_profile.sh",
@@ -103,7 +151,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_self_profile.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_avatar.sh",
@@ -111,7 +163,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 150
+      "costSecs": 150,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_avatar.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_avatar_picker.sh",
@@ -119,7 +175,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 90
+      "costSecs": 90,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_avatar_picker.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_file.sh",
@@ -127,7 +187,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 150
+      "costSecs": 150,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_file.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_image.sh",
@@ -135,7 +199,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 150
+      "costSecs": 150,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_file.dart",
+      "driverArgs": ["--image"],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_voice_msg.sh",
@@ -143,7 +211,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 150
+      "costSecs": 150,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_voice_msg.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_presence.sh",
@@ -151,7 +223,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 240
+      "costSecs": 240,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_presence.dart",
+      "driverArgs": [],
+      "legacyOnly": true
     },
     {
       "script": "run_fixture_c_group.sh",
@@ -159,7 +235,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_group.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_join.sh",
@@ -167,7 +247,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 480
+      "costSecs": 480,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_join.dart",
+      "driverArgs": [],
+      "legacyOnly": true
     },
     {
       "script": "run_fixture_c_member_list.sh",
@@ -175,7 +259,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 480
+      "costSecs": 480,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_member_list.dart",
+      "driverArgs": [],
+      "legacyOnly": true
     },
     {
       "script": "run_fixture_c_group_invite.sh",
@@ -183,7 +271,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 150
+      "costSecs": 150,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_group_invite.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_block.sh",
@@ -191,7 +283,11 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_block.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_call.sh",
@@ -199,7 +295,11 @@
       "class": "2proc-l3",
       "media": true,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_call.dart",
+      "driverArgs": [],
+      "legacyOnly": true
     },
     {
       "script": "run_fixture_c_missed_call.sh",
@@ -207,7 +307,11 @@
       "class": "2proc-l3",
       "media": true,
       "destructive": false,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_missed_call.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_network_drop.sh",
@@ -215,7 +319,11 @@
       "class": "2proc-l3",
       "media": true,
       "destructive": true,
-      "costSecs": 120
+      "costSecs": 120,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_network_drop.dart",
+      "driverArgs": [],
+      "legacyOnly": false
     },
     {
       "script": "run_fixture_c_kick.sh",
@@ -223,16 +331,30 @@
       "class": "2proc-l3",
       "media": false,
       "destructive": true,
-      "costSecs": 360
+      "costSecs": 360,
+      "base": "paired_for_e2e",
+      "driver": "drive_fixture_c_kick.dart",
+      "driverArgs": ["--private"],
+      "legacyOnly": true
     },
     {
       "script": "drive_real_ui_pair.dart",
-      "scenarios": ["S26", "S61", "S27", "S62", "S64", "S108"],
+      "scenarios": ["S26", "S54", "S61", "S27", "S62", "S64", "S65", "S67", "S76", "S108"],
       "class": "2proc-ui",
       "media": false,
       "destructive": false,
       "costSecs": 240,
-      "launchNote": "No .sh wrapper. Drives the REAL UIKit widgets across two live instances via ext.flutter.flutter_skill taps + osascript foreground/keystroke/Return - it needs two manually-launched live instances (launch_toxee_instance.sh) and a foreground-able macOS session, so it cannot be batched by run_fixture_c_suite.sh (which SKIPs this 2proc-ui entry with a NOTE). Invoke directly: dart run tool/mcp_test/drive_real_ui_pair.dart <scenario> <wsA> <pidA> <nickA> <wsB> <pidB> <nickB> where scenario is handshake (S26/S61) | handshake_detail (S108) | decline (S27) | message (S62/S64). See REAL_UI_TWO_PROCESS.md."
+      "base": "real-ui",
+      "driver": "drive_real_ui_pair.dart",
+      "driverArgs": [],
+      "scenarioCommands": [
+        "handshake",
+        "message",
+        "handshake_detail",
+        "decline"
+      ],
+      "legacyOnly": false,
+      "launchNote": "Direct real-UI driver. The unified runner plans this entry alongside Fixture C by expanding scenarioCommands and passing ws/pid/nickname args from pair.json. Additional reusable real-UI scenarios such as custom_message (S54) and call_voice (S65/S67/S76) are available through --real-ui-scenario / --real-ui-campaign even though the default smoke batch stays smaller. You can still invoke it directly as: dart run tool/mcp_test/drive_real_ui_pair.dart <scenario> <wsA> <pidA> <nickA> <wsB> <pidB> <nickB>."
     }
   ]
 }

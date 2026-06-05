@@ -33,6 +33,19 @@
 //   message           S62 + S64 — bidirectional message delivery through the
 //                     REAL composer + a real Return (RUITEST_STAMP=<n> for a
 //                     stable nonce).
+//   custom_message    S54 — B sends a friend request carrying a distinctive
+//                     custom message; A verifies the wording round-trips, then
+//                     declines the request so the pair returns to no-friend.
+//   call_voice        S65 + S67 + S76 — with an existing friendship, B starts
+//                     a voice call from the real chat header, A accepts via the
+//                     real incoming-call UI, then B hangs up.
+//   call_reject       S68 — with an existing friendship, B starts a voice call
+//                     and A rejects it via the real incoming-call UI.
+//   message_burst     S64 — a short alternating burst through the real
+//                     composer on an already-friended pair.
+//   reset_friendship  Internal runner utility: if A and/or B are currently
+//                     friends, delete the friendship through the real profile
+//                     UI until both sides are back to a no-friend state.
 //
 // ignore_for_file: depend_on_referenced_packages, avoid_print
 import 'dart:async';
@@ -175,24 +188,31 @@ class Inst {
   // ExtendedTextField whose ExtendedEditableText cannot be driven by synthetic
   // enterText, and Enter-to-send rides the legacy FocusNode.onKey RawKeyEvent
   // path — both need genuine OS events. ---
-  Future<void> _osa(String script) =>
-      Process.run('osascript', ['-e', script]);
+  Future<void> _osa(String script) => Process.run('osascript', ['-e', script]);
   Future<void> osaType(String text) =>
       _osa('tell application "System Events" to keystroke "$text"');
   Future<void> osaReturn() =>
       _osa('tell application "System Events" to key code 36');
   Future<void> osaClear() async {
-    await _osa('tell application "System Events" to keystroke "a" using command down');
+    await _osa(
+      'tell application "System Events" to keystroke "a" using command down',
+    );
     await _osa('tell application "System Events" to key code 51');
   }
 
   Future<bool> waitKey(String key, {int timeoutSecs = 25}) async {
-    final r = await skill('waitForElement', {'key': key, 'timeout': '$timeoutSecs'});
+    final r = await skill('waitForElement', {
+      'key': key,
+      'timeout': '$timeoutSecs',
+    });
     return r['found'] == true;
   }
 
   Future<bool> waitText(String text, {int timeoutSecs = 25}) async {
-    final r = await skill('waitForElement', {'text': text, 'timeout': '$timeoutSecs'});
+    final r = await skill('waitForElement', {
+      'text': text,
+      'timeout': '$timeoutSecs',
+    });
     return r['found'] == true;
   }
 
@@ -245,8 +265,10 @@ Future<void> recoverStartupExceptions(Inst inst, {int maxRounds = 4}) async {
     if (st['sessionReady'] == true) return;
     // sc_load_account_fail: "Startup Failed" / "Exception: Profile not found".
     if (await inst.waitText('Startup Failed', timeoutSecs: 2)) {
-      print('[${inst.name}] sc_load_account_fail detected '
-          '(stale account, profile missing) -> tapping "Go to Login"');
+      print(
+        '[${inst.name}] sc_load_account_fail detected '
+        '(stale account, profile missing) -> tapping "Go to Login"',
+      );
       await inst.tapText('Go to Login');
       await Future<void>.delayed(const Duration(milliseconds: 1500));
       continue; // re-evaluate the page we landed on
@@ -257,8 +279,10 @@ Future<void> recoverStartupExceptions(Inst inst, {int maxRounds = 4}) async {
     // Unknown transient page (route still settling); let frames pump and retry.
     await Future<void>.delayed(const Duration(milliseconds: 1000));
   }
-  print('[${inst.name}] WARN: startup recovery exhausted after $maxRounds '
-      'rounds; proceeding best-effort');
+  print(
+    '[${inst.name}] WARN: startup recovery exhausted after $maxRounds '
+    'rounds; proceeding best-effort',
+  );
 }
 
 Future<void> ensureHome(Inst inst, String nickname) async {
@@ -268,7 +292,24 @@ Future<void> ensureHome(Inst inst, String nickname) async {
     // A booted session has navigated past login/register; just make sure the
     // window is foregrounded so any in-flight frame settles.
     print('[${inst.name}] already logged in (${st['nickname']})');
-    await inst.waitKey('new_entry_menu_button', timeoutSecs: 10);
+    if (!await inst.waitKey('new_entry_menu_button', timeoutSecs: 6)) {
+      // A previous scenario may have left us on Contacts/Profile/Chat detail.
+      // Normalize back to the Chats home before continuing.
+      if (!await inst.tryTapKey('sidebar_chats_tab', retries: 2)) {
+        if (await inst.waitText('Back', timeoutSecs: 2)) {
+          await inst.tapText('Back');
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+        } else {
+          // Top-left back affordance in the contact/profile route.
+          await inst.tapAt(70, 88);
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+        }
+        await inst.tryTapKey('sidebar_chats_tab', retries: 2);
+      }
+      if (!await inst.waitKey('new_entry_menu_button', timeoutSecs: 8)) {
+        throw DriveError('[${inst.name}] did not recover to HomePage');
+      }
+    }
     return;
   }
   // Handle the sc_load_account_fail.png "Startup Failed" page (and similar
@@ -292,7 +333,10 @@ Future<void> ensureHome(Inst inst, String nickname) async {
   if (await inst.waitText('Save your account file', timeoutSecs: 20)) {
     await inst.tapText("I'll do it later");
     await Future<void>.delayed(const Duration(milliseconds: 1200));
-    await inst.tapText('I understand, continue');
+    if (!await _tryTapText(inst, 'I understand, continue')) {
+      await inst.tapAt(894, 520);
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+    }
   }
   if (!await inst.waitKey('new_entry_menu_button', timeoutSecs: 25)) {
     throw DriveError('[${inst.name}] did not reach HomePage after register');
@@ -300,14 +344,30 @@ Future<void> ensureHome(Inst inst, String nickname) async {
   print('[${inst.name}] on HomePage ($nickname)');
 }
 
+Future<bool> _tryTapText(Inst inst, String text) async {
+  for (var i = 0; i < 3; i++) {
+    try {
+      await inst.tapText(text, retries: 1);
+      return true;
+    } on DriveError {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+  }
+  return false;
+}
+
 /// B drives the add-friend dialog targeting A's tox id (real UI).
-Future<void> driveAddFriend(Inst b, String toxA) async {
+Future<void> driveAddFriend(Inst b, String toxA, {String? message}) async {
   await b.foreground();
   await b.tapKey('new_entry_menu_button');
   await Future<void>.delayed(const Duration(milliseconds: 600));
   await b.tapKey('new_entry_add_contact_item');
   await Future<void>.delayed(const Duration(milliseconds: 800));
   await b.focusType('add_friend_id_input', toxA);
+  if (message != null && message.isNotEmpty) {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await b.focusType('add_friend_message_input', message);
+  }
   await Future<void>.delayed(const Duration(milliseconds: 300));
   await b.tapKey('add_friend_submit_button');
   print('[${b.name}] add-friend submitted toward ${toxA.substring(0, 16)}...');
@@ -343,35 +403,36 @@ Future<void> driveRespondToApplication(
   final st = await a.waitState(
     (s) {
       final apps = (s['friendApplications'] as List?) ?? const [];
-      return apps.any((e) =>
-          e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB));
+      return apps.any(
+        (e) =>
+            e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB),
+      );
     },
     timeoutSecs: 120,
     label: 'friendApplication from B',
   );
   final apps = (st['friendApplications'] as List).cast<dynamic>();
-  final app = apps.firstWhere(
-    (e) => e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB),
-  ) as Map;
+  final app =
+      apps.firstWhere(
+            (e) =>
+                e is Map &&
+                _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB),
+          )
+          as Map;
   final userId = app['userId'].toString();
-  print('[${a.name}] application present (userId=${userId.substring(0, 16)}...)');
-  await a.foreground();
-  // APP-SIDE FINDING: the New Contacts detail panel does NOT live-refresh when
-  // an application arrives while it is already open — the master-row badge
-  // increments but the detail keeps showing "0 New Applications". The early
-  // navigation above (done before B's request landed) rendered an EMPTY detail,
-  // and re-tapping the already-selected New Contacts row is a no-op. So navigate
-  // AWAY (Blocked Users row) then BACK to New Contacts to force a fresh detail
-  // load that renders the now-present application + its Accept/Decline buttons.
-  await a.tapAt(240, 270); // Blocked Users master row
-  await Future<void>.delayed(const Duration(milliseconds: 500));
-  await a.tapAt(240, 173); // New Contacts master row (fresh load)
-  await Future<void>.delayed(const Duration(milliseconds: 900));
+  print(
+    '[${a.name}] application present (userId=${userId.substring(0, 16)}...)',
+  );
+  await _refreshApplicationList(a, userId, detail: false);
   final keyBase = accept
       ? 'contact_application_accept_button'
       : 'contact_application_decline_button';
+  var tapped = await a.tryTapKey('$keyBase:$userId', retries: 2);
+  if (!tapped) {
+    tapped = await _tapApplicationActionByCoordinate(a, accept: accept);
+  }
   // Prefer the keyed control; fall back to the visible Accept/Decline label.
-  if (!await a.tryTapKey('$keyBase:$userId')) {
+  if (!tapped) {
     await a.tapText(accept ? 'Accept' : 'Decline');
   }
   print('[${a.name}] tapped ${accept ? "ACCEPT" : "DECLINE"} on real UI');
@@ -395,27 +456,27 @@ Future<void> driveRespondViaDetail(Inst a, String toxB) async {
   final st = await a.waitState(
     (s) {
       final apps = (s['friendApplications'] as List?) ?? const [];
-      return apps.any((e) =>
-          e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB));
+      return apps.any(
+        (e) =>
+            e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB),
+      );
     },
     timeoutSecs: 120,
     label: 'friendApplication from B',
   );
   final apps = (st['friendApplications'] as List).cast<dynamic>();
-  final app = apps.firstWhere(
-    (e) => e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB),
-  ) as Map;
+  final app =
+      apps.firstWhere(
+            (e) =>
+                e is Map &&
+                _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB),
+          )
+          as Map;
   final userId = app['userId'].toString();
-  print('[${a.name}] application present (userId=${userId.substring(0, 16)}...)');
-  await a.foreground();
-  // Same away-and-back refresh the inline path needs: the detail panel does not
-  // live-refresh when the application lands while it is already open. Use
-  // generous settles — a too-short settle leaves the right pane on its stale
-  // "0 New Applications" render and the row never appears.
-  await a.tapAt(240, 270); // Blocked Users master row
-  await Future<void>.delayed(const Duration(milliseconds: 1500));
-  await a.tapAt(240, 173); // New Contacts master row (fresh load)
-  await Future<void>.delayed(const Duration(milliseconds: 2000));
+  print(
+    '[${a.name}] application present (userId=${userId.substring(0, 16)}...)',
+  );
+  await _refreshApplicationList(a, userId, detail: true);
   // OPEN the detail screen by tapping the application ROW (the left text area —
   // the inline Accept/Decline buttons sit at the far right ~x:1148). The row's
   // `contact_application_item:<userId>` KeyedSubtree wraps a GestureDetector that
@@ -437,21 +498,357 @@ Future<void> driveRespondViaDetail(Inst a, String toxB) async {
   print('[${a.name}] tapped DETAIL ACCEPT on real UI');
 }
 
+Future<void> _refreshApplicationList(
+  Inst a,
+  String userId, {
+  required bool detail,
+}) async {
+  await a.foreground();
+  final probeKey = detail
+      ? 'contact_application_item:$userId'
+      : 'contact_application_accept_button:$userId';
+  for (var attempt = 0; attempt < 3; attempt++) {
+    // The New Contacts detail panel does not live-refresh reliably when the
+    // inbound request lands while it is already open. Force a fresh load by
+    // navigating away and back.
+    await a.tapAt(240, 270); // Blocked Users master row
+    await Future<void>.delayed(Duration(milliseconds: detail ? 1200 : 700));
+    await a.tapAt(240, 173); // New Contacts master row (fresh load)
+    await Future<void>.delayed(Duration(milliseconds: detail ? 1800 : 1200));
+    if (await a.waitKey(probeKey, timeoutSecs: 4)) return;
+  }
+}
+
+Future<bool> _tapApplicationActionByCoordinate(
+  Inst a, {
+  required bool accept,
+}) async {
+  await a.foreground();
+  // First application row action buttons in the 1280x768 desktop layout.
+  await a.tapAt(accept ? 1088 : 1170, 208);
+  await Future<void>.delayed(const Duration(milliseconds: 700));
+  return true;
+}
+
 Future<bool> areFriends(Inst x, String otherTox) async {
   final s = await x.dumpState();
   final friends = (s['friends'] as List?) ?? const [];
   return friends.any(
-      (f) => f is Map && _pubkey(f['userId']?.toString() ?? '') == _pubkey(otherTox));
+    (f) =>
+        f is Map && _pubkey(f['userId']?.toString() ?? '') == _pubkey(otherTox),
+  );
 }
 
 Future<String> friendNick(Inst x, String otherTox) async {
   final s = await x.dumpState();
   for (final f in (s['friends'] as List? ?? const [])) {
-    if (f is Map && _pubkey(f['userId']?.toString() ?? '') == _pubkey(otherTox)) {
+    if (f is Map &&
+        _pubkey(f['userId']?.toString() ?? '') == _pubkey(otherTox)) {
       return f['nickName']?.toString() ?? '';
     }
   }
   return '';
+}
+
+String _shortId(String id) => id.length <= 16 ? id : id.substring(0, 16);
+
+Future<void> openFriendProfile(Inst inst, String otherTox) async {
+  await inst.foreground();
+  if (!await inst.tryTapKey('sidebar_contacts_tab', retries: 2)) {
+    if (await inst.waitText('Back', timeoutSecs: 2)) {
+      await inst.tapText('Back');
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+    } else {
+      await inst.tapAt(70, 88);
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+    }
+    await inst.tapKey('sidebar_contacts_tab');
+  }
+  await Future<void>.delayed(const Duration(milliseconds: 600));
+  final fullId = otherTox.trim();
+  final shortId = _pubkey(otherTox);
+  final fullKey = 'contact_list_item:$fullId';
+  final shortKey = 'contact_list_item:$shortId';
+  for (var attempt = 0; attempt < 3; attempt++) {
+    final tapped =
+        await inst.tryTapKey(fullKey, retries: 2) ||
+        await inst.tryTapKey(shortKey, retries: 2);
+    if (!tapped) {
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      continue;
+    }
+    final onProfile =
+        await inst.waitKey('user_profile_friend_name_text', timeoutSecs: 6) ||
+        await inst.waitKey(
+          'friend_profile_send_message_button',
+          timeoutSecs: 6,
+        ) ||
+        await inst.waitKey('user_profile_delete_friend_button', timeoutSecs: 6);
+    if (!onProfile) {
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      continue;
+    }
+    if (await inst.waitKey(
+      'user_profile_delete_friend_button',
+      timeoutSecs: 10,
+    )) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+  }
+  throw DriveError(
+    '[${inst.name}] friend profile did not render delete button for '
+    '${_shortId(shortId)}...',
+  );
+}
+
+Future<bool> deleteFriendViaProfile(Inst inst, String otherTox) async {
+  if (!await areFriends(inst, otherTox)) return false;
+  await openFriendProfile(inst, otherTox);
+  if (!await inst.tryTapKey('user_profile_delete_friend_button')) {
+    await inst.tapText('Delete');
+  }
+  await Future<void>.delayed(const Duration(milliseconds: 1200));
+  return true;
+}
+
+Future<bool> waitFriendshipState(
+  Inst a,
+  Inst b,
+  String toxA,
+  String toxB, {
+  required bool friends,
+  int timeoutSecs = 20,
+}) async {
+  final deadline = DateTime.now().add(Duration(seconds: timeoutSecs));
+  while (DateTime.now().isBefore(deadline)) {
+    final aHasB = await areFriends(a, toxB);
+    final bHasA = await areFriends(b, toxA);
+    if (friends) {
+      if (aHasB && bHasA) return true;
+    } else if (!aHasB && !bHasA) {
+      return true;
+    }
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+  return false;
+}
+
+Future<int> runResetFriendship(
+  Inst a,
+  Inst b,
+  String nickA,
+  String nickB,
+) async {
+  final stateA = await a.dumpState();
+  final stateB = await b.dumpState();
+  if (stateA['sessionReady'] != true) {
+    await ensureHome(a, nickA);
+  }
+  if (stateB['sessionReady'] != true) {
+    await ensureHome(b, nickB);
+  }
+  final toxA = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+  final toxB = (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
+  if (toxA.isEmpty || toxB.isEmpty) {
+    throw DriveError('missing tox ids for reset: A=$toxA B=$toxB');
+  }
+  final aHasB = await areFriends(a, toxB);
+  final bHasA = await areFriends(b, toxA);
+  if (!aHasB && !bHasA) {
+    print('[pair] reset_friendship no-op: pair already not friends');
+    return 0;
+  }
+  if (aHasB) {
+    await deleteFriendViaProfile(a, toxB);
+  }
+  if (!await waitFriendshipState(
+        a,
+        b,
+        toxA,
+        toxB,
+        friends: false,
+        timeoutSecs: 12,
+      ) &&
+      await areFriends(b, toxA)) {
+    await deleteFriendViaProfile(b, toxA);
+  }
+  final cleared = await waitFriendshipState(
+    a,
+    b,
+    toxA,
+    toxB,
+    friends: false,
+    timeoutSecs: 20,
+  );
+  if (cleared) {
+    print('[pair] PASS: friendship reset both directions');
+    return 0;
+  }
+  print(
+    '[pair] FAIL: friendship reset incomplete '
+    '(A has B=${await areFriends(a, toxB)} B has A=${await areFriends(b, toxA)})',
+  );
+  return 1;
+}
+
+Future<int> runCustomMessage(Inst a, Inst b, String nickA, String nickB) async {
+  await ensureHome(a, nickA);
+  await ensureHome(b, nickB);
+  final toxA = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+  final toxB = (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
+  if (toxA.isEmpty || toxB.isEmpty) {
+    throw DriveError('missing tox ids for custom_message: A=$toxA B=$toxB');
+  }
+  if (await areFriends(a, toxB) || await areFriends(b, toxA)) {
+    throw DriveError('custom_message requires a no-friend pair');
+  }
+  final wording = 'S54-CUSTOM-${DateTime.now().microsecondsSinceEpoch}';
+  await driveAddFriend(b, toxA, message: wording);
+  final st = await a.waitState(
+    (s) {
+      final apps = (s['friendApplications'] as List?) ?? const [];
+      return apps.any(
+        (e) =>
+            e is Map &&
+            _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB) &&
+            (e['wording']?.toString() ?? '') == wording,
+      );
+    },
+    timeoutSecs: 120,
+    label: 'friendApplication wording from B',
+  );
+  final apps = (st['friendApplications'] as List).cast<dynamic>();
+  final app =
+      apps.firstWhere(
+            (e) =>
+                e is Map &&
+                _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB),
+          )
+          as Map;
+  final seenWording = app['wording']?.toString() ?? '';
+  if (seenWording != wording) {
+    print('[pair] FAIL: custom message mismatch "$seenWording" != "$wording"');
+    return 1;
+  }
+  await _refreshApplicationList(a, toxB, detail: false);
+  final wordingKey = 'contact_application_addwording:${toxB.trim()}';
+  await a.waitKey(wordingKey, timeoutSecs: 6);
+  await driveRespondToApplication(a, toxB, accept: false);
+  await Future<void>.delayed(const Duration(seconds: 2));
+  if (await areFriends(a, toxB) || await areFriends(b, toxA)) {
+    print('[pair] FAIL: custom_message cleanup unexpectedly formed friendship');
+    return 1;
+  }
+  print('[pair] PASS: custom message round-tripped and self-cleaned');
+  return 0;
+}
+
+Future<String?> _callState(Inst inst) async {
+  final s = await inst.dumpState();
+  final call = (s['call'] as Map?)?.cast<String, dynamic>();
+  return call?['state']?.toString();
+}
+
+Future<bool> _waitCallStateAny(
+  Inst inst,
+  Set<String> states, {
+  int timeoutSecs = 30,
+}) async {
+  final deadline = DateTime.now().add(Duration(seconds: timeoutSecs));
+  while (DateTime.now().isBefore(deadline)) {
+    final current = await _callState(inst);
+    if (current != null && states.contains(current)) return true;
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+  return false;
+}
+
+Future<int> runCallVoice(Inst a, Inst b, String nickA, String nickB) async {
+  await ensureHome(a, nickA);
+  await ensureHome(b, nickB);
+  final toxA = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+  final toxB = (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
+  if (toxA.isEmpty || toxB.isEmpty) {
+    throw DriveError('missing tox ids for call_voice: A=$toxA B=$toxB');
+  }
+  if (!await areFriends(a, toxB) || !await areFriends(b, toxA)) {
+    print('[pair] call_voice requires an existing friendship');
+    return 1;
+  }
+  final alicePk = _pubkey(toxA);
+  await openChat(b, alicePk);
+  await b.tapKey('chat_call_voice_button');
+  final ringing = await _waitCallStateAny(a, {'ringing', 'incoming'});
+  if (!ringing) {
+    print('[pair] FAIL: incoming call never reached ringing');
+    return 1;
+  }
+  await a.foreground();
+  await a.tapKey('call_accept_button');
+  final inCallA = await _waitCallStateAny(a, {'inCall'});
+  final inCallB = await _waitCallStateAny(b, {'inCall'});
+  if (!inCallA || !inCallB) {
+    print(
+      '[pair] FAIL: call did not reach inCall '
+      '(A=${await _callState(a)} B=${await _callState(b)})',
+    );
+    return 1;
+  }
+  await b.foreground();
+  await b.tapKey('call_hangup_button');
+  final endedA = await _waitCallStateAny(a, {'ended', 'idle'});
+  final endedB = await _waitCallStateAny(b, {'ended', 'idle'});
+  await a.shot('/tmp/ui_call_voice_A.png');
+  await b.foreground();
+  await b.shot('/tmp/ui_call_voice_B.png');
+  if (endedA && endedB) {
+    print('[pair] PASS: voice call accepted and hung up through real UI');
+    return 0;
+  }
+  print(
+    '[pair] FAIL: call did not tear down cleanly '
+    '(A=${await _callState(a)} B=${await _callState(b)})',
+  );
+  return 1;
+}
+
+Future<int> runCallReject(Inst a, Inst b, String nickA, String nickB) async {
+  await ensureHome(a, nickA);
+  await ensureHome(b, nickB);
+  final toxA = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+  final toxB = (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
+  if (toxA.isEmpty || toxB.isEmpty) {
+    throw DriveError('missing tox ids for call_reject: A=$toxA B=$toxB');
+  }
+  if (!await areFriends(a, toxB) || !await areFriends(b, toxA)) {
+    print('[pair] call_reject requires an existing friendship');
+    return 1;
+  }
+  final alicePk = _pubkey(toxA);
+  await openChat(b, alicePk);
+  await b.tapKey('chat_call_voice_button');
+  final ringing = await _waitCallStateAny(a, {'ringing', 'incoming'});
+  if (!ringing) {
+    print('[pair] FAIL: incoming call never reached ringing');
+    return 1;
+  }
+  await a.foreground();
+  await a.tapKey('call_decline_button');
+  final endedA = await _waitCallStateAny(a, {'ended', 'idle'});
+  final endedB = await _waitCallStateAny(b, {'ended', 'idle'});
+  await a.shot('/tmp/ui_call_reject_A.png');
+  await b.foreground();
+  await b.shot('/tmp/ui_call_reject_B.png');
+  if (endedA && endedB) {
+    print('[pair] PASS: voice call rejected through real UI');
+    return 0;
+  }
+  print(
+    '[pair] FAIL: rejected call did not settle to idle '
+    '(A=${await _callState(a)} B=${await _callState(b)})',
+  );
+  return 1;
 }
 
 // Logical-pixel center of the desktop composer text field (1280x768 window).
@@ -472,20 +869,25 @@ Future<void> openChat(Inst inst, String friendPubkey) async {
 /// [text] (the legacy RawKeyEvent send races a freshly-typed field, so a single
 /// Return is unreliable — verify-and-retry).
 Future<bool> sendComposerMessage(Inst inst, String text) async {
-  await inst.foreground();
-  await inst.tapAt(_composerX, _composerY);
-  await Future<void>.delayed(const Duration(milliseconds: 500));
-  await inst.osaClear();
-  await Future<void>.delayed(const Duration(milliseconds: 300));
-  await inst.osaType(text);
-  await Future<void>.delayed(const Duration(milliseconds: 800));
-  for (var attempt = 0; attempt < 6; attempt++) {
+  for (var outer = 0; outer < 2; outer++) {
     await inst.foreground();
-    await inst.tapAt(_composerX, _composerY); // ensure keyboard focus
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    await inst.osaReturn();
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    if (await _lastMessage(inst) == text) return true;
+    await inst.tapAt(_composerX, _composerY);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    await inst.osaClear();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await inst.osaType(text);
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    for (var attempt = 0; attempt < 6; attempt++) {
+      await inst.foreground();
+      await inst.tapAt(_composerX, _composerY); // ensure keyboard focus
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      await inst.osaReturn();
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      if (await _lastMessage(inst) == text) return true;
+    }
+    // Re-prime the chat surface once before giving up.
+    await inst.tapKey('sidebar_chats_tab');
+    await Future<void>.delayed(const Duration(milliseconds: 600));
   }
   return false;
 }
@@ -500,7 +902,11 @@ Future<String> _lastMessage(Inst inst) async {
   return '';
 }
 
-Future<bool> _waitLastMessage(Inst inst, String text, {int timeoutSecs = 60}) async {
+Future<bool> _waitLastMessage(
+  Inst inst,
+  String text, {
+  int timeoutSecs = 60,
+}) async {
   final deadline = DateTime.now().add(Duration(seconds: timeoutSecs));
   while (DateTime.now().isBefore(deadline)) {
     if (await _lastMessage(inst) == text) return true;
@@ -511,7 +917,13 @@ Future<bool> _waitLastMessage(Inst inst, String text, {int timeoutSecs = 60}) as
 
 /// S62/S64: bidirectional message delivery driven through the REAL composer
 /// across two processes. Assumes A and B are already friends.
-Future<int> runMessage(Inst a, Inst b, String nickA, String nickB, int stamp) async {
+Future<int> runMessage(
+  Inst a,
+  Inst b,
+  String nickA,
+  String nickB,
+  int stamp,
+) async {
   await ensureHome(a, nickA);
   await ensureHome(b, nickB);
   final toxB = (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
@@ -519,7 +931,9 @@ Future<int> runMessage(Inst a, Inst b, String nickA, String nickB, int stamp) as
   final bobPk = _pubkey(toxB);
   final alicePk = _pubkey(toxA);
   if (!await areFriends(a, toxB) || !await areFriends(b, toxA)) {
-    print('[pair] message scenario requires an existing friendship; run handshake first');
+    print(
+      '[pair] message scenario requires an existing friendship; run handshake first',
+    );
     return 1;
   }
   final m1 = 'RUITEST-AtoB-$stamp';
@@ -547,10 +961,64 @@ Future<int> runMessage(Inst a, Inst b, String nickA, String nickB, int stamp) as
   return 1;
 }
 
-Future<int> main(List<String> args) async {
+Future<int> runMessageBurst(Inst a, Inst b, String nickA, String nickB) async {
+  await ensureHome(a, nickA);
+  await ensureHome(b, nickB);
+  final toxB = (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
+  final toxA = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+  if (!await areFriends(a, toxB) || !await areFriends(b, toxA)) {
+    print('[pair] message_burst requires an existing friendship');
+    return 1;
+  }
+  final bobPk = _pubkey(toxB);
+  final alicePk = _pubkey(toxA);
+  final nonce = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final aMsgs = [
+    'RUIBURST-A1-$nonce',
+    'RUIBURST-A2-$nonce',
+    'RUIBURST-A3-$nonce',
+  ];
+  final bMsgs = [
+    'RUIBURST-B1-$nonce',
+    'RUIBURST-B2-$nonce',
+    'RUIBURST-B3-$nonce',
+  ];
+
+  await openChat(a, bobPk);
+  await openChat(b, alicePk);
+
+  for (var i = 0; i < aMsgs.length; i++) {
+    final aOk = await sendComposerMessage(a, aMsgs[i]);
+    final bGot = await _waitLastMessage(b, aMsgs[i], timeoutSecs: 60);
+    if (!aOk || !bGot) {
+      print('[pair] FAIL: burst A->$i did not converge');
+      return 1;
+    }
+    final bOk = await sendComposerMessage(b, bMsgs[i]);
+    final aGot = await _waitLastMessage(a, bMsgs[i], timeoutSecs: 60);
+    if (!bOk || !aGot) {
+      print('[pair] FAIL: burst B->$i did not converge');
+      return 1;
+    }
+  }
+
+  await a.shot('/tmp/ui_message_burst_A.png');
+  await b.foreground();
+  await b.shot('/tmp/ui_message_burst_B.png');
+  print('[pair] PASS: alternating real-UI burst converged both directions');
+  return 0;
+}
+
+Future<void> main(List<String> args) async {
+  exitCode = await _main(args);
+}
+
+Future<int> _main(List<String> args) async {
   if (args.length < 7) {
-    print('usage: drive_real_ui_pair.dart <scenario> '
-        '<wsA> <pidA> <nickA> <wsB> <pidB> <nickB>');
+    print(
+      'usage: drive_real_ui_pair.dart <scenario> '
+      '<wsA> <pidA> <nickA> <wsB> <pidB> <nickB>',
+    );
     return 64;
   }
   final scenario = args[0];
@@ -561,12 +1029,27 @@ Future<int> main(List<String> args) async {
   await a.connect();
   await b.connect();
   try {
+    if (scenario == 'reset_friendship') {
+      return await runResetFriendship(a, b, nickA, nickB);
+    }
+    if (scenario == 'custom_message') {
+      return await runCustomMessage(a, b, nickA, nickB);
+    }
     if (scenario == 'message') {
       // Stamp passed via env (scripts can't use DateTime determinism concerns here).
-      final stamp = int.tryParse(
-              Platform.environment['RUITEST_STAMP'] ?? '') ??
+      final stamp =
+          int.tryParse(Platform.environment['RUITEST_STAMP'] ?? '') ??
           DateTime.now().millisecondsSinceEpoch ~/ 1000;
       return await runMessage(a, b, nickA, nickB, stamp);
+    }
+    if (scenario == 'message_burst') {
+      return await runMessageBurst(a, b, nickA, nickB);
+    }
+    if (scenario == 'call_voice') {
+      return await runCallVoice(a, b, nickA, nickB);
+    }
+    if (scenario == 'call_reject') {
+      return await runCallReject(a, b, nickA, nickB);
     }
     await ensureHome(a, nickA);
     await ensureHome(b, nickB);
@@ -576,7 +1059,9 @@ Future<int> main(List<String> args) async {
     if (toxA.isEmpty || toxB.isEmpty) {
       throw DriveError('missing tox ids: A=$toxA B=$toxB');
     }
-    print('[pair] toxA=${toxA.substring(0, 16)}.. toxB=${toxB.substring(0, 16)}..');
+    print(
+      '[pair] toxA=${toxA.substring(0, 16)}.. toxB=${toxB.substring(0, 16)}..',
+    );
 
     // Wait for both connected to the DHT before the handshake.
     await a.waitState((s) => s['isConnected'] == true, label: 'A connected');
@@ -593,24 +1078,29 @@ Future<int> main(List<String> args) async {
 
     // Verify outcome.
     if (accept) {
-      await a.waitState(
-        (_) => true,
-        timeoutSecs: 1,
+      await a.waitState((_) => true, timeoutSecs: 1);
+      final aHasB = await _retryBool(
+        () => areFriends(a, toxB),
+        label: 'A has B as friend',
       );
-      final aHasB = await _retryBool(() => areFriends(a, toxB),
-          label: 'A has B as friend');
-      final bHasA = await _retryBool(() => areFriends(b, toxA),
-          label: 'B has A as friend');
+      final bHasA = await _retryBool(
+        () => areFriends(b, toxA),
+        label: 'B has A as friend',
+      );
       // Name-propagation regression gate (the register-time setSelfInfo bug):
       // each peer must see the OTHER's registered nickname, not the raw tox-id.
       final aSeesNick = await _retryBool(
-          () async => (await friendNick(a, toxB)) == nickB,
-          label: 'A sees B nickname "$nickB"');
+        () async => (await friendNick(a, toxB)) == nickB,
+        label: 'A sees B nickname "$nickB"',
+      );
       final bSeesNick = await _retryBool(
-          () async => (await friendNick(b, toxA)) == nickA,
-          label: 'B sees A nickname "$nickA"');
-      print('[pair] names: A sees B="${await friendNick(a, toxB)}" '
-          'B sees A="${await friendNick(b, toxA)}"');
+        () async => (await friendNick(b, toxA)) == nickA,
+        label: 'B sees A nickname "$nickA"',
+      );
+      print(
+        '[pair] names: A sees B="${await friendNick(a, toxB)}" '
+        'B sees A="${await friendNick(b, toxA)}"',
+      );
       await a.shot('/tmp/ui_${scenario}_A.png');
       await b.foreground();
       await b.shot('/tmp/ui_${scenario}_B.png');
@@ -618,16 +1108,21 @@ Future<int> main(List<String> args) async {
         print('[pair] PASS: friendship + name propagation both directions');
         return 0;
       }
-      print('[pair] FAIL: aHasB=$aHasB bHasA=$bHasA '
-          'aSeesNick=$aSeesNick bSeesNick=$bSeesNick');
+      print(
+        '[pair] FAIL: aHasB=$aHasB bHasA=$bHasA '
+        'aSeesNick=$aSeesNick bSeesNick=$bSeesNick',
+      );
       return 1;
     } else {
       // Decline: application should clear on A and no friendship forms.
       await Future<void>.delayed(const Duration(seconds: 3));
       final stillFriend = await areFriends(a, toxB);
-      final apps = ((await a.dumpState())['friendApplications'] as List?) ?? const [];
-      final appGone = !apps.any((e) =>
-          e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB));
+      final apps =
+          ((await a.dumpState())['friendApplications'] as List?) ?? const [];
+      final appGone = !apps.any(
+        (e) =>
+            e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(toxB),
+      );
       await a.shot('/tmp/ui_${scenario}_A.png');
       if (!stillFriend && appGone) {
         print('[pair] PASS: decline removed application, no friendship');

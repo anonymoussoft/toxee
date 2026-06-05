@@ -15,6 +15,8 @@ name: MCP Harness Smoke
 #   - _write_toxee_instance_json.py isolation-value recording
 #   - run_fixture_c_non_media.sh mode documentation
 #   - drive_fixture_c_pair.dart usage exit-code (64) propagation
+#   - unified Fixture C / real-UI runner planning, filtering, and dry-run
+#     regressions via fixture_c_unified_runner_regression.sh
 #
 #   - L3 scenario JSON schema (suite/order/feature/uiDriven) via the runner's
 #     --validate-only mode (no VM connection)
@@ -54,6 +56,12 @@ jobs:
 
       - name: Fixture C helper contracts (hermetic)
         run: bash tool/mcp_test/fixture_c_helpers_regression.sh
+
+      # Unified runner gate: manifest planning / grouping / dry-run command
+      # rendering only. This stays hermetic: no app launch, no VM attach,
+      # no networked Tox traffic.
+      - name: Unified Fixture C runner regression (hermetic)
+        run: bash tool/mcp_test/fixture_c_unified_runner_regression.sh
 
       # Schema gate for the 46 L3 scenario JSONs: required suite enum, order/
       # feature/uiDriven types, unique ids. Pure file validation — no app, no
