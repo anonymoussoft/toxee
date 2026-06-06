@@ -17,20 +17,51 @@ import 'dart:io';
 
 import 'package:vm_service/vm_service_io.dart';
 
-Future<int> main(List<String> args) async {
+class _LocalVmServiceHttpOverrides extends HttpOverrides {
+  @override
+  String findProxyFromEnvironment(
+    Uri url,
+    Map<String, String>? environment,
+  ) {
+    final host = url.host.toLowerCase();
+    if (host == '127.0.0.1' || host == 'localhost' || host == '::1') {
+      return 'DIRECT';
+    }
+    return super.findProxyFromEnvironment(url, environment);
+  }
+}
+
+Future<void> main(List<String> args) async {
+  exitCode = await HttpOverrides.runWithHttpOverrides(
+    () => _main(args),
+    _LocalVmServiceHttpOverrides(),
+  );
+}
+
+Future<int> _main(List<String> args) async {
   if (args.length != 1) {
     stderr.writeln('usage: probe_vm_service.dart <ws_uri>');
     return 64;
   }
   final wsUri = args[0];
-  try {
-    final vm = await vmServiceConnectUri(wsUri);
-    await vm.getVM();
-    await vm.dispose();
-    stdout.writeln('OK: vm service attachable at $wsUri');
-    return 0;
-  } catch (e) {
-    stderr.writeln('probe_vm_service.dart: attach failed for $wsUri: $e');
-    return 1;
+  Object? lastError;
+  for (var attempt = 1; attempt <= 15; attempt++) {
+    try {
+      final vm = await vmServiceConnectUri(wsUri);
+      await vm.getVM();
+      await vm.dispose();
+      stdout.writeln('OK: vm service attachable at $wsUri');
+      return 0;
+    } catch (e) {
+      lastError = e;
+      if (attempt < 15) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+    }
   }
+  stderr.writeln(
+    'probe_vm_service.dart: attach failed for $wsUri after 15 attempts: '
+    '$lastError',
+  );
+  return 1;
 }

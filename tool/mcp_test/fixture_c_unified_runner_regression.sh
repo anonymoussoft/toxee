@@ -363,6 +363,36 @@ else
         "$(cat "$TMP_ROOT/real_ui_message.err" "$REAL_UI_MESSAGE_PLAN" 2>/dev/null)"
 fi
 
+REAL_UI_RESTORE_RESET_DRY="$TMP_ROOT/real_ui_restore_reset_dry.out"
+if run_runner --dry-run --class=2proc-ui --real-ui-scenario=message,decline \
+    >"$REAL_UI_RESTORE_RESET_DRY" 2>"$TMP_ROOT/real_ui_restore_reset.err"; then
+    RESTORE_LAUNCH_COUNT="$(grep -c '^TOXEE_FIXTURE_C_RESTORE=paired_for_e2e tool/mcp_test/launch_fixture_c_pair.sh$' "$REAL_UI_RESTORE_RESET_DRY" || true)"
+    RESTORED_MESSAGE_COUNT="$(grep -c 'drive_real_ui_pair.dart --boot-restored message ' "$REAL_UI_RESTORE_RESET_DRY" || true)"
+    RESET_COUNT="$(grep -c 'drive_real_ui_pair.dart reset_friendship ' "$REAL_UI_RESTORE_RESET_DRY" || true)"
+    BOOTED_DECLINE_COUNT="$(grep -c 'drive_real_ui_pair.dart --boot-restored decline ' "$REAL_UI_RESTORE_RESET_DRY" || true)"
+    RESTORE_LINE="$(grep -n '^TOXEE_FIXTURE_C_RESTORE=paired_for_e2e tool/mcp_test/launch_fixture_c_pair.sh$' "$REAL_UI_RESTORE_RESET_DRY" | head -n1 | cut -d: -f1)"
+    MESSAGE_LINE="$(grep -n 'drive_real_ui_pair.dart --boot-restored message ' "$REAL_UI_RESTORE_RESET_DRY" | head -n1 | cut -d: -f1)"
+    RESET_LINE="$(grep -n 'drive_real_ui_pair.dart reset_friendship ' "$REAL_UI_RESTORE_RESET_DRY" | head -n1 | cut -d: -f1)"
+    DECLINE_LINE="$(grep -n 'drive_real_ui_pair.dart decline ' "$REAL_UI_RESTORE_RESET_DRY" | head -n1 | cut -d: -f1)"
+    STOP_LINE="$(grep -n '^tool/mcp_test/stop_fixture_c_pair.sh$' "$REAL_UI_RESTORE_RESET_DRY" | head -n1 | cut -d: -f1)"
+    if [[ "$RESTORE_LAUNCH_COUNT" -eq 1 && "$RESTORED_MESSAGE_COUNT" -eq 1 \
+        && "$RESET_COUNT" -eq 1 && "$BOOTED_DECLINE_COUNT" -eq 0 \
+        && -n "$RESTORE_LINE" && -n "$MESSAGE_LINE" && -n "$RESET_LINE" \
+        && -n "$DECLINE_LINE" && -n "$STOP_LINE" \
+        && "$RESTORE_LINE" -lt "$MESSAGE_LINE" \
+        && "$MESSAGE_LINE" -lt "$RESET_LINE" \
+        && "$RESET_LINE" -lt "$DECLINE_LINE" \
+        && "$DECLINE_LINE" -lt "$STOP_LINE" ]]; then
+        pass "restore -> reset -> no-friend dry-run clears --boot-restored after friendship reset"
+    else
+        fail "restore -> reset -> no-friend dry-run clears --boot-restored after friendship reset" \
+            "expected restore launch, boot-restored message, one reset, plain decline, then stop"
+    fi
+else
+    fail "restore/reset/no-friend dry-run exits 0" \
+        "$(cat "$TMP_ROOT/real_ui_restore_reset.err" "$REAL_UI_RESTORE_RESET_DRY" 2>/dev/null)"
+fi
+
 REAL_UI_NO_FRIEND_PLAN="$TMP_ROOT/real_ui_no_friend_plan.json"
 if run_runner --plan-json --class=2proc-ui --real-ui-campaign=fresh-no-friend \
     >"$REAL_UI_NO_FRIEND_PLAN" 2>"$TMP_ROOT/real_ui_no_friend.err"; then

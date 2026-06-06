@@ -97,6 +97,16 @@ class FakeIM {
   Map<String, DateTime> get debugPendingFriendAdds =>
       Map.unmodifiable(_pendingFriendAdds);
 
+  void clearPendingFriendAdd(String userId) {
+    final normalized = normalizeToxId(userId);
+    if (normalized.isEmpty) return;
+    _pendingFriendAdds.remove(normalized);
+    AppLogger.log(
+      '[FakeIM] clearPendingFriendAdd: $normalized '
+      '(now=${_pendingFriendAdds.length} pending)',
+    );
+  }
+
   /// Test-only: number of currently-active internal timers. Used by the
   /// session-lifecycle re-entry tests to detect timer leaks across a
   /// logout→login cycle (a second login that doubles this count vs the first
@@ -432,6 +442,11 @@ class FakeIM {
     // This is important after client restart when Tox hasn't fully restored friends yet
     final localFriends = await Prefs.getLocalFriends();
     final normalizedLocalFriends = localFriends.map((uid) => normalizeToxId(uid)).toSet();
+    final pendingApplications = await ffi.getFriendApplications();
+    final normalizedPendingApplicationIds = pendingApplications
+        .map((app) => normalizeToxId(app.userId))
+        .where((id) => id.isNotEmpty)
+        .toSet();
 
     // If friend list is empty and Tox hasn't returned friends yet,
     // try to restore from local persistence (cold-start fallback).
@@ -515,13 +530,15 @@ class FakeIM {
       final normalizedId = normalizedTox[i].normalized;
       final f = normalizedTox[i].source;
       toxFriendIds.add(normalizedId);
-      friendMap[normalizedId] = FakeUser(
-        userID: normalizedId,
-        nickName: f.nickName,
-        status: f.status,
-        online: f.online,
-        faceUrl: toxAvatars[i],
-      );
+      if (!normalizedPendingApplicationIds.contains(normalizedId)) {
+        friendMap[normalizedId] = FakeUser(
+          userID: normalizedId,
+          nickName: f.nickName,
+          status: f.status,
+          online: f.online,
+          faceUrl: toxAvatars[i],
+        );
+      }
       // X9: a confirmed friend is no longer pending — drop it so the next
       // localFriends-write doesn't include duplicate semantics.
       _pendingFriendAdds.remove(normalizedId);
@@ -535,8 +552,10 @@ class FakeIM {
 
     // Compute the diff between what we previously believed the friend list
     // was and what Tox returned now.
+    final visibleToxFriendIds =
+        toxFriendIds.difference(normalizedPendingApplicationIds);
     final missingFromTox = _previousFriendIds.isNotEmpty
-        ? _previousFriendIds.difference(toxFriendIds)
+        ? _previousFriendIds.difference(visibleToxFriendIds)
         : <String>{};
 
     // Cold-start grace: Tox may return friends incrementally for the first
@@ -603,8 +622,8 @@ class FakeIM {
     // we also merge X9 pending-adds so a friend the app just accepted does
     // not get destroyed by this overwrite before Tox confirms.
     final authoritativeIds = inColdStartGrace
-        ? toxFriendIds.union(missingFromTox).union(livePending)
-        : toxFriendIds.union(livePending);
+        ? visibleToxFriendIds.union(missingFromTox).union(livePending)
+        : visibleToxFriendIds.union(livePending);
     // Only write to SharedPreferences when the set actually changed. The
     // steady-state poll runs every 5s and most cycles see no friend churn —
     // unconditional writes were doing one disk/IPC write per tick for no
@@ -769,5 +788,4 @@ class FakeIM {
     }
   }
 }
-
 

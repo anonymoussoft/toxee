@@ -759,42 +759,47 @@ List<String> _symbolicRealUiCommands(_PlannedEntry planned) {
   final commands = <String>[];
   var pairActive = false;
   String? pairState;
+  var pairNeedsRestoreBoot = false;
 
   for (var i = 0; i < planned.realUiScenarios.length; i++) {
     final scenario = planned.realUiScenarios[i];
     final requiredState = _requiredRealUiState(scenario);
     if (!pairActive) {
-      commands.add(
-        _launchPairCommand(restore: _restoreForRealUiState(requiredState)),
-      );
+      final restore = _restoreForRealUiState(requiredState);
+      commands.add(_launchPairCommand(restore: restore));
       pairActive = true;
       pairState = requiredState;
+      pairNeedsRestoreBoot = restore != null;
     } else if (pairState != requiredState) {
       if (pairState == _realUiStateFriends &&
           requiredState == _realUiStateNoFriend) {
         commands.add(_symbolicRealUiResetCommand());
         pairState = _realUiStateNoFriend;
+        pairNeedsRestoreBoot = false;
       } else if (pairState == _realUiStateNoFriend &&
           requiredState == _realUiStateFriends) {
         commands.add(_stopPairCommand());
-        commands.add(
-          _launchPairCommand(restore: _restoreForRealUiState(requiredState)),
-        );
+        final restore = _restoreForRealUiState(requiredState);
+        commands.add(_launchPairCommand(restore: restore));
         pairState = requiredState;
+        pairNeedsRestoreBoot = restore != null;
       } else {
         commands.add(_stopPairCommand());
-        commands.add(
-          _launchPairCommand(restore: _restoreForRealUiState(requiredState)),
-        );
+        final restore = _restoreForRealUiState(requiredState);
+        commands.add(_launchPairCommand(restore: restore));
         pairState = requiredState;
+        pairNeedsRestoreBoot = restore != null;
       }
     }
 
     commands.add(
-      'dart run tool/mcp_test/${planned.entry.driver} ${_shellLiteral(scenario)} '
+      'dart run tool/mcp_test/${planned.entry.driver} '
+      '${pairNeedsRestoreBoot ? '--boot-restored ' : ''}'
+      '${_shellLiteral(scenario)} '
       '"\$A_WS" "\$A_PID" "\$A_NICK" "\$B_WS" "\$B_PID" "\$B_NICK"',
     );
     pairState = _resultRealUiState(scenario);
+    pairNeedsRestoreBoot = false;
   }
 
   if (pairActive) {
@@ -973,20 +978,21 @@ Future<int> _executeDirectEntry(_Entry entry, {required bool paired}) async {
 Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
   var pairActive = false;
   String? pairState;
+  var pairNeedsRestoreBoot = false;
   try {
     for (var i = 0; i < planned.realUiScenarios.length; i++) {
       final scenario = planned.realUiScenarios[i];
       final requiredState = _requiredRealUiState(scenario);
       var resetApplied = false;
       if (!pairActive) {
-        final launchRc = await _launchPair(
-          restore: _restoreForRealUiState(requiredState),
-        );
+        final restore = _restoreForRealUiState(requiredState);
+        final launchRc = await _launchPair(restore: restore);
         if (launchRc != 0) {
           return launchRc;
         }
         pairActive = true;
         pairState = requiredState;
+        pairNeedsRestoreBoot = restore != null;
       } else if (pairState != requiredState) {
         if (pairState == _realUiStateFriends &&
             requiredState == _realUiStateNoFriend) {
@@ -995,20 +1001,28 @@ Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
             return resetRc;
           }
           pairState = _realUiStateNoFriend;
+          pairNeedsRestoreBoot = false;
           resetApplied = true;
         } else {
           await _bestEffortStopPair();
-          final launchRc = await _launchPair(
-            restore: _restoreForRealUiState(requiredState),
-          );
+          final restore = _restoreForRealUiState(requiredState);
+          final launchRc = await _launchPair(restore: restore);
           if (launchRc != 0) {
             return launchRc;
           }
           pairState = requiredState;
+          pairNeedsRestoreBoot = restore != null;
         }
       }
 
-      var rc = await _executeRealUiScenario(planned.entry.driver, scenario);
+      var rc = await _executeRealUiScenario(
+        planned.entry.driver,
+        scenario,
+        bootRestored: pairNeedsRestoreBoot,
+      );
+      if (rc == 78) {
+        return rc;
+      }
       if (rc != 0 && resetApplied) {
         rc = await _retryRealUiScenarioFromFreshLaunch(
           requiredState: requiredState,
@@ -1040,6 +1054,7 @@ Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
         return rc;
       }
       pairState = _resultRealUiState(scenario);
+      pairNeedsRestoreBoot = false;
     }
     return 0;
   } finally {
@@ -1051,6 +1066,9 @@ Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
 
 int _maxRealUiAttempts(String requiredState) {
   if (requiredState == _realUiStateNoFriend) {
+    return 2;
+  }
+  if (requiredState == _realUiStateFriends) {
     return 2;
   }
   return 1;
@@ -1074,7 +1092,14 @@ Future<int> _retryRealUiScenarioFromFreshLaunch({
       return relaunchRc;
     }
     pairActiveSetter();
-    final rc = await _executeRealUiScenario(driver, scenario);
+    final rc = await _executeRealUiScenario(
+      driver,
+      scenario,
+      bootRestored: requiredState == _realUiStateFriends,
+    );
+    if (rc == 78) {
+      return rc;
+    }
     if (rc == 0) {
       return 0;
     }
@@ -1082,7 +1107,11 @@ Future<int> _retryRealUiScenarioFromFreshLaunch({
   return 1;
 }
 
-Future<int> _executeRealUiScenario(String driver, String scenario) async {
+Future<int> _executeRealUiScenario(
+  String driver,
+  String scenario, {
+  required bool bootRestored,
+}) async {
   final runtime = _RuntimePair.load(
     _pairJson,
     fallbackNickA: _defaultRealUiNickA,
@@ -1092,6 +1121,7 @@ Future<int> _executeRealUiScenario(String driver, String scenario) async {
     'dart',
     'run',
     'tool/mcp_test/$driver',
+    if (bootRestored) '--boot-restored',
     scenario,
     runtime.a.wsUri,
     '${runtime.a.pid}',

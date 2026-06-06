@@ -46,6 +46,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Locale, Size, ThemeMode;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:mcp_toolkit/mcp_toolkit.dart';
+import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_common/data/contact/tencent_cloud_chat_contact_data.dart';
 import 'package:tencent_cloud_chat_sdk/enum/group_member_filter_enum.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_im_sdk_plugin.dart';
@@ -91,11 +92,23 @@ String? _exportSaveFilePathOverride;
 /// Prefs-only write (e.g. unit tests with no live HomePage).
 typedef L3AutoAcceptApplier = Future<void> Function(String key, bool value);
 L3AutoAcceptApplier? _l3AutoAcceptApplier;
+typedef L3HomeShellApplier = Future<void> Function(String tab);
+L3HomeShellApplier? _l3HomeShellApplier;
+typedef L3HomeShellSnapshotReader = Map<String, dynamic> Function();
+L3HomeShellSnapshotReader? _l3HomeShellSnapshotReader;
 
 /// Register (or clear, with null) the live auto-accept applier. No-op unless the
 /// L3 test surface is enabled.
 void registerL3AutoAcceptApplier(L3AutoAcceptApplier? fn) {
   if (kL3TestSurfaceEnabled) _l3AutoAcceptApplier = fn;
+}
+
+void registerL3HomeShellApplier(L3HomeShellApplier? fn) {
+  if (kL3TestSurfaceEnabled) _l3HomeShellApplier = fn;
+}
+
+void registerL3HomeShellSnapshotReader(L3HomeShellSnapshotReader? fn) {
+  if (kL3TestSurfaceEnabled) _l3HomeShellSnapshotReader = fn;
 }
 
 /// S79: avatar-pick override path (mirrors the export-save override). When set,
@@ -191,7 +204,9 @@ void registerL3DebugToolsIfEnabled() {
     'l3_boot_existing_account, '
     'l3_add_friend_request, '
     'l3_start_call, l3_call_action, '
-    'l3_clear_history, l3_invoke_message_action, l3_mark_read, '
+    'l3_clear_history, l3_clear_active_conversation, '
+    'l3_force_home_root, '
+    'l3_invoke_message_action, l3_mark_read, '
     'l3_accept_friend_request, l3_refuse_friend_request, '
     'l3_set_friend_remark, l3_set_blocked, '
     'l3_set_export_save_path, '
@@ -215,6 +230,8 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3ForwardMessageEntry());
   addMcpTool(_l3DumpStateEntry());
   addMcpTool(_l3ClearHistoryEntry());
+  addMcpTool(_l3ClearActiveConversationEntry());
+  addMcpTool(_l3ForceHomeRootEntry());
   addMcpTool(_l3InvokeMessageActionEntry());
   addMcpTool(_l3MarkReadEntry());
   addMcpTool(_l3AcceptFriendRequestEntry());
@@ -377,7 +394,8 @@ MCPCallEntry _l3ReplyTextEntry() => MCPCallEntry.tool(
     if (userId.isEmpty) userId = ffi.activePeerId ?? '';
     if (userId.isEmpty) {
       return MCPCallResult(
-        message: 'l3_reply_text: no target — pass "userId" or open a chat first',
+        message:
+            'l3_reply_text: no target — pass "userId" or open a chat first',
         parameters: {'ok': false, 'error': 'no_target'},
       );
     }
@@ -401,9 +419,12 @@ MCPCallEntry _l3ReplyTextEntry() => MCPCallEntry.tool(
     final history = ffi.getHistory(userId);
     var matches = replyToMsgId.isNotEmpty
         ? history
-            .where((m) =>
-                m.msgID == replyToMsgId || m.altMsgIds.contains(replyToMsgId))
-            .toList()
+              .where(
+                (m) =>
+                    m.msgID == replyToMsgId ||
+                    m.altMsgIds.contains(replyToMsgId),
+              )
+              .toList()
         : history.where((m) => m.text == replyToText).toList();
     // Optional isSelf disambiguator: a running echo peer mirrors a self text
     // back inbound, so the same `replyToText` can match twice — filter to the
@@ -480,7 +501,8 @@ MCPCallEntry _l3ReplyTextEntry() => MCPCallEntry.tool(
           description: 'msgID of the replied message (or use replyToText).',
         ),
         'replyToText': StringSchema(
-          description: 'UNIQUE text of the replied message (resolver for gates).',
+          description:
+              'UNIQUE text of the replied message (resolver for gates).',
         ),
         'replyToIsSelf': StringSchema(
           description:
@@ -488,7 +510,8 @@ MCPCallEntry _l3ReplyTextEntry() => MCPCallEntry.tool(
               '(a running echo peer mirrors a self text back).',
         ),
         'userId': StringSchema(
-          description: 'C2C target (bare or c2c_); defaults to the active chat.',
+          description:
+              'C2C target (bare or c2c_); defaults to the active chat.',
         ),
       },
     ),
@@ -519,7 +542,8 @@ MCPCallEntry _l3ForwardMessageEntry() => MCPCallEntry.tool(
     final sourceText = (request['sourceText'] ?? '').toString();
     if (sourceText.isEmpty) {
       return MCPCallResult(
-        message: 'l3_forward_message: need "sourceText" (the message to forward)',
+        message:
+            'l3_forward_message: need "sourceText" (the message to forward)',
         parameters: {'ok': false, 'error': 'missing_source_text'},
       );
     }
@@ -542,7 +566,8 @@ MCPCallEntry _l3ForwardMessageEntry() => MCPCallEntry.tool(
     }
     if (fromUserId.isEmpty || toUserId.isEmpty) {
       return MCPCallResult(
-        message: 'l3_forward_message: no source/target — pass fromUserId/toUserId',
+        message:
+            'l3_forward_message: no source/target — pass fromUserId/toUserId',
         parameters: {'ok': false, 'error': 'no_target'},
       );
     }
@@ -558,8 +583,10 @@ MCPCallEntry _l3ForwardMessageEntry() => MCPCallEntry.tool(
     // Resolve the source message (prove it exists + is unambiguous) before
     // re-sending its text — that resolution is the "forward". An echo peer
     // mirrors a self text back inbound, so allow an isSelf disambiguator.
-    var matches =
-        ffi.getHistory(fromUserId).where((m) => m.text == sourceText).toList();
+    var matches = ffi
+        .getHistory(fromUserId)
+        .where((m) => m.text == sourceText)
+        .toList();
     final sourceIsSelf = request['sourceIsSelf'];
     if (sourceIsSelf != null) {
       final wantSelf = sourceIsSelf.toString().toLowerCase() == 'true';
@@ -588,7 +615,11 @@ MCPCallEntry _l3ForwardMessageEntry() => MCPCallEntry.tool(
       );
       return MCPCallResult(
         message: 'forwarded',
-        parameters: {'ok': true, 'fromUserId': fromUserId, 'toUserId': toUserId},
+        parameters: {
+          'ok': true,
+          'fromUserId': fromUserId,
+          'toUserId': toUserId,
+        },
       );
     } catch (e, st) {
       AppLogger.logError('[L3] l3_forward_message failed', e, st);
@@ -823,8 +854,9 @@ MCPCallEntry _l3BootExistingAccountEntry() => MCPCallEntry.tool(
     // sentinels. (codex: dropped the redundant toxId-prefix OR I had added —
     // booting echo_seeded already goes through its `echo_seeded_test`
     // nickname, so the prefix branch added reach without adding safety.)
-    final isReservedFixtureNick =
-        _kTestNicknames.contains(nickname.toLowerCase().trim());
+    final isReservedFixtureNick = _kTestNicknames.contains(
+      nickname.toLowerCase().trim(),
+    );
     if (!isReservedFixtureNick && !await _isL3SeedToxId(toxId)) {
       return MCPCallResult(
         message:
@@ -1354,6 +1386,119 @@ MCPCallEntry _l3ClearHistoryEntry() => MCPCallEntry.tool(
   ),
 );
 
+MCPCallEntry _l3ClearActiveConversationEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    if (!await _activeAccountIsTest()) {
+      return MCPCallResult(
+        message: 'l3_clear_active_conversation: refused — non-test account',
+        parameters: {'ok': false, 'error': 'non_test_account'},
+      );
+    }
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_clear_active_conversation: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    final previousConversationId =
+        UikitDataFacade.currentConversation?.conversationID;
+    final previousActivePeerId = ffi.activePeerId;
+    ffi.setActivePeer(null);
+    UikitDataFacade.currentConversation = null;
+    AppLogger.info(
+      '[L3] l3_clear_active_conversation: cleared '
+      '${previousConversationId ?? previousActivePeerId ?? 'none'}',
+    );
+    return MCPCallResult(
+      message: 'cleared active conversation',
+      parameters: {
+        'ok': true,
+        'previousConversationId': previousConversationId,
+        'previousActivePeerId': previousActivePeerId,
+      },
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_clear_active_conversation',
+    description:
+        'L3 TEST ONLY: clear the currently selected conversation from the '
+        'desktop shell without mutating history or friendship state.',
+    inputSchema: ObjectSchema(properties: {}),
+  ),
+);
+
+MCPCallEntry _l3ForceHomeRootEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    if (!await _activeAccountIsTest()) {
+      return MCPCallResult(
+        message: 'l3_force_home_root: refused — non-test account',
+        parameters: {'ok': false, 'error': 'non_test_account'},
+      );
+    }
+    final currentService = FakeUIKit.instance.im?.ffi;
+    if (currentService == null) {
+      return MCPCallResult(
+        message: 'l3_force_home_root: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    final previousConversationId =
+        UikitDataFacade.currentConversation?.conversationID;
+    final previousActivePeerId = currentService.activePeerId;
+    final targetTab =
+        request['tab']?.toString().trim().toLowerCase() ?? 'chats';
+    currentService.setActivePeer(null);
+    UikitDataFacade.currentConversation = null;
+    final shellApplier = _l3HomeShellApplier;
+    if (shellApplier != null) {
+      await shellApplier(targetTab);
+    } else {
+      final navigated = await navigateToHomeIfPossible(currentService);
+      if (!navigated) {
+        return MCPCallResult(
+          message: 'l3_force_home_root: navigator not ready',
+          parameters: {'ok': false, 'error': 'navigator_not_ready'},
+        );
+      }
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await FakeUIKit.instance.im?.refreshConversations();
+    await FakeUIKit.instance.im?.refreshContacts();
+    AppLogger.info(
+      '[L3] l3_force_home_root: restored HomePage '
+      'tab=$targetTab '
+      '(previousConversation=${previousConversationId ?? 'none'}, '
+      'previousActivePeer=${previousActivePeerId ?? 'none'})',
+    );
+    return MCPCallResult(
+      message: 'forced HomePage root',
+      parameters: {
+        'ok': true,
+        'tab': targetTab,
+        'previousConversationId': previousConversationId,
+        'previousActivePeerId': previousActivePeerId,
+      },
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_force_home_root',
+    description:
+        'L3 TEST ONLY: rebuild the current session back onto the desktop '
+        'HomePage root, clearing any active conversation selection first. '
+        'Optional tab: chats | contacts | applications | settings.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'tab': StringSchema(
+          description:
+              'Optional target tab after recovery: chats | contacts | '
+              'applications | settings. Default: chats.',
+        ),
+      },
+    ),
+  ),
+);
+
 /// Mark a C2C conversation read: advances the per-conversation lastView
 /// barrier so `getC2CUnreadCount` (surfaced as `unreadCount` in l3_dump_state)
 /// drops to 0. Lets a scenario assert unread>0 → mark-read → unread==0 (S19).
@@ -1549,11 +1694,14 @@ MCPCallEntry _l3SetBlockedEntry() => MCPCallEntry.tool(
       ffi?.quitGroups ?? const <String>{},
     );
     if (groupReject != null) return groupReject;
-    final rawBlocked =
-        (request['blocked'] ?? 'true').toString().toLowerCase().trim();
+    final rawBlocked = (request['blocked'] ?? 'true')
+        .toString()
+        .toLowerCase()
+        .trim();
     if (rawBlocked != 'true' && rawBlocked != 'false') {
       return MCPCallResult(
-        message: 'l3_set_blocked: "blocked" must be true|false (got "$rawBlocked")',
+        message:
+            'l3_set_blocked: "blocked" must be true|false (got "$rawBlocked")',
         parameters: {'ok': false, 'error': 'bad_value'},
       );
     }
@@ -1561,11 +1709,11 @@ MCPCallEntry _l3SetBlockedEntry() => MCPCallEntry.tool(
     try {
       final res = blocked
           ? await TencentImSDKPlugin.v2TIMManager
-              .getFriendshipManager()
-              .addToBlackList(userIDList: [userId])
+                .getFriendshipManager()
+                .addToBlackList(userIDList: [userId])
           : await TencentImSDKPlugin.v2TIMManager
-              .getFriendshipManager()
-              .deleteFromBlackList(userIDList: [userId]);
+                .getFriendshipManager()
+                .deleteFromBlackList(userIDList: [userId]);
       if (res.code != 0) {
         return MCPCallResult(
           message: 'l3_set_blocked: SDK returned ${res.code}: ${res.desc}',
@@ -1587,7 +1735,11 @@ MCPCallEntry _l3SetBlockedEntry() => MCPCallEntry.tool(
       AppLogger.logError('[L3] l3_set_blocked failed', e, st);
       return MCPCallResult(
         message: 'l3_set_blocked: failed: $e',
-        parameters: {'ok': false, 'error': 'set_blocked_failed', 'detail': '$e'},
+        parameters: {
+          'ok': false,
+          'error': 'set_blocked_failed',
+          'detail': '$e',
+        },
       );
     }
   },
@@ -1826,7 +1978,8 @@ MCPCallEntry _l3SetAvatarPickPathEntry() => MCPCallEntry.tool(
     inputSchema: ObjectSchema(
       properties: {
         'path': StringSchema(
-          description: 'Absolute image path to use as the picked avatar. Empty clears.',
+          description:
+              'Absolute image path to use as the picked avatar. Empty clears.',
         ),
       },
     ),
@@ -1881,9 +2034,7 @@ MCPCallEntry _l3SetSettingEntry() => MCPCallEntry.tool(
       // {ok:false} like the bool branches, instead of throwing out of the ext.
       try {
         await Prefs.setAutoDownloadSizeLimit(mb);
-        AppLogger.info(
-          '[L3] l3_set_setting MUTATED autoDownloadSizeLimit=$mb',
-        );
+        AppLogger.info('[L3] l3_set_setting MUTATED autoDownloadSizeLimit=$mb');
         return MCPCallResult(
           message: 'setting updated: autoDownloadSizeLimit=$mb',
           parameters: {'ok': true, 'key': key, 'value': mb},
@@ -2084,10 +2235,17 @@ MCPCallEntry _l3SetSettingEntry() => MCPCallEntry.tool(
     if (applier != null) {
       try {
         await applier(key, value);
-        AppLogger.info('[L3] l3_set_setting MUTATED (live applier) $key=$value');
+        AppLogger.info(
+          '[L3] l3_set_setting MUTATED (live applier) $key=$value',
+        );
         return MCPCallResult(
           message: 'setting updated (live): $key=$value',
-          parameters: {'ok': true, 'key': key, 'value': value, 'applied': 'live'},
+          parameters: {
+            'ok': true,
+            'key': key,
+            'value': value,
+            'applied': 'live',
+          },
         );
       } catch (e, st) {
         AppLogger.logError(
@@ -2228,7 +2386,8 @@ MCPCallEntry _l3SetSelfProfileEntry() => MCPCallEntry.tool(
         ?.toString();
     final hasNick = nick != null && nick.isNotEmpty;
     final hasStatus = status != null;
-    final hasAvatar = (avatarPath != null && avatarPath.isNotEmpty) ||
+    final hasAvatar =
+        (avatarPath != null && avatarPath.isNotEmpty) ||
         (avatarContent != null && avatarContent.isNotEmpty);
     if (!hasNick && !hasStatus && !hasAvatar) {
       return MCPCallResult(
@@ -2274,9 +2433,7 @@ MCPCallEntry _l3SetSelfProfileEntry() => MCPCallEntry.tool(
         await ffi.updateAvatar(pathToSend);
         changed.add('avatar');
       }
-      AppLogger.info(
-        '[L3] l3_set_self_profile MUTATED ${changed.join(",")}',
-      );
+      AppLogger.info('[L3] l3_set_self_profile MUTATED ${changed.join(",")}');
       return MCPCallResult(
         message: 'self profile updated',
         parameters: {'ok': true, 'changed': changed},
@@ -2285,7 +2442,11 @@ MCPCallEntry _l3SetSelfProfileEntry() => MCPCallEntry.tool(
       AppLogger.logError('[L3] l3_set_self_profile failed', e, st);
       return MCPCallResult(
         message: 'l3_set_self_profile: failed: $e',
-        parameters: {'ok': false, 'error': 'set_profile_failed', 'detail': '$e'},
+        parameters: {
+          'ok': false,
+          'error': 'set_profile_failed',
+          'detail': '$e',
+        },
       );
     }
   },
@@ -2410,10 +2571,9 @@ MCPCallEntry _l3SimulateNotificationTapEntry() => MCPCallEntry.tool(
         parameters: {'ok': false, 'error': 'non_test_account'},
       );
     }
-    var payload =
-        (request['conversationId'] ?? request['payload'] ?? '')
-            .toString()
-            .trim();
+    var payload = (request['conversationId'] ?? request['payload'] ?? '')
+        .toString()
+        .trim();
     if (payload.isEmpty) {
       return MCPCallResult(
         message:
@@ -2448,7 +2608,8 @@ MCPCallEntry _l3SimulateNotificationTapEntry() => MCPCallEntry.tool(
     inputSchema: ObjectSchema(
       properties: {
         'conversationId': StringSchema(
-          description: 'Tap payload: c2c_<pubkey>, group_<gid>, or bare Tox id.',
+          description:
+              'Tap payload: c2c_<pubkey>, group_<gid>, or bare Tox id.',
         ),
       },
     ),
@@ -2614,7 +2775,8 @@ MCPCallEntry _l3SendFileEntry() => MCPCallEntry.tool(
     if (userId.isEmpty) userId = ffi.activePeerId ?? '';
     if (userId.isEmpty) {
       return MCPCallResult(
-        message: 'l3_send_file: no target — pass "userId" or open a conversation',
+        message:
+            'l3_send_file: no target — pass "userId" or open a conversation',
         parameters: {'ok': false, 'error': 'no_target'},
       );
     }
@@ -2763,10 +2925,7 @@ MCPCallEntry _l3CreateGroupEntry() => MCPCallEntry.tool(
       final effectiveName = (name == null || name.isEmpty)
           ? 'l3_test_group'
           : name;
-      final gid = await ffi.createGroup(
-        effectiveName,
-        groupType: groupType,
-      );
+      final gid = await ffi.createGroup(effectiveName, groupType: groupType);
       if (gid == null || gid.isEmpty) {
         return MCPCallResult(
           message: 'l3_create_group: createGroup returned null',
@@ -3144,7 +3303,9 @@ MCPCallEntry _l3InviteToGroupEntry() => MCPCallEntry.tool(
         'With the invitee autoAcceptGroupInvites=true, they auto-join.',
     inputSchema: ObjectSchema(
       properties: {
-        'groupId': StringSchema(description: 'Group id (local tox_N or chat-id).'),
+        'groupId': StringSchema(
+          description: 'Group id (local tox_N or chat-id).',
+        ),
         'userId': StringSchema(description: 'Friend Tox ID to invite.'),
       },
       required: ['groupId', 'userId'],
@@ -3175,7 +3336,11 @@ MCPCallEntry _l3ContactSearchEntry() => MCPCallEntry.tool(
       AppLogger.logError('[L3] l3_contact_search failed', e, st);
       return MCPCallResult(
         message: 'l3_contact_search: failed: $e',
-        parameters: {'ok': false, 'error': 'contact_search_failed', 'detail': '$e'},
+        parameters: {
+          'ok': false,
+          'error': 'contact_search_failed',
+          'detail': '$e',
+        },
       );
     }
   },
@@ -3253,7 +3418,9 @@ MCPCallEntry _l3KickGroupMemberEntry() => MCPCallEntry.tool(
         'no-op Platform wrapper).',
     inputSchema: ObjectSchema(
       properties: {
-        'groupId': StringSchema(description: 'Group id (local tox_N or chat-id).'),
+        'groupId': StringSchema(
+          description: 'Group id (local tox_N or chat-id).',
+        ),
         'userId': StringSchema(description: 'Member Tox ID to kick.'),
       },
       required: ['groupId', 'userId'],
@@ -3566,7 +3733,9 @@ MCPCallEntry _l3SetTypingEntry() => MCPCallEntry.tool(
         'on=true|false.',
     inputSchema: ObjectSchema(
       properties: {
-        'userId': StringSchema(description: 'Target Tox ID. Optional — active conv.'),
+        'userId': StringSchema(
+          description: 'Target Tox ID. Optional — active conv.',
+        ),
         'conversationId': StringSchema(description: 'c2c_<toxId> alternative.'),
         'on': StringSchema(description: 'true | false (default true)'),
       },
@@ -3643,7 +3812,11 @@ MCPCallEntry _l3WindowStateEntry() => MCPCallEntry.tool(
       AppLogger.logError('[L3] l3_window_state failed', e, st);
       return MCPCallResult(
         message: 'l3_window_state: failed: $e',
-        parameters: {'ok': false, 'error': 'window_state_failed', 'detail': '$e'},
+        parameters: {
+          'ok': false,
+          'error': 'window_state_failed',
+          'detail': '$e',
+        },
       );
     }
   },
@@ -3660,12 +3833,8 @@ MCPCallEntry _l3WindowStateEntry() => MCPCallEntry.tool(
         'state': StringSchema(
           description: 'minimize | restore | hide | show | focus | bounds',
         ),
-        'width': StringSchema(
-          description: 'Logical width for state=bounds.',
-        ),
-        'height': StringSchema(
-          description: 'Logical height for state=bounds.',
-        ),
+        'width': StringSchema(description: 'Logical width for state=bounds.'),
+        'height': StringSchema(description: 'Logical height for state=bounds.'),
       },
       required: ['state'],
     ),
@@ -3830,6 +3999,16 @@ MCPCallEntry _l3DumpStateEntry() => MCPCallEntry.tool(
       'exportSaveFileOverridePath': debugCurrentExportSaveFileOverridePath,
       ..._l3HarnessEnvironmentSnapshot(Platform.environment),
     };
+    final homeShell = _l3HomeShellSnapshotReader?.call();
+    if (homeShell != null) {
+      params['homeShell'] = homeShell;
+      params['homeShellTab'] = homeShell['tab'];
+      params['homeShellIndex'] = homeShell['index'];
+      params['homeShellCurrentConversationId'] =
+          homeShell['currentConversationId'];
+      params['homeShellInContactProfileContext'] =
+          homeShell['inContactProfileContext'];
+    }
     if (ffi != null) {
       try {
         final friends = await ffi.getFriendList();
@@ -3972,7 +4151,15 @@ MCPCallEntry _l3DumpStateEntry() => MCPCallEntry.tool(
               'conversationID': cur.conversationID,
               'type': cur.type,
               'showName': cur.showName,
+              'userID': cur.userID,
+              'groupID': cur.groupID,
             };
+      final currentUserId = cur?.userID;
+      params['activeChatPeerOnline'] =
+          currentUserId == null || currentUserId.isEmpty
+          ? null
+          : TencentCloudChat.instance.dataInstance.contact
+                .getOnlineStatusByUserId(userID: currentUserId);
     }
     // Optional: include the PERSISTED message list for a conversation so
     // tests can assert on history (count, text, isSelf, msgID) instead of

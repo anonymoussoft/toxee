@@ -90,20 +90,22 @@ if [[ "$LAUNCH_METHOD" == "open" && "$(uname -s)" == "Darwin" ]]; then
         --env "FLUTTER_ENGINE_SWITCH_2=disable-service-auth-codes"
     LAUNCHED_PID=""
 else
-    (
-        trap '' HUP
-        export HOME="$HOME_OVERRIDE_DIR"
-        export TOXEE_APP_SUPPORT_DIR="$APP_SUPPORT_OVERRIDE_DIR"
-        export TOXEE_SHARED_PREFS_PREFIX="$SHARED_PREFS_PREFIX"
-        export TOXEE_TCCF_GLOBAL_SUBDIR="$TCCF_GLOBAL_SUBDIR"
-        export TIM2TOX_FFI_PATH="$FFI_LIB"
-        export DYLD_FALLBACK_LIBRARY_PATH="$APP_EXE_DIR:${DYLD_FALLBACK_LIBRARY_PATH:-}"
-        export TOXEE_LOG_DIR="$BUILD_DIR"
-        export FLUTTER_ENGINE_SWITCHES=2
-        export FLUTTER_ENGINE_SWITCH_1="vm-service-port=0"
-        export FLUTTER_ENGINE_SWITCH_2="disable-service-auth-codes"
-        exec "$APP_EXECUTABLE"
-    ) >>"$STDIO_LOG" 2>&1 </dev/null &
+    # `trap '' HUP` in a subshell was not enough here: once the launcher shell
+    # exited, the direct-launched GUI process still died within a few seconds on
+    # macOS. `nohup` keeps the debug app alive after this script returns so the
+    # later VM attach / restored-boot probes connect to a real, persistent pid.
+    env \
+        HOME="$HOME_OVERRIDE_DIR" \
+        TOXEE_APP_SUPPORT_DIR="$APP_SUPPORT_OVERRIDE_DIR" \
+        TOXEE_SHARED_PREFS_PREFIX="$SHARED_PREFS_PREFIX" \
+        TOXEE_TCCF_GLOBAL_SUBDIR="$TCCF_GLOBAL_SUBDIR" \
+        TIM2TOX_FFI_PATH="$FFI_LIB" \
+        DYLD_FALLBACK_LIBRARY_PATH="$APP_EXE_DIR:${DYLD_FALLBACK_LIBRARY_PATH:-}" \
+        TOXEE_LOG_DIR="$BUILD_DIR" \
+        FLUTTER_ENGINE_SWITCHES=2 \
+        FLUTTER_ENGINE_SWITCH_1="vm-service-port=0" \
+        FLUTTER_ENGINE_SWITCH_2="disable-service-auth-codes" \
+        /usr/bin/nohup "$APP_EXECUTABLE" >>"$STDIO_LOG" 2>&1 </dev/null &
     LAUNCHED_PID=$!
 fi
 
