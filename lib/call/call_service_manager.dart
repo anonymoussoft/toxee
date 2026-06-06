@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'package:tim2tox_dart/service/toxav_service.dart';
 import 'package:tim2tox_dart/service/call_bridge_service.dart';
@@ -78,8 +79,14 @@ class CallServiceManager implements CallOverlayManager {
   /// call was connected and then irrecoverably dropped by the transport.
   /// Consumers that don't know the value treat it as a generic end (see
   /// `lib/sdk_fake/fake_uikit_core.dart` — defaults to actionType=hangup).
-  void Function(String remoteUserID, bool isVideo, bool isOutgoing,
-      int durationSeconds, String endReason)? onCallRecordNeeded;
+  void Function(
+    String remoteUserID,
+    bool isVideo,
+    bool isOutgoing,
+    int durationSeconds,
+    String endReason,
+  )?
+  onCallRecordNeeded;
 
   /// Prevents duplicate call record emissions per call.
   bool _callRecordEmitted = false;
@@ -151,9 +158,8 @@ class CallServiceManager implements CallOverlayManager {
     _foregroundElevated = true;
     try {
       final l10n = lookupAppLocalizations(AppLocale.locale.value);
-      final callerName = _callState.remoteNickname ??
-          _callState.remoteUserID ??
-          '';
+      final callerName =
+          _callState.remoteNickname ?? _callState.remoteUserID ?? '';
       final body = callerName.isEmpty
           ? l10n.runtimeForegroundCallBody
           : l10n.runtimeForegroundCallBodyWithCaller(callerName);
@@ -166,7 +172,8 @@ class CallServiceManager implements CallOverlayManager {
       );
     } catch (e, st) {
       AppLogger.warn(
-          '[CallServiceManager] _elevateForegroundForCall failed: $e\n$st');
+        '[CallServiceManager] _elevateForegroundForCall failed: $e\n$st',
+      );
     }
   }
 
@@ -186,7 +193,8 @@ class CallServiceManager implements CallOverlayManager {
       );
     } catch (e, st) {
       AppLogger.warn(
-          '[CallServiceManager] _restoreForegroundAfterCall failed: $e\n$st');
+        '[CallServiceManager] _restoreForegroundAfterCall failed: $e\n$st',
+      );
     }
   }
 
@@ -200,7 +208,12 @@ class CallServiceManager implements CallOverlayManager {
     final isOutgoing = _callState.direction == CallDirection.outgoing;
     final durationSeconds = _callState.callDuration.inSeconds;
     onCallRecordNeeded?.call(
-        remoteUserID, isVideo, isOutgoing, durationSeconds, endReason);
+      remoteUserID,
+      isVideo,
+      isOutgoing,
+      durationSeconds,
+      endReason,
+    );
   }
 
   /// Fire-and-forget OS-level missed-call notification. Reads peer info from
@@ -233,21 +246,40 @@ class CallServiceManager implements CallOverlayManager {
 
   /// Check if a friend is online via FfiChatService.
   Future<bool> _isFriendOnline(String userID) async {
+    bool? ffiOnline;
     try {
       final friends = await _chatService.getFriendList();
       for (final f in friends) {
         if (compareToxIds(f.userId, userID)) {
-          return f.online;
+          ffiOnline = f.online;
+          break;
         }
       }
-      return false; // Friend not found → treat as offline
     } catch (_) {
-      // Fail-closed: previously returned `true` to be permissive, but that
-      // causes outgoing calls to ring forever against unreachable peers when
-      // the friend list lookup transiently fails. Better UX is to surface the
-      // problem immediately than to leave the user staring at a dead ringer.
-      return false;
+      ffiOnline = null;
     }
+    if (ffiOnline == true) {
+      return true;
+    }
+    // Call buttons in the real UI already gate on UIKit's contact-status cache.
+    // During multi-instance restored runs we've observed brief skew where the
+    // UI cache has already refreshed the friend to online while
+    // `_chatService.getFriendList()` still reports offline/missing, which causes
+    // `_onOutgoingCallInitiated` to auto-cancel a call the UI just allowed to
+    // start. Use the UIKit cache as a fallback so the auto-cancel decision stays
+    // aligned with what the user just saw and tapped.
+    final uikitOnline = TencentCloudChat.instance.dataInstance.contact
+        .getOnlineStatusByUserId(userID: userID);
+    AppLogger.info(
+      '[CallServiceManager] _isFriendOnline userID=$userID '
+      'ffiOnline=$ffiOnline uikitOnline=$uikitOnline',
+    );
+    if (uikitOnline) {
+      return true;
+    }
+    // Fail-closed only after both sources say "not online" (or the FFI source
+    // failed to answer and UIKit also has no online signal).
+    return ffiOnline ?? false;
   }
 
   // ---------------------------------------------------------------------------
@@ -278,8 +310,7 @@ class CallServiceManager implements CallOverlayManager {
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(_reconnectGrace, () {
       if (_callState.state == CallUIState.reconnecting) {
-        debugPrint(
-            '[CallServiceManager] reconnect grace expired, ending call');
+        debugPrint('[CallServiceManager] reconnect grace expired, ending call');
         // 'network_error' rather than 'hangup' — the call was dropped by the
         // transport, not user-terminated. Surfacing this distinctly lets the
         // UI / history layer label the record accurately.
@@ -378,7 +409,8 @@ class CallServiceManager implements CallOverlayManager {
     }
     if (activeId != null && action.callId != activeId) {
       debugPrint(
-          '[CallServiceManager] CallKit action for stale callId ${action.callId}; ignoring');
+        '[CallServiceManager] CallKit action for stale callId ${action.callId}; ignoring',
+      );
       return;
     }
     switch (action.kind) {
@@ -452,9 +484,17 @@ class CallServiceManager implements CallOverlayManager {
 
   /// Called when the user initiates an outgoing call via the UIKit call button.
   void _onOutgoingCallInitiated(
-      String inviteID, String userID, String type) async {
+    String inviteID,
+    String userID,
+    String type,
+  ) async {
+    AppLogger.info(
+      '[CallServiceManager] outgoing initiated inviteID=$inviteID '
+      'userID=$userID type=$type state=${_callState.state}',
+    );
     debugPrint(
-        '[CallServiceManager] _onOutgoingCallInitiated: inviteID=$inviteID, userID=$userID, type=$type, currentState=${_callState.state}');
+      '[CallServiceManager] _onOutgoingCallInitiated: inviteID=$inviteID, userID=$userID, type=$type, currentState=${_callState.state}',
+    );
     final nickname = await _resolveNickname(userID);
     _callRecordEmitted = false;
     _callState.startRinging(
@@ -466,20 +506,24 @@ class CallServiceManager implements CallOverlayManager {
     );
     // Surface in the iOS system call UI so the user can see / interact with
     // the outgoing call from the lock screen / AirPods. No-op off-iOS.
-    unawaited(_callKitReportRinging(
-      callId: inviteID,
-      displayName: nickname ?? userID,
-      hasVideo: type == TYPE_VIDEO,
-      incoming: false,
-    ));
+    unawaited(
+      _callKitReportRinging(
+        callId: inviteID,
+        displayName: nickname ?? userID,
+        hasVideo: type == TYPE_VIDEO,
+        incoming: false,
+      ),
+    );
     debugPrint(
-        '[CallServiceManager] _onOutgoingCallInitiated: after startRinging, state=${_callState.state}');
+      '[CallServiceManager] _onOutgoingCallInitiated: after startRinging, state=${_callState.state}',
+    );
 
     // Check friend online status — auto-cancel if offline
     final isOnline = await _isFriendOnline(userID);
     if (!isOnline && _callState.state == CallUIState.ringing) {
       debugPrint(
-          '[CallServiceManager] Friend $userID is offline, auto-ending call after brief delay');
+        '[CallServiceManager] Friend $userID is offline, auto-ending call after brief delay',
+      );
       await Future.delayed(const Duration(milliseconds: 800));
       if (_callState.state == CallUIState.ringing &&
           _callState.inviteID == inviteID) {
@@ -498,8 +542,15 @@ class CallServiceManager implements CallOverlayManager {
     }
   }
 
-  void _onCallStateChanged(String inviteID, CallState state,
-      {String? endReason}) async {
+  void _onCallStateChanged(
+    String inviteID,
+    CallState state, {
+    String? endReason,
+  }) async {
+    AppLogger.info(
+      '[CallServiceManager] signaling state inviteID=$inviteID '
+      'state=$state endReason=$endReason currentUiState=${_callState.state}',
+    );
     switch (state) {
       case CallState.ringing:
         final callInfo = _callBridge!.getCallInfo(inviteID);
@@ -514,12 +565,14 @@ class CallServiceManager implements CallOverlayManager {
             remoteUserID: callInfo.inviter,
             remoteNickname: nickname,
           );
-          unawaited(_callKitReportRinging(
-            callId: inviteID,
-            displayName: nickname ?? callInfo.inviter,
-            hasVideo: isVideo,
-            incoming: true,
-          ));
+          unawaited(
+            _callKitReportRinging(
+              callId: inviteID,
+              displayName: nickname ?? callInfo.inviter,
+              hasVideo: isVideo,
+              incoming: true,
+            ),
+          );
           _ringtone.start(); // incoming call ringtone
         }
         break;
@@ -542,13 +595,15 @@ class CallServiceManager implements CallOverlayManager {
         // Prefer the bridge-supplied endReason (reject/hangup/timeout/cancel).
         // Fall back to the pre-Fix-Y heuristic when the bridge omits it so
         // legacy code paths keep producing a sensible record.
-        final resolvedEndReason = endReason ??
+        final resolvedEndReason =
+            endReason ??
             (_callState.state == CallUIState.inCall ? 'hangup' : 'cancel');
         // Missed-call OS banner: an incoming ring that ended without us
         // entering inCall is a missed call from the user's perspective.
         // ('reject' means the user explicitly rejected — don't re-notify on
         // that path; the user is already aware.)
-        final wasIncomingRing = _callState.state == CallUIState.ringing &&
+        final wasIncomingRing =
+            _callState.state == CallUIState.ringing &&
             _callState.direction == CallDirection.incoming &&
             resolvedEndReason != 'reject';
         _emitCallRecord(resolvedEndReason);
@@ -571,11 +626,19 @@ class CallServiceManager implements CallOverlayManager {
 
   /// Called when ToxAV receives an incoming call directly (e.g. from qTox).
   void _onIncomingCall(
-      int friendNumber, bool audioEnabled, bool videoEnabled) async {
+    int friendNumber,
+    bool audioEnabled,
+    bool videoEnabled,
+  ) async {
+    AppLogger.info(
+      '[CallServiceManager] native incoming friendNumber=$friendNumber '
+      'audio=$audioEnabled video=$videoEnabled state=${_callState.state}',
+    );
     // Ignore if already in a call.
     if (_callState.state != CallUIState.idle) {
       debugPrint(
-          '[CallServiceManager] _onIncomingCall: ignored (not idle), friendNumber=$friendNumber');
+        '[CallServiceManager] _onIncomingCall: ignored (not idle), friendNumber=$friendNumber',
+      );
       return;
     }
 
@@ -591,9 +654,10 @@ class CallServiceManager implements CallOverlayManager {
     _callRecordEmitted = false;
 
     debugPrint(
-        '[CallServiceManager] _onIncomingCall: friendNumber=$friendNumber, '
-        'inviteID=$inviteID, remoteUserID=$remoteUserID, nickname=$nickname, '
-        'audio=$audioEnabled, video=$videoEnabled');
+      '[CallServiceManager] _onIncomingCall: friendNumber=$friendNumber, '
+      'inviteID=$inviteID, remoteUserID=$remoteUserID, nickname=$nickname, '
+      'audio=$audioEnabled, video=$videoEnabled',
+    );
 
     _callState.startRinging(
       mode: videoEnabled ? CallMode.video : CallMode.audio,
@@ -602,12 +666,14 @@ class CallServiceManager implements CallOverlayManager {
       remoteUserID: remoteUserID,
       remoteNickname: nickname,
     );
-    unawaited(_callKitReportRinging(
-      callId: inviteID,
-      displayName: nickname ?? remoteUserID,
-      hasVideo: videoEnabled,
-      incoming: true,
-    ));
+    unawaited(
+      _callKitReportRinging(
+        callId: inviteID,
+        displayName: nickname ?? remoteUserID,
+        hasVideo: videoEnabled,
+        incoming: true,
+      ),
+    );
     _ringtone.start();
   }
 
@@ -621,7 +687,8 @@ class CallServiceManager implements CallOverlayManager {
     const stateAcceptingA = 16; // TOXAV_FRIEND_CALL_STATE_ACCEPTING_A
 
     debugPrint(
-        '[CallServiceManager] _onCallState: friendNumber=$friendNumber, state=$state');
+      '[CallServiceManager] _onCallState: friendNumber=$friendNumber, state=$state',
+    );
 
     // Error or finished → end the call
     if (state == stateError || state == stateFinished) {
@@ -685,7 +752,8 @@ class CallServiceManager implements CallOverlayManager {
 
   void _onAudioBitrateChanged(int friendNumber, int audioBitRate) {
     debugPrint(
-        '[CallServiceManager] _onAudioBitrateChanged: friendNumber=$friendNumber, audioBitRate=$audioBitRate');
+      '[CallServiceManager] _onAudioBitrateChanged: friendNumber=$friendNumber, audioBitRate=$audioBitRate',
+    );
     // While reconnecting the transport is mid-recovery; peer-suggested values
     // here reflect the dip, not steady state. Skip estimator + profile entirely
     // so reset()/clearReconnecting() recovery isn't polluted by dirty samples.
@@ -699,7 +767,8 @@ class CallServiceManager implements CallOverlayManager {
 
   void _onVideoBitrateChanged(int friendNumber, int videoBitRate) {
     debugPrint(
-        '[CallServiceManager] _onVideoBitrateChanged: friendNumber=$friendNumber, videoBitRate=$videoBitRate');
+      '[CallServiceManager] _onVideoBitrateChanged: friendNumber=$friendNumber, videoBitRate=$videoBitRate',
+    );
     if (_callState.state == CallUIState.reconnecting) return;
     if (!_qualityEstimator.observeVideoBitrate(videoBitRate)) return;
     _callState.setCallQuality(_qualityEstimator.currentQuality());
@@ -800,12 +869,27 @@ class CallServiceManager implements CallOverlayManager {
     if (!result.granted) {
       _emitPermissionNotice(result);
       debugPrint(
-          '[CallServiceManager] Required call permissions denied for mode=${_callState.mode}');
+        '[CallServiceManager] Required call permissions denied for mode=${_callState.mode}',
+      );
     }
     return result.granted;
   }
 
-  Future<bool> _preflightOutgoingCall(String _, String type) async {
+  Future<bool> _preflightOutgoingCall(String userID, String type) async {
+    final activeRemoteUserID = _callState.remoteUserID;
+    final duplicateOutgoingRing =
+        _callState.state == CallUIState.ringing &&
+        _callState.direction == CallDirection.outgoing &&
+        activeRemoteUserID != null &&
+        compareToxIds(activeRemoteUserID, userID);
+    if (duplicateOutgoingRing) {
+      AppLogger.info(
+        '[CallServiceManager] duplicate outgoing call suppressed '
+        'userID=$userID state=${_callState.state} '
+        'activeRemoteUserID=$activeRemoteUserID',
+      );
+      return false;
+    }
     final result = await CallPermissionHelper.requestPermissionsForCallDetailed(
       isVideo: type == TYPE_VIDEO,
     );
@@ -848,7 +932,9 @@ class CallServiceManager implements CallOverlayManager {
         // Don't poison the chain if a prior sync threw — but record the failure
         // so it doesn't vanish silently.
         .catchError((Object e, StackTrace st) {
-          AppLogger.warn('[CallServiceManager] previous platform-effects sync failed: $e');
+          AppLogger.warn(
+            '[CallServiceManager] previous platform-effects sync failed: $e',
+          );
         })
         .then((_) => _doSyncPlatformEffectsForState(state));
     _pendingSync = next;
@@ -923,8 +1009,9 @@ class CallServiceManager implements CallOverlayManager {
     if (_isNativeCall(inviteID)) {
       return _getNativeFriendNumber(inviteID);
     }
-    final callInfo =
-        inviteID != null ? _callBridge?.getCallInfo(inviteID) : null;
+    final callInfo = inviteID != null
+        ? _callBridge?.getCallInfo(inviteID)
+        : null;
     return callInfo?.friendNumber;
   }
 
@@ -1060,11 +1147,14 @@ class CallServiceManager implements CallOverlayManager {
       }
     } else {
       // Signaling path — look up friendNumber from callInfo
-      final callInfo =
-          inviteID != null ? _callBridge?.getCallInfo(inviteID) : null;
+      final callInfo = inviteID != null
+          ? _callBridge?.getCallInfo(inviteID)
+          : null;
       if (callInfo?.friendNumber != null) {
         await _avService?.muteAudio(
-            callInfo!.friendNumber!, _callState.isMuted);
+          callInfo!.friendNumber!,
+          _callState.isMuted,
+        );
       }
     }
   }
@@ -1077,7 +1167,9 @@ class CallServiceManager implements CallOverlayManager {
     try {
       await _callAudioPlatform.activateSession(preferSpeaker: preferSpeaker);
     } catch (e) {
-      AppLogger.warn('[CallServiceManager] toggleSpeaker activateSession failed: $e');
+      AppLogger.warn(
+        '[CallServiceManager] toggleSpeaker activateSession failed: $e',
+      );
     }
   }
 
@@ -1087,12 +1179,13 @@ class CallServiceManager implements CallOverlayManager {
     if (enableVideo) {
       final result =
           await CallPermissionHelper.requestPermissionsForCallDetailed(
-        isVideo: true,
-      );
+            isVideo: true,
+          );
       if (!result.granted) {
         _emitPermissionNotice(result);
         debugPrint(
-            '[CallServiceManager] Video permission denied while enabling camera');
+          '[CallServiceManager] Video permission denied while enabling camera',
+        );
         return;
       }
     }

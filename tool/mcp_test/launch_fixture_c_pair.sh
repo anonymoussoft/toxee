@@ -17,43 +17,82 @@ RUNTIME_ROOT="${TOXEE_MULTI_RUNTIME_ROOT:-$MCP_DIR/.multi_instance_runtime}"
 PAIR_JSON="$RUNTIME_ROOT/pair.json"
 APP_BUNDLE="${TOXEE_APP_BUNDLE:-$REPO_ROOT/build/macos/Build/Products/Debug/Toxee.app}"
 COPIES_DIR="$RUNTIME_ROOT/app_copies"
-APP_B_COPY="$COPIES_DIR/ToxeeB.app"
 VM_PROBE_DART="$MCP_DIR/probe_vm_service.dart"
 CONTAINER_MULTI_ROOT="$HOME/Library/Containers/com.toxee.app/Data/Library/Application Support/com.toxee.app/multi_instance"
 FIXTURE_RESTORE_MODE="${TOXEE_FIXTURE_C_RESTORE:-}"
 FIXTURE_RESTORE_REPORT="$CONTAINER_MULTI_ROOT/fixture_c_pair_restore.json"
+REQUESTED_LAUNCH_METHOD="${TOXEE_MULTI_LAUNCH_METHOD:-}"
+ALLOW_OPEN_FALLBACK="${TOXEE_MULTI_ALLOW_OPEN_FALLBACK:-1}"
+POST_PROBE_STABILITY_SECS="${TOXEE_MULTI_POST_PROBE_STABILITY_SECS:-8}"
+SKIP_VM_PROBE="${TOXEE_MULTI_SKIP_VM_PROBE:-0}"
 
-mkdir -p "$RUNTIME_ROOT"
-mkdir -p "$COPIES_DIR"
-rm -rf "$RUNTIME_ROOT/A" "$RUNTIME_ROOT/B"
-rm -rf "$CONTAINER_MULTI_ROOT/A" "$CONTAINER_MULTI_ROOT/B"
-# Disposable spike harness: clear the shared macOS defaults domain so both
-# instances start from a blank login state. Without this, a previous run's
-# shared `account_list` can turn the register page into a saved-account page
-# before the pair driver ever starts.
-defaults delete com.toxee.app >/dev/null 2>&1 || true
-killall cfprefsd >/dev/null 2>&1 || true
-
-if [[ "$FIXTURE_RESTORE_MODE" == "paired" || "$FIXTURE_RESTORE_MODE" == "paired_for_e2e" ]]; then
-    TOXEE_FIXTURE_C_RESTORE_ROOT="$CONTAINER_MULTI_ROOT" \
-        "$MCP_DIR/restore_fixture_c_pair.sh"
+# Restored-fixture launches currently prioritize VM attach stability over the
+# direct-binary path: on this host, a restored direct launch can probe cleanly
+# and still die shortly afterward, while LaunchServices (`open`) remains alive
+# long enough for the restored-boot drivers to do real work. Keep direct as the
+# global default, but switch restored pair launches to `open` unless the caller
+# explicitly overrides the method.
+if [[ -n "$FIXTURE_RESTORE_MODE" && -z "$REQUESTED_LAUNCH_METHOD" ]]; then
+    export TOXEE_MULTI_LAUNCH_METHOD=open
+    REQUESTED_LAUNCH_METHOD="open"
 fi
 
-"$MCP_DIR/launch_toxee_instance.sh" A
-A_WS_URI="$(jq -r '.ws_uri' "$RUNTIME_ROOT/A/instance.json")"
-dart run "$VM_PROBE_DART" "$A_WS_URI"
-# Empirically, launching both instances from the exact same .app path leaves the
-# direct-launch VM service attach path unhealthy (`Connection closed before full
-# header was received`). A physical copy for B avoids that collision and keeps
-# the rest of the harness unchanged.
-rm -rf "$APP_B_COPY"
-cp -R "$APP_BUNDLE" "$APP_B_COPY"
-TOXEE_APP_BUNDLE="$APP_B_COPY" "$MCP_DIR/launch_toxee_instance.sh" B
-B_WS_URI="$(jq -r '.ws_uri' "$RUNTIME_ROOT/B/instance.json")"
-dart run "$VM_PROBE_DART" "$A_WS_URI"
-dart run "$VM_PROBE_DART" "$B_WS_URI"
+wait_for_instance_json() {
+    local path="$1"
+    local timeout="${2:-20}"
+    local elapsed=0
+    while [[ "$elapsed" -lt "$timeout" ]]; do
+        if [[ -f "$path" ]] && jq -e '.ws_uri | length > 0' "$path" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    echo "launch_fixture_c_pair.sh: timed out waiting for instance json: $path" >&2
+    return 1
+}
 
-/usr/bin/python3 - "$RUNTIME_ROOT/A/instance.json" "$RUNTIME_ROOT/B/instance.json" "$PAIR_JSON" "$FIXTURE_RESTORE_MODE" "$FIXTURE_RESTORE_REPORT" <<'PY'
+probe_vm_service_retry() {
+    local ws_uri="$1"
+    local timeout="${2:-15}"
+    local elapsed=0
+    while [[ "$elapsed" -lt "$timeout" ]]; do
+        if dart run "$VM_PROBE_DART" "$ws_uri"; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    echo "launch_fixture_c_pair.sh: timed out probing VM service: $ws_uri" >&2
+    return 1
+}
+
+verify_post_probe_stability() {
+    if [[ "$SKIP_VM_PROBE" == "1" ]]; then
+        return 0
+    fi
+    local a_json="$1"
+    local b_json="$2"
+    local wait_secs="${3:-0}"
+    local a_pid
+    local b_pid
+    local a_ws
+    local b_ws
+    a_pid="$(jq -r '.pid' "$a_json")"
+    b_pid="$(jq -r '.pid' "$b_json")"
+    a_ws="$(jq -r '.ws_uri' "$a_json")"
+    b_ws="$(jq -r '.ws_uri' "$b_json")"
+    if [[ "$wait_secs" -gt 0 ]]; then
+        sleep "$wait_secs"
+    fi
+    kill -0 "$a_pid"
+    kill -0 "$b_pid"
+    probe_vm_service_retry "$a_ws"
+    probe_vm_service_retry "$b_ws"
+}
+
+write_pair_json() {
+    /usr/bin/python3 - "$RUNTIME_ROOT/A/instance.json" "$RUNTIME_ROOT/B/instance.json" "$PAIR_JSON" "$FIXTURE_RESTORE_MODE" "$FIXTURE_RESTORE_REPORT" <<'PY'
 import json
 import os
 import sys
@@ -89,8 +128,67 @@ with open(out_file, "w") as f:
     json.dump(doc, f, indent=2)
     f.write("\n")
 PY
+}
 
-echo "OK: launched Fixture C pair"
-echo "pair json: $PAIR_JSON"
-echo "A ws_uri: $(jq -r '.instances.A.ws_uri' "$PAIR_JSON")"
-echo "B ws_uri: $(jq -r '.instances.B.ws_uri' "$PAIR_JSON")"
+launch_pair_once() (
+    set -euo pipefail
+    mkdir -p "$RUNTIME_ROOT"
+    mkdir -p "$COPIES_DIR"
+    rm -rf "$RUNTIME_ROOT/A" "$RUNTIME_ROOT/B"
+    rm -rf "$CONTAINER_MULTI_ROOT/A" "$CONTAINER_MULTI_ROOT/B"
+    # Disposable spike harness: clear the shared macOS defaults domain so both
+    # instances start from a blank login state. Without this, a previous run's
+    # shared `account_list` can turn the register page into a saved-account page
+    # before the pair driver ever starts.
+    defaults delete com.toxee.app >/dev/null 2>&1 || true
+    killall cfprefsd >/dev/null 2>&1 || true
+
+    if [[ "$FIXTURE_RESTORE_MODE" == "paired" || "$FIXTURE_RESTORE_MODE" == "paired_for_e2e" ]]; then
+        TOXEE_FIXTURE_C_RESTORE_ROOT="$CONTAINER_MULTI_ROOT" \
+            "$MCP_DIR/restore_fixture_c_pair.sh"
+    fi
+
+    "$MCP_DIR/launch_toxee_instance.sh" A
+    wait_for_instance_json "$RUNTIME_ROOT/A/instance.json"
+    A_WS_URI="$(jq -r '.ws_uri' "$RUNTIME_ROOT/A/instance.json")"
+    if [[ "$SKIP_VM_PROBE" != "1" ]]; then
+        probe_vm_service_retry "$A_WS_URI"
+    fi
+    # Empirically, launching both instances from the exact same .app path leaves the
+    # direct-launch VM service attach path unhealthy (`Connection closed before full
+    # header was received`). A physical copy for B avoids that collision and keeps
+    # the rest of the harness unchanged.
+    APP_B_COPY="$COPIES_DIR/ToxeeB-$(date +%s)-$$.app"
+    /usr/bin/ditto "$APP_BUNDLE" "$APP_B_COPY"
+    TOXEE_APP_BUNDLE="$APP_B_COPY" "$MCP_DIR/launch_toxee_instance.sh" B
+    wait_for_instance_json "$RUNTIME_ROOT/B/instance.json"
+    B_WS_URI="$(jq -r '.ws_uri' "$RUNTIME_ROOT/B/instance.json")"
+    if [[ "$SKIP_VM_PROBE" != "1" ]]; then
+        probe_vm_service_retry "$A_WS_URI"
+        probe_vm_service_retry "$B_WS_URI"
+    fi
+    verify_post_probe_stability \
+        "$RUNTIME_ROOT/A/instance.json" \
+        "$RUNTIME_ROOT/B/instance.json" \
+        "$POST_PROBE_STABILITY_SECS"
+    write_pair_json
+
+    echo "OK: launched Fixture C pair"
+    echo "pair json: $PAIR_JSON"
+    echo "A ws_uri: $(jq -r '.instances.A.ws_uri' "$PAIR_JSON")"
+    echo "B ws_uri: $(jq -r '.instances.B.ws_uri' "$PAIR_JSON")"
+)
+
+set +e
+launch_pair_once
+launch_rc=$?
+set -e
+
+if [[ "$launch_rc" -ne 0 ]]; then
+    if [[ "$ALLOW_OPEN_FALLBACK" != "0" && "$REQUESTED_LAUNCH_METHOD" != "open" ]]; then
+        echo "WARN: pair launch became unhealthy with method=${REQUESTED_LAUNCH_METHOD:-direct}; retrying with TOXEE_MULTI_LAUNCH_METHOD=open" >&2
+        "$MCP_DIR/stop_fixture_c_pair.sh" >/dev/null 2>&1 || true
+        exec env TOXEE_MULTI_LAUNCH_METHOD=open TOXEE_MULTI_ALLOW_OPEN_FALLBACK=0 "$0"
+    fi
+    exit "$launch_rc"
+fi

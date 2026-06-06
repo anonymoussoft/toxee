@@ -1,6 +1,77 @@
 part of 'home_page.dart';
 
 extension _HomePageBootstrap on _HomePageState {
+  void _installContactProfileBuilders() {
+    // Only override the delete-button slot: when the user is a friend we
+    // render the upstream default widget directly; otherwise we render the
+    // toxee "Add Friend" affordance. Content + state slots are left null so
+    // the manager falls through to upstream defaults — no pass-through
+    // closure needed (which would otherwise round-trip through the manager
+    // and recurse on restore).
+    contact_pkg.TencentCloudChatContactManager.builder.setBuilders(
+      userProfileDeleteButtonBuilder:
+          ({required V2TimUserFullInfo userFullInfo}) {
+            final friendIDList = UikitDataFacade.contactList
+                .map((e) => normalizeToxId(e.userID))
+                .toSet();
+            final normalizedUserID = normalizeToxId(userFullInfo.userID ?? '');
+            final isFriend = friendIDList.contains(normalizedUserID);
+
+            if (isFriend) {
+              return TencentCloudChatUserProfileDeleteButton(
+                userFullInfo: userFullInfo,
+              );
+            } else {
+              return _buildAddFriendButton(userFullInfo);
+            }
+          },
+      // Wrap the upstream chat-button row (Send Message + Voice + Video
+      // tiles) with [UiKeys.friendProfileSendMessageButton] so UI
+      // automation can tap "Send Message" from the friend profile without
+      // patching the UIKit fork. The tile's own onTap (which calls
+      // `onNavigateToChat` and routes via toxee's `onTapContactItem`
+      // handler) is preserved by delegating to the upstream widget.
+      userProfileChatButtonBuilder:
+          ({
+            required V2TimUserFullInfo userFullInfo,
+            VoidCallback? startVideoCall,
+            VoidCallback? startVoiceCall,
+            bool? isNavigatedFromChat,
+          }) {
+            return KeyedSubtree(
+              key: UiKeys.friendProfileSendMessageButton,
+              child: TencentCloudChatUserProfileChatButton(
+                userFullInfo: userFullInfo,
+                startVideoCall: startVideoCall,
+                startVoiceCall: startVoiceCall,
+                isNavigatedFromChat: isNavigatedFromChat,
+              ),
+            );
+          },
+      contactItemContentBuilder: (friend) => KeyedSubtree(
+        key: UiKeys.contactListTile(friend.userID),
+        child: TencentCloudChatContactItemContent(friend: friend),
+      ),
+      contactGroupListItemContentBuilder: (group) => KeyedSubtree(
+        key: UiKeys.groupListTile(group.groupID),
+        child: TencentCloudChatContactGroupItemContent(group: group),
+      ),
+      // setBuilders is destructive (any slot not passed is nulled) — re-supply
+      // the app-bar-name override (including the trailing `NewEntryButton`)
+      // here so it stays mounted after the post-contacts-load override is
+      // applied, and so a later route-dispose restore can be healed by
+      // calling this helper again (restored-account boot path).
+      contactAppBarNameBuilder: ({String? title}) => ContactAppBarNameOverride(
+        title: title,
+        trailing: NewEntryButton(
+          onAddFriend: _showAddFriendDialog,
+          onCreateGroup: _showAddGroupDialog,
+          onJoinIrcChannel: _ircAppInstalled ? _showJoinIrcChannelDialog : null,
+        ),
+      ),
+    );
+  }
+
   Future<void> _initAfterSessionReady() async {
     await SessionRuntimeCoordinator(
       service: widget.service,
@@ -894,6 +965,45 @@ extension _HomePageBootstrap on _HomePageState {
       }
     });
     _bag.add(() => registerL3AutoAcceptApplier(null));
+    registerL3HomeShellApplier((tab) async {
+      final normalized = tab.trim().toLowerCase();
+      final nextIndex = switch (normalized) {
+        'contacts' => 1,
+        'applications' => 2,
+        'settings' => 3,
+        _ => 0,
+      };
+      if (normalized == 'contacts') {
+        _installContactProfileBuilders();
+      }
+      widget.service.setActivePeer(null);
+      UikitDataFacade.currentConversation = null;
+      if (mounted) {
+        _bootstrapSetState(() {
+          _index = nextIndex;
+          _currentConversationID = null;
+          _messageWidgetKeys.clear();
+          _messageWidgetKeyCounter++;
+          _inContactProfileContext = false;
+        });
+      }
+    });
+    _bag.add(() => registerL3HomeShellApplier(null));
+    registerL3HomeShellSnapshotReader(() {
+      final tab = switch (_index) {
+        1 => 'contacts',
+        2 => 'applications',
+        3 => 'settings',
+        _ => 'chats',
+      };
+      return {
+        'tab': tab,
+        'index': _index,
+        'currentConversationId': _currentConversationID,
+        'inContactProfileContext': _inContactProfileContext,
+      };
+    });
+    _bag.add(() => registerL3HomeShellSnapshotReader(null));
 
     _checkIrcAppStatus();
     _msgSub = widget.service.messages.listen((m) {
@@ -1085,73 +1195,7 @@ extension _HomePageBootstrap on _HomePageState {
     _contactBuilderOverride = ContactBuilderOverrideHandle.capture();
     _bag.add(() => _contactBuilderOverride?.restore());
 
-    // Only override the delete-button slot: when the user is a friend we
-    // render the upstream default widget directly; otherwise we render the
-    // toxee "Add Friend" affordance. Content + state slots are left null so
-    // the manager falls through to upstream defaults — no pass-through
-    // closure needed (which would otherwise round-trip through the manager
-    // and recurse on restore).
-    contact_pkg.TencentCloudChatContactManager.builder.setBuilders(
-      userProfileDeleteButtonBuilder:
-          ({required V2TimUserFullInfo userFullInfo}) {
-            final friendIDList = UikitDataFacade.contactList
-                .map((e) => normalizeToxId(e.userID))
-                .toSet();
-            final normalizedUserID = normalizeToxId(userFullInfo.userID ?? '');
-            final isFriend = friendIDList.contains(normalizedUserID);
-
-            if (isFriend) {
-              return TencentCloudChatUserProfileDeleteButton(
-                userFullInfo: userFullInfo,
-              );
-            } else {
-              return _buildAddFriendButton(userFullInfo);
-            }
-          },
-      // Wrap the upstream chat-button row (Send Message + Voice + Video
-      // tiles) with [UiKeys.friendProfileSendMessageButton] so UI
-      // automation can tap "Send Message" from the friend profile without
-      // patching the UIKit fork. The tile's own onTap (which calls
-      // `onNavigateToChat` and routes via toxee's `onTapContactItem`
-      // handler) is preserved by delegating to the upstream widget.
-      userProfileChatButtonBuilder:
-          ({
-            required V2TimUserFullInfo userFullInfo,
-            VoidCallback? startVideoCall,
-            VoidCallback? startVoiceCall,
-            bool? isNavigatedFromChat,
-          }) {
-            return KeyedSubtree(
-              key: UiKeys.friendProfileSendMessageButton,
-              child: TencentCloudChatUserProfileChatButton(
-                userFullInfo: userFullInfo,
-                startVideoCall: startVideoCall,
-                startVoiceCall: startVoiceCall,
-                isNavigatedFromChat: isNavigatedFromChat,
-              ),
-            );
-          },
-      contactItemContentBuilder: (friend) => KeyedSubtree(
-        key: UiKeys.contactListTile(friend.userID),
-        child: TencentCloudChatContactItemContent(friend: friend),
-      ),
-      contactGroupListItemContentBuilder: (group) => KeyedSubtree(
-        key: UiKeys.groupListTile(group.groupID),
-        child: TencentCloudChatContactGroupItemContent(group: group),
-      ),
-      // setBuilders is destructive (any slot not passed is nulled) — re-supply
-      // the app-bar-name override (including the trailing `NewEntryButton`)
-      // here so it stays mounted after the post-contacts-load override is
-      // applied.
-      contactAppBarNameBuilder: ({String? title}) => ContactAppBarNameOverride(
-        title: title,
-        trailing: NewEntryButton(
-          onAddFriend: _showAddFriendDialog,
-          onCreateGroup: _showAddGroupDialog,
-          onJoinIrcChannel: _ircAppInstalled ? _showJoinIrcChannelDialog : null,
-        ),
-      ),
-    );
+    _installContactProfileBuilders();
 
     _groupBuilderOverride = GroupProfileBuilderOverrideHandle.capture();
     _bag.add(() => _groupBuilderOverride?.restore());

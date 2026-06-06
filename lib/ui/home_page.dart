@@ -196,10 +196,7 @@ AlertDialog buildDeleteConversationDialog({
     title: Text(l10n.deleteConversationTitle),
     content: Text(l10n.deleteConversationBody(conversationLabel)),
     actions: [
-      TextButton(
-        onPressed: () => dismiss(false),
-        child: Text(l10n.cancel),
-      ),
+      TextButton(onPressed: () => dismiss(false), child: Text(l10n.cancel)),
       TextButton(
         key: UiKeys.deleteConversationConfirmButton,
         onPressed: () => dismiss(true),
@@ -676,6 +673,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _openChat({String? peerId, String? groupId}) {
     setState(() {
       _index = 0; // Ensure Chats tab is visible
+      _inContactProfileContext = false;
     });
     _selectConversation(peerId: peerId, groupId: groupId);
     unawaited(_updateTray());
@@ -1718,19 +1716,52 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         break;
       }
     }
-    if (target == null) {
-      target = V2TimConversation(
-        conversationID: targetConvId,
-        type: hasGroup
-            ? ConversationType.V2TIM_GROUP
-            : ConversationType.V2TIM_C2C,
-        userID: hasGroup ? null : peerId,
-        groupID: hasGroup ? groupId : null,
-        showName: hasGroup ? groupId : peerId,
-        unreadCount: 0,
-      );
-    }
-    UikitDataFacade.currentConversation = target;
+    final normalizedTarget = target == null
+        ? V2TimConversation(
+            conversationID: targetConvId,
+            type: hasGroup
+                ? ConversationType.V2TIM_GROUP
+                : ConversationType.V2TIM_C2C,
+            userID: hasGroup ? null : peerId,
+            groupID: hasGroup ? groupId : null,
+            showName: hasGroup ? groupId : peerId,
+            unreadCount: 0,
+          )
+        : V2TimConversation(
+            conversationID: target.conversationID,
+            type:
+                target.type ??
+                (hasGroup
+                    ? ConversationType.V2TIM_GROUP
+                    : ConversationType.V2TIM_C2C),
+            userID: hasGroup ? null : peerId,
+            groupID: hasGroup ? groupId : null,
+            showName:
+                target.showName ??
+                (hasGroup ? groupId : peerId) ??
+                targetConvId,
+            faceUrl: target.faceUrl,
+            groupType: target.groupType,
+            unreadCount: target.unreadCount ?? 0,
+            lastMessage: target.lastMessage,
+            draftText: target.draftText,
+            draftTimestamp: target.draftTimestamp,
+            isPinned: target.isPinned,
+            recvOpt: target.recvOpt,
+            orderkey: target.orderkey,
+            markList: target.markList,
+            customData: target.customData,
+            conversationGroupList: target.conversationGroupList,
+            c2cReadTimestamp: target.c2cReadTimestamp,
+            groupReadSequence: target.groupReadSequence,
+            groupAtInfoList: target.groupAtInfoList,
+          );
+    // Selecting a chat means the profile/detail shell is no longer the active
+    // interaction surface. Clear this flag here as a final backstop so desktop
+    // contact-profile "Send Message" transitions cannot leave the HomePage in a
+    // stale "inside profile" mode after the chat has already opened.
+    _inContactProfileContext = false;
+    UikitDataFacade.currentConversation = normalizedTarget;
   }
 
   Future<void> _setAutoAcceptFriends(bool value) async {
@@ -1782,21 +1813,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _updateTray();
   }
 
-  Future<void> _handleFriendAdded(String friendId) async {
-    final trimmed = friendId.trim();
-    if (trimmed.isEmpty) return;
-    // X9: mark the friend as pending before the refresh poll runs. This keeps
-    // Prefs.localFriends from racing the Tox-side accept propagation during
-    // seed generation and ordinary add-friend flows.
-    FakeUIKit.instance.im?.registerPendingFriendAdd(trimmed);
-    // Don't write to Prefs here — FakeIM._emitContactsWithFriendsImpl is the
-    // single authority for Prefs.localFriends. It will persist the Tox friend list
-    // on the next refresh cycle. Writing here risks re-adding stale friends from
-    // _localFriends.
-    await FakeUIKit.instance.im?.refreshContacts();
-    await _load();
-  }
-
   /// Load persisted groups into UIKit on app startup
   /// This ensures groups are visible in the group list even if contacts haven't been refreshed yet
   Future<void> _loadPersistedGroupsIntoUIKit() =>
@@ -1824,9 +1840,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         insetPadding: _dialogInset(ctx),
         child: AddFriendDialog(
           service: widget.service,
-          onFriendAdded: (id) async {
-            await _handleFriendAdded(id);
-          },
           onShowSnackBar: _showSnackBar,
         ),
       ),
