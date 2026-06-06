@@ -19,10 +19,10 @@
 | 3 | Anchor/key 源码测试（L1） | `test/ui/testing/`、`test/ui/contact/`… | 17 文件（anchor/key/L3-debug） | `flutter test` | analyze.yml |
 | 4 | host-bundle 生命周期（L2） | `integration_test/` | 6 个 Dart 文件（5 个可运行 `_test.dart`，打 `needs-native` tag + 1 个 harness） | 逐文件 `flutter test -d <os>` | e2e.yml，按需 `ci:e2e` |
 | 5 | L3 runner 门禁（数据层） | `tool/mcp_test/scenarios/*.json` | 46（40 blocking，6 nonBlocking） | `run_l3_scenarios.dart` 对接活跃 debug 应用 | 否（本地） |
-| 6 | 双进程 Fixture C 驱动 | `tool/mcp_test/drive_fixture_c_*.dart` + `.sh` | 27 个 Dart 驱动 / 28 个 shell 包装 | 逐脚本 | 否（本地）；契约经 mcp_harness_smoke.yml |
-| 7 | 双进程真实 UI 驱动 | `tool/mcp_test/drive_real_ui_pair.dart` | 4 个固化场景（握手/握手详情/拒绝/消息） | 脚本 + osascript | 否（本地，macOS） |
+| 6 | 双进程 Fixture C / unified runner | `tool/mcp_test/fixture_c_unified_runner.dart`、`fixture_c_manifest.json`、`drive_fixture_c_*.dart` + legacy `.sh` | 1 个统一 runner / 27 个 Dart 驱动 / 28 个 legacy shell 包装 | `dart run tool/mcp_test/fixture_c_unified_runner.dart ...`（legacy shell 入口委托它） | 否（本地）；契约经 mcp_harness_smoke.yml |
+| 7 | 双进程真实 UI 场景 | `tool/mcp_test/drive_real_ui_pair.dart`（由 unified runner 通过 manifest 规划） | 8 个固化场景 + 38 项可复用 campaign 目录（握手 / 握手详情 / 拒绝 / 消息 / 消息突发 / 自定义申请词 / 语音通话 / 拒接通话） | `fixture_c_unified_runner.dart --class=2proc-ui [--real-ui-scenario=<name> \| --real-ui-campaign=<name>]` 或直接 driver + osascript | 否（本地，macOS） |
 | 8 | 单实例 UI 脚本驱动 | `tool/mcp_test/drive_export_account.dart` | 1 | 脚本 | 否（本地） |
-| 9 | Harness 自检 | `fixture_c_helpers_regression.sh`、`echo_peer_{contract_smoke,drift_check,helpers_regression}.sh` | 4 个脚本 | 逐脚本 | fixture-c 那个在 mcp_harness_smoke.yml；echo 系列在本地 |
+| 9 | Harness 自检 | `fixture_c_helpers_regression.sh`、`fixture_c_unified_runner_regression.sh`、`echo_peer_{contract_smoke,drift_check,helpers_regression}.sh` | 5 个脚本 | 逐脚本 | `fixture_c_helpers_regression.sh` 在 mcp_harness_smoke.yml；其余本地 |
 | 10 | L3 playbook（规格） | `test/mcp/S*.md` | 118（S1–S125，有空缺） | agent 驱动 | 不适用（规格） |
 | 11 | 协议分档（超出范围） | `third_party/tim2tox/auto_tests` | 14 阶段 | `run_tests_ordered.sh` | auto_tests*.yml 第 1–4 档 |
 
@@ -56,8 +56,8 @@
 | `l3-gate` | 单实例、活跃应用、`l3_*` 调试工具、无 peer | 35 个场景 JSON |
 | `l3-gate-echo` | 单实例 + echo peer（实时 DHT） | 7 个场景 JSON（`requiresEchoPeer`） |
 | `l3-ui-single` | 单实例，驱动真实 widget（marionette/skill 点击或脚本） | 4 个 `l3_settings_*_tap` JSON（nonBlocking）+ `drive_export_account.dart` + S96–S125 战役 playbook |
-| `2proc-l3` | 两个 toxee 进程，经 `l3_*` 工具驱动 | 全部 `drive_fixture_c_*`（用调试工具，非 widget 驱动） |
-| `2proc-ui` | 两个 toxee 进程，真实 widget + osascript | 仅 `drive_real_ui_pair.dart` |
+| `2proc-l3` | 两个 toxee 进程，经 unified runner 规划、由 `l3_*` 工具驱动 | manifest 中全部 data-layer Fixture C 项（legacy `run_fixture_c_*.sh` 兼容入口最终委托 unified runner） |
+| `2proc-ui` | 两个 toxee 进程，真实 widget + osascript | manifest 中的 `drive_real_ui_pair.dart` 场景与命名 campaign（经 unified runner 参与同一 planning / dry-run 体系） |
 | `manual-playbook` | 钉在 L3、仅 agent 驱动（OS 对话框、媒体硬件、kill+重启） | 其余 `S*.md` |
 
 （35 + 7 + 4 = 46 个场景 JSON。类由 JSON 标志位推导，故此名册再不需手工清点。）
@@ -73,6 +73,39 @@
 测试资产的类**在资产所在处声明**（JSON 字段、脚本头、playbook 头），
 并**由生成器聚合**，再不在某张中心表里手工维护。
 
+双进程入口现在统一到
+`dart run tool/mcp_test/fixture_c_unified_runner.dart`。它读取同一个
+`fixture_c_manifest.json` 来规划 `2proc-l3` 和 `2proc-ui`；legacy shell
+入口（如 `run_fixture_c_non_media.sh`、`run_fixture_c_suite.sh`）只保留兼容壳层，
+参数归一后委托给这个 Dart runner。因而 `2proc-ui` 不再在 planning 阶段被
+NOTE-skip，`--plan-json` / `--dry-run` 也会展开 real-UI 场景；需要已有好友关系的
+`message` 子场景则可以作为“已接受握手之后”的链式步骤来规划，而不是要求手工拆成
+两次运行。`--plan-json` 里现在还会显式带出 `realUiScenarios` 和 `commands`，
+因此“哪些 real-UI 场景能复用同一次启动”已经是 hermetic 可回归的契约，而不只是
+live 观察结论。
+
+对 `2proc-ui` 而言，契约是“能复用就复用”，而不是“每个场景都 fresh launch 一次”。
+默认批次会尽量保留已经准备好的账号与联系人状态，因为 `message` 与 `call_voice`
+都依赖已有好友关系。当前完整的默认批次会以一次 stateful launch 执行，中间按需
+插入内部的 friendship reset，再继续跑下一个不兼容的好友请求分支；若只重放
+`message` 或 `call_voice` 这类依赖已有好友关系的场景，则会通过
+`paired_for_e2e` restore 自动补足前置状态。
+当前可 discover 的 catalog 共有 38 个内建 campaign，按调度语义大致分成四个 bucket：
+
+- `accepted-friend-*`：在已接受好友关系后继续叠加聊天/通话步骤。代表形态：
+  `accepted-friend-inline-full = handshake -> message -> message_burst -> call_voice -> call_reject`。
+- `fresh-*` / `no-friend-*`：从无好友关系起步；若中间场景会自清理，则仍可保持单次 launch。
+  代表形态：`no-friend-inline-call = custom_message -> handshake -> call_voice`。
+- `*-then-decline`：中途切回“无好友”分支，因此 planner 会显式插入
+  `reset_friendship` 维护步，而不是强制 relaunch。代表形态：
+  `inline-call-then-decline = handshake -> call_voice -> reset_friendship -> decline`。
+- `all-*`：把几个代表性分支缝成端到端 smoke bundle。代表形态：
+  `all-expanded = handshake -> message -> message_burst -> call_voice -> call_reject -> reset_friendship -> custom_message -> handshake_detail -> reset_friendship -> decline`。
+
+精确的当前目录和名字以 `--list-real-ui-campaigns` 输出为准。这些 bucket 名称描述的是
+planner / dry-run 的调度语义，不是“每个分支都已 live 验证完成”的声明。live 端仍是
+本地 dogfood 门禁，不要把它提前解读成 CI 级稳定性承诺。
+
 ## 三、推荐战役顺序（便宜 → 昂贵）
 
 按此顺序运行各套件；每一步都严格比下一步更便宜更快，因此失败会先以最低成本暴露。
@@ -86,9 +119,9 @@ SKIP-exit-2。
 | 3 | L3 hermetic 套件 | `l3-gate` | `dart run tool/mcp_test/run_l3_scenarios.dart <ws_uri> --class=l3-gate` |
 | 4 | L3 echo 套件 | `l3-gate-echo` | `dart run tool/mcp_test/run_l3_scenarios.dart <ws_uri> --class=l3-gate-echo --echo` |
 | 5 | UI-tap 套件（nonBlocking） | `l3-ui-single` | `dart run tool/mcp_test/run_l3_scenarios.dart <ws_uri> --class=l3-ui-single --allow-skip` |
-| 6 | Fixture C 非媒体 | `2proc-l3` | `bash tool/mcp_test/run_fixture_c_suite.sh --tier=non-media` |
-| 7 | Fixture C 媒体 | `2proc-l3` | `bash tool/mcp_test/run_fixture_c_suite.sh --tier=media` |
-| 8 | 双进程真实 UI 配对 | `2proc-ui` | `dart run tool/mcp_test/drive_real_ui_pair.dart`（+ osascript；macOS） |
+| 6 | Fixture C 非媒体统一战役 | `2proc-l3` + `2proc-ui` | `dart run tool/mcp_test/fixture_c_unified_runner.dart --tier=non-media` |
+| 7 | Fixture C 媒体统一战役 | `2proc-l3` | `dart run tool/mcp_test/fixture_c_unified_runner.dart --tier=media` |
+| 8 | 聚焦双进程真实 UI（可筛场景或 campaign） | `2proc-ui` | `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui [--real-ui-scenario=<name> \| --real-ui-campaign=<name>]` |
 | 9 | 手动 playbook | `manual-playbook` | agent 驱动，仅用于上述都无法表达的流程（`test/mcp/S*.md`） |
 
 说明：
@@ -98,6 +131,22 @@ SKIP-exit-2。
   记录了 no-DDS 启动器以及如何读取该 URI。
 - 第 3–8 步需要一个**正在运行**的桌面 debug 构建；它们不是 hermetic。
   第 1–2 步是 hermetic。
+- 兼容入口仍保留：`run_fixture_c_non_media.sh`、`run_fixture_c_suite.sh`
+  等 legacy shell 入口只做参数翻译 / 委托，不再各自维护规划逻辑。
+- `fixture_c_unified_runner.dart` 的 `--plan-json` / `--dry-run` 现在会把
+  `2proc-ui` 一起规划出来；如果只想重放某个 real-UI 场景，可用
+  `--class=2proc-ui --real-ui-scenario=handshake|message|message_burst|handshake_detail|decline|custom_message|call_voice|call_reject`；
+  对 `message` / `call_voice`，planner 仍会通过链式复用或 restore 自动满足好友关系
+  前置条件，而不是假定一个裸 fresh pair。
+- 如果想直接选一个已合并好的 real-UI 批次，可用
+  `--class=2proc-ui --real-ui-campaign=<name>`；完整目录可通过
+  `--list-real-ui-campaigns` 打印。当前 catalog 横跨
+  `accepted-friend-*`、`fresh-*` / `no-friend-*`、`*-then-decline`、`all-*`
+  四类 bucket；这些名称描述的是调度形态，不是 CI 级 live 覆盖承诺。
+- 若只是做底层诊断，仍可直调 `drive_real_ui_pair.dart`；统一 runner 只是把它纳入同一
+  manifest / 计划 / 过滤体系。
+- 不要把外部脚本绑死在某个固定的 real-UI 启动次数上。只要场景顺序和前置条件正确，
+  “更少 launch” 本身就是被鼓励的优化。
 - 第 9 步是兜底：用于任何更便宜的类都确实无法表达的流程（OS 对话框、
   真实媒体硬件、kill 后重启）。
 
@@ -110,7 +159,7 @@ SKIP-exit-2。
 | `harness-contract`（ci: true） | **是**，hermetic | `mcp_harness_smoke.yml`（`fixture_c_helpers_regression.sh`） |
 | `harness-contract`（ci: false） | 否（本地） | echo-peer 契约/漂移/回归脚本 |
 | `l3-gate`、`l3-gate-echo`、`l3-ui-single` | **否**（本地门禁） | `run_l3_scenarios.dart` 对接活跃应用 |
-| `2proc-l3`、`2proc-ui` | **否**（本地，macOS） | Fixture C 套件 + `drive_real_ui_pair.dart` |
+| `2proc-l3`、`2proc-ui` | **否**（本地，macOS） | `fixture_c_unified_runner.dart`（必要时直调 `drive_real_ui_pair.dart`） |
 | `manual-playbook` | 不适用（规格） | `test/mcp/S*.md` |
 
 此外，`mcp_harness_smoke.yml` 跑 hermetic 的 harness 校验步骤（经 runner 的

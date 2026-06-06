@@ -55,6 +55,7 @@ tool/vendor_state.json
 # Local agent / tooling state
 .claude/
 .cache/
+.worktrees/
 dist/
 
 # Canonical docs live in `doc/` (singular). Block accidental writes to the

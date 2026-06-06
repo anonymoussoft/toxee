@@ -107,20 +107,77 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
 
-# Install the tim2tox FFI shared library next to the Flutter runner so the
-# Dart FFI loader can find it via the executable directory at runtime.
-# We try several plausible build output locations because the tim2tox CMake
-# project may emit the DLL in different subdirectories depending on the
-# generator (single-config Ninja vs. multi-config Visual Studio).
+# Install the tim2tox FFI shared library (and its libsodium runtime dependency)
+# next to the Flutter runner so the Dart FFI loader can find them via the
+# executable directory at runtime. The native library can be produced by two
+# scripts that emit into different layouts:
+#   * tool/ci/build_tim2tox.sh — the canonical Windows path (CI + local Windows,
+#     since build_ffi.sh below is make-based and does not run on Windows). It
+#     drops a generator-independent copy in build/native-artifacts/windows/ and
+#     leaves the raw Visual Studio output under
+#     third_party/tim2tox/build/ci-windows/ffi/<config>/.
+#   * third_party/tim2tox/build_ffi.sh — the Unix-oriented dev convenience that
+#     build_all.sh invokes; emits build/ffi/.
+# Rather than hard-coding a priority (which risks a stale copy in one layout
+# shadowing a freshly-built copy in another — true in either order), we pick the
+# candidate with the NEWEST mtime, so whichever build ran most recently wins.
+# The native library MUST be built before `flutter build windows` (see
+# build_all.sh / CLAUDE.md), so a candidate is present at configure time in
+# normal flows; one that only appears after configure is intentionally not
+# picked up — re-run CMake (touch the build) in that case.
+set(_TIM2TOX_NATIVE_ARTIFACTS_DIR "${CMAKE_SOURCE_DIR}/../build/native-artifacts/windows")
 set(_TIM2TOX_FFI_DLL_CANDIDATES
+  "${_TIM2TOX_NATIVE_ARTIFACTS_DIR}/tim2tox_ffi.dll"
+  "${CMAKE_SOURCE_DIR}/../third_party/tim2tox/build/ci-windows/ffi/Release/tim2tox_ffi.dll"
+  "${CMAKE_SOURCE_DIR}/../third_party/tim2tox/build/ci-windows/ffi/Debug/tim2tox_ffi.dll"
   "${CMAKE_SOURCE_DIR}/../third_party/tim2tox/build/ffi/tim2tox_ffi.dll"
   "${CMAKE_SOURCE_DIR}/../third_party/tim2tox/build/ffi/Release/tim2tox_ffi.dll"
   "${CMAKE_SOURCE_DIR}/../third_party/tim2tox/build/ffi/Debug/tim2tox_ffi.dll"
   "${CMAKE_SOURCE_DIR}/../third_party/tim2tox/build/bin/tim2tox_ffi.dll"
 )
-foreach(_dll IN LISTS _TIM2TOX_FFI_DLL_CANDIDATES)
-  install(FILES "${_dll}"
-          DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-          COMPONENT Runtime
-          OPTIONAL)
-endforeach()
+# Install whichever of the listed candidates exists and has the newest mtime.
+# Timestamps are formatted YYYYMMDDHHMMSS so plain string compare == time order.
+function(toxee_install_newest_existing _label)
+  set(_best "")
+  set(_best_ts "0")
+  foreach(_f IN LISTS ARGN)
+    if(EXISTS "${_f}")
+      file(TIMESTAMP "${_f}" _ts "%Y%m%d%H%M%S")
+      if(_ts STRGREATER _best_ts)
+        set(_best_ts "${_ts}")
+        set(_best "${_f}")
+      endif()
+    endif()
+  endforeach()
+  if(_best)
+    install(FILES "${_best}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+    message(STATUS "toxee: bundling ${_label} from ${_best}")
+  endif()
+  set(toxee_install_newest_existing_result "${_best}" PARENT_SCOPE)
+endfunction()
+
+toxee_install_newest_existing("tim2tox_ffi.dll" ${_TIM2TOX_FFI_DLL_CANDIDATES})
+if(NOT toxee_install_newest_existing_result)
+  message(WARNING "toxee: tim2tox_ffi.dll not found in any known build output "
+    "location; the runner will be missing the Tox native library. Run "
+    "tool/ci/build_tim2tox.sh --target windows before `flutter build windows`.")
+endif()
+
+# tim2tox_ffi.dll dynamically links libsodium.dll, so the runner needs it next to
+# the executable or the FFI library fails to load at startup. Probe the libsodium
+# matching the target architecture (mirrors the triplet logic in
+# tool/ci/build_tim2tox.sh). Note: $ENV{VCPKG_ROOT} is captured at CMake
+# configure time — re-run CMake if it changes.
+if(CMAKE_GENERATOR_PLATFORM MATCHES "[Aa][Rr][Mm]64")
+  set(_TIM2TOX_VCPKG_TRIPLET "arm64-windows")
+else()
+  set(_TIM2TOX_VCPKG_TRIPLET "x64-windows")
+endif()
+set(_TIM2TOX_LIBSODIUM_DLL_CANDIDATES
+  "${_TIM2TOX_NATIVE_ARTIFACTS_DIR}/libsodium.dll"
+)
+if(DEFINED ENV{VCPKG_ROOT})
+  list(APPEND _TIM2TOX_LIBSODIUM_DLL_CANDIDATES
+    "$ENV{VCPKG_ROOT}/installed/${_TIM2TOX_VCPKG_TRIPLET}/bin/libsodium.dll")
+endif()
+toxee_install_newest_existing("libsodium.dll" ${_TIM2TOX_LIBSODIUM_DLL_CANDIDATES})

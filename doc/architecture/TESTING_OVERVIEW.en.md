@@ -22,10 +22,10 @@
 | 3 | Anchor/key source tests (L1) | `test/ui/testing/`, `test/ui/contact/`, … | 17 files (anchor/key/L3-debug) | `flutter test` | analyze.yml |
 | 4 | Host-bundle lifecycle (L2) | `integration_test/` | 6 Dart files (5 runnable `_test.dart` tagged `needs-native` + 1 harness) | per-file `flutter test -d <os>` | e2e.yml, opt-in `ci:e2e` |
 | 5 | L3 runner gates (data layer) | `tool/mcp_test/scenarios/*.json` | 46 (40 blocking, 6 nonBlocking) | `run_l3_scenarios.dart` against a live debug app | no (local) |
-| 6 | Two-process Fixture C drivers | `tool/mcp_test/drive_fixture_c_*.dart` + `.sh` | 27 Dart drivers / 28 shell wrappers | per-script | no (local); contracts via mcp_harness_smoke.yml |
-| 7 | Two-process real-UI driver | `tool/mcp_test/drive_real_ui_pair.dart` | 4 codified scenarios (handshake/handshake_detail/decline/message) | script + osascript | no (local, macOS) |
+| 6 | Two-process Fixture C / unified runner | `tool/mcp_test/fixture_c_unified_runner.dart`, `fixture_c_manifest.json`, `drive_fixture_c_*.dart` + legacy `.sh` | 1 unified runner / 27 Dart drivers / 28 legacy shell wrappers | `dart run tool/mcp_test/fixture_c_unified_runner.dart ...` (legacy shell entrypoints delegate to it) | no (local); contracts via mcp_harness_smoke.yml |
+| 7 | Two-process real-UI scenarios | `tool/mcp_test/drive_real_ui_pair.dart` (planned by the unified runner through the manifest) | 8 codified scenarios + a 38-entry reusable campaign catalog (handshake / handshake_detail / decline / message / message_burst / custom_message / call_voice / call_reject) | `fixture_c_unified_runner.dart --class=2proc-ui [--real-ui-scenario=<name> \| --real-ui-campaign=<name>]` or direct driver + osascript | no (local, macOS) |
 | 8 | Single-instance UI script driver | `tool/mcp_test/drive_export_account.dart` | 1 | script | no (local) |
-| 9 | Harness self-checks | `fixture_c_helpers_regression.sh`, `echo_peer_{contract_smoke,drift_check,helpers_regression}.sh` | 4 scripts | per-script | fixture-c one in mcp_harness_smoke.yml; echo ones local |
+| 9 | Harness self-checks | `fixture_c_helpers_regression.sh`, `fixture_c_unified_runner_regression.sh`, `echo_peer_{contract_smoke,drift_check,helpers_regression}.sh` | 5 scripts | per-script | `fixture_c_helpers_regression.sh` in mcp_harness_smoke.yml; the rest local |
 | 10 | L3 playbooks (specs) | `test/mcp/S*.md` | 118 (S1–S125, gaps) | agent-driven | n/a (specs) |
 | 11 | Protocol tiers (out of scope) | `third_party/tim2tox/auto_tests` | 14 phases | `run_tests_ordered.sh` | auto_tests*.yml tiers 1–4 |
 
@@ -63,8 +63,8 @@ hand-maintained in a central table.
 | `l3-gate` | single instance, live app, `l3_*` debug tools, no peer | 35 scenario JSONs |
 | `l3-gate-echo` | single instance + echo peer (live DHT) | 7 scenario JSONs (`requiresEchoPeer`) |
 | `l3-ui-single` | single instance, drives REAL widgets (marionette/skill taps or script) | 4 `l3_settings_*_tap` JSONs (nonBlocking) + `drive_export_account.dart` + S96–S125 campaign playbooks |
-| `2proc-l3` | two toxee processes, driven via `l3_*` tools | all `drive_fixture_c_*` (they use debug tools, not widget driving) |
-| `2proc-ui` | two toxee processes, REAL widgets + osascript | `drive_real_ui_pair.dart` only |
+| `2proc-l3` | two toxee processes, planned by the unified runner and driven via `l3_*` tools | all data-layer Fixture C manifest entries (legacy `run_fixture_c_*.sh` compatibility entrypoints ultimately delegate to the unified runner) |
+| `2proc-ui` | two toxee processes, REAL widgets + osascript | the manifest-backed `drive_real_ui_pair.dart` scenarios and named campaigns (participates in the same planning / dry-run system via the unified runner) |
 | `manual-playbook` | L3-pinned, agent-driven only (OS dialogs, media HW, kill+relaunch) | remaining `S*.md` |
 
 (35 + 7 + 4 = 46 scenario JSONs. Classes are derived from JSON flags, so
@@ -83,6 +83,48 @@ A test asset's class is **declared where the asset lives** (a JSON field, a
 script header, or a playbook header) and **aggregated by a generator**,
 never maintained by hand in a central table again.
 
+The two-process entrypoint is now unified under
+`dart run tool/mcp_test/fixture_c_unified_runner.dart`. It reads the same
+`fixture_c_manifest.json` for both `2proc-l3` and `2proc-ui`; the legacy shell
+entrypoints (for example `run_fixture_c_non_media.sh` and
+`run_fixture_c_suite.sh`) remain only as compatibility shims that normalize
+arguments and delegate to that Dart runner. As a result, `2proc-ui` is no
+longer NOTE-skipped at planning time: `--plan-json` / `--dry-run` expand the
+real-UI scenarios too, and the friendship-dependent `message` step can be
+planned as a chained follow-up after an accepted handshake instead of forcing a
+manual split into separate runs. `--plan-json` now also carries explicit
+`realUiScenarios` and `commands`, so "which real-UI scenarios can reuse the
+same launch" is a hermetic contract, not just a live observation.
+
+Within `2proc-ui`, the contract is "reuse when safe", not "one fresh launch per
+scenario". The default batch tries to keep already prepared account and contact
+state alive across compatible steps, because `message` and `call_voice` require
+an existing friendship. Today the default reusable batch runs as one stateful
+launch with internal friendship resets between incompatible friend-request
+branches; focused replays can either preserve that live chain or restore
+`paired_for_e2e` when a scenario needs an already-friended pair.
+Today the discoverable catalog has 38 built-in campaigns across four scheduler
+buckets:
+
+- `accepted-friend-*` keeps stacking chat and call steps after an accepted
+  friendship. Representative shape:
+  `accepted-friend-inline-full = handshake -> message -> message_burst -> call_voice -> call_reject`.
+- `fresh-*` / `no-friend-*` starts from a no-friend pair and can still stay on
+  one launch when the intermediate scenario self-cleans. Representative shape:
+  `no-friend-inline-call = custom_message -> handshake -> call_voice`.
+- `*-then-decline` crosses back into a no-friend branch and therefore exposes
+  explicit `reset_friendship` maintenance when reuse is cheaper than a
+  relaunch. Representative shape:
+  `inline-call-then-decline = handshake -> call_voice -> reset_friendship -> decline`.
+- `all-*` smoke bundles stitch together representative branches for
+  end-to-end scheduling coverage. Representative shape:
+  `all-expanded = handshake -> message -> message_burst -> call_voice -> call_reject -> reset_friendship -> custom_message -> handshake_detail -> reset_friendship -> decline`.
+
+Use `--list-real-ui-campaigns` for the exact current catalog and names. Those
+bucket names describe planner / dry-run scheduling semantics; they are not a
+claim that every branch is already live-verified. Live confidence is still a
+local dogfood gate, not a CI-grade promise.
+
 ## 3. Recommended campaign order (cheap → expensive)
 
 Run the suites in this order; each step is strictly cheaper and faster than
@@ -97,9 +139,9 @@ the partitions you did not select.
 | 3 | L3 hermetic suite | `l3-gate` | `dart run tool/mcp_test/run_l3_scenarios.dart <ws_uri> --class=l3-gate` |
 | 4 | L3 echo suite | `l3-gate-echo` | `dart run tool/mcp_test/run_l3_scenarios.dart <ws_uri> --class=l3-gate-echo --echo` |
 | 5 | UI-tap suite (nonBlocking) | `l3-ui-single` | `dart run tool/mcp_test/run_l3_scenarios.dart <ws_uri> --class=l3-ui-single --allow-skip` |
-| 6 | Fixture C non-media | `2proc-l3` | `bash tool/mcp_test/run_fixture_c_suite.sh --tier=non-media` |
-| 7 | Fixture C media | `2proc-l3` | `bash tool/mcp_test/run_fixture_c_suite.sh --tier=media` |
-| 8 | Two-process real-UI pair | `2proc-ui` | `dart run tool/mcp_test/drive_real_ui_pair.dart` (+ osascript; macOS) |
+| 6 | Unified Fixture C non-media campaign | `2proc-l3` + `2proc-ui` | `dart run tool/mcp_test/fixture_c_unified_runner.dart --tier=non-media` |
+| 7 | Unified Fixture C media campaign | `2proc-l3` | `dart run tool/mcp_test/fixture_c_unified_runner.dart --tier=media` |
+| 8 | Focused two-process real-UI replay (scenario/campaign selectable) | `2proc-ui` | `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui [--real-ui-scenario=<name> \| --real-ui-campaign=<name>]` |
 | 9 | Manual playbooks | `manual-playbook` | agent-driven, only for what nothing above expresses (`test/mcp/S*.md`) |
 
 Notes:
@@ -109,6 +151,26 @@ Notes:
   MCP/L3 playbook documents the no-DDS launcher and how to read the URI.
 - Steps 3–8 require a **running** desktop debug build; they are not
   hermetic. Steps 1–2 are.
+- Compatibility entrypoints still exist: `run_fixture_c_non_media.sh`,
+  `run_fixture_c_suite.sh`, and similar legacy shell entrypoints now only do
+  argument translation / delegation and no longer own separate planning logic.
+- `fixture_c_unified_runner.dart --plan-json` / `--dry-run` now include
+  `2proc-ui`. If you want only one real-UI scenario, use
+  `--class=2proc-ui --real-ui-scenario=handshake|message|message_burst|handshake_detail|decline|custom_message|call_voice|call_reject`;
+  the planner will still satisfy `message` / `call_voice`'s friendship
+  precondition by chaining or restore instead of assuming a bare fresh pair.
+- If you want a named merged batch instead of spelling out the scenarios, use
+  `--class=2proc-ui --real-ui-campaign=<name>` and discover the current
+  catalog with `--list-real-ui-campaigns`. Today that catalog spans
+  `accepted-friend-*`, `fresh-*` / `no-friend-*`, `*-then-decline`, and
+  `all-*` buckets; those names describe scheduler shapes, not CI-grade live
+  coverage.
+- For low-level diagnostics you can still call `drive_real_ui_pair.dart`
+  directly; the unified runner simply places it inside the shared manifest /
+  planning / filtering system.
+- Do not key external tooling off an exact real-UI launch count. Fewer launches
+  are an intended optimization as long as scenario ordering and preconditions
+  stay valid.
 - Step 9 is the catch-all for flows that genuinely cannot be expressed by
   any cheaper class (OS dialogs, real media hardware, kill-and-relaunch).
 
@@ -121,7 +183,7 @@ Notes:
 | `harness-contract` (ci: true) | **Yes**, hermetic | `mcp_harness_smoke.yml` (`fixture_c_helpers_regression.sh`) |
 | `harness-contract` (ci: false) | No (local) | echo-peer contract/drift/regression scripts |
 | `l3-gate`, `l3-gate-echo`, `l3-ui-single` | **No** (local gate) | `run_l3_scenarios.dart` against a live app |
-| `2proc-l3`, `2proc-ui` | **No** (local, macOS) | Fixture C suite + `drive_real_ui_pair.dart` |
+| `2proc-l3`, `2proc-ui` | **No** (local, macOS) | `fixture_c_unified_runner.dart` (direct `drive_real_ui_pair.dart` still available when needed) |
 | `manual-playbook` | n/a (specs) | `test/mcp/S*.md` |
 
 Additionally, `mcp_harness_smoke.yml` runs the hermetic harness-validation

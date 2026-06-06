@@ -4,12 +4,13 @@
 # Fixture C non-media entry point.
 #
 # This script now has TWO roles (plan section 3.4 made it a thin alias for the
-# tiered suite runner, but its original single-gate leaf behavior is preserved
-# so the S61/S62 contract is never lost):
+# unified runner, but its original single-gate leaf behavior is preserved so
+# the S61/S62 contract is never lost):
 #
 #   1. THIN ALIAS (default / no positional arg): delegate to
-#      run_fixture_c_suite.sh --tier=non-media, i.e. run ALL non-media Fixture C
-#      gates in manifest order. --include-destructive is passed through.
+#      fixture_c_unified_runner.dart --tier=non-media, i.e. run ALL non-media
+#      Fixture C gates in manifest order. Planning flags such as --dry-run /
+#      --list / --plan-json / --validate-only are passed through.
 #
 #   2. LEAF GATE (legacy modes, unchanged): run only the S61/S62 pair handshake
 #      + message-delivery gate via drive_fixture_c_pair.dart.
@@ -25,16 +26,22 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MCP_DIR="$REPO_ROOT/tool/mcp_test"
+RUNNER_REL="tool/mcp_test/fixture_c_unified_runner.dart"
+RUNNER_PATH="$REPO_ROOT/$RUNNER_REL"
 PAIR_JSON="$MCP_DIR/.multi_instance_runtime/pair.json"
 PAIR_MANIFEST="$MCP_DIR/fixtures/paired_for_e2e_manifest.json"
 
 usage() {
     cat <<EOF
-usage: run_fixture_c_non_media.sh [fresh|paired_for_e2e] [--include-destructive]
+usage: run_fixture_c_non_media.sh [runner flags] | [fresh|paired_for_e2e]
 
 Two roles:
-  (no arg)                THIN ALIAS -> run_fixture_c_suite.sh --tier=non-media
+  (flags only / no mode)  THIN ALIAS -> $RUNNER_REL --tier=non-media
                           (runs ALL non-media Fixture C gates in manifest order)
+  --dry-run               alias mode, print the planned commands only
+  --list                  alias mode, list resolved non-media entries
+  --plan-json             alias mode, emit grouped plan JSON
+  --validate-only         alias mode, validate planning inputs without running
   --include-destructive   alias mode, also run destructive gates (kick)
   fresh                   LEAF: fresh A/B registration, request/accept, ping/pong
   paired_for_e2e          LEAF: restore paired_for_e2e A/B, boot existing, ping/pong
@@ -45,40 +52,52 @@ Environment (LEAF modes):
 EOF
 }
 
+leaf_mode=""
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help|help)
+            usage
+            exit 0
+            ;;
+        fresh|paired_for_e2e|paired|restored)
+            leaf_mode="$arg"
+            break
+            ;;
+        --*)
+            ;;
+        *)
+            echo "run_fixture_c_non_media.sh: unknown mode: $arg" >&2
+            usage >&2
+            exit 64
+            ;;
+    esac
+done
+
 # --- Role dispatch -----------------------------------------------------------
-# No positional mode (or only flags) => thin alias for the tiered suite runner.
-arg1="${1:-}"
-case "$arg1" in
-    ""|--tier=*|--include-destructive)
-        # Forward args; force --tier=non-media if none was given. A script named
-        # "non_media" must not silently run other tiers (codex final review P3):
-        # reject any explicit tier that isn't non-media — use
-        # run_fixture_c_suite.sh directly for media/all.
-        # `${arr[@]:+...}` guards empty-array-under-set-u (bash 3.2 footgun) — the
-        # common no-arg invocation makes suite_args empty before the default tier
-        # is prepended.
-        suite_args=()
-        have_tier=0
-        for a in "$@"; do
-            if [[ "$a" == --tier=* && "$a" != --tier=non-media ]]; then
-                echo "run_fixture_c_non_media.sh: refusing '$a' — this alias only runs --tier=non-media." >&2
-                echo "Use tool/mcp_test/run_fixture_c_suite.sh --tier=<media|all> directly." >&2
-                exit 64
-            fi
-            [[ "$a" == --tier=* ]] && have_tier=1
-            suite_args+=("$a")
-        done
-        [[ "$have_tier" -eq 1 ]] || suite_args=(--tier=non-media ${suite_args[@]:+"${suite_args[@]}"})
-        exec "$MCP_DIR/run_fixture_c_suite.sh" ${suite_args[@]:+"${suite_args[@]}"}
-        ;;
-    -h|--help|help)
-        usage
-        exit 0
-        ;;
-esac
+# No leaf mode => thin alias for the unified runner, pinned to non-media only.
+if [[ -z "$leaf_mode" ]]; then
+    runner_args=()
+    have_tier=0
+    for a in "$@"; do
+        if [[ "$a" == --tier=* && "$a" != --tier=non-media ]]; then
+            echo "run_fixture_c_non_media.sh: refusing '$a' — this alias only runs --tier=non-media." >&2
+            echo "Use tool/mcp_test/run_fixture_c_suite.sh --tier=<media|all> directly." >&2
+            exit 64
+        fi
+        [[ "$a" == --tier=* ]] && have_tier=1
+        runner_args+=("$a")
+    done
+    if [[ ! -f "$RUNNER_PATH" ]]; then
+        echo "run_fixture_c_non_media.sh: unified runner not found: $RUNNER_PATH" >&2
+        exit 70
+    fi
+    [[ "$have_tier" -eq 1 ]] || runner_args=(--tier=non-media ${runner_args[@]:+"${runner_args[@]}"})
+    cd "$REPO_ROOT"
+    exec dart run "$RUNNER_REL" ${runner_args[@]:+"${runner_args[@]}"}
+fi
 
 # --- Legacy LEAF behavior (S61/S62 pair gate) --------------------------------
-mode="$arg1"
+mode="$leaf_mode"
 case "$mode" in
     paired|restored)
         mode="paired_for_e2e"

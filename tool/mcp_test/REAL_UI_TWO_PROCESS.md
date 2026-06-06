@@ -18,7 +18,79 @@ hangs at startup) is needed:
 - `ext.mcp.toolkit.l3_*` — data-layer assertions/setup (dump_state, etc.).
 
 `tool/mcp_test/_scratch/skill_call.dart <ws> <ext.method> '<json>'` is the
-one-shot probe; `tool/mcp_test/drive_real_ui_pair.dart` is the reusable driver.
+one-shot probe; `tool/mcp_test/drive_real_ui_pair.dart` is the low-level
+reusable driver that the unified runner calls for each `2proc-ui` scenario.
+
+## Preferred entrypoint (unified runner)
+
+Real-UI two-process scenarios now enter the same `fixture_c_manifest.json` and
+planning system as the rest of Fixture C via
+`tool/mcp_test/fixture_c_unified_runner.dart`.
+
+Typical commands:
+
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui --real-ui-scenario=handshake`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui --real-ui-campaign=accepted-friend-detail`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui --real-ui-campaign=accepted-friend-inline-call`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui --real-ui-campaign=accepted-friend-inline-burst`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui --real-ui-campaign=accepted-friend-inline-call-reject`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --class=2proc-ui --real-ui-scenario=custom_message`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --list-real-ui-campaigns`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --plan-json --class=2proc-ui`
+- `dart run tool/mcp_test/fixture_c_unified_runner.dart --dry-run --class=2proc-ui`
+
+Behavior to know:
+
+- `2proc-ui` is no longer skipped at planning time; it is planned from the same
+  manifest/groups as `2proc-l3`.
+- `--real-ui-scenario=...` narrows to one real-UI scenario (`handshake`,
+  `message`, `message_burst`, `handshake_detail`, `decline`,
+  `custom_message`, `call_voice`, `call_reject`)
+  without leaving the unified planner.
+- `--plan-json` now records both the selected `realUiScenarios` list and the
+  concrete `commands` sequence, so the reusable batch semantics are hermetically
+  regression-checkable without launching Toxee.
+- The default `--class=2proc-ui` batch is intentionally stateful, not "4 fixed
+  isolated launches": the runner tries to reuse already prepared account /
+  contact state whenever the next scenario's preconditions are already
+  satisfied.
+- In the currently codified 4-scenario batch, that means one fresh launch for
+  `handshake -> message -> reset_friendship -> handshake_detail -> reset_friendship -> decline`.
+- `message` and `call_voice` are the key preconditioned steps: they need an
+  existing friendship, so the planner either chains them immediately after an
+  accepted handshake (`handshake` / `handshake_detail`) or restores
+  `paired_for_e2e` for a focused replay.
+- `--real-ui-campaign=...` expands named merged batches of compatible
+  scenarios. Today there are 38 built-in campaigns spanning four buckets:
+  accepted-friend reusable stacks, fresh/no-friend request flows,
+  reset-backed "then-decline" transitions, and `all-*` smoke bundles.
+- The currently codified reusable batches are:
+  `accepted-friend-inline = handshake -> message`,
+  `accepted-friend-detail = handshake_detail -> message`,
+  `accepted-friend-inline-burst = handshake -> message_burst`,
+  `accepted-friend-detail-burst = handshake_detail -> message_burst`,
+  `accepted-friend-inline-call = handshake -> message -> call_voice`,
+  `accepted-friend-detail-call = handshake_detail -> message -> call_voice`,
+  `accepted-friend-inline-call-reject = handshake -> call_reject`,
+  `accepted-friend-detail-call-reject = handshake_detail -> call_reject`,
+  `fresh-no-friend = decline`,
+  `fresh-custom-message = custom_message`,
+  `accepted-friend-inline-full = handshake -> message -> message_burst -> call_voice -> call_reject`,
+  `no-friend-inline-call = custom_message -> handshake -> call_voice`,
+  `inline-call-then-decline = handshake -> call_voice -> reset_friendship -> decline`,
+  `all-current = handshake -> message -> reset_friendship -> handshake_detail -> reset_friendship -> decline`,
+  `all-expanded = handshake -> message -> message_burst -> call_voice -> call_reject -> reset_friendship -> custom_message -> handshake_detail -> reset_friendship -> decline`.
+- Use `--list-real-ui-campaigns` to print the full current catalog. Treat that
+  list as the source of truth for exact campaign names; this document only
+  calls out the representative shapes above.
+- Treat the exact number of launches as an optimization detail, not an API.
+  What is stable is the state contract: the runner may insert friendship-reset
+  maintenance steps when that is cheaper than relaunching the pair.
+- The legacy Fixture C shell entrypoints stay as compatibility shims and
+  delegate into the unified runner. Real-UI still has no dedicated `.sh`
+  wrapper because it needs two manually launched live instances plus a
+  foreground-able macOS session.
 
 ## Hard-won harness facts (the "problems found" + how solved)
 
@@ -55,7 +127,10 @@ one-shot probe; `tool/mcp_test/drive_real_ui_pair.dart` is the reusable driver.
    it; tapping the **"New Contacts"** label works. *(Fork fix candidate: move the
    key onto the tappable row; needs a rebuild — driver uses the text fallback.)*
 
-## Driver
+## Direct driver (low-level / debugging)
+
+Use the direct driver when you already have `ws/pid/nick` tuples or want to
+debug one phase below the unified planner.
 
 `dart run tool/mcp_test/drive_real_ui_pair.dart <scenario> <wsA> <pidA> <nickA> <wsB> <pidB> <nickB>`
 
@@ -63,25 +138,72 @@ Scenarios implemented: `handshake` (S61+S26, A accepts via the INLINE row
 button), `handshake_detail` (S108, A accepts via the pushed application-DETAIL
 screen — `contact_application_detail_accept_button`, the distinct UI entry S26
 does not exercise), `decline` (S27), `message` (S62/S64, `RUITEST_STAMP=<n>` for
-a stable nonce). Reusable primitives:
+a stable nonce), `message_burst` (S64 alternating burst on an already-friended
+pair), `custom_message` (S54, verifies the add-wording round-trip then
+self-cleans back to no-friend), `call_voice` (S65/S67/S76 happy path:
+invite -> accept -> hangup), `call_reject` (S68 reject path), plus the
+runner-internal `reset_friendship` maintenance step. Reusable primitives:
 `foreground`, `tapKey`/`tryTapKey`/`tapText`/`focusType`/`tapAt`,
 `osaType`/`osaReturn`/`osaClear`, `waitKey`/`waitText`/`waitState`,
 `openChat`, `sendComposerMessage`, `dumpState`, `shot`.
 
-## Validated (real UI, two process)
+When invoked directly, `message` still assumes the pair is already friends; the
+unified runner handles that dependency by planning it after an accepted
+handshake when possible, or by restoring `paired_for_e2e` when `message` is
+selected on its own.
+
+## Codified today vs live-verified today
+
+The shared planner/driver contract now codifies eight real-UI scenarios plus a
+38-entry reusable campaign catalog:
+
+- `handshake`
+- `message`
+- `message_burst`
+- `handshake_detail`
+- `decline`
+- `custom_message`
+- `call_voice`
+- `call_reject`
+
+Representative catalog buckets:
+
+- `accepted-friend-*`: one-launch chat/call stacks after an accepted
+  friendship, for example `accepted-friend-inline-full`.
+- `fresh-*` / `no-friend-*`: request/no-friend flows that stay schedulable on
+  one launch, for example `fresh-custom-message` and `no-friend-inline-call`.
+- `*-then-decline`: mixed-state chains where the planner inserts
+  `reset_friendship` maintenance instead of forcing a relaunch, for example
+  `inline-call-then-decline`.
+- `all-*`: end-to-end smoke bundles such as `all-current` and `all-expanded`.
+
+That "codified" claim is about manifest/planner/dry-run semantics and the
+discoverable scheduler catalog. It does **not** mean all 38 campaign branches
+have already been repeatedly dogfooded live. Today the continued live
+confidence is:
+
+- `handshake` and `message`: live-driven and verified below.
+- `call_voice`: live-driven in continued execution below, but still a local
+  dogfood result rather than a CI-grade gate.
+- `message_burst`, `call_reject`, `handshake_detail`, `decline`, and
+  `custom_message`: scheduler/driver support is in place and hermetic
+  regression covers the planning contract, but continued live dogfood is still
+  in progress before treating them as stable gates.
+
+## Live-verified so far (real UI, two process)
 
 | Spec | What was driven (real UI) | Result |
 |---|---|---|
 | **S26 / S61** accept / handshake | B: Add-Friend dialog (`new_entry_menu_button` → `new_entry_add_contact_item` → `add_friend_id_input` → `add_friend_submit_button`); A: New Contacts → **Accept** | **PASS** — friendship both directions, application consumed |
 | **S62 / S64** message delivery | real composer + real Return, A↔B | **PASS** — bidirectional, rendered bubbles on both sides |
+| **S65 / S67 / S76** voice call happy path | real chat header voice button + real incoming-call accept + real hangup | **Observed PASS** — see continued execution notes below; still local dogfood, not CI-gated |
 
 ## Filtered set still to codify (same primitives)
 
-Friend: S27 decline (fresh pair), S54 custom-msg request, S46 auto-accept. ·
-Messaging: S64 concurrent (burst), S21/S88 file/image (attach button), S78 voice.
-· Group: S33 join, S34 message, S37 kick, S81 invite, S47 auto-accept. · Calls:
-S65/S66 initiate, S67/S68 accept/decline, S74/S75/S76 mute/camera/hangup. ·
-Conversation: S83 mute, S52 profile, S63 receipt/typing.
+Friend: S46 auto-accept. · Messaging: S64 concurrent (burst), S21/S88
+file/image (attach button), S78 voice. · Group: S33 join, S34 message, S37
+kick, S81 invite, S47 auto-accept. · Calls: S66 initiate video, S68 decline,
+S74/S75 mute/camera. · Conversation: S83 mute, S52 profile, S63 receipt/typing.
 
 Each reuses `foreground` + `flutter_skill` taps + (for sends) the osascript
 composer/Return recipe.
