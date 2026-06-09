@@ -12,7 +12,6 @@ import '../util/prefs.dart';
 import '../i18n/app_localizations.dart';
 import '../util/feature_flags.dart';
 import '../util/responsive_layout.dart';
-import '../util/app_theme_config.dart';
 import '../util/logger.dart';
 import '../util/account_service.dart';
 import '../util/app_bootstrap_coordinator.dart';
@@ -21,6 +20,7 @@ import 'home_page.dart';
 import 'widgets/app_page_route.dart';
 import 'widgets/error_banner.dart';
 import 'widgets/first_run_backup_wizard.dart';
+import 'widgets/register_password_strength_bar.dart';
 import 'testing/ui_keys.dart';
 
 /// Standalone page for registering a new account (opened from login page).
@@ -239,56 +239,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  int _passwordStrength(String password) {
-    if (password.isEmpty) return 0;
-    if (password.length < 6) return 1;
-    int score = 2;
-    if (password.length >= 8 && (RegExp(r'[A-Z]').hasMatch(password) || RegExp(r'\d').hasMatch(password))) score = 3;
-    if (password.length >= 8 && RegExp(r'[A-Z]').hasMatch(password) && RegExp(r'\d').hasMatch(password) && RegExp(r'[!@#$%^&*]').hasMatch(password)) score = 4;
-    return score;
-  }
-
-  Widget _buildPasswordStrengthBar(BuildContext context) {
-    final strength = _passwordStrength(_passwordController.text);
-    final cs = Theme.of(context).colorScheme;
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    // Decorative semantic ramp: weak → strong. The two middle segments are
-    // status colors (amber-500 / amber-300 from the design system) and are
-    // intentionally kept hex — they live alongside cs.error and cs.primary
-    // as a visual gradient, not a themed brand surface.
-    final colors = [
-      cs.error,
-      AppThemeConfig.statusAwayColor, // amber-500
-      const Color(0xFFFCD34D),         // amber-300 (lighter than statusAway)
-      cs.primary,
-    ];
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.xs, bottom: AppSpacing.sm),
-      // Stable test key for the password-strength bar (real-UI gate reads its
-      // per-segment fill state to assert weak→strong ramping).
-      key: const Key('register_password_strength_bar'),
-      child: Row(
-        children: List.generate(4, (i) => Expanded(
-          child: AnimatedContainer(
-            // Per-segment stable key: `register_strength_segment_<i>`. A segment
-            // is "filled" when its BoxDecoration.color == colors[i] (i < strength)
-            // and "empty" (outline @ alpha 0.2) otherwise. Tests count filled
-            // segments to verify the 0→4 strength ramp.
-            key: Key('register_strength_segment_$i'),
-            duration: reduceMotion ? Duration.zero : AppDurations.medium,
-            curve: AppCurves.standard,
-            height: 4,
-            margin: EdgeInsets.only(right: i < 3 ? AppSpacing.xs : 0),
-            decoration: BoxDecoration(
-              color: i < strength ? colors[i] : cs.outline.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        )),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return TencentCloudChatThemeWidget(
@@ -401,7 +351,9 @@ class _RegisterPageState extends State<RegisterPage> {
                       if (mounted) setState(() {});
                     },
                   ),
-                  _buildPasswordStrengthBar(context),
+                  RegisterPasswordStrengthBar(
+                    password: _passwordController.text,
+                  ),
                   AppSpacing.verticalLg,
                   TextFormField(
                     key: UiKeys.registerPageConfirmPasswordField,

@@ -6,7 +6,8 @@
 // segments as the password strengthens, then asserts the visibility toggle
 // flips `obscureText` on the live EditableText.
 //
-// Strength model (register_page.dart `_passwordStrength`):
+// Strength model (RegisterPasswordStrengthBar.strengthOf, extracted from
+// register_page.dart into lib/ui/widgets/register_password_strength_bar.dart):
 //   ""             -> 0   (empty)
 //   < 6 chars      -> 1
 //   >= 6 chars     -> 2   (base)
