@@ -49,3 +49,8 @@ lib/util/prefs.dart
 lib/ui/settings/settings_page_build.dart
 lib/ui/testing/l3_debug_tools.dart
 lib/util/placeholder_account_migration.dart
+# Appended 2026-06-09 (real-UI scenario gating campaign):
+# - register_page.dart: grew 500→501 with the registerAccount injectable test
+#   seam (RegisterPage.registerAccount) used by the register real-UI L1 gates;
+#   re-split with the next register/login refactor, not as commit churn.
+lib/ui/register_page.dart
