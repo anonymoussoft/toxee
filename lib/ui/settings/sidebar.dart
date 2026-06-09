@@ -1,4 +1,7 @@
 import 'dart:async';
+
+// ignore: directives_ordering
+import '../widgets/safe_dialog_pop.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../util/app_spacing.dart';
@@ -180,7 +183,7 @@ Future<void> showSelfProfile(
                       icon: const Icon(Icons.close),
                       tooltip:
                           AppLocalizations.of(dialogContext)?.close ?? 'Close',
-                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      onPressed: () => popDialogIfCurrent(dialogContext),
                     ),
                   ),
                 ],

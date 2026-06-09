@@ -1,5 +1,8 @@
 // Wrapper to refresh member list before opening the member list page
 import 'package:flutter/material.dart';
+
+// ignore: directives_ordering
+import '../widgets/safe_dialog_pop.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat_common.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_group_member_list.dart';
@@ -182,7 +185,7 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
               // EdgeInsetsDirectional so the back-button gutter flips for RTL.
               padding: EdgeInsetsDirectional.only(start: ResponsiveLayout.responsiveHorizontalPadding(context)),
               child: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => popDialogIfCurrent(context),
                 icon: const Icon(Icons.arrow_back_ios_rounded),
                 color: colorTheme.primaryColor,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
@@ -208,7 +211,7 @@ class GroupMemberListWrapperState extends TencentCloudChatState<GroupMemberListW
             leading: Padding(
               padding: EdgeInsetsDirectional.only(start: ResponsiveLayout.responsiveHorizontalPadding(context)),
               child: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => popDialogIfCurrent(context),
                 icon: const Icon(Icons.arrow_back_ios_rounded),
                 color: colorTheme.primaryColor,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,

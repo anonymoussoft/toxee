@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+
+import '../widgets/safe_dialog_pop.dart';
 import '../../util/app_spacing.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tencent_cloud_chat_common/data/theme/color/color_base.dart';
@@ -217,11 +219,11 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
         content: Text(appL10n.uninstallIrcAppConfirm),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => popDialogIfCurrent(context, false),
             child: Text(appL10n.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => popDialogIfCurrent(context, true),
             child: Text(appL10n.uninstall),
           ),
         ],
@@ -350,11 +352,11 @@ class _ApplicationsPageState extends State<ApplicationsPage> {
         content: Text(appL10n.removeIrcChannelConfirm(channel)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => popDialogIfCurrent(context, false),
             child: Text(appL10n.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => popDialogIfCurrent(context, true),
             child: Text(appL10n.remove),
           ),
         ],

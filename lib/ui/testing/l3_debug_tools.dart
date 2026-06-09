@@ -94,8 +94,42 @@ typedef L3AutoAcceptApplier = Future<void> Function(String key, bool value);
 L3AutoAcceptApplier? _l3AutoAcceptApplier;
 typedef L3HomeShellApplier = Future<void> Function(String tab);
 L3HomeShellApplier? _l3HomeShellApplier;
+typedef L3OpenAddFriendDialogInvoker = Future<bool> Function();
+L3OpenAddFriendDialogInvoker? _l3OpenAddFriendDialogInvoker;
+typedef L3OpenAddGroupDialogInvoker = Future<bool> Function();
+L3OpenAddGroupDialogInvoker? _l3OpenAddGroupDialogInvoker;
+typedef L3OpenGroupAddMemberInvoker = Future<bool> Function(String groupId);
+L3OpenGroupAddMemberInvoker? _l3OpenGroupAddMemberInvoker;
+typedef L3OpenConversationMenuInvoker =
+    Future<bool> Function(String conversationId, {String? action});
+L3OpenConversationMenuInvoker? _l3OpenConversationMenuInvoker;
 typedef L3HomeShellSnapshotReader = Map<String, dynamic> Function();
 L3HomeShellSnapshotReader? _l3HomeShellSnapshotReader;
+
+/// Project the message provider's in-flight RECEIVE file-progress map
+/// (`FakeMessageProvider.fileProgress`, msgID → byte counts) into the
+/// `l3_dump_state.fileTransfers` shape: msgID → {received, total, percent, path}.
+/// `percent` is `floor(received/total*100)` (0 when total<=0). Extracted as a
+/// pure function so the percent math + projection shape are L1-testable (S94)
+/// without the live recv-event timing or the MCP harness. NOTE: this projects
+/// whatever is in the map — the "entry vanishes at 100%" behaviour is the LIVE
+/// `file_done` clear (fake_msg_provider_routing.dart), not this function.
+@visibleForTesting
+Map<String, Map<String, Object?>> projectFileTransfers(
+  Map<String, ({int received, int total, String? path})> fileProgress,
+) {
+  return {
+    for (final e in fileProgress.entries)
+      e.key: {
+        'received': e.value.received,
+        'total': e.value.total,
+        'percent': e.value.total > 0
+            ? (e.value.received * 100 / e.value.total).floor()
+            : 0,
+        'path': e.value.path,
+      },
+  };
+}
 
 /// Register (or clear, with null) the live auto-accept applier. No-op unless the
 /// L3 test surface is enabled.
@@ -105,6 +139,22 @@ void registerL3AutoAcceptApplier(L3AutoAcceptApplier? fn) {
 
 void registerL3HomeShellApplier(L3HomeShellApplier? fn) {
   if (kL3TestSurfaceEnabled) _l3HomeShellApplier = fn;
+}
+
+void registerL3OpenAddFriendDialogInvoker(L3OpenAddFriendDialogInvoker? fn) {
+  if (kL3TestSurfaceEnabled) _l3OpenAddFriendDialogInvoker = fn;
+}
+
+void registerL3OpenAddGroupDialogInvoker(L3OpenAddGroupDialogInvoker? fn) {
+  if (kL3TestSurfaceEnabled) _l3OpenAddGroupDialogInvoker = fn;
+}
+
+void registerL3OpenGroupAddMemberInvoker(L3OpenGroupAddMemberInvoker? fn) {
+  if (kL3TestSurfaceEnabled) _l3OpenGroupAddMemberInvoker = fn;
+}
+
+void registerL3OpenConversationMenuInvoker(L3OpenConversationMenuInvoker? fn) {
+  if (kL3TestSurfaceEnabled) _l3OpenConversationMenuInvoker = fn;
 }
 
 void registerL3HomeShellSnapshotReader(L3HomeShellSnapshotReader? fn) {
@@ -206,8 +256,9 @@ void registerL3DebugToolsIfEnabled() {
     'l3_start_call, l3_call_action, '
     'l3_clear_history, l3_clear_active_conversation, '
     'l3_force_home_root, '
+    'l3_open_add_friend_dialog, '
     'l3_invoke_message_action, l3_mark_read, '
-    'l3_accept_friend_request, l3_refuse_friend_request, '
+    'l3_accept_friend_request, l3_refuse_friend_request, l3_delete_friend, '
     'l3_set_friend_remark, l3_set_blocked, '
     'l3_set_export_save_path, '
     'l3_reply_text, l3_forward_message, '
@@ -232,10 +283,15 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3ClearHistoryEntry());
   addMcpTool(_l3ClearActiveConversationEntry());
   addMcpTool(_l3ForceHomeRootEntry());
+  addMcpTool(_l3OpenAddFriendDialogEntry());
+  addMcpTool(_l3OpenAddGroupDialogEntry());
+  addMcpTool(_l3OpenGroupAddMemberEntry());
+  addMcpTool(_l3OpenConversationMenuEntry());
   addMcpTool(_l3InvokeMessageActionEntry());
   addMcpTool(_l3MarkReadEntry());
   addMcpTool(_l3AcceptFriendRequestEntry());
   addMcpTool(_l3RefuseFriendRequestEntry());
+  addMcpTool(_l3DeleteFriendEntry());
   addMcpTool(_l3SetFriendRemarkEntry());
   addMcpTool(_l3SetBlockedEntry());
   addMcpTool(_l3SetExportSavePathEntry());
@@ -260,6 +316,17 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3DhtInfoEntry());
   addMcpTool(_l3AddBootstrapNodeEntry());
   addMcpTool(_l3ContactSearchEntry());
+  // UNGATED group-campaign plumbing hooks (work on fresh/non-test accounts).
+  // These mirror the test-gated set_setting(autoAcceptGroupInvites) /
+  // group_member_list / leave_group operations the real-UI two-process
+  // group_message campaign needs on freshly-registered accounts, where the
+  // gated variants refuse. They are pure harness ops (no user-visible flow),
+  // like l3_open_add_group_dialog / dump_state.
+  addMcpTool(_l3SetAutoAcceptGroupInvitesEntry());
+  addMcpTool(_l3GroupMemberCountEntry());
+  addMcpTool(_l3LeaveGroupUncheckedEntry());
+  addMcpTool(_l3ClearGroupHistoryEntry());
+  addMcpTool(_l3SetActiveConversationEntry());
 }
 
 /// Exact fixture identities the mutating/destructive tools are allowed to
@@ -1499,6 +1566,226 @@ MCPCallEntry _l3ForceHomeRootEntry() => MCPCallEntry.tool(
   ),
 );
 
+MCPCallEntry _l3OpenAddFriendDialogEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_open_add_friend_dialog: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    final invoker = _l3OpenAddFriendDialogInvoker;
+    if (invoker == null) {
+      return MCPCallResult(
+        message: 'l3_open_add_friend_dialog: invoker not registered',
+        parameters: {'ok': false, 'error': 'invoker_not_registered'},
+      );
+    }
+    final opened = await invoker();
+    return MCPCallResult(
+      message: opened ? 'add friend dialog opened' : 'add friend dialog unavailable',
+      parameters: {'ok': opened},
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_open_add_friend_dialog',
+    description:
+        'Open the real AddFriendDialog from the current HomePage session '
+        'without relying on the Contacts app-bar entry point. Intended only '
+        'as a navigation-stability harness hook; the dialog itself is still '
+        'filled and submitted through real UI.',
+    inputSchema: ObjectSchema(properties: {}),
+  ),
+);
+
+/// Open the real AddGroupDialog (NOT test-account gated — like
+/// l3_open_add_friend_dialog, this is a navigation-stability hook only; the
+/// dialog itself is filled + submitted through real UI). Lets a fresh non-test
+/// account (the handshake→group_message campaigns) create a group through the
+/// REAL create UI instead of the gated l3_create_group.
+MCPCallEntry _l3OpenAddGroupDialogEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_open_add_group_dialog: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    final invoker = _l3OpenAddGroupDialogInvoker;
+    if (invoker == null) {
+      return MCPCallResult(
+        message: 'l3_open_add_group_dialog: invoker not registered',
+        parameters: {'ok': false, 'error': 'invoker_not_registered'},
+      );
+    }
+    final opened = await invoker();
+    return MCPCallResult(
+      message: opened ? 'add group dialog opened' : 'add group dialog unavailable',
+      parameters: {'ok': opened},
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_open_add_group_dialog',
+    description:
+        'Open the real AddGroupDialog from the current HomePage session. '
+        'Navigation-stability harness hook only; the dialog is filled + '
+        'submitted (name + type + Create) through real UI.',
+    inputSchema: ObjectSchema(properties: {}),
+  ),
+);
+
+/// Deep-link to the REAL group add-member screen for [groupId], skipping the
+/// brittle chat→header-avatar→group-profile→add-member navigation hops. The
+/// invite itself is still performed through the real UI: the harness selects a
+/// contact (`add_member_contact_item:<userId>`) and taps the real confirm
+/// button (`group_member_invite_confirm_button` → `inviteUserToGroup`).
+///
+/// UNGATED on purpose — the campaign drives this on freshly-registered,
+/// non-test accounts (the same rationale as `l3_open_add_group_dialog`).
+MCPCallEntry _l3OpenGroupAddMemberEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_open_group_add_member: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    var groupId = (request['groupId'] as Object?)?.toString().trim() ?? '';
+    if (groupId.startsWith('group_')) groupId = groupId.substring(6);
+    if (groupId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_open_group_add_member: need "groupId"',
+        parameters: {'ok': false, 'error': 'missing_group_id'},
+      );
+    }
+    if (!ffi.knownGroups.contains(groupId)) {
+      return MCPCallResult(
+        message: 'l3_open_group_add_member: not a joined group: $groupId',
+        parameters: {'ok': false, 'error': 'not_joined', 'groupId': groupId},
+      );
+    }
+    final invoker = _l3OpenGroupAddMemberInvoker;
+    if (invoker == null) {
+      return MCPCallResult(
+        message: 'l3_open_group_add_member: invoker not registered',
+        parameters: {'ok': false, 'error': 'invoker_not_registered'},
+      );
+    }
+    final opened = await invoker(groupId);
+    return MCPCallResult(
+      message: opened
+          ? 'group add-member screen opened'
+          : 'group add-member screen unavailable',
+      parameters: {'ok': opened, 'groupId': groupId},
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_open_group_add_member',
+    description:
+        'Open the real group add-member screen for a joined group. '
+        'Navigation-stability harness hook only; the member is selected + '
+        'invited (inviteUserToGroup) through the real add-member UI.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'groupId': StringSchema(
+          description: 'Local group id (tox_N), with or without the '
+              '"group_" conversation prefix.',
+        ),
+      },
+    ),
+  ),
+);
+
+/// Deep-link to OPEN the conversation-row context menu for [conversationId]
+/// (`group_<gid>` or `c2c_<id>`), skipping the un-driveable right-click /
+/// long-press gesture that flutter_skill (tap/tapAt/waitForElement only) cannot
+/// perform. Mirrors `l3_open_add_group_dialog` / `l3_open_group_add_member`:
+/// navigation-stability harness hook only — the menu ITEMS
+/// (`conversation_context_menu_{pin,unpin,mark_read,delete}_item`) and the
+/// delete-confirm dialog (`delete_conversation_confirm_button`) are still tapped
+/// through the real UI. The invoker resolves the conversation from the live
+/// `UikitDataFacade.conversationList` and calls the SAME
+/// `_showConversationContextMenu(conv, position)` the secondary-tap/long-press
+/// handlers call (so pin/mark-read/delete go through the real
+/// pinConversation / cleanConversationUnreadMessageCount / deleteConversation
+/// paths). UNGATED on purpose — driven on freshly-registered, non-test accounts.
+MCPCallEntry _l3OpenConversationMenuEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_open_conversation_menu: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    final conversationId =
+        (request['conversationId'] as Object?)?.toString().trim() ?? '';
+    if (conversationId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_open_conversation_menu: need "conversationId"',
+        parameters: {'ok': false, 'error': 'missing_conversation_id'},
+      );
+    }
+    final invoker = _l3OpenConversationMenuInvoker;
+    if (invoker == null) {
+      return MCPCallResult(
+        message: 'l3_open_conversation_menu: invoker not registered',
+        parameters: {'ok': false, 'error': 'invoker_not_registered'},
+      );
+    }
+    final action = (request['action'] as Object?)?.toString().trim();
+    if (action != null &&
+        action.isNotEmpty &&
+        !const {'pin', 'mark_read', 'delete'}.contains(action)) {
+      return MCPCallResult(
+        message: 'l3_open_conversation_menu: unknown action "$action"',
+        parameters: {'ok': false, 'error': 'unknown_action'},
+      );
+    }
+    final resolvedAction = (action == null || action.isEmpty) ? null : action;
+    final ok = await invoker(conversationId, action: resolvedAction);
+    return MCPCallResult(
+      message: ok
+          ? (resolvedAction == null
+                ? 'conversation context menu opened'
+                : 'conversation menu action "$resolvedAction" dispatched')
+          : 'conversation not found in list',
+      parameters: {
+        'ok': ok,
+        'conversationId': conversationId,
+        if (resolvedAction != null) 'action': resolvedAction,
+      },
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_open_conversation_menu',
+    description:
+        'Open the conversation-row context menu (Pin/Unpin, Mark as read, '
+        'Delete) for a conversation by id (group_<gid> or c2c_<id>), without the '
+        'un-driveable right-click / long-press gesture. Harness hook only. With '
+        'no "action", the visual menu is shown for real-UI item taps. With '
+        '"action" = pin|mark_read|delete, the SAME production handler the menu '
+        'dispatches runs directly (deterministic; avoids the flutter_skill '
+        'double-fire on PopupMenuItem) — delete still raises the real '
+        'confirm dialog (tap delete_conversation_confirm_button).',
+    inputSchema: ObjectSchema(
+      properties: {
+        'conversationId': StringSchema(
+          description: 'group_<gid> or c2c_<toxId> (exact conversationID from '
+              'l3_dump_state.conversations[]).',
+        ),
+        'action': StringSchema(
+          description: 'Optional: pin | mark_read | delete. Dispatches the real '
+              'handler directly instead of showing the visual menu.',
+        ),
+      },
+    ),
+  ),
+);
+
 /// Mark a C2C conversation read: advances the per-conversation lastView
 /// barrier so `getC2CUnreadCount` (surfaced as `unreadCount` in l3_dump_state)
 /// drops to 0. Lets a scenario assert unread>0 → mark-read → unread==0 (S19).
@@ -1645,6 +1932,62 @@ MCPCallEntry _l3RefuseFriendRequestEntry() => MCPCallEntry.tool(
       properties: {
         'userId': StringSchema(
           description: 'Peer Tox ID (64/76 hex) whose application to decline.',
+        ),
+      },
+      required: ['userId'],
+    ),
+  ),
+);
+
+MCPCallEntry _l3DeleteFriendEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final rawUserId = request['userId']?.toString().trim() ?? '';
+    if (rawUserId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_delete_friend: need "userId"',
+        parameters: {'ok': false, 'error': 'missing_user_id'},
+      );
+    }
+    final userId = normalizeToxId(rawUserId);
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_delete_friend: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    if (userId.startsWith('group_')) {
+      return MCPCallResult(
+        message: 'l3_delete_friend: groups unsupported',
+        parameters: {'ok': false, 'error': 'group_unsupported'},
+      );
+    }
+    try {
+      await ffi.deleteFriend(userId);
+      await FakeUIKit.instance.im?.refreshContacts();
+      AppLogger.info('[L3] l3_delete_friend: deleted $userId');
+      return MCPCallResult(
+        message: 'friend deleted',
+        parameters: {'ok': true, 'userId': userId},
+      );
+    } catch (e, st) {
+      AppLogger.logError('[L3] l3_delete_friend failed', e, st);
+      return MCPCallResult(
+        message: 'l3_delete_friend: failed: $e',
+        parameters: {'ok': false, 'error': 'delete_failed', 'detail': '$e'},
+      );
+    }
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_delete_friend',
+    description:
+        'L3 TEST ONLY: delete the given friend via the real FFI/service path, '
+        'then refresh contacts. Intended as a cleanup fallback when the real '
+        'profile delete affordance is unavailable during harness recovery.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'userId': StringSchema(
+          description: 'Peer Tox ID (64/76 hex) to remove from the friend list.',
         ),
       },
       required: ['userId'],
@@ -3551,6 +3894,314 @@ MCPCallEntry _l3GroupMemberListEntry() => MCPCallEntry.tool(
   ),
 );
 
+/// UNGATED campaign hook: enable/disable native auto-accept of group invites on
+/// the CURRENT account, so a fresh/non-test B auto-joins a PRIVATE group invite
+/// over the friend link (`tox_group_invite_accept`). Mirrors the
+/// autoAcceptGroupInvites branch of the test-gated `l3_set_setting` (Prefs write
+/// + native ffi sync); dump_state reads the same persisted flag back. Needed
+/// because `l3_set_setting` refuses non-test accounts, which would block the
+/// "B auto-joins" group_message campaign before it starts.
+MCPCallEntry _l3SetAutoAcceptGroupInvitesEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final raw = (request['value'] as Object?)?.toString().trim().toLowerCase();
+    if (raw == null || (raw != 'true' && raw != 'false')) {
+      return MCPCallResult(
+        message: 'l3_set_auto_accept_group_invites: need "value" true|false',
+        parameters: {'ok': false, 'error': 'missing_value'},
+      );
+    }
+    final value = raw == 'true';
+    try {
+      final toxId = (await Prefs.getCurrentAccountToxId()) ?? '';
+      final scoped = toxId.isEmpty ? null : toxId;
+      await Prefs.setAutoAcceptGroupInvites(value, scoped);
+      final ffi = FakeUIKit.instance.im?.ffi;
+      var nativeSyncSkipped = false;
+      if (ffi != null) {
+        ffi.setAutoAcceptGroupInvites(value);
+      } else {
+        nativeSyncSkipped = true;
+      }
+      AppLogger.info(
+        '[L3] l3_set_auto_accept_group_invites MUTATED autoAcceptGroupInvites='
+        '$value${nativeSyncSkipped ? " (native sync SKIPPED — no service)" : ""}',
+      );
+      return MCPCallResult(
+        message: 'autoAcceptGroupInvites=$value',
+        parameters: {
+          'ok': true,
+          'value': value,
+          if (nativeSyncSkipped) 'nativeSyncSkipped': true,
+        },
+      );
+    } catch (e, st) {
+      AppLogger.logError('[L3] l3_set_auto_accept_group_invites failed', e, st);
+      return MCPCallResult(
+        message: 'l3_set_auto_accept_group_invites: failed: $e',
+        parameters: {'ok': false, 'error': 'set_failed', 'detail': '$e'},
+      );
+    }
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_set_auto_accept_group_invites',
+    description:
+        'UNGATED harness hook: set native auto-accept of group invites on the '
+        'current account (Prefs + ffi). Lets a fresh/non-test B auto-join a '
+        'PRIVATE group invite. value=true|false.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'value': StringSchema(description: 'true|false'),
+      },
+      required: ['value'],
+    ),
+  ),
+);
+
+/// UNGATED campaign hook: return the member COUNT of a joined NGC group via the
+/// SDK group manager (same `getGroupMemberList` the test-gated
+/// `l3_group_member_list` uses, count only — no per-member identity, so no
+/// self-pubkey requirement). The real-UI group_message peer-readiness gate
+/// (`_waitGroupPeersConnected`) needs this on fresh/non-test accounts, where the
+/// full member-list tool refuses. Read-only.
+MCPCallEntry _l3GroupMemberCountEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    var groupId = (request['groupId'] as Object?)?.toString().trim() ?? '';
+    if (groupId.startsWith('group_')) groupId = groupId.substring(6);
+    if (groupId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_group_member_count: need "groupId"',
+        parameters: {'ok': false, 'error': 'missing_group_id'},
+      );
+    }
+    try {
+      final res = await TencentImSDKPlugin.v2TIMManager
+          .getGroupManager()
+          .getGroupMemberList(
+            groupID: groupId,
+            filter: GroupMemberFilterTypeEnum.V2TIM_GROUP_MEMBER_FILTER_ALL,
+            nextSeq: '0',
+            count: 100,
+          );
+      if (res.code != 0) {
+        return MCPCallResult(
+          message: 'l3_group_member_count: failed (code=${res.code})',
+          parameters: {
+            'ok': false,
+            'error': 'member_list_failed',
+            'code': res.code,
+            'groupId': groupId,
+          },
+        );
+      }
+      final count = res.data?.memberInfoList?.length ?? 0;
+      return MCPCallResult(
+        message: 'group member count',
+        parameters: {'ok': true, 'groupId': groupId, 'count': count},
+      );
+    } catch (e, st) {
+      AppLogger.logError('[L3] l3_group_member_count failed', e, st);
+      return MCPCallResult(
+        message: 'l3_group_member_count: failed: $e',
+        parameters: {'ok': false, 'error': 'member_list_failed', 'detail': '$e'},
+      );
+    }
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_group_member_count',
+    description:
+        'UNGATED harness hook: number of members in a joined NGC group '
+        '(getGroupMemberList count). For the group_message peer-readiness gate '
+        'on fresh/non-test accounts. Read-only.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'groupId': StringSchema(
+          description: 'Group id (local tox_N or chat-id), with or without the '
+              '"group_" prefix.',
+        ),
+      },
+      required: ['groupId'],
+    ),
+  ),
+);
+
+/// UNGATED campaign hook: leave/quit a group (`ffi.quitGroup`), mirroring the
+/// test-gated `l3_leave_group` without the test-account gate. The real-UI
+/// group_message retry cleanup (`_leaveAllGroups`) uses this on fresh/non-test
+/// accounts so a failed attempt's group doesn't leak into the next retry.
+MCPCallEntry _l3LeaveGroupUncheckedEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_leave_group_unchecked: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    var groupId = (request['groupId'] as Object?)?.toString().trim() ?? '';
+    if (groupId.startsWith('group_')) groupId = groupId.substring(6);
+    if (groupId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_leave_group_unchecked: need "groupId"',
+        parameters: {'ok': false, 'error': 'missing_group_id'},
+      );
+    }
+    try {
+      await ffi.quitGroup(groupId);
+      AppLogger.info('[L3] l3_leave_group_unchecked: left $groupId');
+      return MCPCallResult(
+        message: 'left group',
+        parameters: {
+          'ok': true,
+          'groupId': groupId,
+          'knownGroups': ffi.knownGroups.toList(),
+        },
+      );
+    } catch (e, st) {
+      AppLogger.logError('[L3] l3_leave_group_unchecked failed', e, st);
+      return MCPCallResult(
+        message: 'l3_leave_group_unchecked: failed: $e',
+        parameters: {'ok': false, 'error': 'leave_failed', 'detail': '$e'},
+      );
+    }
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_leave_group_unchecked',
+    description:
+        'UNGATED harness hook: quit a group (ffi.quitGroup), for group_message '
+        'retry cleanup on fresh/non-test accounts.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'groupId': StringSchema(
+          description: 'Group id (local tox_N or group_<id>).',
+        ),
+      },
+      required: ['groupId'],
+    ),
+  ),
+);
+
+/// UNGATED campaign hook: clear a JOINED group's message history
+/// (`ffi.clearGroupHistory`) — the executable counterpart to the C2C-only
+/// `l3_clear_history` (which rejects group ids with `group_unsupported`).
+/// `clearGroupHistory` clears the history persistence + the in-memory
+/// `_lastByPeer`/`_unreadByPeer` entries but NEVER touches the pinned set, so a
+/// gate can assert "clear preserves the row + pin" (S122/S154). Ungated so the
+/// two-process group gates run on fresh/non-test accounts.
+MCPCallEntry _l3ClearGroupHistoryEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_clear_group_history: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    var groupId = (request['groupId'] as Object?)?.toString().trim() ?? '';
+    if (groupId.startsWith('group_')) groupId = groupId.substring(6);
+    if (groupId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_clear_group_history: need "groupId"',
+        parameters: {'ok': false, 'error': 'missing_group_id'},
+      );
+    }
+    // Groupness guard (codex): `ffi.clearGroupHistory` is key-based history
+    // deletion with NO groupness check, so a mistyped id or a bare C2C pubkey
+    // would otherwise wipe the wrong conversation's history. Only clear ids this
+    // instance actually knows as a group (joined OR previously-quit).
+    if (!ffi.knownGroups.contains(groupId) &&
+        !ffi.quitGroups.contains(groupId)) {
+      return MCPCallResult(
+        message: 'l3_clear_group_history: not a joined group: $groupId',
+        parameters: {'ok': false, 'error': 'not_joined', 'groupId': groupId},
+      );
+    }
+    try {
+      await ffi.clearGroupHistory(groupId);
+      final remaining = ffi.getHistory(groupId).length;
+      AppLogger.info(
+        '[L3] l3_clear_group_history: cleared $groupId (remaining=$remaining)',
+      );
+      return MCPCallResult(
+        message: 'cleared group history',
+        parameters: {'ok': true, 'groupId': groupId, 'remaining': remaining},
+      );
+    } catch (e, st) {
+      AppLogger.logError('[L3] l3_clear_group_history failed', e, st);
+      return MCPCallResult(
+        message: 'l3_clear_group_history: failed: $e',
+        parameters: {'ok': false, 'error': 'clear_failed', 'detail': '$e'},
+      );
+    }
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_clear_group_history',
+    description:
+        'UNGATED harness hook: clear a joined group\'s message history '
+        '(ffi.clearGroupHistory) — the group counterpart to the C2C-only '
+        'l3_clear_history. Preserves the conversation row + pin state. For the '
+        'S122/S154 clear-history gates on fresh/non-test accounts.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'groupId': StringSchema(
+          description: 'Group id (local tox_N or group_<id>).',
+        ),
+      },
+      required: ['groupId'],
+    ),
+  ),
+);
+
+/// UNGATED harness hook: set (or clear, when omitted/empty) this instance's
+/// ACTIVE conversation (`ffi.setActivePeer`). A group's inbound path only
+/// accrues unread while the group is NOT the active conversation
+/// (`ffi_chat_service`: `_activePeerId != gid` → `_unreadByPeer[gid]++`), so the
+/// S118/S133 mark-read gate clears the active conversation, lets the peer send,
+/// asserts unread>0, then marks read. Ungated for fresh/non-test two-process
+/// accounts.
+MCPCallEntry _l3SetActiveConversationEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_set_active_conversation: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    var target =
+        (request['conversationId'] as Object?)?.toString().trim().isNotEmpty ==
+            true
+        ? (request['conversationId'] as Object).toString().trim()
+        : ((request['userId'] as Object?)?.toString().trim() ?? '');
+    if (target.startsWith('group_')) target = target.substring(6);
+    if (target.startsWith('c2c_')) target = target.substring(4);
+    ffi.setActivePeer(target.isEmpty ? null : target);
+    AppLogger.info(
+      '[L3] l3_set_active_conversation: active='
+      '${target.isEmpty ? '(none)' : target}',
+    );
+    return MCPCallResult(
+      message: 'active conversation set',
+      parameters: {'ok': true, 'activePeerId': ffi.activePeerId},
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_set_active_conversation',
+    description:
+        'UNGATED harness hook: set/clear the active conversation '
+        '(ffi.setActivePeer). Pass conversationId/userId to focus it, or omit '
+        'for none. Group unread only accrues while the group is NOT active, so '
+        'the S118/S133 mark-read gate clears active before seeding unread.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'conversationId': StringSchema(
+          description: 'group_<gid>/c2c_<id>/bare id to focus; omit for none.',
+        ),
+        'userId': StringSchema(description: 'Alias for conversationId.'),
+      },
+    ),
+  ),
+);
+
 /// Fixture-C two-process NGC connectivity: expose this instance's LOCAL DHT
 /// endpoint (UDP port + DHT public key) so a two-process driver can wire a
 /// FULL-MESH local bootstrap between the paired instances. Same-host instances
@@ -4127,17 +4778,7 @@ MCPCallEntry _l3DumpStateEntry() => MCPCallEntry.tool(
       final progressProvider = FakeUIKit.instance.messageProvider;
       params['fileTransfers'] = progressProvider == null
           ? <String, dynamic>{}
-          : {
-              for (final e in progressProvider.fileProgress.entries)
-                e.key: {
-                  'received': e.value.received,
-                  'total': e.value.total,
-                  'percent': e.value.total > 0
-                      ? (e.value.received * 100 / e.value.total).floor()
-                      : 0,
-                  'path': e.value.path,
-                },
-            };
+          : projectFileTransfers(progressProvider.fileProgress);
       // The open/active conversation set by the conversation-tap routing
       // (UikitDataFacade.currentConversation). S53 injects a notification tap
       // via l3_simulate_notification_tap and asserts this flips to the tapped

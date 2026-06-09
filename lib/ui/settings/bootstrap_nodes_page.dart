@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+
+import '../widgets/safe_dialog_pop.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import '../../util/app_spacing.dart';
@@ -146,11 +148,11 @@ class _BootstrapNodesPageState extends State<BootstrapNodesPage> {
         content: Text(confirmMessage),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => popDialogIfCurrent(context, false),
             child: Text(appL10n.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => popDialogIfCurrent(context, true),
             child: Text(appL10n.ok),
           ),
         ],

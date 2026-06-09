@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+// ignore: directives_ordering
+import '../widgets/safe_dialog_pop.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_state_widget.dart';
@@ -289,6 +291,7 @@ class _ToxeeGroupProfileChatButtonState
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Key? key,
   }) {
     return TencentCloudChatThemeWidget(
       build: (context, colorTheme, textStyle) => Material(
@@ -309,6 +312,7 @@ class _ToxeeGroupProfileChatButtonState
           child: Material(
             color: Colors.transparent,
             child: InkWell(
+              key: key,
               onTap: onTap,
               borderRadius: BorderRadius.circular(getSquareSize(12)),
               child: Container(
@@ -352,6 +356,7 @@ class _ToxeeGroupProfileChatButtonState
           mainAxisSize: MainAxisSize.max,
           children: [
             _buildClickableItem(
+              key: UiKeys.groupProfileSendMessageButton,
               icon: Icons.message_rounded,
               label: tL10n.sendMsg,
               onTap: _navigateToChat,
@@ -542,6 +547,7 @@ class _ToxeeGroupProfileContentState
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
+          key: UiKeys.groupProfileEditNameDialog,
           title: Text(tL10n.setGroupName),
           // `TextField.scrollPadding` only nudges the field's own internal
           // cursor scroll — it does NOT move the AlertDialog out from under
@@ -556,6 +562,7 @@ class _ToxeeGroupProfileContentState
               bottom: MediaQuery.viewInsetsOf(dialogContext).bottom,
             ),
             child: TextField(
+              key: UiKeys.groupProfileEditNameField,
               controller: controller,
               autofocus: true,
               maxLines: 3,
@@ -564,25 +571,35 @@ class _ToxeeGroupProfileContentState
           ),
           actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
+              onPressed: () => popDialogIfCurrent(dialogContext),
               child: Text(tL10n.cancel),
             ),
             TextButton(
+              key: UiKeys.groupProfileEditNameConfirmButton,
               onPressed: () {
                 final trimmed = controller.text.trim();
                 if (trimmed.isEmpty) {
-                  Navigator.pop(dialogContext);
+                  popDialogIfCurrent(dialogContext);
                   return;
                 }
                 _onChangeGroupName(trimmed);
-                Navigator.pop(dialogContext);
+                popDialogIfCurrent(dialogContext);
               },
               child: Text(tL10n.confirm),
             ),
           ],
         );
       },
-    ).whenComplete(controller.dispose);
+    ).whenComplete(() {
+      // The dialog close animation can still rebuild the TextField for a frame
+      // after Navigator.pop() resolves. Disposing the controller immediately in
+      // whenComplete() can trip "used after dispose" assertions in tests and
+      // on slow frames. Defer cleanup until the next frame so the route is
+      // fully torn down first.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        controller.dispose();
+      });
+    });
   }
 
   @override
@@ -607,6 +624,7 @@ class _ToxeeGroupProfileContentState
                     ),
                   ),
                   FloatingActionButton.small(
+                    key: UiKeys.groupProfileEditNameButton,
                     onPressed: _changeGroupName,
                     elevation: 0,
                     backgroundColor: colorTheme.contactBackgroundColor,
@@ -623,6 +641,7 @@ class _ToxeeGroupProfileContentState
             Directionality(
               textDirection: TextDirection.ltr,
               child: SelectableText(
+                key: UiKeys.groupProfileIdText,
                 chatId != null && chatId!.isNotEmpty
                     ? "Group ID: $chatId"
                     : "Group ID: $displayGroupID",
@@ -674,18 +693,31 @@ class _ToxeeGroupProfileDeleteButtonState
   }
 
   void _showClearChatHistoryDialog() {
+    // showAdaptiveDialog's actions capture THIS State's context (not a
+    // dialog-builder context), so popDialogIfCurrent can't be used here — it
+    // would test the page route, which is never current while the dialog is up.
+    // A one-shot flag makes a double-fired button (the flutter_skill harness,
+    // or a fast real double-click) pop — and run its action — exactly once,
+    // instead of the second pop unwinding the page underneath and blanking it.
+    var handled = false;
     TencentCloudChatDialog.showAdaptiveDialog(
       context: context,
       title: Text(tL10n.clearMsgTip),
       actions: <Widget>[
         TextButton(
           child: Text(tL10n.cancel),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (handled) return;
+            handled = true;
+            Navigator.of(context).pop();
+          },
         ),
         TextButton(
           child: Text(tL10n.confirm),
           onPressed: () {
-            Navigator.of(context).pop(true);
+            if (handled) return;
+            handled = true;
+            Navigator.of(context).pop();
             _onClearChatHistory();
           },
         ),
@@ -725,18 +757,28 @@ class _ToxeeGroupProfileDeleteButtonState
   }
 
   void _showQuitGroupDialog() {
+    // One-shot guard — see _showClearChatHistoryDialog: showAdaptiveDialog's
+    // actions use this State's context, so a double-fired button must be made
+    // idempotent here rather than via popDialogIfCurrent.
+    var handled = false;
     TencentCloudChatDialog.showAdaptiveDialog(
       context: context,
       title: quitGroup ? Text(tL10n.quitGroupTip) : Text(tL10n.dismissGroupTip),
       actions: <Widget>[
         TextButton(
           child: Text(tL10n.cancel),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (handled) return;
+            handled = true;
+            Navigator.of(context).pop();
+          },
         ),
         TextButton(
           child: Text(tL10n.confirm),
           onPressed: () {
-            Navigator.of(context).pop(true);
+            if (handled) return;
+            handled = true;
+            Navigator.of(context).pop();
             _handleQuitGroup();
           },
         ),

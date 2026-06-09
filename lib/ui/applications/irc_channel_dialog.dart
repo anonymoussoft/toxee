@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../widgets/safe_dialog_pop.dart';
 import '../../util/app_spacing.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
 import '../../i18n/app_localizations.dart';
@@ -163,7 +165,7 @@ class _IrcChannelDialogState extends State<IrcChannelDialog> {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
+                              onPressed: () => popDialogIfCurrent(context),
                               style: TextButton.styleFrom(
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(AppThemeConfig.buttonBorderRadius),
@@ -180,7 +182,7 @@ class _IrcChannelDialogState extends State<IrcChannelDialog> {
                                   final channel = _channelController.text.trim();
                                   final password = _passwordController.text.trim();
                                   final nickname = _nicknameController.text.trim();
-                                  Navigator.of(context).pop((
+                                  popDialogIfCurrent(context, (
                                     channel: channel,
                                     password: password.isEmpty ? null : password,
                                     nickname: nickname.isEmpty ? null : nickname,

@@ -81,6 +81,18 @@ class UiKeys {
   static const Key addGroupAliasInput = Key('add_group_alias_input');
   static const Key addGroupCreateNameInput = Key('add_group_create_name_input');
   static const Key addGroupTypeSelector = Key('add_group_type_selector');
+  // Per-segment hook for the create-group type selector. SegmentedButton's
+  // ButtonSegment takes no key, so the "Private" label is wrapped in a
+  // KeyedSubtree carrying this key — lets UI automation pick Private
+  // (invite-only, reliable same-host) without depending on the localized label.
+  static const Key addGroupTypePrivateSegment =
+      Key('add_group_type_private_segment');
+  static const Key addGroupTypePublicSegment =
+      Key('add_group_type_public_segment');
+  static const Key addGroupTypeConferenceSegment =
+      Key('add_group_type_conference_segment');
+  static const Key addGroupCreateSubmitButton =
+      Key('add_group_create_submit_button');
   static const Key addGroupCopyIdButton = Key('add_group_copy_id_button');
 
   // New-entry popup menu (lib/ui/home/home_widgets.dart).
@@ -160,12 +172,33 @@ class UiKeys {
   static const Key messageSearchField = Key('message_search_field');
   static Key searchResultMessage(String conversationId) =>
       Key('search_result_message_$conversationId');
+  // Conversation/group result ROWS in the global search (custom_search.dart) —
+  // distinct from message-result tiles. Keyed so UI automation taps the row that
+  // opens the conversation (tapping by name collides with the query text in the
+  // search field).
+  static Key searchResultGroup(String groupId) =>
+      Key('search_result_group:$groupId');
+  static Key searchResultConversation(String conversationId) =>
+      Key('search_result_conversation:$conversationId');
   static Key searchHistoryMessage(String messageId) =>
       Key('search_history_message_$messageId');
 
   // Group profile actions (lib/ui/group/group_builder_override.dart).
   static const Key groupProfileMembersEntry = Key(
     'group_profile_members_entry',
+  );
+  static const Key groupProfileEditNameButton = Key(
+    'group_profile_edit_name_button',
+  );
+  static const Key groupProfileIdText = Key('group_profile_id_text');
+  static const Key groupProfileEditNameDialog = Key(
+    'group_profile_edit_name_dialog',
+  );
+  static const Key groupProfileEditNameField = Key(
+    'group_profile_edit_name_field',
+  );
+  static const Key groupProfileEditNameConfirmButton = Key(
+    'group_profile_edit_name_confirm_button',
   );
   static const Key groupProfileClearHistoryButton = Key(
     'group_profile_clear_history_button',
@@ -267,6 +300,9 @@ class UiKeys {
   static const Key groupMemberActionKickButton = Key(
     'group_member_action_kick_button',
   );
+  static const Key groupMemberInfoCopyIdButton = Key(
+    'group_member_info_copy_id_button',
+  );
   static Key groupInviteAcceptButton(String groupId) =>
       Key('group_invite_accept_button:$groupId');
 
@@ -296,5 +332,12 @@ class UiKeys {
   // whole tile group at the toxee boundary.
   static const Key friendProfileSendMessageButton = Key(
     'friend_profile_send_message_button',
+  );
+
+  // Group/conference profile Send Message tile. Attached at toxee's custom
+  // group-profile chat-button override so automation can target the single
+  // send-message affordance without depending on localized text.
+  static const Key groupProfileSendMessageButton = Key(
+    'group_profile_send_message_button',
   );
 }

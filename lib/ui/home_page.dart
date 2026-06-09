@@ -1,4 +1,7 @@
 import 'dart:async';
+
+// ignore: directives_ordering
+import 'widgets/safe_dialog_pop.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -70,7 +73,9 @@ import 'package:tencent_cloud_chat_sdk/models/v2_tim_group_change_info.dart';
 import 'package:tencent_cloud_chat_sdk/enum/group_member_filter_enum.dart';
 import 'package:tencent_cloud_chat_common/router/tencent_cloud_chat_router.dart';
 import 'package:tencent_cloud_chat_common/router/tencent_cloud_chat_route_names.dart';
+import 'package:tencent_cloud_chat_common/router/tencent_cloud_chat_navigator.dart';
 import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_user_profile_options.dart';
+import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_group_add_member_options.dart';
 import 'package:tencent_cloud_chat_sticker/tencent_cloud_chat_sticker.dart';
 import 'package:tencent_cloud_chat_sticker/tencent_cloud_chat_sticker_init_data.dart';
 import 'package:tencent_cloud_chat_text_translate/tencent_cloud_chat_text_translate.dart';
@@ -82,6 +87,7 @@ import 'settings/sidebar.dart';
 import 'applications/applications_page.dart';
 import 'home/home_utils.dart';
 import 'home/toxee_message_header_info.dart';
+import 'home/auto_accept_apply.dart';
 import '../util/app_theme_config.dart';
 import '../util/app_tray.dart';
 import '../util/bootstrap_node_ensurer.dart';
@@ -1609,9 +1615,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
     );
     if (!mounted || selected == null) return;
+    await _dispatchConversationMenuAction(conv, selected);
+  }
 
+  /// Run a conversation-context-menu action (`pin` / `mark_read` / `delete`)
+  /// through the SAME production conversation-manager handlers the menu's
+  /// `showMenu` result dispatches. Extracted from [_showConversationContextMenu]
+  /// so the L3 harness can invoke an action deterministically without tapping
+  /// the `PopupMenuItem` (flutter_skill double-fires `InkWell`-backed items,
+  /// which turns the `pin` toggle into a net no-op). The menu path and the
+  /// harness path now execute byte-identical code; `delete` still raises the
+  /// real confirm dialog (`delete_conversation_confirm_button`).
+  Future<void> _dispatchConversationMenuAction(
+    V2TimConversation conv,
+    String action,
+  ) async {
     final convId = conv.conversationID;
-    switch (selected) {
+    final isPinned = conv.isPinned ?? false;
+    switch (action) {
       case 'pin':
         try {
           await TencentImSDKPlugin.v2TIMManager
@@ -1646,6 +1667,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         }
         break;
       case 'delete':
+        if (!mounted) return;
+        final l10n = AppLocalizations.of(context)!;
+        final scheme = Theme.of(context).colorScheme;
         final confirmed =
             await showDialog<bool>(
               context: context,
@@ -1862,6 +1886,49 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  /// Deep-link entry for the L3 harness: push the REAL group add-member screen
+  /// for [groupId] so the campaign can invite a member without traversing the
+  /// brittle chat→header-avatar→group-profile→add-member navigation hops. The
+  /// invite itself is still performed through the real add-member UI. Returns
+  /// false if the session/context is gone; otherwise pushes the screen and
+  /// returns true (fire-and-forget — see the invoker registration note).
+  Future<bool> _openGroupAddMember(String groupId) async {
+    if (!mounted) return false;
+    var gid = groupId.trim();
+    if (gid.startsWith('group_')) gid = gid.substring(6);
+    if (gid.isEmpty) return false;
+
+    // Resolve the group info: prefer the live UIKit cache, fall back to the
+    // joined-group list, then to a minimal record. The add-member screen only
+    // needs the groupID for the invite; name/avatar are cosmetic.
+    V2TimGroupInfo groupInfo = UikitDataFacade.getGroupInfo(gid);
+    if (groupInfo.groupID.isEmpty) {
+      groupInfo = UikitDataFacade.groupList.firstWhere(
+        (g) => g.groupID == gid,
+        orElse: () => V2TimGroupInfo(groupID: gid, groupType: 'Work'),
+      );
+    }
+
+    final memberList = UikitDataFacade.getGroupMemberList(gid)
+        .whereType<V2TimGroupMemberFullInfo>()
+        .toList();
+    final contactList = List<V2TimFriendInfo>.from(
+      UikitDataFacade.contactList,
+    );
+
+    // No await between the `mounted` guard and this context use, so the
+    // BuildContext is still valid (use_build_context_synchronously is satisfied).
+    navigateToAddGroupMember(
+      context: context,
+      options: TencentCloudChatGroupAddMemberOptions(
+        groupInfo: groupInfo,
+        memberList: memberList,
+        contactList: contactList,
+      ),
+    );
+    return true;
+  }
+
   Future<void> _checkIrcAppStatus() async {
     final ircAppManager = IrcAppManager();
     await ircAppManager.init();
@@ -1883,7 +1950,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
 
-    final result = await showDialog<({String channel, String? password})>(
+    // The record shape MUST match what IrcChannelDialog actually pops
+    // (channel + password + nickname). A 2-field type here threw a runtime
+    // _CastError on submit — record types are matched exactly, and the analyzer
+    // can't see across the showDialog/Navigator.pop boundary.
+    final result =
+        await showDialog<({String channel, String? password, String? nickname})>(
       context: context,
       builder: (ctx) => const IrcChannelDialog(),
     );
@@ -1895,6 +1967,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         result.channel,
         widget.service,
         password: result.password,
+        customNickname: result.nickname,
       );
       if (groupId != null) {
         await _handleGroupChanged(
@@ -2000,7 +2073,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () => popDialogIfCurrent(ctx),
             child: Text(AppLocalizations.of(context)!.close),
           ),
         ],

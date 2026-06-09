@@ -7,6 +7,7 @@ import '../util/app_spacing.dart';
 import '../util/responsive_layout.dart';
 import 'settings/bootstrap_settings_section.dart';
 import 'settings/global_settings_section.dart';
+import 'widgets/safe_dialog_pop.dart';
 
 class LoginSettingsPage extends StatefulWidget {
   const LoginSettingsPage({super.key});
@@ -25,7 +26,7 @@ class _LoginSettingsPageState extends State<LoginSettingsPage> {
         child: IconButton(
           icon: const Icon(Icons.arrow_back),
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => popDialogIfCurrent(context),
         ),
       ),
       title: Text(

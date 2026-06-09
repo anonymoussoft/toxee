@@ -946,12 +946,18 @@ extension _HomePageBootstrap on _HomePageState {
           _bootstrapSetState(() => _autoAcceptFriends = value);
         }
       });
-      Prefs.getAutoAcceptGroupInvites(toxId).then((value) {
-        if (mounted) {
-          _bootstrapSetState(() => _autoAcceptGroupInvites = value);
-          widget.service.setAutoAcceptGroupInvites(value);
-        }
-      });
+      // The Pref→(UI mirror + native-gate push), its order, and its mounted-guard
+      // are extracted to `loadAndApplyAutoAcceptGroupInvites` so they are
+      // L1-testable (S47) without pumping HomePage. mirrorToUi runs before the
+      // push (matching the original order so a throwing FFI setter can't drop
+      // the UI mirror — codex).
+      unawaited(loadAndApplyAutoAcceptGroupInvites(
+        widget.service,
+        toxId,
+        isStillMounted: () => mounted,
+        mirrorToUi: (value) =>
+            _bootstrapSetState(() => _autoAcceptGroupInvites = value),
+      ));
     }
 
     // S46/S47: let the L3 surface drive the LIVE auto-accept setters (cached
@@ -1004,6 +1010,67 @@ extension _HomePageBootstrap on _HomePageState {
       };
     });
     _bag.add(() => registerL3HomeShellSnapshotReader(null));
+    registerL3OpenAddFriendDialogInvoker(() async {
+      if (!mounted) return false;
+      // Fire-and-forget: PUSH the dialog and return immediately. Awaiting
+      // showDialog() here would not complete until the dialog is DISMISSED,
+      // which stalls the l3_open_add_friend_dialog service-extension response
+      // (mcp_toolkit only replies once the handler future resolves), hanging any
+      // caller that opens-then-drives. The hook's contract is "open, then fill +
+      // submit through real UI", so the open call must return as soon as the
+      // dialog is on screen.
+      unawaited(_showAddFriendDialog());
+      return true;
+    });
+    _bag.add(() => registerL3OpenAddFriendDialogInvoker(null));
+    registerL3OpenAddGroupDialogInvoker(() async {
+      if (!mounted) return false;
+      // Same fire-and-forget contract as the add-friend invoker above.
+      unawaited(_showAddGroupDialog());
+      return true;
+    });
+    _bag.add(() => registerL3OpenAddGroupDialogInvoker(null));
+    registerL3OpenGroupAddMemberInvoker((groupId) async {
+      if (!mounted) return false;
+      // Same fire-and-forget contract as the dialog invokers above: PUSH the
+      // real add-member screen and return as soon as it is on screen so the
+      // l3_open_group_add_member service-extension response is not blocked
+      // until the screen is popped.
+      return _openGroupAddMember(groupId);
+    });
+    _bag.add(() => registerL3OpenGroupAddMemberInvoker(null));
+    registerL3OpenConversationMenuInvoker((conversationId, {action}) async {
+      if (!mounted) return false;
+      // Resolve the conversation from the live UIKit list (the same source the
+      // sidebar renders and l3_dump_state reports). The menu's
+      // pin/mark-read/delete branches only need conversationID + isPinned +
+      // unreadCount, all carried on the V2TimConversation.
+      V2TimConversation? target;
+      for (final conv in UikitDataFacade.conversationList) {
+        if (conv.conversationID == conversationId) {
+          target = conv;
+          break;
+        }
+      }
+      if (target == null) return false;
+      if (action != null) {
+        // Deterministic path: dispatch the SAME production handler the visual
+        // menu's onSelected runs (pin/mark_read/delete), bypassing the
+        // PopupMenuItem tap (flutter_skill double-fires InkWell-backed items —
+        // fatal for the pin toggle). `delete` still raises the real confirm
+        // dialog, awaited internally; fire-and-forget so the l3 response is not
+        // blocked on that dialog (same contract as the menu-open path below).
+        unawaited(_dispatchConversationMenuAction(target, action));
+        return true;
+      }
+      // Fixed in-bounds anchor (the real menu is cursor-positioned; any offset
+      // renders the same keyed PopupMenuItems). Fire-and-forget:
+      // _showConversationContextMenu awaits showMenu until DISMISSED, so awaiting
+      // here would block the l3 response (same contract as the dialog invokers).
+      unawaited(_showConversationContextMenu(target, const Offset(200, 200)));
+      return true;
+    });
+    _bag.add(() => registerL3OpenConversationMenuInvoker(null));
 
     _checkIrcAppStatus();
     _msgSub = widget.service.messages.listen((m) {

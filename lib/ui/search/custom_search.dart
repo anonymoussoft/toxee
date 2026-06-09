@@ -1,5 +1,8 @@
 import 'dart:async' show Timer;
 
+// ignore: directives_ordering
+import '../widgets/safe_dialog_pop.dart';
+
 import 'package:flutter/material.dart';
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
@@ -511,7 +514,7 @@ class _CustomSearchState extends State<CustomSearch> {
                   IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: l10n.close,
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => popDialogIfCurrent(context),
                   ),
                 SizedBox(
                   width: ResponsiveLayout.responsiveHorizontalPadding(context),
@@ -593,7 +596,7 @@ class _CustomSearchState extends State<CustomSearch> {
                   IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: l10n.close,
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => popDialogIfCurrent(context),
                   ),
                 SizedBox(
                   width: ResponsiveLayout.responsiveHorizontalPadding(context),
@@ -707,6 +710,11 @@ class _CustomSearchState extends State<CustomSearch> {
               label: l10n.searchResultGroupSemantics(name),
               button: true,
               child: ListTile(
+                // Keyed so UI automation can tap THIS group result row
+                // deterministically (tapping by name is ambiguous with the
+                // query text in the search field). The row's onTap opens the
+                // group chat via _navigateToMessage(groupID:).
+                key: UiKeys.searchResultGroup(e.groupID),
                 leading: _avatarWidget(e.faceUrl, const Icon(Icons.group)),
                 title: _buildHighlightedText(
                   name,
@@ -787,6 +795,9 @@ class _CustomSearchState extends State<CustomSearch> {
               label: l10n.searchResultConversationSemantics(name),
               button: true,
               child: ListTile(
+                // Keyed so UI automation taps THIS conversation row (the onTap
+                // opens the conversation) without colliding with the query text.
+                key: UiKeys.searchResultConversation(c.conversationID),
                 leading: _avatarWidget(
                   c.faceUrl,
                   const Icon(Icons.chat_bubble_outline),

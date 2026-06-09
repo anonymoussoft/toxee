@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:tencent_cloud_chat_common/external/chat_message_provider.dart';
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
@@ -66,6 +67,22 @@ class FakeChatMessageProvider implements ChatMessageProvider {
   /// isSend==true); only the receiver observes this curve.
   Map<String, ({int received, int total, String? path})> get fileProgress =>
       Map.unmodifiable(_fileProgress);
+
+  /// Test seam (S94): inject an in-flight RECEIVE progress entry so a gate can
+  /// deterministically observe the `fileProgress` exposure + the
+  /// `l3_dump_state.fileTransfers` projection WITHOUT a live transfer (whose
+  /// curve is racy — entries vanish at completion). Writes the same
+  /// `(received, total, path)` record the real `_onFileProgress` recv path
+  /// writes; use a synthetic msgId so a real message bubble isn't affected.
+  @visibleForTesting
+  void debugSetFileProgress(
+    String msgId, {
+    required int received,
+    required int total,
+    String? path,
+  }) {
+    _fileProgress[msgId] = (received: received, total: total, path: path);
+  }
 
   /// P1-22 (degraded): mirror of FfiChatService.progressUpdates for messages
   /// that are *being sent* (isSend == true), exposed so call-site UI can

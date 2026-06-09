@@ -1,5 +1,8 @@
 import 'dart:io';
 
+// ignore: directives_ordering
+import 'safe_dialog_pop.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -193,7 +196,7 @@ class _FirstRunBackupWizardState extends State<FirstRunBackupWizard> {
           content: Text(l10n.firstRunBackupWizardDismissBody),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
+              onPressed: () => popDialogIfCurrent(ctx, false),
               child: Text(l10n.cancel),
             ),
             // Skip is destructive — outlined-error button reads as "danger,
@@ -208,7 +211,7 @@ class _FirstRunBackupWizardState extends State<FirstRunBackupWizard> {
                   borderRadius: BorderRadius.circular(AppRadii.button),
                 ),
               ),
-              onPressed: () => Navigator.of(ctx).pop(true),
+              onPressed: () => popDialogIfCurrent(ctx, true),
               child: Text(l10n.firstRunBackupWizardDismissConfirm),
             ),
           ],

@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// ignore: directives_ordering
+import 'widgets/safe_dialog_pop.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_theme_widget.dart';
@@ -22,6 +25,12 @@ import 'testing/ui_keys.dart';
 
 /// Standalone page for registering a new account (opened from login page).
 /// Mirrors the layout of [LoginSettingsPage]: AppBar with back + title, form in body.
+///
+/// Mobile parity: this is shared Dart with no platform-conditional code — the
+/// same fields, validators, password-strength bar, match/mismatch icon, busy
+/// spinner, error banner, and the injectable callbacks run identically on iOS,
+/// Android, and desktop. The hermetic real-UI gates in
+/// `test/ui/register/*_real_ui_test.dart` therefore cover all targets at once.
 typedef _RegisterAccountFn = Future<RegisterResult> Function({
   required String nickname,
   required String statusMessage,
@@ -255,9 +264,17 @@ class _RegisterPageState extends State<RegisterPage> {
     ];
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xs, bottom: AppSpacing.sm),
+      // Stable test key for the password-strength bar (real-UI gate reads its
+      // per-segment fill state to assert weak→strong ramping).
+      key: const Key('register_password_strength_bar'),
       child: Row(
         children: List.generate(4, (i) => Expanded(
           child: AnimatedContainer(
+            // Per-segment stable key: `register_strength_segment_<i>`. A segment
+            // is "filled" when its BoxDecoration.color == colors[i] (i < strength)
+            // and "empty" (outline @ alpha 0.2) otherwise. Tests count filled
+            // segments to verify the 0→4 strength ramp.
+            key: Key('register_strength_segment_$i'),
             duration: reduceMotion ? Duration.zero : AppDurations.medium,
             curve: AppCurves.standard,
             height: 4,
@@ -281,9 +298,11 @@ class _RegisterPageState extends State<RegisterPage> {
           leading: Padding(
             padding: EdgeInsetsDirectional.only(start: ResponsiveLayout.responsiveHorizontalPadding(context)),
             child: IconButton(
+              // Stable test key for the AppBar back button (real-UI pop assertion).
+              key: const Key('register_back_button'),
               icon: const Icon(Icons.arrow_back),
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => popDialogIfCurrent(context),
             ),
           ),
           title: Text(AppLocalizations.of(context)!.registerNewAccount),
@@ -332,6 +351,8 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   AppSpacing.verticalLg,
                   TextFormField(
+                    // Stable test key for the status-message field (real-UI gate).
+                    key: const Key('register_status_field'),
                     controller: _statusMessageController,
                     focusNode: _statusFocusNode,
                     textAlignVertical: TextAlignVertical.center,
@@ -369,6 +390,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       hintText: AppLocalizations.of(context)!.ircChannelPasswordHint,
                       prefixIcon: Icon(Icons.lock_outline, color: _passwordFocused ? Theme.of(context).colorScheme.primary : null),
                       suffixIcon: IconButton(
+                        // Stable test key for the password visibility toggle.
+                        key: const Key('register_password_visibility_toggle'),
                         icon: Icon(_passwordObscure ? Icons.visibility_off : Icons.visibility),
                         onPressed: () => setState(() => _passwordObscure = !_passwordObscure),
                         tooltip: AppLocalizations.of(context)!.passwordVisibility,
@@ -395,6 +418,9 @@ class _RegisterPageState extends State<RegisterPage> {
                         children: [
                           if (_confirmPasswordController.text.isNotEmpty && _passwordController.text.isNotEmpty)
                             Icon(
+                              // Stable test key for the confirm-password match/mismatch
+                              // indicator (check_circle when matching, cancel otherwise).
+                              key: const Key('register_confirm_match_icon'),
                               _confirmPasswordController.text == _passwordController.text ? Icons.check_circle : Icons.cancel,
                               color: _confirmPasswordController.text == _passwordController.text
                                   ? Theme.of(context).colorScheme.primary
@@ -402,6 +428,8 @@ class _RegisterPageState extends State<RegisterPage> {
                               size: 20,
                             ),
                           IconButton(
+                            // Stable test key for the confirm-password visibility toggle.
+                            key: const Key('register_confirm_visibility_toggle'),
                             icon: Icon(_confirmPasswordObscure ? Icons.visibility_off : Icons.visibility),
                             onPressed: () => setState(() => _confirmPasswordObscure = !_confirmPasswordObscure),
                             tooltip: AppLocalizations.of(context)!.passwordVisibility,

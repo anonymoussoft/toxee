@@ -57,7 +57,11 @@ class ContactAppBarNameOverride extends StatelessWidget {
                 ),
               ),
             ),
-            if (trailing != null) trailing!,
+            if (trailing != null)
+              KeyedSubtree(
+                key: const ValueKey('contact_app_bar_trailing_override'),
+                child: trailing!,
+              ),
           ],
         );
       },

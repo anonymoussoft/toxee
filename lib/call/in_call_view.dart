@@ -1,4 +1,7 @@
 import 'dart:async';
+
+// ignore: directives_ordering
+import '../ui/widgets/safe_dialog_pop.dart';
 import 'dart:ui' as ui;
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -299,7 +302,7 @@ class InCallView extends StatelessWidget {
                         )
                       : null,
                   onTap: () async {
-                    Navigator.of(ctx).pop();
+                    popDialogIfCurrent(ctx);
                     await manager.selectAudioRoute(route.id);
                   },
                 ),

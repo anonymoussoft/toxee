@@ -452,27 +452,44 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                 segments: [
                   ButtonSegment(
                     value: 'group',
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(_localeText(context, 'publicGroup',
-                          fallback: 'Public')),
+                    // KeyedSubtree wrapper (see the privateGroup segment) so UI
+                    // automation can pick Public locale-independently.
+                    label: KeyedSubtree(
+                      key: UiKeys.addGroupTypePublicSegment,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(_localeText(context, 'publicGroup',
+                            fallback: 'Public')),
+                      ),
                     ),
                     icon: const Icon(Icons.public),
                   ),
                   ButtonSegment(
                     value: 'privateGroup',
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(_localeText(context, 'privateGroup',
-                          fallback: 'Private')),
+                    // KeyedSubtree carries [UiKeys.addGroupTypePrivateSegment]
+                    // because ButtonSegment takes no key of its own — UI
+                    // automation taps this to select Private regardless of the
+                    // localized label text.
+                    label: KeyedSubtree(
+                      key: UiKeys.addGroupTypePrivateSegment,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(_localeText(context, 'privateGroup',
+                            fallback: 'Private')),
+                      ),
                     ),
                     icon: const Icon(Icons.lock),
                   ),
                   ButtonSegment(
                     value: 'conference',
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(AppLocalizations.of(context)!.conference),
+                    // KeyedSubtree wrapper (see the privateGroup segment) so UI
+                    // automation can pick Conference locale-independently.
+                    label: KeyedSubtree(
+                      key: UiKeys.addGroupTypeConferenceSegment,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(AppLocalizations.of(context)!.conference),
+                      ),
                     ),
                     icon: const Icon(Icons.forum),
                   ),
@@ -499,6 +516,7 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
                 label: _localeText(context, 'createAction',
                     fallback: 'Create Group'),
                 onPressed: _createGroup,
+                buttonKey: UiKeys.addGroupCreateSubmitButton,
               ),
             ],
           ),
@@ -532,12 +550,14 @@ class _AddGroupDialogState extends State<AddGroupDialog> {
     required IconData icon,
     required String label,
     required VoidCallback onPressed,
+    Key? buttonKey,
   }) {
     return SizedBox(
       width: double.infinity,
       child: Tooltip(
         message: busy ? _localeText(context, 'sending', fallback: 'Sending...') : '',
         child: FilledButton.icon(
+          key: buttonKey,
           style: FilledButton.styleFrom(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadii.button),

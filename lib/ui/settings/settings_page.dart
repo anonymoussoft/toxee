@@ -19,6 +19,7 @@ import '../../util/locale_controller.dart';
 import '../../util/prefs.dart';
 import '../widgets/app_page_route.dart';
 import '../widgets/bottom_sheet_handle.dart';
+import '../widgets/safe_dialog_pop.dart';
 import '../widgets/section_header.dart';
 import '../widgets/stagger_list_item.dart';
 import '../testing/ui_keys.dart';
@@ -40,6 +41,29 @@ import '../testing/l3_debug_tools.dart';
 
 part 'settings_page_widgets.dart';
 part 'settings_page_build.dart';
+
+/// Test seam for the logout teardown step. Production binds this to
+/// [AccountService.teardownCurrentSession]; widget tests inject a recording
+/// stub so `_logout` can be driven to completion (confirm → teardown →
+/// navigate) without disposing a real FFI session. Mirrors the
+/// `teardownSession` seam on `LoginPage` (login_page.dart).
+typedef SettingsTeardownSessionFn =
+    Future<void> Function({
+      required FfiChatService service,
+      bool reEncryptProfile,
+    });
+
+/// Test seam for the account-switch step. Production binds this to
+/// [AccountSwitcher.switchAccount]; widget tests inject a recording stub so
+/// the confirm/cancel dialog can be driven and the switch handler observed
+/// (fired after Confirm, NOT fired after Cancel) without booting the target
+/// account's FFI session.
+typedef SettingsSwitchAccountFn =
+    Future<void> Function({
+      required BuildContext context,
+      required String targetToxId,
+      FfiChatService? currentService,
+    });
 
 /// English words shown for confirmation when deleting account without password.
 const _kDeleteConfirmWords = <String>[
@@ -73,6 +97,8 @@ class SettingsPage extends StatefulWidget {
     required this.onAutoAcceptFriendsChanged,
     required this.autoAcceptGroupInvites,
     required this.onAutoAcceptGroupInvitesChanged,
+    this.teardownSession,
+    this.switchAccountFn,
   });
   final FfiChatService service;
   final Stream<bool>
@@ -81,6 +107,14 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onAutoAcceptFriendsChanged;
   final bool autoAcceptGroupInvites;
   final ValueChanged<bool> onAutoAcceptGroupInvitesChanged;
+
+  /// Test seam for logout teardown; defaults to
+  /// [AccountService.teardownCurrentSession]. See [SettingsTeardownSessionFn].
+  final SettingsTeardownSessionFn? teardownSession;
+
+  /// Test seam for account switching; defaults to
+  /// [AccountSwitcher.switchAccount]. See [SettingsSwitchAccountFn].
+  final SettingsSwitchAccountFn? switchAccountFn;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -100,9 +134,31 @@ class _SettingsPageState extends State<SettingsPage> {
   static const int _accountListPreviewCount = 3;
   Timer? _lastLoginTimeUpdateTimer;
 
+  // Resolved test seams: the injected override, else the production binding.
+  late final SettingsTeardownSessionFn _teardownSession;
+  late final SettingsSwitchAccountFn _switchAccountFn;
+
   @override
   void initState() {
     super.initState();
+    _teardownSession =
+        widget.teardownSession ??
+        ({required FfiChatService service, bool reEncryptProfile = true}) =>
+            AccountService.teardownCurrentSession(
+              service: service,
+              reEncryptProfile: reEncryptProfile,
+            );
+    _switchAccountFn =
+        widget.switchAccountFn ??
+        ({
+          required BuildContext context,
+          required String targetToxId,
+          FfiChatService? currentService,
+        }) => AccountSwitcher.switchAccount(
+          context: context,
+          targetToxId: targetToxId,
+          currentService: currentService,
+        );
     _loadAutoLogin();
     _loadCurrentNickname();
     _loadAvatarPath();
@@ -284,12 +340,12 @@ class _SettingsPageState extends State<SettingsPage> {
         actions: [
           TextButton(
             key: UiKeys.settingsAccountSwitchCancelButton,
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => popDialogIfCurrent(context, false),
             child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
             key: UiKeys.settingsAccountSwitchConfirmButton,
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => popDialogIfCurrent(context, true),
             child: Text(AppLocalizations.of(context)!.switchAccount),
           ),
         ],
@@ -298,7 +354,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (confirmed == true && mounted) {
       try {
-        await AccountSwitcher.switchAccount(
+        await _switchAccountFn(
           context: context,
           targetToxId: toxId,
           currentService: widget.service,
@@ -344,7 +400,7 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: Text(
             AppLocalizations.of(ctx)!.exportOptionProfileToxSubtitle,
           ),
-          onTap: () => Navigator.of(ctx).pop('tox'),
+          onTap: () => popDialogIfCurrent(ctx, 'tox'),
         ),
         ListTile(
           key: UiKeys.settingsExportFullBackupOption,
@@ -353,7 +409,7 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: Text(
             AppLocalizations.of(ctx)!.exportOptionFullBackupSubtitle,
           ),
-          onTap: () => Navigator.of(ctx).pop('zip'),
+          onTap: () => popDialogIfCurrent(ctx, 'zip'),
         ),
         const SizedBox(height: AppSpacing.sm),
       ];
@@ -622,7 +678,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => popDialogIfCurrent(context),
                     child: Text(AppLocalizations.of(context)!.ok),
                   ),
                 ],
@@ -702,7 +758,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => popDialogIfCurrent(context),
                     child: Text(AppLocalizations.of(context)!.ok),
                   ),
                 ],
@@ -770,7 +826,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => popDialogIfCurrent(context),
                 child: Text(AppLocalizations.of(context)!.ok),
               ),
             ],
@@ -910,7 +966,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
+            onPressed: () => popDialogIfCurrent<String>(context),
             child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
@@ -927,7 +983,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 );
                 return;
               }
-              Navigator.of(context).pop(pwd);
+              popDialogIfCurrent(context, pwd);
             },
             child: Text(AppLocalizations.of(context)!.ok),
           ),
@@ -952,6 +1008,9 @@ class _SettingsPageState extends State<SettingsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
+              // Stable automation anchor for the set/change-password "new
+              // password" field (the dialog opened by _setAccountPassword).
+              key: const Key('settings_set_password_new_field'),
               controller: passwordController,
               obscureText: true,
               textAlignVertical: TextAlignVertical.center,
@@ -969,6 +1028,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 12),
             TextField(
+              // Stable automation anchor for the set/change-password "confirm
+              // password" field.
+              key: const Key('settings_set_password_confirm_field'),
               controller: confirmPasswordController,
               obscureText: true,
               textAlignVertical: TextAlignVertical.center,
@@ -985,10 +1047,14 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
+            // Stable automation anchor for the set-password dialog Cancel.
+            key: const Key('settings_set_password_cancel_button'),
+            onPressed: () => popDialogIfCurrent<String>(context),
             child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
+            // Stable automation anchor for the set-password dialog Save/OK.
+            key: const Key('settings_set_password_save_button'),
             onPressed: () {
               final password = passwordController.text;
               final confirm = confirmPasswordController.text;
@@ -1005,7 +1071,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 return;
               }
 
-              Navigator.of(context).pop(password);
+              popDialogIfCurrent(context, password);
             },
             child: Text(AppLocalizations.of(context)!.ok),
           ),
@@ -1022,12 +1088,12 @@ class _SettingsPageState extends State<SettingsPage> {
         content: Text(AppLocalizations.of(context)!.logOutConfirm),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => popDialogIfCurrent(context, false),
             child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
             key: UiKeys.settingsLogoutConfirmButton,
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => popDialogIfCurrent(context, true),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
             ),
@@ -1039,7 +1105,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (confirmed == true && mounted) {
       unawaited(HapticFeedback.heavyImpact());
-      await AccountService.teardownCurrentSession(service: widget.service);
+      await _teardownSession(service: widget.service);
       await Prefs.setCurrentAccountToxId(null);
 
       if (!mounted) return;
@@ -1188,7 +1254,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
+              onPressed: () => popDialogIfCurrent(ctx, false),
               child: Text(AppLocalizations.of(ctx)!.cancel),
             ),
             TextButton(
@@ -1229,7 +1295,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   }
                 }
                 if (!ctx.mounted) return;
-                Navigator.of(ctx).pop(true);
+                popDialogIfCurrent(ctx, true);
               },
               style: TextButton.styleFrom(
                 foregroundColor: Theme.of(ctx).colorScheme.error,

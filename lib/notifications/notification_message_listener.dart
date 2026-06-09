@@ -42,6 +42,23 @@ class NotificationMessageListener {
     return _instance ??= NotificationMessageListener._(service);
   }
 
+  /// Test seam: evaluate the pure suppression decision (`_shouldSuppress` — the
+  /// contract that decides whether an inbound message rings a notification) for
+  /// [service] + [message], so a unit test can assert mute/block/self/
+  /// active-conversation suppression without the SDK listener + OS plumbing.
+  ///
+  /// Deliberately a STATIC over a throwaway instance, NOT a public constructor:
+  /// it never escapes, never touches the `forService` singleton (`_instance`),
+  /// and — having no reachable reference — can never have `register()` called on
+  /// it, so it cannot install a second SDK listener (codex). The throwaway only
+  /// holds `_service`; `_shouldSuppress` reads nothing the constructor wires.
+  @visibleForTesting
+  static bool debugShouldSuppressFor(
+    FfiChatService service,
+    V2TimMessage message,
+  ) =>
+      NotificationMessageListener._(service)._shouldSuppress(message);
+
   final FfiChatService _service;
   V2TimAdvancedMsgListener? _listener;
   bool _registered = false;

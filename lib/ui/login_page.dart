@@ -1,7 +1,15 @@
+// Mobile parity: this file is shared Dart with no platform split — the same
+// saved-account picker, quick-login/password dialogs, restore/import actions,
+// account-management bottom sheet (long-press on mobile, right-click on
+// desktop), and settings entry render identically on iOS/Android and desktop.
+// The widget-test gates in test/ui/login/*_real_ui_test.dart therefore cover
+// every target; no mobile-specific twin exists for these handlers.
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+// ignore: directives_ordering
+import 'widgets/safe_dialog_pop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../util/app_spacing.dart';
@@ -38,6 +46,13 @@ typedef _TeardownSessionFn =
       bool reEncryptProfile,
     });
 
+/// Exports a non-active account's profile and returns the written file path.
+/// Production binds this to [AccountExportService.exportAccountData]; tests
+/// inject a recording stub so the export handler can be driven without the
+/// Tox FFI / on-disk profile.
+typedef _ExportAccountFn =
+    Future<String> Function({required String toxId, String? password});
+
 /// Returns the appropriate trailing chevron for the current text direction.
 /// In LTR locales this is `chevron_right`; in RTL locales it flips to
 /// `chevron_left` so the affordance always points "forward" in reading order.
@@ -54,12 +69,18 @@ class LoginPage extends StatefulWidget {
     this.loginPageController,
     this.bootSession,
     this.teardownSession,
+    this.exportAccount,
   });
 
   final LoginUseCase? loginUseCase;
   final LoginPageController? loginPageController;
   final _BootSessionFn? bootSession;
   final _TeardownSessionFn? teardownSession;
+
+  /// Test seam for the saved-account "Export" action. Defaults to the real
+  /// [AccountExportService.exportAccountData]; injected in widget tests so the
+  /// export handler is observable without FFI / disk profile state.
+  final _ExportAccountFn? exportAccount;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -79,6 +100,7 @@ class _LoginPageState extends State<LoginPage> {
   late final LoginPageController _loginController;
   late final _BootSessionFn _bootSession;
   late final _TeardownSessionFn _teardownSession;
+  late final _ExportAccountFn _exportAccount;
   final TextEditingController _manualHostController = TextEditingController();
   final TextEditingController _manualPortController = TextEditingController();
   final TextEditingController _manualPubkeyController = TextEditingController();
@@ -110,6 +132,13 @@ class _LoginPageState extends State<LoginPage> {
             AccountService.teardownCurrentSession(
               service: service,
               reEncryptProfile: reEncryptProfile,
+            );
+    _exportAccount =
+        widget.exportAccount ??
+        ({required String toxId, String? password}) =>
+            AccountExportService.exportAccountData(
+              toxId: toxId,
+              password: password,
             );
     // Listen to text changes to update UI
     _nicknameController.addListener(() {
@@ -196,16 +225,16 @@ class _LoginPageState extends State<LoginPage> {
                 tooltip: AppLocalizations.of(context)!.passwordVisibility,
               ),
             ),
-            onSubmitted: (value) => Navigator.of(context).pop(value),
+            onSubmitted: (value) => popDialogIfCurrent(context, value),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
+              onPressed: () => popDialogIfCurrent<String>(context),
               child: Text(AppLocalizations.of(context)!.cancel),
             ),
             TextButton(
               onPressed: () =>
-                  Navigator.of(context).pop(passwordController.text),
+                  popDialogIfCurrent(context, passwordController.text),
               child: Text(AppLocalizations.of(context)!.ok),
             ),
           ],
@@ -251,7 +280,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
+            onPressed: () => popDialogIfCurrent<String>(context),
             child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
@@ -264,7 +293,7 @@ class _LoginPageState extends State<LoginPage> {
                 );
                 return;
               }
-              Navigator.of(context).pop(pwd);
+              popDialogIfCurrent(context, pwd);
             },
             child: Text(AppLocalizations.of(context)!.ok),
           ),
@@ -625,14 +654,18 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const Divider(height: 1),
             ListTile(
+              // Automation anchor for the saved-account "Export" action.
+              key: const Key('login_account_management_export_option'),
               leading: const Icon(Icons.upload_file),
               title: Text(AppLocalizations.of(context)!.exportAccount),
               onTap: () {
-                Navigator.of(ctx).pop();
+                popDialogIfCurrent(ctx);
                 _exportAccountFromLoginPage(toxId, nickname);
               },
             ),
             ListTile(
+              // Automation anchor for the saved-account "Delete" action.
+              key: const Key('login_account_management_delete_option'),
               leading: Icon(
                 Icons.delete_forever,
                 color: Theme.of(context).colorScheme.error,
@@ -642,7 +675,7 @@ class _LoginPageState extends State<LoginPage> {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               onTap: () {
-                Navigator.of(ctx).pop();
+                popDialogIfCurrent(ctx);
                 _confirmDeleteAccountFromLoginPage(toxId, nickname);
               },
             ),
@@ -659,9 +692,7 @@ class _LoginPageState extends State<LoginPage> {
     String nickname,
   ) async {
     try {
-      final filePath = await AccountExportService.exportAccountData(
-        toxId: toxId,
-      );
+      final filePath = await _exportAccount(toxId: toxId);
       if (mounted) {
         AppSnackBar.showSuccess(
           context,
@@ -703,6 +734,8 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 AppSpacing.verticalSm,
                 TextField(
+                  // Automation anchor for the delete-confirm password input.
+                  key: const Key('login_delete_account_confirm_input'),
                   controller: inputController,
                   obscureText: true,
                   keyboardType: TextInputType.visiblePassword,
@@ -721,16 +754,24 @@ class _LoginPageState extends State<LoginPage> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 AppSpacing.verticalSm,
-                TextField(controller: inputController),
+                TextField(
+                  // Same automation anchor as the password branch: tests target
+                  // the single delete-confirm input regardless of which branch
+                  // (password vs confirm-word) the account triggers.
+                  key: const Key('login_delete_account_confirm_input'),
+                  controller: inputController,
+                ),
               ],
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
+              onPressed: () => popDialogIfCurrent(ctx, false),
               child: Text(AppLocalizations.of(ctx)!.cancel),
             ),
             TextButton(
+              // Automation anchor for the delete-confirm action button.
+              key: const Key('login_delete_account_confirm_button'),
               style: TextButton.styleFrom(
                 foregroundColor: Theme.of(ctx).colorScheme.error,
               ),
@@ -760,7 +801,7 @@ class _LoginPageState extends State<LoginPage> {
                     return;
                   }
                 }
-                Navigator.of(ctx).pop(true);
+                popDialogIfCurrent(ctx, true);
               },
               child: Text(AppLocalizations.of(ctx)!.deleteAccount),
             ),
@@ -1202,6 +1243,8 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: AppSpacing.sm),
                           _LoginActionCard(
+                            // Automation anchor for the "Import account" action.
+                            key: const Key('login_page_import_account_card'),
                             icon: Icons.download_outlined,
                             label: AppLocalizations.of(context)!.importAccount,
                             color: colorTheme.primaryColor,

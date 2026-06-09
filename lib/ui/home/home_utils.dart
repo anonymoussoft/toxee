@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../widgets/safe_dialog_pop.dart';
 import '../../util/app_spacing.dart';
 import 'package:tencent_cloud_chat_intl/localizations/tencent_cloud_chat_localizations.dart';
 import '../../util/app_theme_config.dart';
@@ -80,7 +82,7 @@ Future<String?> promptText(
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => popDialogIfCurrent(context),
             child: Text(
               TencentCloudChatLocalizations.of(context)?.cancel ?? 'Cancel',
             ),
@@ -89,7 +91,7 @@ Future<String?> promptText(
           ElevatedButton(
             onPressed: () {
               result = controller.text;
-              Navigator.pop(context);
+              popDialogIfCurrent(context);
             },
             style: ElevatedButton.styleFrom(
               shape: RoundedRectangleBorder(

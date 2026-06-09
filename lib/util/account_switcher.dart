@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../ui/widgets/safe_dialog_pop.dart';
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 
 import '../models/account_summary.dart';
@@ -136,15 +138,15 @@ class AccountSwitcher {
           decoration: InputDecoration(
             labelText: AppLocalizations.of(context)!.password,
           ),
-          onSubmitted: (value) => Navigator.of(context).pop(value),
+          onSubmitted: (value) => popDialogIfCurrent(context, value),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
+            onPressed: () => popDialogIfCurrent<String>(context),
             child: Text(AppLocalizations.of(context)!.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(passwordController.text),
+            onPressed: () => popDialogIfCurrent(context, passwordController.text),
             child: Text(AppLocalizations.of(context)!.ok),
           ),
         ],

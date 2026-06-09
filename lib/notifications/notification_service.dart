@@ -78,6 +78,22 @@ class NotificationService {
   /// non-Android platforms this stays `null` and is never consulted.
   bool? _androidPermissionGranted;
 
+  /// Test seam (S59): force the Android permission-gate code path on a
+  /// non-Android test host so the in-app CONSEQUENCE of a denied permission
+  /// (no banner shown) is deterministically unit-testable. The OS GRANT itself
+  /// (macOS TCC / iOS) is irreducibly OS-owned and out of scope. `null` in
+  /// production → the real `Platform.isAndroid`.
+  @visibleForTesting
+  static bool? debugForceIsAndroid;
+  bool get _isAndroidPlatform => debugForceIsAndroid ?? Platform.isAndroid;
+
+  /// Test seam (S59): seed the cached permission result directly. Bypasses
+  /// `_ensureAndroidPermission`, whose `AndroidFlutterLocalNotificationsPlugin`
+  /// resolution returns null on a non-Android host (which would otherwise force
+  /// `granted=true`). Pair with [debugForceIsAndroid].
+  @visibleForTesting
+  set debugAndroidPermissionGranted(bool? v) => _androidPermissionGranted = v;
+
   // Per-conversation message accumulator for inbox-style grouping. Cleared
   // when the user opens the conversation (callers tell us via
   // [clearConversationGroup]) or when the system reports the notification
@@ -311,7 +327,7 @@ class NotificationService {
     // tells us to bail before queueing a no-op platform call. The contextual
     // prompt fires here for the first message — exactly the moment a banner
     // would otherwise be useful.
-    if (Platform.isAndroid) {
+    if (_isAndroidPlatform) {
       await _ensureAndroidPermission();
       if (_androidPermissionGranted == false) {
         AppLogger.debug(
