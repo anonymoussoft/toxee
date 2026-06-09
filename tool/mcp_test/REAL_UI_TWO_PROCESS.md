@@ -45,7 +45,7 @@ Behavior to know:
 - `2proc-ui` is no longer skipped at planning time; it is planned from the same
   manifest/groups as `2proc-l3`.
 - `--real-ui-scenario=...` narrows to one real-UI scenario (`handshake`,
-  `message`, `message_burst`, `handshake_detail`, `decline`,
+  `message`, `message_burst`, `group_message`, `handshake_detail`, `decline`,
   `custom_message`, `call_voice`, `call_reject`)
   without leaving the unified planner.
 - `--plan-json` now records both the selected `realUiScenarios` list and the
@@ -62,7 +62,7 @@ Behavior to know:
   accepted handshake (`handshake` / `handshake_detail`) or restores
   `paired_for_e2e` for a focused replay.
 - `--real-ui-campaign=...` expands named merged batches of compatible
-  scenarios. Today there are 38 built-in campaigns spanning four buckets:
+  scenarios. Today there are 42 built-in campaigns spanning four buckets:
   accepted-friend reusable stacks, fresh/no-friend request flows,
   reset-backed "then-decline" transitions, and `all-*` smoke bundles.
 - The currently codified reusable batches are:
@@ -70,6 +70,7 @@ Behavior to know:
   `accepted-friend-detail = handshake_detail -> message`,
   `accepted-friend-inline-burst = handshake -> message_burst`,
   `accepted-friend-detail-burst = handshake_detail -> message_burst`,
+  `accepted-friend-inline-group-message = handshake -> group_message`,
   `accepted-friend-inline-call = handshake -> message -> call_voice`,
   `accepted-friend-detail-call = handshake_detail -> message -> call_voice`,
   `accepted-friend-inline-call-reject = handshake -> call_reject`,
@@ -139,27 +140,88 @@ button), `handshake_detail` (S108, A accepts via the pushed application-DETAIL
 screen — `contact_application_detail_accept_button`, the distinct UI entry S26
 does not exercise), `decline` (S27), `message` (S62/S64, `RUITEST_STAMP=<n>` for
 a stable nonce), `message_burst` (S64 alternating burst on an already-friended
-pair), `custom_message` (S54, verifies the add-wording round-trip then
-self-cleans back to no-friend), `call_voice` (S65/S67/S76 happy path:
-invite -> accept -> hangup), `call_reject` (S68 reject path), plus the
-runner-internal `reset_friendship` maintenance step. Reusable primitives:
-`foreground`, `tapKey`/`tryTapKey`/`tapText`/`focusType`/`tapAt`,
-`osaType`/`osaReturn`/`osaClear`, `waitKey`/`waitText`/`waitState`,
-`openChat`, `sendComposerMessage`, `dumpState`, `shot`.
+pair), `group_message` (S151, A creates a public group over l3 setup, B joins
+it, then both sides send via the REAL group composer), `custom_message` (S54,
+verifies the add-wording round-trip then self-cleans back to no-friend),
+`call_voice` (S65/S67/S76 happy path: invite -> accept -> hangup),
+`call_reject` (S68 reject path), plus the runner-internal `reset_friendship`
+maintenance step. Reusable primitives: `foreground`, `tapKey`/`tryTapKey`/
+`tapText`/`focusType`/`tapAt`, `osaType`/`osaReturn`/`osaClear`, `waitKey`/
+`waitText`/`waitState`, `openChat`, `openGroupChat`, `sendComposerMessage`,
+`dumpState`, `shot`.
 
 When invoked directly, `message` still assumes the pair is already friends; the
 unified runner handles that dependency by planning it after an accepted
 handshake when possible, or by restoring `paired_for_e2e` when `message` is
 selected on its own.
 
+## Single-instance LOGIN + SETTINGS scenarios (real clicks, one live app)
+
+Added alongside `group_create` (same "drive only A, B launched-but-idle" shape):
+real flutter_skill clicks on the REAL login/settings widgets of ONE live
+instance, asserting real side-effects via `l3_dump_state`
+(`autoLogin`/`notificationSound`/`sessionReady`/`currentAccountToxId`) or the
+real UI response (snackbar / dialog mount / login-page transition).
+
+`dart run tool/mcp_test/drive_real_ui_pair.dart <scenario> <wsA> <pidA> <nickA> <wsB> <pidB> <nickB>`
+
+- `settings_sweep` — the whole suite on ONE launch (reuses startup; maximizes
+  cases/batch). Order: copy_id → export_chooser → autologin → notification →
+  logout_relogin → password (logout BEFORE password so the saved-account
+  relogin is no-password; password LAST since it sets one).
+- `settings_copy_id` (S100) — tap `settings_copy_tox_id_button` → "ID copied to
+  clipboard" snackbar.
+- `settings_export_chooser` (S105) — tap `settings_export_account_button` → the
+  chooser mounts both `settings_export_profile_tox_option` +
+  `settings_export_full_backup_option`; ESC dismisses (no native save panel).
+- `settings_password` — tap `settings_set_password_button` → the keyed dialog
+  (`settings_set_password_new_field`/`_confirm_field`/`_save_button`) opens; fill
+  matching + Save → assert the **`Password set successfully` snackbar** (only
+  shown when `AccountService.setAccountPassword` actually persists; real PBKDF2
+  runs on the live isolate, so 25 s) **and** that the dialog is gone. "Dialog
+  closed" alone is a false pass — the dialog pops before the async write
+  completes.
+- `settings_logout_relogin` — tap `settings_logout_button` →
+  `settings_logout_confirm_button` → the app returns to the login page
+  (`sessionReady=false`) showing `login_page_account_card:<tox>` → tap the card →
+  quick-login back to HomePage (`sessionReady=true`).
+- `settings_autologin` / `settings_notification` — tap the keyed `Switch` and
+  assert the `l3_dump_state` flip. **Soft (harness limitation):** flutter_skill's
+  synthetic `tap` finds an off-stage/below-fold `Switch` in the whole-tree search
+  but does not toggle it, and flutter_skill has **no scroll** to bring the lower
+  switches on-stage; `settings_sweep` excludes these from its hard pass.
+
+> **Harness hazard — dialog pop buttons must be single-fired.** flutter_skill's
+> `tap` fires the callback TWICE (a synthetic pointer hit AND a direct
+> `widget.onPressed!()` via `_tryInvokeCallback`). On an **on-screen** dialog
+> button that calls `Navigator.pop(...)` (logout confirm, password save) both
+> land: the first pop closes the dialog, the second — fired while the button is
+> still mounted mid-dismiss — pops the **page underneath** (HomePage). The
+> logout/password handlers then hit their trailing `if (!mounted) return` and
+> skip `pushAndRemoveUntil(LoginPage)`, leaving an **empty Navigator** (blank
+> screen, zero interactive elements). Drive those pop buttons with
+> `Inst.tapKeyCenter` (one `tapAt` at the element centre). The dialog **openers**
+> (`settings_logout_button`, `settings_set_password_button`) stay on `tapKey`:
+> they sit below the fold, where `tap`'s synthetic pointer misses and only its
+> direct `_tryInvokeCallback` fires (exactly once → one dialog), and a coordinate
+> `tapAt` would miss entirely.
+
+**Live-verified (single instance, fresh account):** register click-through →
+`copy_id` → `export_chooser` → `logout_relogin` (logout + saved-account
+quick-login) → `password` all PASS via real clicks; the two `Switch` gates are
+the documented soft cases above. Mobile parity: the underlying login/settings
+widgets are shared Dart (mobile is covered by the L1 WidgetTester gates in
+`test/ui/login,register,settings/`); this harness drives the macOS desktop app.
+
 ## Codified today vs live-verified today
 
-The shared planner/driver contract now codifies eight real-UI scenarios plus a
-38-entry reusable campaign catalog:
+The shared planner/driver contract now codifies nine real-UI scenarios plus an
+expanded reusable campaign catalog:
 
 - `handshake`
 - `message`
 - `message_burst`
+- `group_message`
 - `handshake_detail`
 - `decline`
 - `custom_message`
@@ -169,7 +231,8 @@ The shared planner/driver contract now codifies eight real-UI scenarios plus a
 Representative catalog buckets:
 
 - `accepted-friend-*`: one-launch chat/call stacks after an accepted
-  friendship, for example `accepted-friend-inline-full`.
+  friendship, for example `accepted-friend-inline-full` and
+  `accepted-friend-inline-group-message`.
 - `fresh-*` / `no-friend-*`: request/no-friend flows that stay schedulable on
   one launch, for example `fresh-custom-message` and `no-friend-inline-call`.
 - `*-then-decline`: mixed-state chains where the planner inserts
@@ -178,11 +241,17 @@ Representative catalog buckets:
 - `all-*`: end-to-end smoke bundles such as `all-current` and `all-expanded`.
 
 That "codified" claim is about manifest/planner/dry-run semantics and the
-discoverable scheduler catalog. It does **not** mean all 38 campaign branches
+discoverable scheduler catalog. It does **not** mean all 42 campaign branches
 have already been repeatedly dogfooded live. Today the continued live
 confidence is:
 
 - `handshake` and `message`: live-driven and verified below.
+- `group_message`: planner/driver support is now landed and was dogfooded on
+  2026-06-07. The scenario now clears full-mesh bootstrap, group create/join,
+  and real UI chat open, but live delivery remains unstable: some runs pass
+  `A->B`, others drop both directions entirely, with the joiner showing an
+  empty candidate group conversation and the creator retaining only its own
+  self-send. So it is not yet a stable gate.
 - `call_voice`: live-driven in continued execution below, but still a local
   dogfood result rather than a CI-grade gate.
 - `message_burst`, `call_reject`, `handshake_detail`, `decline`, and
@@ -201,7 +270,7 @@ confidence is:
 ## Filtered set still to codify (same primitives)
 
 Friend: S46 auto-accept. · Messaging: S64 concurrent (burst), S21/S88
-file/image (attach button), S78 voice. · Group: S33 join, S34 message, S37
+file/image (attach button), S78 voice. · Group: S33 join, S37
 kick, S81 invite, S47 auto-accept. · Calls: S66 initiate video, S68 decline,
 S74/S75 mute/camera. · Conversation: S83 mute, S52 profile, S63 receipt/typing.
 

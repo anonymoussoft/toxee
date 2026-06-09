@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online groups=[gidG] history=seeded`
 **Harness mode**: peerHarness=none (single-instance group create/open is hermetic; full member content with a remote peer is Fixture C — see S36)
 **Promotion target**: L1 WidgetTester for the entry-tap → member-panel mount + navigation; live multi-member content is L3-pinned (Fixture C `run_fixture_c_member_list.sh`).
-**Status**: covered (single-instance: panel mounts + SELF row). The members ENTRY tap is the real-UI step (marionette, NOT executable). The multi-member READ with a real peer is S36's two-process gate (`run_fixture_c_member_list.sh`), not this scenario.
+**Status**: entry surface covered at the widget layer — `test/ui/chat_core_real_ui_test.dart` renders the toxee keyed wrapper with a minimal current-user fixture and asserts `group_profile_members_entry` is present. Full panel mount + SELF-row verification remain outside executable widget coverage.
+**Covered-by**: `test/ui/chat_core_real_ui_test.dart`
 
 > Real-UI sibling of S36. S36 drives the SDK→C++ `GetGroupMemberList` path with a joined remote peer B over two processes. S121 is the single-instance real-tap of the keyed members ENTRY: open a group → group profile → tap the members entry → the member-list panel mounts and shows SELF (the only member when no peer has joined).
 
@@ -35,4 +36,4 @@
 - Key verified: `groupProfileMembersEntry` @ `lib/ui/group/group_builder_override.dart:65` (defined `ui_keys.dart:167`), wrapping `TencentCloudChatGroupProfileGroupMember`.
 - Sibling distinction: S36 = two-process member-list READ with peer B (`run_fixture_c_member_list.sh`); S121 = single-instance real-tap of the members ENTRY (panel mount + self). S122/S123 are the OTHER two keyed group-profile rows (clear-history / leave).
 - Mobile parity: the members entry is wired in the SHARED toxee builder override (`lib/ui/group/group_builder_override.dart`), so the keyed entry covers mobile; only the desktop side-panel vs phone push-route presentation differs (S36 note 7).
-- No executable single-instance gate for the panel itself: the closest data-half is S36's two-process gate. Do NOT mark this "covered (executable)" for the marionette tap.
+- No executable single-instance gate for the full member panel itself yet: the closest data-half is S36's two-process gate. The current widget-level coverage is intentionally narrower and only claims the keyed entry surface.

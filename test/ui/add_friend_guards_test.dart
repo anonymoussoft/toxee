@@ -62,6 +62,10 @@ class _StubFfiChatService extends FfiChatService {
   /// this, so every test asserts it stays false.
   bool addFriendCalled = false;
 
+  /// Number of addFriend dispatches. The session-dedup test (S56 tier-2) asserts
+  /// a repeated same-id submit is rejected BEFORE a second dispatch (stays 1).
+  int addFriendCount = 0;
+
   final StreamController<bool> _connection = StreamController<bool>.broadcast();
 
   @override
@@ -83,6 +87,7 @@ class _StubFfiChatService extends FfiChatService {
   Future<AddFriendResult> addFriend(String serverId,
       {String? requestMessage}) async {
     addFriendCalled = true;
+    addFriendCount++;
     return const AddFriendResult(
       resultCode: 0,
       userId: '',
@@ -120,6 +125,30 @@ Widget _harness(_StubFfiChatService service, void Function(String) onSnack) {
             child: const Text('open'),
           ),
         ),
+      ),
+    ),
+  );
+}
+
+// S56 tier-2 needs the dialog's State (and its `_attemptedThisSession` set) to
+// SURVIVE a successful submit. Mounting the dialog DIRECTLY as the home body —
+// not via showDialog — means the success-path `navigator.maybePop()` finds only
+// the root route and is a no-op, so the State is not disposed. This is exactly
+// what the marionette/MCP path could NOT do (S56 tier-2 was "deferred until the
+// dialog stops auto-dismissing on success"); an L1 mount sidesteps the dismiss.
+Widget _directHarness(_StubFfiChatService service, void Function(String) onSnack) {
+  return MaterialApp(
+    localizationsDelegates: const [
+      AppLocalizations.delegate,
+      TencentCloudChatLocalizations.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    supportedLocales: const [Locale('en')],
+    home: Scaffold(
+      body: Center(
+        child: AddFriendDialog(service: service, onShowSnackBar: onSnack),
       ),
     ),
   );
@@ -211,6 +240,76 @@ void main() {
       expect(service.addFriendCalled, isFalse,
           reason:
               'duplicate guard must short-circuit before any addFriend dispatch');
+    });
+
+    testWidgets(
+        'tier-2: re-submitting the SAME id in one session shows alreadySent and dispatches addFriend only ONCE',
+        (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      // Empty friend list → the friend-list dedup passes; addFriend returns
+      // success so the FIRST submit records the id in `_attemptedThisSession`.
+      final service = _StubFfiChatService(friends: const []);
+      addTearDown(service.disposeStub);
+      final snacks = <String>[];
+
+      // Direct mount (NOT showDialog) so the success-path maybePop() is a no-op
+      // and the dialog State — with its session set — survives for a 2nd submit.
+      await tester.pumpWidget(_directHarness(service, snacks.add));
+      await tester.pumpAndSettle();
+
+      // Distinct from _selfId ('B') and _dupId ('C') so neither the self-add nor
+      // the friend-list guard fires — only the session-dedup is under test.
+      final freshId = 'A' * 76;
+
+      // First submit → success → `_attemptedThisSession.add(freshId)`; the dialog
+      // clears the id field but (direct mount) stays alive.
+      await tester.enterText(find.byKey(UiKeys.addFriendIdInput), freshId);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(UiKeys.addFriendSubmitButton));
+      await tester.pumpAndSettle();
+
+      expect(service.addFriendCount, 1,
+          reason: 'the first submit must dispatch addFriend once');
+      expect(find.byKey(UiKeys.addFriendSubmitButton), findsOneWidget,
+          reason: 'direct-mounted dialog must stay alive after a success');
+
+      // Second submit of the SAME id → the in-session dedup must reject it
+      // BEFORE any second dispatch. `requestAlreadySent` has no `_localeText`
+      // switch case, so it resolves to the deterministic fallback string.
+      await tester.enterText(find.byKey(UiKeys.addFriendIdInput), freshId);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(UiKeys.addFriendSubmitButton));
+      await tester.pumpAndSettle();
+
+      expect(snacks.last, 'A friend request was already sent in this session',
+          reason:
+              'the in-session dedup (A2, _attemptedThisSession) must reject the repeat');
+      expect(service.addFriendCount, 1,
+          reason:
+              'the repeat must be rejected BEFORE a second addFriend dispatch');
+
+      // Normalization variant: a DIFFERENT 76-char address that shares the same
+      // 32-byte public key (first 64 hex) but a different nospam+checksum (last
+      // 12 hex) is the SAME Tox identity. The dedup keys on normalizeToxId (the
+      // pubkey), so it must also be rejected — proving the guard compares the
+      // normalized id, not the raw 76-char string.
+      final sameKeyDifferentNospam = '${'A' * 64}${'B' * 12}';
+      expect(sameKeyDifferentNospam.length, 76);
+      expect(sameKeyDifferentNospam, isNot(freshId));
+      await tester.enterText(
+          find.byKey(UiKeys.addFriendIdInput), sameKeyDifferentNospam);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(UiKeys.addFriendSubmitButton));
+      await tester.pumpAndSettle();
+
+      expect(snacks.last, 'A friend request was already sent in this session',
+          reason:
+              'a same-pubkey address (different nospam) is the same identity — '
+              'the normalized dedup must reject it too');
+      expect(service.addFriendCount, 1,
+          reason: 'the normalization variant must not reach a 3rd dispatch');
     });
   });
 }

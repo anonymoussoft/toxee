@@ -31,11 +31,21 @@ import 'package:tencent_cloud_chat_common/cross_platforms_adapter/tencent_cloud_
 import 'package:tencent_cloud_chat_common/widgets/desktop_popup/tencent_cloud_chat_desktop_popup.dart';
 import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact_builders.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_contact_item.dart';
+import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_group_member_info.dart';
+import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_group_member_list.dart';
 import 'package:tencent_cloud_chat_conversation/tencent_cloud_chat_conversation_builders.dart';
 import 'package:tencent_cloud_chat_conversation/widgets/tencent_cloud_chat_conversation_item.dart';
 import 'package:tencent_cloud_chat_sdk/native_im/bindings/native_library_manager.dart';
+import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_input/desktop/tencent_cloud_chat_message_input_desktop.dart';
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_input/mobile/tencent_cloud_chat_message_input_mobile.dart';
+import 'package:tencent_cloud_chat_message/tencent_cloud_chat_group_profile.dart';
+import 'package:tencent_cloud_chat_message/tencent_cloud_chat_group_profile_builders.dart';
+import 'package:tencent_cloud_chat_message/tencent_cloud_chat_group_profile_controller.dart';
+import 'package:toxee/ui/group/group_member_list_wrapper.dart';
+import 'package:toxee/ui/group/group_builder_override.dart';
+import 'package:toxee/ui/testing/ui_keys.dart';
+import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_group_profile_options.dart';
 
 // Wrap a child so the UIKit fork's i18n singleton (`tL10n`) is initialized from
 // a real Localizations ancestor before the child builds — the fork composer
@@ -59,6 +69,21 @@ Widget _localized({required Widget child}) {
       ),
     ),
   );
+}
+
+class _FakeGroupSdkPlatform extends TencentCloudChatSdkPlatform {
+  V2TimGroupInfo? lastGroupInfo;
+
+  @override
+  bool get isCustomPlatform => true;
+
+  @override
+  Future<V2TimCallback> setGroupInfo({
+    required V2TimGroupInfo info,
+  }) async {
+    lastGroupInfo = info;
+    return V2TimCallback(code: 0, desc: 'ok');
+  }
 }
 
 MessageInputBuilderMethods _stubMethods(List<String> sentSink) {
@@ -451,4 +476,482 @@ void main() {
       expect(find.text('Copy Tox ID'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'group profile Send Message tile navigates back into chat via onNavigateToChat',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final contact = TencentCloudChat.instance.dataInstance.contact;
+      String? tappedGroupId;
+      contact.contactEventHandlers = TencentCloudChatContactEventHandlers(
+        uiEventHandlers: TencentCloudChatContactUIEventHandlers(
+          onTapContactItem: ({userID, groupID}) async {
+            tappedGroupId = groupID;
+            return true;
+          },
+        ),
+      );
+      addTearDown(() => contact.contactEventHandlers = null);
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      final widgetUnderTest = builders.getGroupProfileChatButtonBuilder(
+        groupInfo: V2TimGroupInfo(
+          groupID: 'tox_conf_42',
+          groupName: 'Conference 42',
+          groupType: 'AVChatRoom',
+        ),
+      );
+
+      await tester.pumpWidget(
+        _localized(
+          child: widgetUnderTest,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tappedGroupId, isNull);
+      expect(find.byKey(UiKeys.groupProfileSendMessageButton), findsOneWidget);
+
+      await tester.tap(find.byKey(UiKeys.groupProfileSendMessageButton));
+      await tester.pumpAndSettle();
+
+      expect(
+        tappedGroupId,
+        'tox_conf_42',
+        reason:
+            'the toxee group-profile Send Message tile should route back to chat with the active groupID',
+      );
+    },
+  );
+
+  testWidgets(
+    'group profile clear-history row opens the keyed confirm dialog',
+    (tester) async {
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      final widgetUnderTest = builders.getGroupProfileDeleteButtonBuilder(
+        groupInfo: V2TimGroupInfo(
+          groupID: 'tox_group_42',
+          groupName: 'Group 42',
+          groupType: GroupType.Work,
+          role: GroupMemberRoleType.V2TIM_GROUP_MEMBER_ROLE_MEMBER,
+        ),
+        groupMemberList: const <V2TimGroupMemberFullInfo>[],
+      );
+
+      await tester.pumpWidget(_localized(child: widgetUnderTest));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(UiKeys.groupProfileClearHistoryButton), findsOneWidget);
+      expect(
+        find.text('Are you sure you want to clear the chat history?'),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(UiKeys.groupProfileClearHistoryButton));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Are you sure you want to clear the chat history?'),
+        findsOneWidget,
+        reason: 'tapping the clear-history row should open the confirm dialog',
+      );
+      expect(find.text('Confirm'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'group profile leave row shows Disband Group for a non-Work owner',
+    (tester) async {
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      final widgetUnderTest = builders.getGroupProfileDeleteButtonBuilder(
+        groupInfo: V2TimGroupInfo(
+          groupID: 'tox_conf_42',
+          groupName: 'Conference 42',
+          groupType: GroupType.AVChatRoom,
+          role: GroupMemberRoleType.V2TIM_GROUP_MEMBER_ROLE_OWNER,
+        ),
+        groupMemberList: const <V2TimGroupMemberFullInfo>[],
+      );
+
+      await tester.pumpWidget(_localized(child: widgetUnderTest));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(UiKeys.groupProfileLeaveButton), findsOneWidget);
+      expect(find.text('Disband Group'), findsOneWidget);
+      expect(find.text('Leave'), findsNothing);
+
+      await tester.tap(find.byKey(UiKeys.groupProfileLeaveButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Disband the group?'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'group profile leave row shows Leave for a member',
+    (tester) async {
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      final widgetUnderTest = builders.getGroupProfileDeleteButtonBuilder(
+        groupInfo: V2TimGroupInfo(
+          groupID: 'tox_group_99',
+          groupName: 'Group 99',
+          groupType: GroupType.Work,
+          role: GroupMemberRoleType.V2TIM_GROUP_MEMBER_ROLE_MEMBER,
+        ),
+        groupMemberList: const <V2TimGroupMemberFullInfo>[],
+      );
+
+      await tester.pumpWidget(_localized(child: widgetUnderTest));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(UiKeys.groupProfileLeaveButton), findsOneWidget);
+      expect(find.text('Leave'), findsOneWidget);
+      expect(find.text('Disband Group'), findsNothing);
+
+      await tester.tap(find.byKey(UiKeys.groupProfileLeaveButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Leave the group?'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'group profile content shows a stable Group ID text surface',
+    (tester) async {
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      final widgetUnderTest = builders.getGroupProfileContentBuilder(
+        groupInfo: V2TimGroupInfo(
+          groupID: 'tox_group_1234',
+          groupName: 'Group 1234',
+          groupType: GroupType.Work,
+        ),
+      );
+
+      await tester.pumpWidget(_localized(child: widgetUnderTest));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Group 1234'), findsOneWidget);
+      expect(find.byKey(UiKeys.groupProfileIdText), findsOneWidget);
+      expect(find.textContaining('Group ID:'), findsOneWidget);
+      expect(find.textContaining('tox_group_1234'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'group profile content edit button opens the rename dialog',
+    (tester) async {
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      final widgetUnderTest = builders.getGroupProfileContentBuilder(
+        groupInfo: V2TimGroupInfo(
+          groupID: 'tox_group_5678',
+          groupName: 'Rename Me',
+          groupType: GroupType.Work,
+        ),
+      );
+
+      await tester.pumpWidget(_localized(child: widgetUnderTest));
+      await tester.pumpAndSettle();
+
+      expect(find.text('set Group Name'), findsNothing);
+
+      expect(find.byKey(UiKeys.groupProfileEditNameButton), findsOneWidget);
+
+      await tester.tap(find.byKey(UiKeys.groupProfileEditNameButton));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(UiKeys.groupProfileEditNameDialog),
+        findsOneWidget,
+        reason: 'tapping the group-profile edit button should open the rename dialog',
+      );
+      expect(find.byKey(UiKeys.groupProfileEditNameField), findsOneWidget);
+      expect(find.text('Confirm'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'group profile content rename confirm updates the title and calls setGroupInfo',
+    (tester) async {
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final oldPlatform = TencentCloudChatSdkPlatform.instance;
+      final fakePlatform = _FakeGroupSdkPlatform();
+      TencentCloudChatSdkPlatform.instance = fakePlatform;
+      addTearDown(() => TencentCloudChatSdkPlatform.instance = oldPlatform);
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      final widgetUnderTest = builders.getGroupProfileContentBuilder(
+        groupInfo: V2TimGroupInfo(
+          groupID: 'tox_group_rename',
+          groupName: 'Before Rename',
+          groupType: GroupType.Work,
+        ),
+      );
+
+      await tester.pumpWidget(_localized(child: widgetUnderTest));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Before Rename'), findsOneWidget);
+
+      await tester.tap(find.byKey(UiKeys.groupProfileEditNameButton));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(UiKeys.groupProfileEditNameField),
+        'After Rename',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(UiKeys.groupProfileEditNameConfirmButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('After Rename'), findsOneWidget);
+      // S153: the displayed group title refreshed — the OLD name is gone, not
+      // just the new one present (the widget-layer half of "rename refreshes
+      // the row"; the conversation-list-row half is two-process).
+      expect(find.text('Before Rename'), findsNothing);
+      expect(fakePlatform.lastGroupInfo, isNotNull);
+      expect(fakePlatform.lastGroupInfo!.groupID, 'tox_group_rename');
+      expect(fakePlatform.lastGroupInfo!.groupName, 'After Rename');
+    },
+  );
+
+  testWidgets(
+    'group profile members entry renders through the toxee keyed wrapper when currentUser is set',
+    (tester) async {
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final oldCurrentUser =
+          TencentCloudChat.instance.dataInstance.basic.currentUser;
+      TencentCloudChat.instance.dataInstance.basic
+          .updateCurrentUserInfo(userFullInfo: V2TimUserFullInfo(userID: 'alice'));
+      addTearDown(() {
+        if (oldCurrentUser != null) {
+          TencentCloudChat.instance.dataInstance.basic
+              .updateCurrentUserInfo(userFullInfo: oldCurrentUser);
+        }
+      });
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      final widgetUnderTest = builders.getGroupProfileMemberBuilder(
+        groupInfo: V2TimGroupInfo(
+          groupID: 'tox_group_members',
+          groupName: 'Members Group',
+          groupType: GroupType.Work,
+        ),
+        groupMember: <V2TimGroupMemberFullInfo>[
+          V2TimGroupMemberFullInfo(userID: 'alice', nickName: 'Alice'),
+        ],
+        contactList: const <V2TimFriendInfo>[],
+      );
+
+      await tester.pumpWidget(_localized(child: widgetUnderTest));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(UiKeys.groupProfileMembersEntry), findsOneWidget);
+      expect(find.textContaining('Group Members'), findsOneWidget);
+    },
+  );
+
+  // S141 — member-info surface renders a member's name + identifier. The
+  // pushed member-info ROUTE is not flutter_skill-reachable from the
+  // two-process harness (same limitation as the whole group-profile route), so
+  // this asserts the real member-info BODY widget directly at the widget layer.
+  testWidgets(
+    'S141 group member info body renders the member name and id',
+    (tester) async {
+      final member = V2TimGroupMemberFullInfo(
+        userID: 'bob',
+        nickName: 'Bob',
+        role: GroupMemberRoleType.V2TIM_GROUP_MEMBER_ROLE_MEMBER,
+        joinTime: 0,
+      );
+      await tester.pumpWidget(
+        _localized(
+          child: TencentCloudChatGroupMemberInfoBody(memberFullInfo: member),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bob'), findsOneWidget);
+      expect(find.textContaining('bob'), findsWidgets);
+    },
+  );
+
+  // S143 — an OWNER tapping a non-self member row surfaces the keyed kick
+  // action (in the manage-member Cupertino sheet). The kick key is on the
+  // PLAIN-tap sheet (the desktop secondary-click opens a different, unkeyed
+  // menu — codex), and the row's GestureDetector uses deferToChild so a
+  // byType/center tap can miss; tap the member NAME instead (mirrors the
+  // working control in test/ui/conference/conference_members_real_ui_test.dart).
+  // The kick FUNCTION is additionally covered data-half by S37.
+  testWidgets(
+    'S143 owner tapping a non-self member row surfaces the keyed kick action',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // isSelf() reads currentUser; set it to someone OTHER than the row member.
+      final oldCurrentUser =
+          TencentCloudChat.instance.dataInstance.basic.currentUser;
+      TencentCloudChat.instance.dataInstance.basic.updateCurrentUserInfo(
+          userFullInfo: V2TimUserFullInfo(userID: 'owner_self'));
+      addTearDown(() {
+        if (oldCurrentUser != null) {
+          TencentCloudChat.instance.dataInstance.basic
+              .updateCurrentUserInfo(userFullInfo: oldCurrentUser);
+        }
+      });
+
+      final member = V2TimGroupMemberFullInfo(
+        userID: 'bob',
+        nickName: 'Bob Member',
+        role: GroupMemberRoleType.V2TIM_GROUP_MEMBER_ROLE_MEMBER,
+      );
+      await tester.pumpWidget(
+        _localized(
+          child: TencentCloudChatGroupMemberListItem(
+            groupInfo: V2TimGroupInfo(
+              groupID: 'tox_group_s143',
+              groupName: 'S143 Group',
+              groupType: GroupType.Work,
+              role: GroupMemberRoleType.V2TIM_GROUP_MEMBER_ROLE_OWNER,
+            ),
+            memberFullInfo: member,
+            myRole: GroupMemberRoleType.V2TIM_GROUP_MEMBER_ROLE_OWNER,
+            onDeleteGroupMember: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(UiKeys.groupMemberActionKickButton), findsNothing);
+
+      // Tap the member NAME (deferToChild → a center/byType tap can miss).
+      await tester.tap(find.text('Bob Member'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(UiKeys.groupMemberActionKickButton),
+        findsOneWidget,
+        reason: 'owner viewing a non-self member must see the kick action',
+      );
+    },
+  );
+
+  // S139 — the toxee group-profile avatar override renders a tappable
+  // local-pick surface (camera badge + GestureDetector). We do NOT fire the
+  // real FilePicker (needs the plugin + per-account paths). Mirrors the working
+  // conference analog test/ui/conference/conference_profile_real_ui_test.dart.
+  testWidgets(
+    'S139 group profile avatar override renders a tappable picker surface',
+    (tester) async {
+      final handle = GroupProfileBuilderOverrideHandle.capture();
+      handle.installOverrides();
+      addTearDown(handle.restore);
+
+      final builders = TencentCloudChatGroupProfileManager.builder;
+      await tester.pumpWidget(
+        _localized(
+          child: builders.getGroupProfileAvatarBuilder(
+            groupInfo: V2TimGroupInfo(
+              groupID: 'tox_group_s139',
+              groupName: 'S139 Group',
+              groupType: GroupType.Work,
+            ),
+            groupMember: const <V2TimGroupMemberFullInfo>[],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The local-pick camera badge signals the avatar is tappable (the toxee
+      // override, not the upstream preset grid).
+      expect(find.byIcon(Icons.camera_alt_outlined), findsOneWidget,
+          reason: 'the group avatar must show the local-pick camera badge');
+      expect(find.byType(GestureDetector), findsWidgets,
+          reason: 'the avatar must be wrapped in a tap target');
+    },
+  );
+
+  // S142 — the group member-info body exposes a keyed Copy-ID button that puts
+  // the member's Tox id on the clipboard (toxee added it to the fork; the only
+  // prior copy path was the member-LIST desktop right-click, leaving mobile
+  // users no way to copy a member id).
+  testWidgets(
+    'S142 group member info copy-id button copies the member id to the clipboard',
+    (tester) async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      String? clipboardText;
+      messenger.setMockMethodCallHandler(SystemChannels.platform,
+          (MethodCall call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboardText = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      });
+      addTearDown(() =>
+          messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+      final member = V2TimGroupMemberFullInfo(
+        userID: 'bob',
+        nickName: 'Bob',
+        role: GroupMemberRoleType.V2TIM_GROUP_MEMBER_ROLE_MEMBER,
+        joinTime: 0,
+      );
+      await tester.pumpWidget(
+        _localized(
+          child: TencentCloudChatGroupMemberInfoBody(memberFullInfo: member),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final copyBtn = find.byKey(UiKeys.groupMemberInfoCopyIdButton);
+      expect(copyBtn, findsOneWidget);
+
+      await tester.tap(copyBtn);
+      await tester.pumpAndSettle();
+
+      expect(clipboardText, 'bob',
+          reason: 'copy button should put the member userID on the clipboard');
+    },
+  );
+
 }

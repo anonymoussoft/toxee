@@ -54,6 +54,17 @@ void main() {
       expect(unpinnedMarkReadItem.enabled, isTrue);
       expect(unpinnedDeleteItem.key, UiKeys.conversationContextMenuDeleteItem);
 
+      // Assert the `value` each item returns from showMenu → the dispatch
+      // switch (`_dispatchConversationMenuAction`). The real-UI driver gates
+      // (S132/S134) drive these actions via `l3_open_conversation_menu`
+      // action:'pin'|'delete' to dodge the flutter_skill PopupMenuItem
+      // double-fire, so this is the ONLY guard on the item→value→handler wiring
+      // (codex MINOR). A drift here (e.g. value:'pin' renamed) would otherwise
+      // pass the driver gates but break the production menu.
+      expect(unpinnedPinItem.value, 'pin');
+      expect(unpinnedMarkReadItem.value, 'mark_read');
+      expect(unpinnedDeleteItem.value, 'delete');
+
       final pinnedItems = buildConversationContextMenuItems(
         l10n: l10n,
         scheme: scheme,
@@ -64,6 +75,10 @@ void main() {
       final pinnedMarkReadItem = pinnedItems[1] as PopupMenuItem<String>;
 
       expect(pinnedToggleItem.key, UiKeys.conversationContextMenuUnpinItem);
+      // The pinned toggle still carries value:'pin' — the SAME action the
+      // handler toggles off (the menu shows "Unpin" but dispatches 'pin', which
+      // `_dispatchConversationMenuAction` flips against the live `isPinned`).
+      expect(pinnedToggleItem.value, 'pin');
       expect(
         pinnedMarkReadItem.key,
         UiKeys.conversationContextMenuMarkReadItem,

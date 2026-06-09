@@ -4,7 +4,9 @@
 **Fixture vector**: `accounts=1 current=A1 profileCrypt=plain autoLogin=on network=any (Offline OK) history=don't-care`
 **Harness mode**: peerHarness=none
 **Promotion target**: L1 WidgetTester candidate (REAL_UI_GATES recipe §47 "render fork chat widgets" — though this needs only `MaterialApp` + `AppLocalizations`/`TencentCloudChatLocalizations` delegates, no fork chat widget). The toggle→edit→save closure is ALREADY exercised by `test/ui/profile_edit_persists_to_account_list_test.dart:156-198` (fires `UiKeys.profileEditToggle.onPressed`, edits `profileNicknameField`/`profileStatusField`, taps `profileSaveButton`); the only missing L1 leg is the toggle-again-EXITS-edit-mode assertion (`_editMode` flips back to read-only), which that test does not cover. Promote by extending that test with a second toggle tap + `findsNothing` on the edit fields.
-**Status**: spec-only for the UI tap (no marionette-driven runnable gate for the toggle). The DATA half of the save (statusMessage round-trip) is an executable hermetic gate — see Executable Driver. The L1 toggle-exit leg is owed (recipe above).
+**Status**: covered (L1 WidgetTester real-UI gate — test/ui/profile_open_and_edit_toggle_real_ui_test.dart). Marionette live-round-trip (A2 statusMessage l3_dump_state assertion) remains L3-only.
+**Covered-by**: test/ui/profile_open_and_edit_toggle_real_ui_test.dart
+**Mobile parity**: the edit toggle, edit fields, and save button all live in shared Dart (`lib/ui/profile/profile_header.dart`, `lib/ui/profile/profile_edit_fields.dart`, `lib/ui/profile_page.dart`). The L1 gate covers iOS/Android identically; the only platform fork is Dialog vs fullscreen route (both in `sidebar.dart`), orthogonal to the toggle assertions.
 
 ## Precondition
 - Account A signed in, plaintext profile (`_StartupGate` lands on HomePage, not the password dialog).

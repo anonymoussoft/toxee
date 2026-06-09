@@ -60,67 +60,67 @@ Fixture C two-process scripts (via `tool/mcp_test/fixture_c_manifest.json`), and
 | S44 | S44 — Logout (退出登录) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
 | S45 | S45 — Delete account (注销账号) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (S45a + S45b); S45c/d/f deferred |
 | S46 | S46 — Auto-accept friend request toggle | L3 (MCP playbook) | l3-gate<br>2proc-l3 | `L3-autoaccept-friend-toggle` (l3-gate)<br>`L3-session-settings` (l3-gate)<br>`run_fixture_c_autoaccept_friend.sh` (2proc-l3) | covered by executable Fixture C gate |
-| S47 | S47 — Auto-accept group invite toggle | L3 (MCP playbook) | l3-gate<br>2proc-l3 | `L3-autoaccept-group-toggle` (l3-gate)<br>`L3-session-settings` (l3-gate)<br>`run_fixture_c_group_invite.sh` (2proc-l3) | partial (Dart fix landed; native residual) |
+| S47 | S47 — Auto-accept group invite toggle | L3 (MCP playbook) | l3-gate<br>2proc-l3 | `L3-autoaccept-group-toggle` (l3-gate)<br>`L3-session-settings` (l3-gate)<br>`run_fixture_c_group_invite.sh` (2proc-l3)<br>``test/ui/home/auto_accept_apply_test.dart`` (Covered-by) | partial (Dart fix landed; native residual) |
 | S48 | S48 — Conversation list search | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
 | S49 | S49 — Contact list search (tap, filter, clear, empty state) | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_contact_search.sh` (2proc-l3) | covered |
 | S51 | S51 — Friend online/offline presence indicator | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_presence.sh` (2proc-l3) | covered by executable Fixture C gate |
 | S52 | S52 — Self profile change propagates to a friend | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_avatar.sh` (2proc-l3)<br>`run_fixture_c_self_profile.sh` (2proc-l3) | covered by executable Fixture C gates |
 | S53 | S53 — Tap a message notification → opens the conversation | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_notification_tap.sh` (2proc-l3) | routing half covered by executable Fixture C gate |
-| S54 | S54 — Friend request custom message round-trips to the recipient | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_custom_message.sh` (2proc-l3) | covered by executable Fixture C gate |
+| S54 | S54 — Friend request custom message round-trips to the recipient | L3 (MCP playbook) | 2proc-ui<br>2proc-l3 | `drive_real_ui_pair.dart` (2proc-ui)<br>`run_fixture_c_custom_message.sh` (2proc-l3) | covered by executable Fixture C gate |
 | S55 | S55 — Add self as friend (A1 self-add guard rejects) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered; two sub-variants (S55-full = 76-char address, S55-pubkey = 64-char public-key prefix). |
-| S56 | S56 — Add duplicate friend (A2 dedup guard rejects) | L3 (MCP playbook) | — | _(none — manual playbook)_ | tier 1 covered; tier 2 deferred until the dialog stops auto-dismissing on success. |
+| S56 | S56 — Add duplicate friend (A2 dedup guard rejects) | L3 (MCP playbook) | — | ``test/ui/add_friend_guards_test.dart`` (Covered-by) | BOTH tiers covered at the widget layer (2026-06-08) |
 | S57 | S57 — Theme switch with chat open (in-flight rebuild robustness) | L3 (MCP playbook) | l3-gate | `L3-session-settings` (l3-gate) | covered. |
 | S58 | S58 — Window minimize / restore lifecycle (badge + notification) | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_window.sh` (2proc-l3) | covered by executable Fixture C gate |
-| S59 | S59 — Notification permission revoke / regrant | L3 (MCP playbook) | — | _(none — manual playbook)_ | OS-gated |
+| S59 | S59 — Notification permission revoke / regrant | L3 (MCP playbook) | — | ``test/notifications/notification_permission_gate_test.dart`` (Covered-by) | the in-app permission CONSEQUENCE is now gated (2026-06-08); only the OS GRANT itself is irreducible |
 | S60 | S60 — Responsive layout (window resize → desktop / mobile switch) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
 | S61 | S61 — Friend handshake (two processes) | L3 (MCP playbook) | 2proc-ui<br>2proc-l3 | `drive_real_ui_pair.dart` (2proc-ui)<br>`run_fixture_c_non_media.sh` (2proc-l3) | covered by executable Fixture C state driver (UI accept surface remains S26) |
 | S62 | S62 — Real-time message delivery (two processes) | L3 (MCP playbook) | 2proc-ui<br>2proc-l3 | `drive_real_ui_pair.dart` (2proc-ui)<br>`run_fixture_c_non_media.sh` (2proc-l3) | covered by executable Fixture C state driver |
 | S63 | S63 — Read receipt / typing indicator | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_receipt.sh` (2proc-l3)<br>`run_fixture_c_typing.sh` (2proc-l3) | typing leg covered (`run_fixture_c_typing.sh`, validated live) |
 | S64 | S64 — Concurrent send (two processes) | L3 (MCP playbook) | 2proc-ui<br>2proc-l3 | `drive_real_ui_pair.dart` (2proc-ui)<br>`run_fixture_c_concurrent.sh` (2proc-l3) | covered by executable Fixture C gate |
-| S65 | S65 — Initiate voice call | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
+| S65 | S65 — Initiate voice call | L3 (MCP playbook) | 2proc-ui<br>2proc-l3 | `drive_real_ui_pair.dart` (2proc-ui)<br>`run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
 | S66 | S66 — Initiate video call | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
-| S67 | S67 — Accept incoming call | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
+| S67 | S67 — Accept incoming call | L3 (MCP playbook) | 2proc-ui<br>2proc-l3 | `drive_real_ui_pair.dart` (2proc-ui)<br>`run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
 | S68 | S68 — Decline incoming call | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
 | S69 | S69 — Call mid-ring rejection by network drop | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_network_drop.sh` (2proc-l3) [media, destructive] | covered by executable Fixture C gate |
-| S70 | S70 — Call duration timeout (outgoing ring no-answer) | L3 (MCP playbook) | — | _(none — manual playbook)_ | not applicable |
+| S70 | S70 — Call duration timeout (outgoing ring no-answer) | L3 (MCP playbook) | — | ``test/call/call_duration_no_timeout_test.dart`` (Covered-by) | the "no auto-end" INVARIANT is now gated (2026-06-08) |
 | S71 | S71 — Import-then-auto-switch (LoginPage `.tox` restore) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered with Plan B (debug-only `toxee_restore_from_tox` MCP tool); plaintext `.tox` variant. |
 | S72 | S72 — Multi-account state isolation (privacy regression) | L3 (MCP playbook) | l3-gate | `L3-session-settings` (l3-gate) | covered; tier-1 privacy invariants (I1-I6) gate ship. |
 | S74 | S74 — In-call microphone mute / unmute | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
 | S75 | S75 — In-call camera (video) toggle | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
-| S76 | S76 — Hang up an active call | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
+| S76 | S76 — Hang up an active call | L3 (MCP playbook) | 2proc-ui<br>2proc-l3 | `drive_real_ui_pair.dart` (2proc-ui)<br>`run_fixture_c_call.sh` (2proc-l3) [media] | covered by executable Fixture C call gate |
 | S77 | S77 — Missed incoming call → call record + notification | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_missed_call.sh` (2proc-l3) [media] | covered by executable Fixture C gate |
 | S78 | S78 — Record + send a voice message | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_voice_msg.sh` (2proc-l3) | covered by executable Fixture C gate |
 | S79 | S79 — Set self avatar via the native image picker | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_avatar_picker.sh` (2proc-l3) | covered by executable Fixture C gate |
 | S80 | S80 — Add a friend by scanning their QR code | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
 | S81 | S81 — Invite a friend to a group (two processes) | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_group_invite.sh` (2proc-l3) | invite-send + delivery FIXED (Dart) |
 | S82 | S82 — Custom / failover DHT bootstrap node → connect | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
-| S83 | S83 — Mute a conversation → inbound message notification suppressed | L3 (MCP playbook) | l3-gate<br>2proc-l3 | `L3-recvopt-mute-toggle` (l3-gate)<br>`run_fixture_c_mute.sh` (2proc-l3) | mute-state half covered by executable Fixture C gate |
+| S83 | S83 — Mute a conversation → inbound message notification suppressed | L3 (MCP playbook) | l3-gate<br>2proc-l3 | `L3-recvopt-mute-toggle` (l3-gate)<br>`run_fixture_c_mute.sh` (2proc-l3)<br>``test/ui/notification_mute_suppression_test.dart`` (Covered-by) | covered |
 | S84 | S84 — Pin / unpin a conversation | L3 (executable hermetic runner gate) | — | _(none — manual playbook)_ | covered (executable) |
 | S85 | S85 — Bootstrap node mode switch (auto / manual / lan) | L3 (executable hermetic runner gate) | — | _(none — manual playbook)_ | covered (executable, **setting** half) |
 | S86 | S86 — Notification sound toggle (per account) | L3 (executable hermetic runner gate) | — | _(none — manual playbook)_ | covered (executable, **setting** half) |
 | S87 | S87 — Download directory + auto-download size threshold | L3 (executable hermetic runner gate) | — | _(none — manual playbook)_ | covered (executable, **threshold** half) |
 | S88 | S88 — Send an image message to a friend | L3 (MCP playbook) | 2proc-l3 | `run_fixture_c_image.sh` (2proc-l3) | covered (executable) |
 | S89 | S89 — Manual bootstrap node config + test (settings) → DHT reachability | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (split: runner-assertable add path + L3-manual UI form) |
-| S90 | S90 — App badge unread count (inbound bumps total, mark-read clears it) | L3 (MCP playbook) | — | _(none — manual playbook)_ | driveable |
-| S91 | S91 — Cross-device pairing (host/client, QR + 6-digit SAS, .tox blob) | L3 (MCP playbook) — two-instance / two-device, L3-manual | — | _(none — manual playbook)_ | blocked (driveable seams documented; full automation blocked on camera/QR + SAS confirmation + a disabled feature flag) |
-| S92 | S92 — LAN bootstrap service start/stop (desktop) + LAN node scan | L3 (MCP playbook) — desktop-only, infra-heavy, L3-manual | — | _(none — manual playbook)_ | C4 L3-manual (start/stop driveable on a desktop dev box); C5 blocked (UI not wired |
-| S93 | S93 — Message search within a conversation (full-text + highlight) | L3 (MCP playbook) | — | _(none — manual playbook)_ | L3-MANUAL (no executable gate yet) |
-| S94 | S94 — File transfer progress (send + receive, 0 → 100) | L3 (MCP playbook) | — | _(none — manual playbook)_ | NEEDS-SMALL-TOOL / L3-MANUAL |
+| S90 | S90 — App badge unread count (inbound bumps total, mark-read clears it) | L3 (MCP playbook) | — | ``tool/mcp_test/scenarios/l3_total_unread_badge.json`` (Covered-by) | covered (the BUMP half) by an executable L3 echo gate |
+| S91 | S91 — Cross-device pairing (host/client, QR + 6-digit SAS, .tox blob) | L3 (MCP playbook) — two-instance / two-device, L3-manual | — | ``test/pairing/pairing_wire_test.dart`` (Covered-by) | covered at the unit/logic layer (2026-06-08) |
+| S92 | S92 — LAN bootstrap service start/stop (desktop) + LAN node scan | L3 (MCP playbook) — desktop-only, infra-heavy, L3-manual | — | ``test/util/lan_bootstrap_recovery_test.dart`` (Covered-by) | hermetic HALF gated (2026-06-08); the start/stop native orchestration is documented-irreducible (manual-LAN-smoke-only)… |
+| S93 | S93 — Message search within a conversation (full-text + highlight) | L3 (MCP playbook) | — | ``test/ui/search/custom_search_keys_test.dart`` (Covered-by)<br>``test/tim2tox_message_search_test.dart`` (Covered-by) | covered at the widget layer for the in-conversation MATCHING + HIGHLIGHT (2026-06-08); only the SDK-backed full-search … |
+| S94 | S94 — File transfer progress (send + receive, 0 → 100) | L3 (MCP playbook) | — | ``test/ui/testing/file_transfers_projection_test.dart`` (Covered-by)<br>``test/sdk_fake/file_progress_exposure_test.dart`` (Covered-by) | tool SHIPPED (2026-06-08) |
 | S95 | S95 — Prefs newer-than-app → upgrade-required screen (cold start) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (requires a crafted Prefs fixture; NOT the runner's seeded account) |
 | S96 | S96 — Settings: toggle Auto-Login switch (real tap) | L3 (MCP playbook) | l3-ui-single | `L3-settings-autologin-tap` (l3-ui-single) _(nonBlocking)_ | covered READ-ONLY (`l3_session_settings.json` reads `autoLogin`); there is NO write round-trip gate |
 | S97 | S97 — Settings: toggle Notification-Sound switch (real tap) | L3 (MCP playbook) | l3-ui-single | `L3-settings-notifsound-tap` (l3-ui-single) _(nonBlocking)_ | covered (data-half gate exists; the UI tap is L3, authored-as-target only) |
 | S98 | S98 — Settings: edit Download-Size-Limit field + Save (real input) | L3 (MCP playbook) | l3-ui-single | `L3-settings-downloadlimit-tap` (l3-ui-single) _(nonBlocking)_ | covered (data-half gate exists; the UI input is L3, authored-as-target only) |
 | S99 | S99 — Settings: Bootstrap-Node mode segmented control (real tap) | L3 (MCP playbook) | l3-ui-single | `L3-settings-bootstrap-mode-tap` (l3-ui-single) _(nonBlocking)_ | covered (data-half gate exists; the UI tap is L3, authored-as-target only) |
 | S100 | S100 — Settings: Copy Tox ID button → OS clipboard (real tap) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (data-half gate exists; the real tap + OS clipboard write is L3, verified out-of-band) |
-| S101 | S101 — Self-profile: enter/exit edit-mode toggle | L3 (MCP playbook) | — | _(none — manual playbook)_ | spec-only for the UI tap (no marionette-driven runnable gate for the toggle) |
-| S102 | S102 — Self-profile: Copy Tox ID button → OS clipboard | L3 (MCP playbook) | — | _(none — manual playbook)_ | spec-only for the clipboard write (no marionette-driven runnable gate) |
-| S103 | S103 — Self-profile: QR section copy / action | L3 (MCP playbook) | — | _(none — manual playbook)_ | spec-only (L1 WidgetTester gate owed for the callback-fires leg; the image-clipboard write + QR render stay L3) |
-| S104 | S104 — Sidebar user-avatar tap → opens self-profile | L3 (MCP playbook) | — | _(none — manual playbook)_ | spec-only (L1 WidgetTester gate owed |
-| S105 | S105 — Settings: Export-account option chooser | L3 (MCP playbook) | — | _(none — manual playbook)_ | spec-only |
-| S106 | S106 — Contacts: sub-tab navigation (New Contacts / Group Notifications / Blocked Users) | L3 (MCP playbook) | — | _(none — manual playbook)_ | spec-only (L1 WidgetTester gate owed; surface proven renderable by `contact_application_anchors_test.dart`) |
-| S107 | S107 — Contacts: Blocked-Users tab listing + unblock | L3 (MCP playbook) | — | _(none — manual playbook)_ | spec-only for the UI-surface angle |
-| S108 | S108 — Friend application DETAIL screen accept | L3 (MCP playbook) | 2proc-ui | `drive_real_ui_pair.dart` (2proc-ui) | covered (executable, two-process) for the accept DATA-path via `tool/mcp_test/run_fixture_c_accept.sh` (S26's gate) |
-| S109 | S109 — Contacts: friend-applications EMPTY state | L3 (MCP playbook) | — | _(none — manual playbook)_ | spec-only (L1 WidgetTester gate owed; surface proven renderable by `contact_application_anchors_test.dart`) |
+| S101 | S101 — Self-profile: enter/exit edit-mode toggle | L3 (MCP playbook) | — | `test/ui/profile_open_and_edit_toggle_real_ui_test.dart` (Covered-by) | covered (L1 WidgetTester real-UI gate |
+| S102 | S102 — Self-profile: Copy Tox ID button → OS clipboard | L3 (MCP playbook) | — | `test/ui/profile_copy_tox_id_real_ui_test.dart` (Covered-by) | covered (L1 WidgetTester real-UI gate |
+| S103 | S103 — Self-profile: QR section copy / action | L3 (MCP playbook) | — | `test/ui/profile_qr_copy_real_ui_test.dart` (Covered-by) | covered (L1 WidgetTester real-UI gate |
+| S104 | S104 — Sidebar user-avatar tap → opens self-profile | L3 (MCP playbook) | — | `test/ui/profile_open_and_edit_toggle_real_ui_test.dart` (Covered-by) | covered (L1 WidgetTester real-UI gate |
+| S105 | S105 — Settings: Export-account option chooser | L3 (MCP playbook) | — | ``test/ui/settings/settings_export_chooser_real_ui_test.dart`` (Covered-by) | covered (L1 WidgetTester real-UI gate |
+| S106 | S106 — Contacts: sub-tab navigation (New Contacts / Group Notifications / Blocked Users) | L3 (MCP playbook) | — | ``test/ui/contact/contact_subtab_navigation_real_ui_test.dart`` (Covered-by) | covered (L1 WidgetTester real-UI gate |
+| S107 | S107 — Contacts: Blocked-Users tab listing + unblock | L3 (MCP playbook) | — | `test/ui/contact/contact_blocked_users_list_real_ui_test.dart` (Covered-by) | covered (L1 WidgetTester real-UI gate |
+| S108 | S108 — Friend application DETAIL screen accept | L3 (MCP playbook) | 2proc-ui | `drive_real_ui_pair.dart` (2proc-ui)<br>`test/ui/contact/contact_application_detail_accept_real_ui_test.dart` (Covered-by) | covered |
+| S109 | S109 — Contacts: friend-applications EMPTY state | L3 (MCP playbook) | — | `test/ui/contact/contact_applications_empty_state_real_ui_test.dart` (Covered-by) | covered (L1 WidgetTester real-UI gate |
 | S110 | S110 — Contacts: Group-Notifications tab listing | L3 (MCP playbook) | — | _(none — manual playbook)_ | surface spec-only (L1 candidate |
 | S111 | S111 — Friend profile: clear chat history + confirm dialog | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (data-half gate exists |
 | S112 | S112 — Friend profile: delete-friend button | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered by S28's data + behavioral assertions (delete-friend → friend leaves `friends[]` / `Prefs.local_friends`) |
@@ -129,14 +129,74 @@ Fixture C two-process scripts (via `tool/mcp_test/fixture_c_manifest.json`), and
 | S115 | S115 — Friend profile: "Send Message" tile → opens conversation | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (keying GAP: `friendProfileSendMessageButton` wraps the whole [Send, Voice, Video] tile row; a center key-tap h… |
 | S116 | S116 — Conversation row: Pin / unpin via context-menu items (real tap) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (this is the real-MENU upgrade of S84's hermetic `l3_set_pinned` data-half; the menu-item TAP itself is a mario… |
 | S117 | S117 — Conversation row: context-menu SURFACE (enumerate items) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (surface gate only |
-| S118 | S118 — Conversation row: Mark-read via context-menu item (real tap) | L3 (MCP playbook) | — | _(none — manual playbook)_ | **EXPECTED-FAIL for the unread→0 side effect via the context-menu item** (the menu's `cleanConversationUnreadMessageCou… |
+| S118 | S118 — Conversation row: Mark-read via context-menu item (real tap) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
 | S119 | S119 — Conversation row: Delete via context-menu item + confirm dialog | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered as a **SURFACE + clear-history** gate |
 | S120 | S120 — Chat composer: input field focus + type + send | L3 (MCP playbook) | — | `test/ui/chat_core_real_ui_test.dart` (Covered-by) | **covered (L1 WidgetTester gate #1 exists for typing + Enter → real send; live send is L3).** The marionette desktop se… |
-| S121 | S121 — Group profile: Members entry → member-list panel (real tap) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (single-instance: panel mounts + SELF row) |
-| S122 | S122 — Group profile: Clear group history + confirm (real tap) | L3 (MCP playbook) | — | _(none — manual playbook)_ | NOT runner-gated for the data half |
+| S121 | S121 — Group profile: Members entry → member-list panel (real tap) | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by) | entry surface covered at the widget layer |
+| S122 | S122 — Group profile: Clear group history + confirm (real tap) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
 | S123 | S123 — Group profile: Leave group button (real tap, owner/dissolve case) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (data-half `l3_leave_group.json` proves the leave STATE; the real-UI dissolve-button TAP is an L3 / L1 WidgetTe… |
 | S124 | S124 — Group invite: Add-member button → picker → confirm (two processes) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (invite-send + delivery FIXED in Dart; the friend-PICKER selection is mostly text/semantic with no per-row key |
 | S125 | S125 — Manual bootstrap form: open → enter host/port/pubkey → test (real taps) | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (split: the add path is an AGENT-DRIVEN debug-tool flow (S89 L3-manual), NOT a runner gate; the manual FORM fil… |
+| S126 | S126 — Group: create a public group from Add Group dialog | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered (infra) |
+| S127 | S127 — Group: create a private group from Add Group dialog | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S128 | S128 — Group: copy the created group ID from Add Group dialog | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered at the widget layer (L1) |
+| S129 | S129 — Group: open a conversation from the chat list | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S130 | S130 — Group: composer focus, type, and send | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S131 | S131 — Group: conversation-row context-menu surface | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S132 | S132 — Group: pin / unpin from the conversation-row context menu | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S133 | S133 — Group: mark-read from the conversation-row context menu | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S134 | S134 — Group: delete from the conversation-row context menu and confirm | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S135 | S135 — Group: search result opens the target conversation | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S136 | S136 — Group: open the group profile from the active chat header | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered at the widget layer (L1) for the profile SURFACE |
+| S137 | S137 — Group: the profile Send Message tile returns to chat | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S138 | S138 — Group: edit the group name from the profile dialog | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S139 | S139 — Group: change the group avatar through the local picker override | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered at the widget layer (L1) |
+| S140 | S140 — Group: profile content shows the resolved group ID | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S141 | S141 — Group: open member info from the member list | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered at the widget layer (L1) |
+| S142 | S142 — Group: copy a member ID from member info | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered at the widget layer (L1) |
+| S143 | S143 — Group: kick-action surface appears for a removable member | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered at the widget layer (L1) |
+| S144 | S144 — Group: add-member entry opens the picker | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S145 | S145 — Group: add-member picker selects a friend and confirms | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S146 | S146 — Group: group-notifications tab shows a pending invite row | L3 (MCP playbook) | — | _(none — manual playbook)_ | N/A for toxee (2026-06-08, codex-reviewed) |
+| S147 | S147 — Group: accept a pending invite from the group-notifications tab | L3 (MCP playbook) | — | _(none — manual playbook)_ | N/A for toxee (2026-06-08, codex-reviewed) |
+| S148 | S148 — Group: clear-history row opens the confirm dialog | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S149 | S149 — Group: leave-row label resolves to quit vs dissolve | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S150 | S150 — Group: leave / dissolve row opens the confirm dialog | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S151 | S151 — Group: realtime message delivery through the real UI | L3 (MCP playbook) | 2proc-ui | `drive_real_ui_pair.dart` (2proc-ui) | covered |
+| S152 | S152 — Group: alternating burst send through the real UI | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S153 | S153 — Group: profile rename refreshes the conversation row title | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered at the widget layer (L1) |
+| S154 | S154 — Group: clear history preserves the row and pin state | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S155 | S155 — Group: accepting an invite eventually updates the member list | L3 (MCP playbook) | — | _(none — manual playbook)_ | covered |
+| S156 | S156 — Conference: create a legacy conference from Add Group dialog | L3 (MCP playbook) | — | ``test/ui/conference/conference_create_dialog_real_ui_test.dart`` (Covered-by) | covered |
+| S157 | S157 — Conference: copy the created conference ID from Add Group dialog | L3 (MCP playbook) | — | ``test/ui/conference/conference_create_dialog_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S158 | S158 — Conference: selecting the Conference segment updates the hint text | L3 (MCP playbook) | — | ``test/ui/add_group_dialog_test.dart`` (Covered-by)<br>``test/ui/conference/conference_create_dialog_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S159 | S159 — Conference: open a conversation from the chat list | L3 (MCP playbook) | — | ``test/ui/conference/conference_conversation_row_real_ui_test.dart`` (Covered-by) | covered |
+| S160 | S160 — Conference: composer focus, type, and send | L3 (MCP playbook) | — | ``test/ui/conference/conference_composer_real_ui_test.dart`` (Covered-by) | covered |
+| S161 | S161 — Conference: conversation-row context-menu surface | L3 (MCP playbook) | — | ``test/ui/conference/conference_conversation_row_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S162 | S162 — Conference: pin / unpin from the conversation-row context menu | L3 (MCP playbook) | — | ``test/ui/conference/conference_conversation_row_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S163 | S163 — Conference: mark-read from the conversation-row context menu | L3 (MCP playbook) | — | ``test/ui/conference/conference_conversation_row_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S164 | S164 — Conference: delete from the conversation-row context menu and confirm | L3 (MCP playbook) | — | ``test/ui/conference/conference_conversation_row_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S165 | S165 — Conference: search result opens the target conversation | L3 (MCP playbook) | — | ``test/ui/conference/conference_conversation_row_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S166 | S166 — Conference: open the profile from the active chat header | L3 (MCP playbook) | — | ``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S167 | S167 — Conference: the profile Send Message tile returns to chat | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by)<br>``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S168 | S168 — Conference: edit the conference name from the profile dialog | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by)<br>``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S169 | S169 — Conference: change the conference avatar through the local picker override | L3 (MCP playbook) | — | ``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S170 | S170 — Conference: profile content shows the resolved conference ID | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by)<br>``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S171 | S171 — Conference: open member info from the member list | L3 (MCP playbook) | — | ``test/ui/conference/conference_members_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S172 | S172 — Conference: copy a member ID from member info | L3 (MCP playbook) | — | ``test/ui/conference/conference_members_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S173 | S173 — Conference: kick-action is NOT offered for conference members (no roles) | L3 (MCP playbook) | — | ``test/ui/conference/conference_members_real_ui_test.dart`` (Covered-by) | covered (truthful NEGATIVE) at the widget layer |
+| S174 | S174 — Conference: add-member entry opens the picker | L3 (MCP playbook) | — | ``test/ui/conference/conference_members_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S175 | S175 — Conference: add-member picker selects a friend and confirms | L3 (MCP playbook) | — | ``test/ui/conference/conference_members_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S176 | S176 — Conference: group-notifications tab shows a pending conference invite row | L3 (MCP playbook) | — | ``test/ui/conference/conference_notifications_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S177 | S177 — Conference: accept a pending conference invite from the group-notifications tab | L3 (MCP playbook) | — | ``test/ui/conference/conference_notifications_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S178 | S178 — Conference: clear-history row opens the confirm dialog | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by)<br>``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S179 | S179 — Conference: leave / delete row opens the confirm dialog | L3 (MCP playbook) | — | ``test/ui/chat_core_real_ui_test.dart`` (Covered-by)<br>``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S180 | S180 — Conference: leaving or deleting the conference removes the row | L3 (MCP playbook) | — | ``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S181 | S181 — Conference: realtime message delivery through the real UI | L3 (MCP playbook) | — | ``test/ui/conference/conference_composer_real_ui_test.dart`` (Covered-by) | covered |
+| S182 | S182 — Conference: alternating burst send through the real UI | L3 (MCP playbook) | — | ``test/ui/conference/conference_composer_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S183 | S183 — Conference: profile rename refreshes the conversation row title | L3 (MCP playbook) | — | ``test/ui/conference/conference_profile_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
+| S184 | S184 — Conference: invite flow uses the `tox_conference_invite` branch | L3 (MCP playbook) | — | ``test/ui/conference/conference_members_real_ui_test.dart`` (Covered-by) | covered |
+| S185 | S185 — Conference: join-by-ID remains unsupported in the NGC join flow | L3 (MCP playbook) | — | ``test/ui/conference/conference_create_dialog_real_ui_test.dart`` (Covered-by) | covered at the widget layer |
 
 ## Execution-class rosters (derived from scenario JSON flags)
 
@@ -233,7 +293,7 @@ Fixture C two-process scripts (via `tool/mcp_test/fixture_c_manifest.json`), and
 | `run_fixture_c_missed_call.sh` | S77 | 2proc-l3 | yes | no |
 | `run_fixture_c_network_drop.sh` | S69 | 2proc-l3 | yes | yes |
 | `run_fixture_c_kick.sh` | S37 | 2proc-l3 | no | yes |
-| `drive_real_ui_pair.dart` | S26, S61, S27, S62, S64, S108 | 2proc-ui | no | no |
+| `drive_real_ui_pair.dart` | S26, S54, S61, S27, S62, S64, S65, S67, S76, S108, S151 | 2proc-ui | no | no |
 
 ## Appendix: playbook header warnings
 

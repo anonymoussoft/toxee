@@ -51,8 +51,10 @@ STDIO_LOG="$BUILD_DIR/toxee_stdio.log"
 VM_URI_FILE="$BUILD_DIR/vm_service_uri.txt"
 JSON_FILE="$INSTANCE_DIR/instance.json"
 APP_SUPPORT_LOG="$APP_SUPPORT_OVERRIDE_DIR/flutter_client.log"
+APP_SUPPORT_LOG_DIR="$APP_SUPPORT_OVERRIDE_DIR/logs"
+PRE_LAUNCH_APP_LOGS_FILE="$BUILD_DIR/prelaunch_app_logs.txt"
 
-mkdir -p "$BUILD_DIR" "$HOME_OVERRIDE_DIR" "$APP_SUPPORT_OVERRIDE_DIR"
+mkdir -p "$BUILD_DIR" "$HOME_OVERRIDE_DIR" "$APP_SUPPORT_OVERRIDE_DIR" "$APP_SUPPORT_LOG_DIR"
 [[ -x "$APP_EXECUTABLE" ]] || {
     echo "launch_toxee_instance.sh: app executable missing: $APP_EXECUTABLE" >&2
     exit 66
@@ -65,6 +67,8 @@ mkdir -p "$BUILD_DIR" "$HOME_OVERRIDE_DIR" "$APP_SUPPORT_OVERRIDE_DIR"
 : > "$STDIO_LOG"
 rm -f "$VM_URI_FILE"
 BASELINE_PIDS="$(_mi_pids_for_executable "$APP_EXECUTABLE")"
+find "$APP_SUPPORT_LOG_DIR" -maxdepth 1 -type f -name 'app_*.log' -print \
+    >"$PRE_LAUNCH_APP_LOGS_FILE" 2>/dev/null || true
 
 cleanup_on_fail() {
     if [[ -n "${LAUNCHED_PID:-}" ]]; then
@@ -165,15 +169,34 @@ if [[ -z "$start_time" || -z "$cmdline" ]]; then
     exit 1
 fi
 
-actual_app_support_log="$(/usr/bin/python3 - "$APP_SUPPORT_OVERRIDE_DIR/logs" <<'PY'
+actual_app_support_log="$(/usr/bin/python3 - "$APP_SUPPORT_LOG_DIR" "$PRE_LAUNCH_APP_LOGS_FILE" <<'PY'
 import glob
 import os
 import sys
+import time
 
-log_dir = sys.argv[1]
-files = glob.glob(os.path.join(log_dir, "app_*.log"))
-if files:
-    print(max(files, key=lambda p: os.stat(p).st_mtime))
+log_dir, baseline_file = sys.argv[1:3]
+baseline = set()
+if os.path.exists(baseline_file):
+    with open(baseline_file, encoding="utf-8") as fh:
+        baseline = {line.strip() for line in fh if line.strip()}
+
+def newest(paths):
+    return max(paths, key=lambda p: os.stat(p).st_mtime)
+
+deadline = time.time() + 8
+selected = ""
+while time.time() < deadline:
+    files = glob.glob(os.path.join(log_dir, "app_*.log"))
+    if files:
+        new_files = [path for path in files if path not in baseline]
+        selected = newest(new_files) if new_files else newest(files)
+        if new_files:
+            break
+    time.sleep(0.25)
+
+if selected:
+    print(selected)
 PY
 )"
 if [[ -n "$actual_app_support_log" ]]; then

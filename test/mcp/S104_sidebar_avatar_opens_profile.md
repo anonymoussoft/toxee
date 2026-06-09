@@ -4,7 +4,9 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any (Offline OK) window=default`
 **Harness mode**: peerHarness=none
 **Promotion target**: L1 WidgetTester candidate (REAL_UI_GATES recipe §47 — `MaterialApp` + `AppLocalizations`/`TencentCloudChatLocalizations` delegates + `TencentCloudChatIntl().init`). `showSelfProfile` is already invoked from a `WidgetTester` harness in `test/ui/profile_edit_persists_to_account_list_test.dart:81-92` (via a test button, not the sidebar `InkWell`). Promote by pumping the real sidebar `_UserAvatar` (`buildSidebar`) and `tester.tap(find.byKey(UiKeys.sidebarUserAvatar))`, then asserting `find.byKey(UiKeys.profileEditToggle)` (or `profileToxIdSelectableText`) `findsOneWidget`. The async Tox-ID resolve in `_openProfile` needs a pumped future, hence the L1 (not pure-unit) layer.
-**Status**: spec-only (L1 WidgetTester gate owed — recipe above). No marionette-driven runnable gate; there is no `l3_dump_state` "which page is open" field, so this is asserted purely via the snapshot presence of profile widgets/keys.
+**Status**: covered (L1 WidgetTester real-UI gate — test/ui/profile_open_and_edit_toggle_real_ui_test.dart). Marionette live-DHT round-trip remains L3-only.
+**Covered-by**: test/ui/profile_open_and_edit_toggle_real_ui_test.dart
+**Mobile parity**: all widgets under test (`buildSidebar`, `_UserAvatar`, `showSelfProfile`, `ProfilePage`, `ProfileToxIdSection`) live in shared Dart (`lib/ui/settings/sidebar.dart`, `lib/ui/profile/`). The L1 gate covers iOS/Android; the only platform fork is Dialog (desktop) vs fullscreen route (mobile), both in `sidebar.dart`. Identity assertions A1–A4 hold on both.
 
 ## Precondition
 - Account A signed in, plaintext profile, HomePage mounted (sidebar visible).

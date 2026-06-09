@@ -258,6 +258,43 @@ void main() {
     });
   }
 
+  testWidgets(
+      'S158 create: selecting Conference updates the helper hint text',
+      (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final service = _StubFfiChatService(createGroupResult: _validGroupId);
+    addTearDown(service.disposeStub);
+
+    await tester.pumpWidget(_harness(service, (_) {}));
+    await _openDialog(tester);
+
+    expect(
+      find.text(
+          'Public group — discoverable on the DHT and joinable by anyone with the chat ID.'),
+      findsOneWidget,
+      reason: 'the dialog starts on the Public segment and should show its hint',
+    );
+
+    final conferenceSegment = find.descendant(
+      of: find.byKey(UiKeys.addGroupTypeSelector),
+      matching: find.text('Conference'),
+    );
+    await tester.ensureVisible(conferenceSegment);
+    await tester.pumpAndSettle();
+    await tester.tap(conferenceSegment);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+          'Legacy conference — older protocol, no roles or persistence.'),
+      findsOneWidget,
+      reason:
+          'selecting the Conference segment should switch the helper hint text',
+    );
+  });
+
   // ---- S33: join group by ID ---------------------------------------------
 
   testWidgets(
@@ -357,5 +394,59 @@ void main() {
         reason: 'joinGroup must fire once the id validator passes');
     expect(service.joinIdArg, _validGroupId,
         reason: 'joinGroup must receive the entered (trimmed) group id');
+  });
+
+  // S128 create copy-id: after a successful create the dialog shows the
+  // created-info card (new group id + Copy ID button). The dialog normally
+  // auto-closes (navigator.maybePop in _createGroup), so mount AddGroupDialog
+  // DIRECTLY as the body (not via showDialog) — maybePop then has nothing to
+  // pop and the card stays mounted for assertion.
+  testWidgets(
+      'S128 create success renders the created-info card with Copy ID button and the new id',
+      (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final service = _StubFfiChatService(createGroupResult: _validGroupId);
+    addTearDown(service.disposeStub);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          TencentCloudChatLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('en')],
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AddGroupDialog(service: service, onShowSnackBar: (_) {}),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Created-info card (and its Copy ID button) is absent before a create.
+    expect(find.byKey(UiKeys.addGroupCopyIdButton), findsNothing);
+
+    await tester.enterText(
+        find.byKey(UiKeys.addGroupCreateNameInput), 'copy-id group');
+    await tester.pumpAndSettle();
+    await _tapButton(tester, 'Create Group');
+
+    expect(service.createCalled, isTrue,
+        reason: 'createGroup must fire once the name validator passes');
+    // After create, the created-info card renders the Copy ID button + the id.
+    expect(find.byKey(UiKeys.addGroupCopyIdButton), findsOneWidget,
+        reason: 'the created-info Copy ID button should render after create');
+    expect(
+      find.byWidgetPredicate(
+          (w) => w is SelectableText && w.data == _validGroupId),
+      findsOneWidget,
+      reason: 'the created-info card should display the new group id',
+    );
   });
 }

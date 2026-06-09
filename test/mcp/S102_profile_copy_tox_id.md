@@ -4,7 +4,9 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any (Offline OK)`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned because the assertion is the host pasteboard (`pbpaste`) cross-process — `Clipboard.setData` writes to the OS pasteboard, and in-process `Clipboard.getData` is not a faithful cross-process check (see §3 UI_TEST_LAYERING "OS clipboard cross-process verification → L3 only"). The button-fires-`_copyToxId` wiring could be L1 (pump `ProfileToxIdSection`, fire `onCopy`, assert the callback), but the actual clipboard write stays L3.
-**Status**: spec-only for the clipboard write (no marionette-driven runnable gate). The DATA half — that the self id value is exposed to the copy path — is the executable `l3_self_id.json` gate (below). The clipboard write itself is verified out-of-band via `pbpaste`, exactly like S31/S16.
+**Status**: covered (L1 WidgetTester real-UI gate — test/ui/profile_copy_tox_id_real_ui_test.dart). The L1 gate proves the REAL `_copyToxId` handler writes the correct 76-hex toxId to the `flutter/platform` clipboard channel (`Clipboard.setData`), verifies the `SelectableText` renders the full 76-char id, asserts the snackbar appears, and guards against the `FlutterUIKitClient` placeholder-leak regression. Cross-process ground truth (`pbpaste` on the OS pasteboard) stays L3 — that is a host-process concern outside the widget-test sandbox.
+**Covered-by**: test/ui/profile_copy_tox_id_real_ui_test.dart
+**Mobile-parity**: `_copyToxId` and `ProfileToxIdSection` are shared Dart (`lib/ui/profile/profile_edit_fields.dart`, `lib/ui/profile_page.dart`) — identical on iOS/Android; only the host-side pasteboard-read command differs per platform (`pbpaste` on macOS, `xclip`/`wl-paste` on Linux, `Get-Clipboard` on Windows). This L1 gate covers all targets.
 
 ## Precondition
 - Account A signed in, plaintext profile; self-profile reachable via `sidebarUserAvatar`.

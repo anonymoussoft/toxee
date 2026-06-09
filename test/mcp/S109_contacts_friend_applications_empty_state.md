@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any friends=any friendApplications=none`
 **Harness mode**: peerHarness=none — the empty friend-applications surface is single-instance and hermetically renderable; no peer is needed to render "no pending applications". (`contact_application_anchors_test.dart:64-79` already pumps `TencentCloudChatContactApplicationList(applicationList: [])` and finds the empty key + "No new application" text.)
 **Promotion target**: L1 WidgetTester (surface proven renderable — the existing `test/ui/contact/contact_application_anchors_test.dart` finds `UiKeys.contactApplicationsListEmpty` with an empty list). This scenario is the L3 mirror that drives the real Contacts → New Contacts route and asserts the empty key under live conditions.
-**Status**: spec-only (L1 WidgetTester gate owed; surface proven renderable by `contact_application_anchors_test.dart`). Not yet driven on a live bundle.
+**Status**: covered (L1 WidgetTester real-UI gate — test/ui/contact/contact_applications_empty_state_real_ui_test.dart). Proves both empty and non-empty branches of TencentCloudChatContactApplicationList; the empty assertion is non-vacuous because the non-empty contrast test fails if the empty branch were always-on. Residual: A3/A5 (l3_dump_state ground-truth + badge count) are live-only L3 assertions, not hermetically testable. Mobile-parity: shared UIKit-fork widget; this gate covers iOS/Android.
+**Covered-by**: test/ui/contact/contact_applications_empty_state_real_ui_test.dart
 
 ## Precondition
 - One account A logged in, plaintext, sidebar Online (poll 60s)

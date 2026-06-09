@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=online friends=≥1`
 **Harness mode**: peerHarness=none
 **Promotion target**: Tier 1 (existing-friend) → L2 candidate with a stub `FfiChatService.getFriendList()`. Tier 2 (session-set) L3-pinned and deferred — currently unreachable from clean MCP drive (see Notes).
-**Status**: tier 1 covered; tier 2 deferred until the dialog stops auto-dismissing on success.
+**Status**: BOTH tiers covered at the widget layer (2026-06-08) — tier 2 is no longer deferred. `test/ui/add_friend_guards_test.dart` drives the real `AddFriendDialog` over a stub `FfiChatService`: tier 1 (existing-friend, `getFriendList()` dedup → `alreadyFriend` SnackBar, no `addFriend` dispatch) AND tier 2 (the in-session `_attemptedThisSession` dedup → `alreadySent` SnackBar). The tier-2 blocker ("the success path auto-dismisses via `navigator.maybePop()`, disposing the State + its session set") was a MARIONETTE limitation, not a product gap: the L1 test mounts the dialog DIRECTLY as the home body (no pushed route), so `maybePop()` is a no-op and the State survives — a first submit of id X dispatches `addFriend` once + records X, a second submit of X is rejected BEFORE any second dispatch (`addFriendCount` stays 1). Sibling S55 (self-add guard) is in the same file. Shared desktop+mobile (the guards live in `_submit`).
+**Covered-by**: `test/ui/add_friend_guards_test.dart`
 
 ## Precondition
 - Account A signed in, online, plaintext profile.

@@ -51,6 +51,23 @@ const _validRealUiScenarios = {
   'handshake',
   'message',
   'message_burst',
+  'group_message',
+  'group_create',
+  'group_profile_open',
+  'group_rename',
+  'group_search',
+  'group_add_member_open',
+  'group_add_member_picker',
+  'group_conversation_menu',
+  'group_menu_pin_unpin',
+  'group_menu_mark_read',
+  'group_menu_mark_read_unread',
+  'group_menu_delete_confirm',
+  'group_clear_history',
+  'group_clear_preserves_pin',
+  'group_burst',
+  'group_member_list',
+  'conference_message',
   'handshake_detail',
   'decline',
   'custom_message',
@@ -63,6 +80,72 @@ const _realUiCampaigns = <String, List<String>>{
   'accepted-friend-detail': ['handshake_detail', 'message'],
   'accepted-friend-inline-burst': ['handshake', 'message_burst'],
   'accepted-friend-detail-burst': ['handshake_detail', 'message_burst'],
+  'accepted-friend-inline-group-message': ['handshake', 'group_message'],
+  'accepted-friend-detail-group-message': [
+    'handshake_detail',
+    'group_message',
+  ],
+  // Single-instance group create/open/composer surface (no friendship needed).
+  'group-create': ['group_create'],
+  'group-profile-open': ['group_profile_open'],
+  'group-rename': ['group_rename'],
+  'group-search': ['group_search'],
+  'group-add-member-open': ['group_add_member_open'],
+  'group-add-member-picker': ['handshake', 'group_add_member_picker'],
+  // Single-instance group conversation-row context menu (no friendship needed).
+  'group-menu-surface': ['group_conversation_menu'],
+  'group-menu-pin': ['group_menu_pin_unpin'],
+  'group-menu-mark-read': ['group_menu_mark_read'],
+  'group-menu-delete': ['group_menu_delete_confirm'],
+  // Combined single-instance group-menu sweep. pin/unpin AND delete-confirm are
+  // now driven through the deterministic `l3_open_conversation_menu` action (no
+  // flutter_skill PopupMenuItem double-fire), so S132 + S134 are back in the
+  // bundle. For a group, "Delete" fires onConversationDeleted (the host
+  // suppresses the row until a new inbound) + clears history/pin, so the row
+  // leaves the sidebar — the "gone" assertion holds. mark_read here is the
+  // single-instance SURFACE check (own sends can't seed unread); the TRUE
+  // unread>0→0 transition is the two-process `group-menu-mark-read-unread`
+  // campaign.
+  'group-menu': [
+    'group_conversation_menu',
+    'group_menu_pin_unpin',
+    'group_menu_mark_read',
+    'group_menu_delete_confirm',
+  ],
+  // Combined single-instance group-surface sweep. Only the live-PASS
+  // single-instance scenarios are included so the bundle is green; the
+  // currently-BLOCKED single-instance gates (group_profile_open, group_rename,
+  // group_search — see their spec Status) keep their own dedicated campaigns.
+  'group-surfaces': [
+    'group_create',
+    'group_conversation_menu',
+    'group_menu_pin_unpin',
+    'group_menu_mark_read',
+  ],
+  // Two-process group alternating-burst (S152) + invite→member-list (S155),
+  // both require an existing friendship (handshake first), like group_message.
+  'group-burst': ['handshake', 'group_burst'],
+  'group-member-list': ['handshake', 'group_member_list'],
+  // Two-process group menu/clear gates that need REAL inbound state (a peer must
+  // send so unread/history actually accrue), so they require a friendship first:
+  //  - mark-read-unread (S118/S133): B seeds unread, A marks read → unread→0.
+  //  - clear-history (S122): B seeds history, A clears → messageCount→0, row stays.
+  //  - clear-preserves-pin (S154): A pins + B seeds, A clears → still pinned.
+  'group-menu-mark-read-unread': [
+    'handshake',
+    'group_menu_mark_read_unread',
+  ],
+  'group-clear-history': ['handshake', 'group_clear_history'],
+  'group-clear-preserves-pin': ['handshake', 'group_clear_preserves_pin'],
+  // Legacy Tox conference, same two-process invite+delivery shape as group.
+  'accepted-friend-inline-conference-message': [
+    'handshake',
+    'conference_message',
+  ],
+  'accepted-friend-detail-conference-message': [
+    'handshake_detail',
+    'conference_message',
+  ],
   'fresh-no-friend': ['decline'],
   'accepted-friend-inline-call': ['handshake', 'message', 'call_voice'],
   'accepted-friend-detail-call': ['handshake_detail', 'message', 'call_voice'],
@@ -94,6 +177,8 @@ const _realUiCampaigns = <String, List<String>>{
     'handshake',
     'message',
     'message_burst',
+    'group_message',
+    'conference_message',
     'call_voice',
     'call_reject',
   ],
@@ -101,6 +186,8 @@ const _realUiCampaigns = <String, List<String>>{
     'handshake_detail',
     'message',
     'message_burst',
+    'group_message',
+    'conference_message',
     'call_voice',
     'call_reject',
   ],
@@ -108,6 +195,16 @@ const _realUiCampaigns = <String, List<String>>{
   'no-friend-then-detail': ['custom_message', 'handshake_detail'],
   'no-friend-inline-chat': ['custom_message', 'handshake', 'message'],
   'no-friend-detail-chat': ['custom_message', 'handshake_detail', 'message'],
+  'no-friend-inline-group-message': [
+    'custom_message',
+    'handshake',
+    'group_message',
+  ],
+  'no-friend-detail-group-message': [
+    'custom_message',
+    'handshake_detail',
+    'group_message',
+  ],
   'no-friend-inline-burst': ['custom_message', 'handshake', 'message_burst'],
   'no-friend-detail-burst': [
     'custom_message',
@@ -145,6 +242,8 @@ const _realUiCampaigns = <String, List<String>>{
     'handshake',
     'message',
     'message_burst',
+    'group_message',
+    'conference_message',
     'call_voice',
     'call_reject',
     'custom_message',
@@ -760,6 +859,7 @@ List<String> _symbolicRealUiCommands(_PlannedEntry planned) {
   var pairActive = false;
   String? pairState;
   var pairNeedsRestoreBoot = false;
+  String? previousScenario;
 
   for (var i = 0; i < planned.realUiScenarios.length; i++) {
     final scenario = planned.realUiScenarios[i];
@@ -790,6 +890,15 @@ List<String> _symbolicRealUiCommands(_PlannedEntry planned) {
         pairState = requiredState;
         pairNeedsRestoreBoot = restore != null;
       }
+    } else if (pairState == _realUiStateNoFriend &&
+        _requiresFreshNoFriendRelaunch(
+          previousScenario: previousScenario,
+          nextScenario: scenario,
+        )) {
+      commands.add(_stopPairCommand());
+      commands.add(_launchPairCommand());
+      pairState = _realUiStateNoFriend;
+      pairNeedsRestoreBoot = false;
     }
 
     commands.add(
@@ -800,6 +909,7 @@ List<String> _symbolicRealUiCommands(_PlannedEntry planned) {
     );
     pairState = _resultRealUiState(scenario);
     pairNeedsRestoreBoot = false;
+    previousScenario = scenario;
   }
 
   if (pairActive) {
@@ -812,6 +922,14 @@ String _requiredRealUiState(String scenario) {
   switch (scenario) {
     case 'message':
     case 'message_burst':
+    case 'group_message':
+    case 'group_burst':
+    case 'group_member_list':
+    case 'group_menu_mark_read_unread':
+    case 'group_clear_history':
+    case 'group_clear_preserves_pin':
+    case 'group_add_member_picker':
+    case 'conference_message':
     case 'call_voice':
     case 'call_reject':
       return _realUiStateFriends;
@@ -819,6 +937,17 @@ String _requiredRealUiState(String scenario) {
     case 'handshake_detail':
     case 'decline':
     case 'custom_message':
+    // These single-instance group scenarios only drive A (no friendship needed),
+    // so they run from a fresh no-friend launch.
+    case 'group_create':
+    case 'group_profile_open':
+    case 'group_rename':
+    case 'group_search':
+    case 'group_add_member_open':
+    case 'group_conversation_menu':
+    case 'group_menu_pin_unpin':
+    case 'group_menu_mark_read':
+    case 'group_menu_delete_confirm':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -830,15 +959,38 @@ String _resultRealUiState(String scenario) {
     case 'handshake_detail':
     case 'message':
     case 'message_burst':
+    case 'group_message':
+    case 'group_burst':
+    case 'group_member_list':
+    case 'group_menu_mark_read_unread':
+    case 'group_clear_history':
+    case 'group_clear_preserves_pin':
+    case 'group_add_member_picker':
+    case 'conference_message':
     case 'call_voice':
     case 'call_reject':
       return _realUiStateFriends;
     case 'decline':
     case 'custom_message':
+    // These single-instance group scenarios leave the friendship state untouched.
+    case 'group_create':
+    case 'group_profile_open':
+    case 'group_rename':
+    case 'group_search':
+    case 'group_add_member_open':
+    case 'group_conversation_menu':
+    case 'group_menu_pin_unpin':
+    case 'group_menu_mark_read':
+    case 'group_menu_delete_confirm':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
 }
+
+bool _requiresFreshNoFriendRelaunch({
+  String? previousScenario,
+  required String nextScenario,
+}) => false;
 
 String? _restoreForRealUiState(String state) {
   if (state == _realUiStateFriends) {
@@ -979,6 +1131,7 @@ Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
   var pairActive = false;
   String? pairState;
   var pairNeedsRestoreBoot = false;
+  String? previousScenario;
   try {
     for (var i = 0; i < planned.realUiScenarios.length; i++) {
       final scenario = planned.realUiScenarios[i];
@@ -1013,6 +1166,19 @@ Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
           pairState = requiredState;
           pairNeedsRestoreBoot = restore != null;
         }
+      } else if (pairState == _realUiStateNoFriend &&
+          _requiresFreshNoFriendRelaunch(
+            previousScenario: previousScenario,
+            nextScenario: scenario,
+          )) {
+        await _bestEffortStopPair();
+        final launchRc = await _launchPair();
+        if (launchRc != 0) {
+          return launchRc;
+        }
+        pairActive = true;
+        pairState = _realUiStateNoFriend;
+        pairNeedsRestoreBoot = false;
       }
 
       var rc = await _executeRealUiScenario(
@@ -1055,6 +1221,7 @@ Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
       }
       pairState = _resultRealUiState(scenario);
       pairNeedsRestoreBoot = false;
+      previousScenario = scenario;
     }
     return 0;
   } finally {

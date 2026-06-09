@@ -339,7 +339,7 @@
     },
     {
       "script": "drive_real_ui_pair.dart",
-      "scenarios": ["S26", "S54", "S61", "S27", "S62", "S64", "S65", "S67", "S76", "S108"],
+      "scenarios": ["S26", "S54", "S61", "S27", "S62", "S64", "S65", "S67", "S76", "S108", "S151"],
       "class": "2proc-ui",
       "media": false,
       "destructive": false,

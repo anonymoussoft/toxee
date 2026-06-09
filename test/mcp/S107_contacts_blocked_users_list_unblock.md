@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any friends=1 (blocklist seeded with F)`
 **Harness mode**: peerHarness=none — blocklist is pure Prefs + listener notify (S29 establishes this); F does NOT need to be online or running to appear in the Blocked-Users tab.
 **Promotion target**: L3-pinned only loosely — the listing surface itself is hermetic, but the unblock control round-trips through Tim2Tox `deleteFromBlackList` + `SharedPreferencesAdapter`, so the data-half belongs at L2/L1 with `l3_set_blocked`. This scenario is the **UI-surface view** of S29's data-half: S29 toggles via the user-profile `blackUser` switch and asserts Prefs; S107 asserts the Blocked-Users TAB renders the blocked peer as a row and that unblocking from there clears it.
-**Status**: spec-only for the UI-surface angle. Data-half is **covered (executable)** by S29's gate (`tool/mcp_test/run_fixture_c_block.sh` + `tool/mcp_test/scenarios/l3_block_toggle.json`); this scenario does not add a new runnable gate — it pins the list-rendering + unblock-entry UI that S29's data-half does not exercise.
+**Status**: covered (L1 WidgetTester real-UI gate — test/ui/contact/contact_blocked_users_list_real_ui_test.dart) for the listing surface (seeded branch, empty branch, and seeded→empty transition). Residual: unblock round-trip (A4/A5: deleteFromBlackList + Prefs) stays L3 — that leg is covered by S29's gate (tool/mcp_test/run_fixture_c_block.sh). Mobile-parity: shared UIKit-fork widget; this gate covers iOS/Android.
+**Covered-by**: test/ui/contact/contact_blocked_users_list_real_ui_test.dart
 
 ## Precondition
 - Account A logged in, plaintext, sidebar Online (poll 60s)

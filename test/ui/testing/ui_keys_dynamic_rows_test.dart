@@ -31,12 +31,36 @@ void main() {
         const Key('group_profile_members_entry'),
       );
       expect(
+        UiKeys.groupProfileEditNameButton,
+        const Key('group_profile_edit_name_button'),
+      );
+      expect(
+        UiKeys.groupProfileIdText,
+        const Key('group_profile_id_text'),
+      );
+      expect(
+        UiKeys.groupProfileEditNameDialog,
+        const Key('group_profile_edit_name_dialog'),
+      );
+      expect(
+        UiKeys.groupProfileEditNameField,
+        const Key('group_profile_edit_name_field'),
+      );
+      expect(
+        UiKeys.groupProfileEditNameConfirmButton,
+        const Key('group_profile_edit_name_confirm_button'),
+      );
+      expect(
         UiKeys.groupProfileClearHistoryButton,
         const Key('group_profile_clear_history_button'),
       );
       expect(
         UiKeys.groupProfileLeaveButton,
         const Key('group_profile_leave_button'),
+      );
+      expect(
+        UiKeys.groupProfileSendMessageButton,
+        const Key('group_profile_send_message_button'),
       );
       expect(
         UiKeys.userProfileEditRemarkButton,

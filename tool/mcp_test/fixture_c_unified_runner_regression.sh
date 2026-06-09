@@ -363,6 +363,30 @@ else
         "$(cat "$TMP_ROOT/real_ui_message.err" "$REAL_UI_MESSAGE_PLAN" 2>/dev/null)"
 fi
 
+REAL_UI_GROUP_MESSAGE_PLAN="$TMP_ROOT/real_ui_group_message_plan.json"
+if run_runner --plan-json --class=2proc-ui --real-ui-scenario=group_message \
+    >"$REAL_UI_GROUP_MESSAGE_PLAN" 2>"$TMP_ROOT/real_ui_group_message.err"; then
+    if jq -e '
+        .groups[0].entries[0].realUiScenarios == ["group_message"]
+    ' "$REAL_UI_GROUP_MESSAGE_PLAN" >/dev/null; then
+        pass "group_message plan-json narrows to the requested scenario"
+    else
+        fail "group_message plan-json narrows to the requested scenario"
+    fi
+    if jq -e '
+        (.groups[0].commands | length) == 3
+        and .groups[0].commands[0]
+            == "TOXEE_FIXTURE_C_RESTORE=paired_for_e2e tool/mcp_test/launch_fixture_c_pair.sh"
+    ' "$REAL_UI_GROUP_MESSAGE_PLAN" >/dev/null; then
+        pass "group_message plan-json restores the friended baseline"
+    else
+        fail "group_message plan-json restores the friended baseline"
+    fi
+else
+    fail "group_message plan-json exits 0" \
+        "$(cat "$TMP_ROOT/real_ui_group_message.err" "$REAL_UI_GROUP_MESSAGE_PLAN" 2>/dev/null)"
+fi
+
 REAL_UI_RESTORE_RESET_DRY="$TMP_ROOT/real_ui_restore_reset_dry.out"
 if run_runner --dry-run --class=2proc-ui --real-ui-scenario=message,decline \
     >"$REAL_UI_RESTORE_RESET_DRY" 2>"$TMP_ROOT/real_ui_restore_reset.err"; then
@@ -478,6 +502,15 @@ else
         "$(cat "$TMP_ROOT/real_ui_custom.err" "$REAL_UI_CUSTOM_DRY" 2>/dev/null)"
 fi
 
+SHELL_RECOVERY_SELFTEST="$TMP_ROOT/shell_recovery_selftest.out"
+if (cd "$REPO_ROOT" && dart run tool/mcp_test/drive_real_ui_pair.dart --self-test-shell-recovery) \
+    >"$SHELL_RECOVERY_SELFTEST" 2>"$TMP_ROOT/shell_recovery_selftest.err"; then
+    pass "new-entry shell recovery accepts usable fresh no-friend landmarks"
+else
+    fail "new-entry shell recovery accepts usable fresh no-friend landmarks" \
+        "$(cat "$TMP_ROOT/shell_recovery_selftest.err" "$SHELL_RECOVERY_SELFTEST" 2>/dev/null)"
+fi
+
 REAL_UI_EXPANDED_DRY="$TMP_ROOT/real_ui_expanded_dry.out"
 if run_runner --dry-run --class=2proc-ui --real-ui-campaign=all-expanded \
     >"$REAL_UI_EXPANDED_DRY" 2>"$TMP_ROOT/real_ui_expanded.err"; then
@@ -489,11 +522,16 @@ if run_runner --dry-run --class=2proc-ui --real-ui-campaign=all-expanded \
     fi
     EXPANDED_LAUNCH_COUNT="$(grep -c 'launch_fixture_c_pair.sh' "$REAL_UI_EXPANDED_DRY" || true)"
     EXPANDED_RESET_COUNT="$(grep -c 'drive_real_ui_pair.dart reset_friendship ' "$REAL_UI_EXPANDED_DRY" || true)"
-    if [[ "$EXPANDED_LAUNCH_COUNT" -eq 1 && "$EXPANDED_RESET_COUNT" -eq 2 ]]; then
-        pass "all-expanded dry-run stays on one launch and inserts two reset maintenance steps"
+    EXPANDED_CUSTOM_LINE="$(grep -n 'drive_real_ui_pair.dart custom_message ' "$REAL_UI_EXPANDED_DRY" | head -n1 | cut -d: -f1)"
+    EXPANDED_RELAUNCH_LINE="$(grep -n '^tool/mcp_test/launch_fixture_c_pair.sh$' "$REAL_UI_EXPANDED_DRY" | tail -n1 | cut -d: -f1)"
+    EXPANDED_DETAIL_LINE="$(grep -n 'drive_real_ui_pair.dart handshake_detail ' "$REAL_UI_EXPANDED_DRY" | head -n1 | cut -d: -f1)"
+    if [[ "$EXPANDED_LAUNCH_COUNT" -eq 1 && "$EXPANDED_RESET_COUNT" -eq 2 \
+        && -n "$EXPANDED_CUSTOM_LINE" && -n "$EXPANDED_DETAIL_LINE" \
+        && "$EXPANDED_CUSTOM_LINE" -lt "$EXPANDED_DETAIL_LINE" ]]; then
+        pass "all-expanded dry-run keeps custom_message -> handshake_detail on the same launch"
     else
-        fail "all-expanded dry-run stays on one launch and inserts two reset maintenance steps" \
-            "expected 1 launch / 2 resets, saw $EXPANDED_LAUNCH_COUNT launch(es) / $EXPANDED_RESET_COUNT reset(s)"
+        fail "all-expanded dry-run keeps custom_message -> handshake_detail on the same launch" \
+            "expected 1 launch / 2 resets with custom_message before handshake_detail; saw $EXPANDED_LAUNCH_COUNT launch(es) / $EXPANDED_RESET_COUNT reset(s)"
     fi
 else
     fail "all-expanded campaign dry-run exits 0" \
@@ -509,6 +547,8 @@ if run_runner --plan-json --class=2proc-ui --real-ui-campaign=all-expanded \
             "handshake",
             "message",
             "message_burst",
+            "group_message",
+            "conference_message",
             "call_voice",
             "call_reject",
             "custom_message",
@@ -520,14 +560,19 @@ if run_runner --plan-json --class=2proc-ui --real-ui-campaign=all-expanded \
     else
         fail "all-expanded plan-json preserves the expanded scenario catalog order"
     fi
-    if jq -e '
-        (.groups[0].commands[0] == "tool/mcp_test/launch_fixture_c_pair.sh")
-        and ([.groups[0].commands[] | select(contains("reset_friendship"))]
-            | length == 2)
-    ' "$REAL_UI_EXPANDED_PLAN" >/dev/null; then
-        pass "all-expanded plan-json shows a single launch plus explicit reset maintenance"
+    EXPANDED_PLAN_CMDS="$TMP_ROOT/real_ui_expanded_plan_commands.txt"
+    jq -r '.groups[0].commands[]' "$REAL_UI_EXPANDED_PLAN" >"$EXPANDED_PLAN_CMDS"
+    EXPANDED_PLAN_LAUNCH_COUNT="$(grep -c '^tool/mcp_test/launch_fixture_c_pair.sh$' "$EXPANDED_PLAN_CMDS" || true)"
+    EXPANDED_PLAN_RESET_COUNT="$(grep -c 'reset_friendship ' "$EXPANDED_PLAN_CMDS" || true)"
+    EXPANDED_PLAN_CUSTOM_LINE="$(grep -n 'drive_real_ui_pair.dart custom_message ' "$EXPANDED_PLAN_CMDS" | head -n1 | cut -d: -f1)"
+    EXPANDED_PLAN_RELAUNCH_LINE="$(grep -n '^tool/mcp_test/launch_fixture_c_pair.sh$' "$EXPANDED_PLAN_CMDS" | tail -n1 | cut -d: -f1)"
+    EXPANDED_PLAN_DETAIL_LINE="$(grep -n 'drive_real_ui_pair.dart handshake_detail ' "$EXPANDED_PLAN_CMDS" | head -n1 | cut -d: -f1)"
+    if [[ "$EXPANDED_PLAN_LAUNCH_COUNT" -eq 1 && "$EXPANDED_PLAN_RESET_COUNT" -eq 2 \
+        && -n "$EXPANDED_PLAN_CUSTOM_LINE" && -n "$EXPANDED_PLAN_DETAIL_LINE" \
+        && "$EXPANDED_PLAN_CUSTOM_LINE" -lt "$EXPANDED_PLAN_DETAIL_LINE" ]]; then
+        pass "all-expanded plan-json keeps custom_message -> handshake_detail on one launch"
     else
-        fail "all-expanded plan-json shows a single launch plus explicit reset maintenance"
+        fail "all-expanded plan-json keeps custom_message -> handshake_detail on one launch"
     fi
 else
     fail "all-expanded plan-json exits 0" \
