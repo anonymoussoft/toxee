@@ -80,6 +80,16 @@ int _filledSegments(WidgetTester tester) {
   return filled;
 }
 
+/// Reads the localized weak→strong caption Text shown under the bar (empty
+/// string when no label widget is mounted, i.e. strength 0). This caption is the
+/// text-matchable signal the Batch-3 real-UI login sweep asserts (the colored
+/// segments above are not text-matchable by widget-driving automation).
+String _strengthLabel(WidgetTester tester) {
+  final finder = find.byKey(const Key('register_password_strength_label'));
+  if (finder.evaluate().isEmpty) return '';
+  return tester.widget<Text>(finder).data ?? '';
+}
+
 /// Reads `obscureText` from the password field's live EditableText.
 bool _passwordObscured(WidgetTester tester) {
   final editable = tester.widget<EditableText>(
@@ -124,9 +134,11 @@ void main() {
     expect(find.byKey(const Key('register_password_strength_bar')), findsOneWidget,
         reason: 'The password-strength bar must render in the RegisterPage.');
 
-    // 0: empty password -> all 4 segments empty.
+    // 0: empty password -> all 4 segments empty, no caption.
     expect(_filledSegments(tester), 0,
         reason: 'An empty password must show 0 filled strength segments.');
+    expect(_strengthLabel(tester), '',
+        reason: 'An empty password must show no strength caption.');
 
     // 1: < 6 chars.
     await tester.enterText(find.byKey(UiKeys.registerPagePasswordField), 'abc');
@@ -134,6 +146,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300)); // let AnimatedContainer settle
     expect(_filledSegments(tester), 1,
         reason: 'A < 6 char password must fill exactly 1 strength segment.');
+    expect(_strengthLabel(tester), 'Weak',
+        reason: 'A 1-segment password must caption "Weak".');
 
     // 2: >= 6 chars, no upper/digit/special.
     await tester.enterText(find.byKey(UiKeys.registerPagePasswordField), 'abcdef');
@@ -141,6 +155,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(_filledSegments(tester), 2,
         reason: 'A 6+ char lowercase password must fill exactly 2 segments.');
+    expect(_strengthLabel(tester), 'Fair',
+        reason: 'A 2-segment password must caption "Fair".');
 
     // 3: >= 8 chars with an uppercase letter (no digit/special).
     await tester.enterText(find.byKey(UiKeys.registerPagePasswordField), 'Abcdefgh');
@@ -148,6 +164,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(_filledSegments(tester), 3,
         reason: 'An 8+ char password with an uppercase letter must fill 3 segments.');
+    expect(_strengthLabel(tester), 'Good',
+        reason: 'A 3-segment password must caption "Good".');
 
     // 4: >= 8 chars with uppercase + digit + special.
     await tester.enterText(find.byKey(UiKeys.registerPagePasswordField), 'Abcdef1!');
@@ -155,6 +173,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(_filledSegments(tester), 4,
         reason: 'An 8+ char password with upper+digit+special must fill all 4 segments.');
+    expect(_strengthLabel(tester), 'Strong',
+        reason: 'A 4-segment password must caption "Strong".');
   });
 
   testWidgets('weak vs strong password produce visibly different filled-segment counts',

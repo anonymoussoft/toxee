@@ -143,19 +143,21 @@ Sweep: `sweep_profile` · Campaign: `rui-profile`. **Batch 2 STATUS: DONE** (6/8
 
 | # | Case | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 21 | login_account_card_renders | 1i | S2 | after logout: saved-account card shows nick + tox prefix | TODO |
-| 22 | login_register_open_back | 1i | S4 | Register CTA → RegisterPage → back to login | TODO |
-| 23 | register_empty_nickname_error | 1i | S4 | submit empty nickname → inline validation error | TODO |
-| 24 | register_password_mismatch_error | 1i | S4 | mismatched passwords → inline error | TODO |
-| 25 | register_password_strength_flips | 1i | S4 | typing weak→strong flips the strength label | TODO |
-| 26 | login_restore_entry_opens | 1i | S9/S71 | restore-from-tox card → import/restore surface mounts; cancel back | TODO |
-| 27 | login_password_wrong_error | 1i | S2b | set pw (settings) → logout → card → wrong pw → error, stays on login | TODO |
-| 28 | login_password_correct_unlocks | 1i | S2b | correct pw → HomePage; then REMOVE password (restore no-pw state) | TODO |
-| 29 | account_switch_second_account | 1i | S3/S72 | register a 2nd account (ONCE, end of suite) → switch back via login cards; dump shows switched toxId | TODO |
+| 21 | login_account_card_renders | 1i | S2 | after logout: saved-account card shows nick + tox prefix | WRITTEN |
+| 22 | login_register_open_back | 1i | S4 | Register CTA → RegisterPage → back to login | WRITTEN |
+| 23 | register_empty_nickname_error | 1i | S4 | submit empty nickname → inline validation error | WRITTEN |
+| 24 | register_password_mismatch_error | 1i | S4 | mismatched passwords → inline error | WRITTEN |
+| 25 | register_password_strength_flips | 1i | S4 | typing weak→strong flips the strength caption (Weak→Strong) | WRITTEN (added strength caption, see log) |
+| 26 | login_restore_entry_opens | 1i | S9/S71 | restore-from-tox card → import/restore surface mounts; cancel back | SKIP(native-picker-only — restore card opens NSOpenPanel directly, no in-app surface) |
+| 27 | login_password_wrong_error | 1i | S2b | set pw (settings) → logout → card → wrong pw → error, stays on login | WRITTEN |
+| 28 | login_password_correct_unlocks | 1i | S2b | correct pw → HomePage; then REMOVE password (restore no-pw state) | WRITTEN (production UI clears pw, see log) |
+| 29 | account_switch_second_account | 1i | S3/S72 | register a 2nd account (ONCE, end of suite) → switch back via login cards; dump shows switched toxId | WRITTEN |
 
-Sweep: `sweep_login` · Campaign: `rui-login`. **Batch 3 STATUS: TODO** (note: case 29
-registers the ONLY extra account of the campaign; password cases must restore the
-no-password state when done)
+Sweep: `sweep_login` · Campaign: `rui-login`. **Batch 3 STATUS: DONE** (8/9 WRITTEN+unrun,
+1 SKIP — case 26 native-picker-only; case 29 registers the ONLY extra account of the
+campaign; password cases RESTORE the no-password state via the production change-password
+dialog. analyze 0-NEW vs 222 baseline; planner/validate/campaign-list/self-test green;
+touched-lib hermetic tests 57/57 green; 4 codex rounds, all findings applied)
 
 #### Batch 4 — Contacts + friend profile (15 cases, 2p; ONE handshake reused; delete/re-add last)
 
@@ -531,6 +533,100 @@ AppleScript System Events window resize, SKIP with reason if refused)
     dialog and the mobile route close buttons, so the close affordance is covered on mobile
     too. The avatar SKIP applies identically on mobile (the native picker is the only avatar
     surface there as well; there is no in-app default-avatar chooser on any platform).
+
+- 2026-06-10 **Batch 3 DONE** (login / register — 8 single-instance cases WRITTEN+unrun, 1
+  SKIP; NOT live-run, per write-phase protocol). New part file
+  `tool/mcp_test/drive_real_ui_pair_login.dart` (~1075 LOC) declared in the
+  `drive_real_ui_pair.dart` part list; 9 per-case functions + `runLoginSweep` (chains all 9
+  on ONE launch, per-case `[sweep] <case>: PASS|FAIL|SKIP` + final counts + `endClean`, exits
+  non-zero if any HARD case fails — 8 hard, 1 SKIP). Each case individually dispatchable in
+  `drive_real_ui_pair.dart` (scenario ids = the campaign table ids; the single-case dispatch
+  runs the minimum prelude each needs — cases that act on the LoginPage log out first). Runner:
+  10 ids (`sweep_login` + 9) added to `_validRealUiScenarios` + both state tables
+  (`no-friend`, single-instance like `sweep_profile`); campaign `rui-login = [sweep_login]`.
+  Gates green: `flutter analyze lib tool` 222 (0 NEW — matches the Batch-0 baseline);
+  `--plan-json --class=2proc-ui` exit 0; `--validate-only` exit 0; `--list-real-ui-campaigns`
+  shows `rui-login`; campaign expansion + dry-run plan `sweep_login` from a fresh no-friend
+  launch (no `--boot-restored`); driver `--self-test-shell-recovery` PASS; touched-lib
+  hermetic tests `flutter test test/ui/register/ test/ui/login/ test/ui/testing/l3_debug_tools_environment_test.dart`
+  57/57 PASS.
+
+  **State-machine ORDER chosen** (ends CLEAN: logged into the PRIMARY account, NO password,
+  autoLogin intact): `ensureHome` (registers the PRIMARY account if the launch is fresh) →
+  **logout once** (serves 21+22; lands on LoginPage) → **22** register-open-back → **21**
+  account-card-renders → **26** restore-entry (SKIP) → **23/24/25** register validation (NO
+  accounts created — all back out) → **quick-login back to primary** (no password) → **27**
+  wrong-password (sets a known pw via Settings, logs out, enters WRONG pw → "Invalid
+  password", stays) → **28** correct-password (unlocks → HomePage, then REMOVES the password)
+  → **29** account-switch (register account #2 nick `RuiSweepB3`, switch back to primary). The
+  whole 9-case body runs inside a `try` with an `_ensureCleanPrimaryEnd` END-STATE GUARD in
+  the `finally` so a partial run still restores the clean end state.
+
+  **PASSWORD-RESTORE ANSWER (the brief's open question):** the PRODUCTION settings UI CAN
+  clear a password — no need to leave the account password-locked. `_showSetPasswordDialog`
+  accepts an EMPTY new+confirm (hint text "Leave empty to remove password"); on empty input
+  `_setAccountPassword` routes to `AccountService.removeAccountPassword` and shows the
+  "Password removed" snackbar. Case 28 unlocks with the correct password, then opens the
+  Settings change-password dialog and submits EMPTY fields to restore the no-password state.
+  The end state is PROVEN no-password via the new authoritative `currentAccountHasPassword`
+  dump field (not the snackbar alone).
+
+  **Case 26 SKIP (verified, not assumed — per "don't trust doc conclusions"):** read
+  `lib/ui/login_page.dart` + `login_page_controller.dart`. The "Restore from .tox file" card
+  (`UiKeys.loginPageRestoreFromToxFile`) calls `_restoreFromToxFile` →
+  `LoginPageController.restoreFromToxFile`, which opens the native `FilePicker.platform.pickFiles`
+  DIRECTLY — there is NO in-app pre-picker / options surface to assert mounting. The login
+  "settings" entry (`login_page_settings_button`) opens `LoginSettingsPage`, which is the
+  bootstrap/global settings page, NOT a restore/import surface. The native panel can't be
+  driven headless and there's no test-account l3 override here → SKIP(native-picker-only),
+  never a fake pass. (The real restore handler has hermetic controller-seam coverage in
+  `test/ui/login/login_restore_import_settings_real_ui_test.dart`.)
+
+  **PRODUCTION CHANGES (3, all intentional + tested + mobile-covered, shared Dart):**
+  - `lib/ui/widgets/register_password_strength_bar.dart`: added a localized **Weak/Fair/Good/
+    Strong** caption `Text` keyed `register_password_strength_label` under the colored bar (the
+    segments' fill is a `BoxDecoration` color, NOT text-matchable by flutter_skill; the caption
+    IS — it's the real-UI signal for case 25, and a genuine a11y win: a screen reader now
+    announces password strength). 4 new l10n keys in `app_en.arb` + `flutter gen-l10n`
+    regenerated (ar/ja/ko/zh fall back to English for these — documented follow-up). The
+    existing strength hermetic test extended to assert the caption ramp (0→Weak→Fair→Good→Strong).
+  - `lib/ui/login_page.dart`: the saved-account quick-login password dialog `TextField` got
+    `key: login_quick_password_field` + `autofocus: true` so the harness can type into it
+    deterministically (no key/autofocus before → could not target it). Compatible with the
+    existing password-dialog test (which finds the field by type, not key).
+  - `lib/ui/testing/l3_debug_tools.dart`: `l3_dump_state` now exposes `currentAccountHasPassword`
+    (via a no-throw `_currentAccountHasPassword()` reading `Prefs.hasAccountPassword` on the
+    current toxId) — the authoritative no-password ground truth case 28 + the end-clean guard
+    gate on (the snackbar alone is ambiguous on a no-password account).
+
+  **Harness keys used:** `register_back_button` (AppBar back), `register_page_*` fields/button,
+  `firstRunBackupWizard.laterButton` + `firstRunBackupWizard.confirmDismissButton` (keyed +
+  single-pop-guarded — case 29's wizard dismissal single-fires these via `tapKeyCenter`,
+  replacing the double-firing text taps `ensureHome` uses), `settings_set_password_*`,
+  `settings_logout_*`, `login_page_account_card:<toxId>` (single-fired via `tapKeyCenter`),
+  `login_quick_password_field`.
+
+  **Codex review (4 rounds, mandatory — telemetry-off):** round 1 found 5 (3 P1 + 2 P2): clamp
+  index type (cosmetic — already compiled via int.clamp, made explicit `.toInt()`); case-27
+  could false-pass under a stuck password dialog (added `waitKeyGone(login_quick_password_field)`);
+  no end-state restore on a mid-sweep failure → dirty/poisoned 29 (added `_ensureCleanPrimaryEnd`);
+  27→28 toxId handoff not enforced (now passes the threaded toxId, empty if 27 failed, so 28
+  fails its guard); autoLogin unproven (now printed). Round 2 confirmed P1.1/P1.2/P2 + flagged
+  3 (the end-clean guard not no-throw / not reached on early-return; case-29 wizard double-fire;
+  endClean false-green). Round 3 fixed those (try/finally + no-throw helper; keyed single-fire
+  wizard dismiss; endClean verdict) + flagged 2 (endClean still trusts the ambiguous remove
+  snackbar; card taps still double-fire). Round 4 added the `currentAccountHasPassword` ground
+  truth + switched all 4 card taps to `tapKeyCenter` + flagged 3 P2 (stale onPrimary; case 28
+  not airtight; set-password opener double-fire). Round 4-fix: recompute the whole end-clean
+  verdict from one final dump; case 28 also requires `sessionReady && currentAccountToxId==toxId`;
+  both password-dialog openers funnel through a single-fire `_openSetPasswordDialog`. Final
+  codex pass: **"No remaining P1/P2."**
+
+  **Mobile parity:** all driven widgets + the 3 production changes are shared Dart (login_page,
+  register_page, register_password_strength_bar, l3_debug_tools) with no platform split — every
+  affordance and the strength caption render identically on iOS/Android/desktop. Case 26's SKIP
+  applies on mobile too (the restore card opens the platform file picker there as well; no
+  in-app pre-picker exists on any platform).
 
 ## Run phase (after ALL batches written) — protocol
 

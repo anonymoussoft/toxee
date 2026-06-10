@@ -785,6 +785,18 @@ class AppLocalizationsKo extends AppLocalizations {
   String get statusMessageTooLong => '상태 메시지가 너무 깁니다';
 
   @override
+  String get passwordStrengthWeak => 'Weak';
+
+  @override
+  String get passwordStrengthFair => 'Fair';
+
+  @override
+  String get passwordStrengthGood => 'Good';
+
+  @override
+  String get passwordStrengthStrong => 'Strong';
+
+  @override
   String get manualNodeInput => '수동 노드 입력';
 
   @override

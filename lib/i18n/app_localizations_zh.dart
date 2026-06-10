@@ -775,6 +775,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get statusMessageTooLong => '签名过长';
 
   @override
+  String get passwordStrengthWeak => 'Weak';
+
+  @override
+  String get passwordStrengthFair => 'Fair';
+
+  @override
+  String get passwordStrengthGood => 'Good';
+
+  @override
+  String get passwordStrengthStrong => 'Strong';
+
+  @override
   String get manualNodeInput => '手动输入节点';
 
   @override

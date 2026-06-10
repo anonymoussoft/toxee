@@ -809,6 +809,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusMessageTooLong => 'Status message too long';
 
   @override
+  String get passwordStrengthWeak => 'Weak';
+
+  @override
+  String get passwordStrengthFair => 'Fair';
+
+  @override
+  String get passwordStrengthGood => 'Good';
+
+  @override
+  String get passwordStrengthStrong => 'Strong';
+
+  @override
   String get manualNodeInput => 'Manual Node Input';
 
   @override

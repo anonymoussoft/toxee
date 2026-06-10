@@ -211,7 +211,13 @@ class _LoginPageState extends State<LoginPage> {
         builder: (context, setLocal) => AlertDialog(
           title: Text(title),
           content: TextField(
+            // Stable automation anchor for the saved-account quick-login /
+            // re-login password prompt (the dialog has no other distinguishing
+            // key; the field is not autofocused). Lets real-UI automation type
+            // the password deterministically. Automation-only, shared Dart.
+            key: const Key('login_quick_password_field'),
             controller: passwordController,
+            autofocus: true,
             obscureText: obscure,
             textAlignVertical: TextAlignVertical.center,
             keyboardType: TextInputType.visiblePassword,

@@ -809,6 +809,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get statusMessageTooLong => 'رسالة الحالة طويلة جداً';
 
   @override
+  String get passwordStrengthWeak => 'Weak';
+
+  @override
+  String get passwordStrengthFair => 'Fair';
+
+  @override
+  String get passwordStrengthGood => 'Good';
+
+  @override
+  String get passwordStrengthStrong => 'Strong';
+
+  @override
   String get manualNodeInput => 'إدخال العقدة يدوياً';
 
   @override

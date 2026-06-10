@@ -784,6 +784,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get statusMessageTooLong => 'ステータスメッセージが長すぎます';
 
   @override
+  String get passwordStrengthWeak => 'Weak';
+
+  @override
+  String get passwordStrengthFair => 'Fair';
+
+  @override
+  String get passwordStrengthGood => 'Good';
+
+  @override
+  String get passwordStrengthStrong => 'Strong';
+
+  @override
   String get manualNodeInput => '手動ノード入力';
 
   @override

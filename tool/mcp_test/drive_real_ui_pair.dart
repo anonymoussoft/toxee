@@ -90,6 +90,10 @@ import 'fixture_c_bootstrap.dart';
 //   profile       — Batch-2 self-profile sweep (open overlay / edit-toggle /
 //                   nickname+status edit / copy-toxid / qr-copy; avatar SKIPs) +
 //                   the sweep_profile chain.
+//   login         — Batch-3 login/register sweep (logout, saved-account card,
+//                   register open/back + validation, restore SKIP, quick-login
+//                   wrong/correct password + remove, account switch) +
+//                   the sweep_login chain.
 //   group_profile — group profile, rename, search, add-member, member list.
 //   group_menu    — conversation-row menu (pin/mark-read/clear/delete) + bursts.
 part 'drive_real_ui_pair_inst.dart';
@@ -100,6 +104,7 @@ part 'drive_real_ui_pair_group.dart';
 part 'drive_real_ui_pair_settings.dart';
 part 'drive_real_ui_pair_settings2.dart';
 part 'drive_real_ui_pair_profile.dart';
+part 'drive_real_ui_pair_login.dart';
 part 'drive_real_ui_pair_group_profile.dart';
 part 'drive_real_ui_pair_group_menu.dart';
 
@@ -298,6 +303,66 @@ Future<int> _main(List<String> args) async {
     if (scenario == 'profile_avatar_select_default_applies') {
       await ensureHome(a, nickA);
       return await _profileAvatarSelectDefaultApplies(a) == false ? 1 : 75;
+    }
+    // Batch 3 — login / register (single-instance; drive only A). sweep_login
+    // chains all 9 on one launch (the canonical entry). The individual cases
+    // below run the minimum prelude each needs: cases that act on the LoginPage
+    // (21/22/23/24/25) log out first; the password cases (27/28) and the account
+    // switch (29) manage their own logout/login internally; 26 is a SKIP (exit
+    // 75, like the Batch-2 avatar SKIPs).
+    if (scenario == 'sweep_login') {
+      return await runLoginSweep(a, nickA);
+    }
+    if (scenario == 'login_register_open_back') {
+      await ensureHome(a, nickA);
+      if ((await _logoutToLoginPage(a)).isEmpty) return 1;
+      return await _loginRegisterOpenBack(a) ? 0 : 1;
+    }
+    if (scenario == 'login_account_card_renders') {
+      await ensureHome(a, nickA);
+      final tox = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+      final nk = (await a.dumpState())['nickname']?.toString() ?? nickA;
+      if ((await _logoutToLoginPage(a)).isEmpty) return 1;
+      return await _loginAccountCardRenders(a, tox, nk) ? 0 : 1;
+    }
+    if (scenario == 'login_restore_entry_opens') {
+      await ensureHome(a, nickA);
+      // SKIP — native picker only (exit 75; false -> 1; true -> 0, neither
+      // happens since this always returns null). Logging out is unnecessary for
+      // a SKIP but keep the page state simple by staying on HomePage.
+      return await _loginRestoreEntryOpens(a) == false ? 1 : 75;
+    }
+    if (scenario == 'register_empty_nickname_error') {
+      await ensureHome(a, nickA);
+      if ((await _logoutToLoginPage(a)).isEmpty) return 1;
+      return await _registerEmptyNicknameError(a) ? 0 : 1;
+    }
+    if (scenario == 'register_password_mismatch_error') {
+      await ensureHome(a, nickA);
+      if ((await _logoutToLoginPage(a)).isEmpty) return 1;
+      return await _registerPasswordMismatchError(a) ? 0 : 1;
+    }
+    if (scenario == 'register_password_strength_flips') {
+      await ensureHome(a, nickA);
+      if ((await _logoutToLoginPage(a)).isEmpty) return 1;
+      return await _registerPasswordStrengthFlips(a) ? 0 : 1;
+    }
+    if (scenario == 'login_password_wrong_error') {
+      await ensureHome(a, nickA);
+      return await _loginPasswordWrongError(a, <String>[]) ? 0 : 1;
+    }
+    if (scenario == 'login_password_correct_unlocks') {
+      // Standalone: set a pw, log out, then unlock with the correct pw + remove.
+      await ensureHome(a, nickA);
+      final holder = <String>[];
+      final wrongOk = await _loginPasswordWrongError(a, holder);
+      if (!wrongOk || holder.isEmpty) return 1;
+      return await _loginPasswordCorrectUnlocks(a, holder.first) ? 0 : 1;
+    }
+    if (scenario == 'account_switch_second_account') {
+      await ensureHome(a, nickA);
+      final tox = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+      return await _accountSwitchSecondAccount(a, tox) ? 0 : 1;
     }
     if (scenario == 'group_profile_open') {
       return await runGroupProfileOpen(a, nickA);

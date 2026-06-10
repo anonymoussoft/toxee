@@ -1552,6 +1552,30 @@ abstract class AppLocalizations {
   /// **'Status message too long'**
   String get statusMessageTooLong;
 
+  /// Caption under the register password-strength bar for a weak password
+  ///
+  /// In en, this message translates to:
+  /// **'Weak'**
+  String get passwordStrengthWeak;
+
+  /// Caption under the register password-strength bar for a fair password
+  ///
+  /// In en, this message translates to:
+  /// **'Fair'**
+  String get passwordStrengthFair;
+
+  /// Caption under the register password-strength bar for a good password
+  ///
+  /// In en, this message translates to:
+  /// **'Good'**
+  String get passwordStrengthGood;
+
+  /// Caption under the register password-strength bar for a strong password
+  ///
+  /// In en, this message translates to:
+  /// **'Strong'**
+  String get passwordStrengthStrong;
+
   /// Title for manual node input section
   ///
   /// In en, this message translates to:

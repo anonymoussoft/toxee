@@ -107,6 +107,20 @@ const _validRealUiScenarios = {
   'profile_qr_copy',
   'profile_avatar_picker_opens',
   'profile_avatar_select_default_applies',
+  // Batch 3 — login / register (single-instance, no-friend). The 9 cases are
+  // individually runnable; sweep_login chains them on one launch. Case 26
+  // (login_restore_entry_opens) is a SKIP inside the sweep — the restore card
+  // opens the native NSOpenPanel with no in-app pre-picker surface.
+  'sweep_login',
+  'login_register_open_back',
+  'login_account_card_renders',
+  'login_restore_entry_opens',
+  'register_empty_nickname_error',
+  'register_password_mismatch_error',
+  'register_password_strength_flips',
+  'login_password_wrong_error',
+  'login_password_correct_unlocks',
+  'account_switch_second_account',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -114,6 +128,9 @@ const _realUiCampaigns = <String, List<String>>{
   // Batch 2 — self profile (the whole 8-case chain on one launch; cases 19/20
   // are SKIPs inside the chain).
   'rui-profile': ['sweep_profile'],
+  // Batch 3 — login / register (the whole 9-case chain on one launch; case 26
+  // is a SKIP inside the chain — native picker only).
+  'rui-login': ['sweep_login'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -1013,6 +1030,18 @@ String _requiredRealUiState(String scenario) {
     case 'profile_qr_copy':
     case 'profile_avatar_picker_opens':
     case 'profile_avatar_select_default_applies':
+    // Batch 3 — login / register: single-instance (drive only A, B idle), no
+    // friendship required, so they run from a fresh no-friend launch.
+    case 'sweep_login':
+    case 'login_register_open_back':
+    case 'login_account_card_renders':
+    case 'login_restore_entry_opens':
+    case 'register_empty_nickname_error':
+    case 'register_password_mismatch_error':
+    case 'register_password_strength_flips':
+    case 'login_password_wrong_error':
+    case 'login_password_correct_unlocks':
+    case 'account_switch_second_account':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1071,6 +1100,17 @@ String _resultRealUiState(String scenario) {
     case 'profile_qr_copy':
     case 'profile_avatar_picker_opens':
     case 'profile_avatar_select_default_applies':
+    // Batch 3 — login / register: single-instance, leaves friendship untouched.
+    case 'sweep_login':
+    case 'login_register_open_back':
+    case 'login_account_card_renders':
+    case 'login_restore_entry_opens':
+    case 'register_empty_nickname_error':
+    case 'register_password_mismatch_error':
+    case 'register_password_strength_flips':
+    case 'login_password_wrong_error':
+    case 'login_password_correct_unlocks':
+    case 'account_switch_second_account':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');

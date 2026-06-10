@@ -683,6 +683,22 @@
   "@statusMessageTooLong": {
     "description": "Error message when status message is too long"
   },
+  "passwordStrengthWeak": "Weak",
+  "@passwordStrengthWeak": {
+    "description": "Caption under the register password-strength bar for a weak password"
+  },
+  "passwordStrengthFair": "Fair",
+  "@passwordStrengthFair": {
+    "description": "Caption under the register password-strength bar for a fair password"
+  },
+  "passwordStrengthGood": "Good",
+  "@passwordStrengthGood": {
+    "description": "Caption under the register password-strength bar for a good password"
+  },
+  "passwordStrengthStrong": "Strong",
+  "@passwordStrengthStrong": {
+    "description": "Caption under the register password-strength bar for a strong password"
+  },
   "manualNodeInput": "Manual Node Input",
   "@manualNodeInput": {
     "description": "Title for manual node input section"

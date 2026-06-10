@@ -4599,6 +4599,20 @@ MCPCallEntry _l3SetPinnedEntry() => MCPCallEntry.tool(
   ),
 );
 
+/// Whether the current account (Prefs.getCurrentAccountToxId) has a stored
+/// password verifier. Returns false when there is no current account or on any
+/// read error (the dump must never throw). Used by l3_dump_state's
+/// `currentAccountHasPassword` field.
+Future<bool> _currentAccountHasPassword() async {
+  try {
+    final toxId = await Prefs.getCurrentAccountToxId();
+    if (toxId == null || toxId.isEmpty) return false;
+    return await Prefs.hasAccountPassword(toxId);
+  } catch (_) {
+    return false;
+  }
+}
+
 MCPCallEntry _l3DumpStateEntry() => MCPCallEntry.tool(
   handler: (request) async {
     final ffi = FakeUIKit.instance.im?.ffi;
@@ -4648,6 +4662,11 @@ MCPCallEntry _l3DumpStateEntry() => MCPCallEntry.tool(
       // asserts via state{field:pinnedConversations, contains:<peer-id-prefix>}.
       'pinnedConversations': (await Prefs.getPinned()).toList(),
       'exportSaveFileOverridePath': debugCurrentExportSaveFileOverridePath,
+      // Whether the CURRENT account is password-protected (Prefs-backed verifier
+      // exists). Lets the Batch-3 login sweep PROVE the no-password end-state
+      // invariant (set/clear-password cases) directly instead of inferring it
+      // from a snackbar. Coerced to false when there is no current account.
+      'currentAccountHasPassword': await _currentAccountHasPassword(),
       ..._l3HarnessEnvironmentSnapshot(Platform.environment),
     };
     final homeShell = _l3HomeShellSnapshotReader?.call();
