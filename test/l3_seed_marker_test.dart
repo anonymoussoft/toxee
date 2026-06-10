@@ -60,4 +60,22 @@ void main() {
     await Prefs.removeL3SeedToxId('   ');
     expect(await Prefs.getL3SeedToxIds(), isEmpty);
   });
+
+  // Batch 6 unblock seam: `l3_mark_current_account_test` records the CURRENT
+  // account in the seed set (the exact wiring it does — getCurrentAccountToxId
+  // → addL3SeedToxId), which is what `_activeAccountIsTest()` then checks (by
+  // public-key prefix) to authorize the seeding tools (l3_send_file /
+  // l3_clear_history) on a real-UI-registered sweep account.
+  test('marking the current account records its public-key prefix in the seed '
+      'set (the l3_mark_current_account_test wiring)', () async {
+    await Prefs.setCurrentAccountToxId(full76);
+    // What the tool does:
+    final current = await Prefs.getCurrentAccountToxId();
+    expect(current, isNotNull);
+    await Prefs.addL3SeedToxId(current!);
+    // What the gate then checks (membership by 64-hex public-key prefix):
+    final ids = await Prefs.getL3SeedToxIds();
+    expect(ids, contains(pk),
+        reason: 'a real-UI-registered current account is now a seed account');
+  });
 }

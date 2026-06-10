@@ -202,24 +202,24 @@ Sweep: `sweep_conv` · Campaign: `rui-conv`. **Batch 5 STATUS: DONE** (9/10 WRIT
 
 | # | Case | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 55 | chat_open_from_row | 2p-r | S11 | tap row → chat opens, header shows friend nick | TODO |
-| 56 | chat_multiline_send | 2p-r | S120 | Shift+Enter newline + send → bubble contains both lines; B receives | TODO |
-| 57 | chat_long_text_send | 2p-r | — | 600-char message → renders + delivers | TODO |
-| 58 | chat_emoji_insert_send | 2p-r | S22 | emoji panel → insert → send → emoji bubble; B receives | TODO |
-| 59 | chat_sticker_panel_send | 2p-r | S23 | sticker tab → tap sticker → face message sends; B receives | TODO |
-| 60 | chat_msg_menu_surface | 2p-r | S15 | secondary-tap own bubble → context menu items render | TODO |
-| 61 | chat_copy_message_clipboard | 2p-r | S16 | menu Copy → OS clipboard contains text (pbpaste) | TODO |
-| 62 | chat_reply_quote_roundtrip | 2p-r | S18 | menu Reply → quoted composer → send → quote bubble renders; B sees reply | TODO |
-| 63 | chat_forward_to_other_conv | 2p-r | S17 | menu Forward → picker → forward to group → message appears there | TODO |
-| 64 | chat_delete_message_gone | 2p-r | — | menu Delete → bubble gone; reopen chat → still gone | TODO |
-| 65 | chat_history_scroll_load_more | 2p-r | S14 | seed >1 page (real alternating sends); scroll up → older page loads | TODO |
-| 66 | chat_inbound_while_scrolled_up | 2p-r | — | scrolled up + B sends → no forced jump; affordance/indicator asserted | TODO |
-| 67 | chat_header_opens_profile | 2p-r | S52 | tap chat header avatar/name → friend profile opens | TODO |
-| 68 | chat_offline_pending_then_deliver | 2p-r | S25/S13 | A offline (l3 seed) → send → pending spinner; reconnect → delivered to B | TODO |
-| 69 | chat_image_bubble_open_preview | 2p-r | S88 | B sends image (l3_send_file seeding) → A real image bubble renders → tap opens preview | TODO |
-| 70 | chat_file_bubble_present_open | 2p-r | S21/S24 | B sends small file (l3 seed) → A file bubble (name+size) → tap dispatches open | TODO |
+| 55 | chat_open_from_row | 2p-r | S11 | tap row → chat opens, header shows friend nick | WRITTEN |
+| 56 | chat_multiline_send | 2p-r | S120 | Shift+Enter newline + send → bubble contains both lines; B receives | WRITTEN (Shift+Enter wired, see log) |
+| 57 | chat_long_text_send | 2p-r | — | 600-char message → renders + delivers | WRITTEN |
+| 58 | chat_emoji_insert_send | 2p-r | S22 | emoji panel → insert → send → emoji bubble; B receives | WRITTEN (panel-OPEN gated via new `desktop_sticker_panel` key + emoji-token path; cells unkeyed, see log) |
+| 59 | chat_sticker_panel_send | 2p-r | S23 | sticker tab → tap sticker → face message sends; B receives | WRITTEN (panel-OPEN gated; face SEND needs keyed cell — fork flag, see log) |
+| 60 | chat_msg_menu_surface | 2p-r | S15 | secondary-tap own bubble → context menu items render | WRITTEN |
+| 61 | chat_copy_message_clipboard | 2p-r | S16 | menu Copy → OS clipboard contains text (pbpaste) | WRITTEN |
+| 62 | chat_reply_quote_roundtrip | 2p-r | S18 | menu Reply → quoted composer → send → quote bubble renders; B sees reply | SKIP(reply only on quotable custom-elem bubbles; no C2C custom-inbound seed seam + unkeyed reply container — fork/ffi flag) |
+| 63 | chat_forward_to_other_conv | 2p-r | S17 | menu Forward → picker → forward to group → message appears there | WRITTEN (forwards into the C2C row — only target with one friend, see log) |
+| 64 | chat_delete_message_gone | 2p-r | — | menu Delete → bubble gone; reopen chat → still gone | WRITTEN |
+| 65 | chat_history_scroll_load_more | 2p-r | S14 | seed >1 page (real alternating sends); scroll up → older page loads | WRITTEN (gates the RENDERED earliest ROW after scroll, not the dump; see log) |
+| 66 | chat_inbound_while_scrolled_up | 2p-r | — | scrolled up + B sends → no forced jump; affordance/indicator asserted | WRITTEN (no-jump = scrolled-up older ROW stays rendered after inbound; see log) |
+| 67 | chat_header_opens_profile | 2p-r | S52 | tap chat header avatar/name → friend profile opens | WRITTEN |
+| 68 | chat_offline_pending_then_deliver | 2p-r | S25/S13 | A offline (l3 seed) → send → pending spinner; reconnect → delivered to B | SKIP(offline-pending un-seedable on a reused launch — no ungated offline seam; stopping B forbidden) |
+| 69 | chat_image_bubble_open_preview | 2p-r | S88 | B sends image (l3_send_file seeding) → A real image bubble renders → tap opens preview | WRITTEN (renders gated; preview-open best-effort — async-load tap, see log) |
+| 70 | chat_file_bubble_present_open | 2p-r | S21/S24 | B sends small file (l3 seed) → A file bubble (name+size) → tap dispatches open | WRITTEN (renders+name gated; tap-open best-effort) |
 
-Sweep: `sweep_chat` · Campaign: `rui-chat`. **Batch 6 STATUS: TODO**
+Sweep: `sweep_chat` · Campaign: `rui-chat`. **Batch 6 STATUS: DONE** (14/16 WRITTEN+unrun, 2 SKIP — case 62 reply / case 68 offline; analyze 0-NEW vs 222 baseline; planner/validate/campaign-list/INDEX/self-test green; touched hermetic tests 46/46; codex PASS-WITH-FIXES — 5 P1 + 1 P2 + 1 P3 all applied; 3 production changes — the ungated `l3_mark_current_account_test` + `l3_unmark_current_account_test` seam pair and a `desktop_sticker_panel` automation key)
 
 #### Batch 7 — Group + conference (14 cases, mixed)
 
@@ -952,6 +952,239 @@ AppleScript System Events window resize, SKIP with reason if refused)
   message menu, applies here too). The presence SKIP applies identically on mobile
   (the friend online flag is the same native readout with no setter on any
   platform).
+
+- 2026-06-10 **Batch 6 DONE** (chat surface C2C — 14 TWO-PROCESS cases
+  WRITTEN+unrun, 2 SKIP; NOT live-run, per write-phase protocol). New part file
+  `tool/mcp_test/drive_real_ui_pair_chat.dart` (~950 LOC) declared in the
+  `drive_real_ui_pair.dart` part list; 16 per-case functions + `_seedChatHistory`
+  (~24-message seed shared by 65/66) + `runChatSweep` (chains all 16 on ONE 2p
+  launch, per-case `[sweep] <case>: PASS|FAIL|SKIP` + final counts + an end-state
+  re-seed guard, exits non-zero if any HARD case fails — 14 hard, 2 SKIP). Each
+  case individually dispatchable in `drive_real_ui_pair.dart` (all need an A<->B
+  friendship — establishes it inline via the real-UI handshake, or the runner
+  restores paired_for_e2e). Runner: 17 ids (`sweep_chat` + 16) added to
+  `_validRealUiScenarios` + both state tables; campaign `rui-chat = [sweep_chat]`.
+
+  **GATING ANSWER (the brief's prominent open question — answered + UNBLOCKED):**
+  the whole L3 surface only registers in a `kDebugMode && TOXEE_L3_TEST` build
+  (`kL3TestSurfaceEnabled`; run_toxee.sh injects `--dart-define=TOXEE_L3_TEST=true`).
+  WITHIN that build, the mutating/SEEDING tools (`l3_send_file`,
+  `l3_clear_history`, `l3_clear_active_conversation`, …) ALSO gate on
+  `_activeAccountIsTest()` (`l3_debug_tools.dart:377`): an account qualifies via
+  (1) an EXACT fixture nickname (`_kTestNicknames` = echo_seeded_test/
+  echo_live_test/echobotserver), (2) a known fixture Tox-ID PREFIX
+  (`8895A8D64C34334F…`), OR (3) the persistent SEED-ACCOUNT MARKER
+  (`Prefs.l3SeedToxIds`, written by `l3_register_account`). A real-UI sweep
+  account registers through the REAL RegisterPage (NOT `l3_register_account`), so
+  it has NO marker and is NON-TEST → those seeding tools refuse it with
+  `non_test_account`. **This also retroactively explains why Batch-5 cases 49/50
+  call `l3_clear_history`: those will refuse on the fresh non-test sweep accounts
+  unless the account is test-marked at run time.** FIX (legitimate, in-contract):
+  a new UNGATED **`l3_mark_current_account_test`** tool records the CURRENT
+  account in the seed marker (`Prefs.addL3SeedToxId`) — exactly as if it had been
+  created via `l3_register_account`. NOTE (codex P1): the marker authorizes the
+  WHOLE test-account-gated surface (not a "seeding-only" subset — there is no
+  per-tool scope today), so the campaign uses it ONLY to seed (the asserted
+  action in EVERY case stays the real widget/gesture — the tool NEVER substitutes
+  for the asserted UI action) and the sweep REVOKES it via the new
+  **`l3_unmark_current_account_test`** in its end-guard so the launch ends with
+  the same non-test privilege state it started — no hidden grant for a reused
+  launch (the marker is ALSO revoked when the account is deleted —
+  `Prefs.removeL3SeedToxId` in `removeAccount`, proven by `l3_seed_marker_test`).
+  It only works in the already-gated debug build. `runChatSweep` calls
+  `Inst.markAccountTest()` on BOTH peers right after the handshake → unblocks
+  cases 69/70 (image/file `l3_send_file` SEEDING) AND Batch-5's `l3_clear_history`,
+  then `unmarkAccountTest()` in the end-guard. **A sweep CAN legitimately
+  test-mark its own throwaway account at run time — via these ungated tools (and
+  must un-mark before it ends), not a nick pattern.**
+
+  **MULTILINE FINDING (case 56, S120 — Shift+Enter IS wired):** read
+  `tencent_cloud_chat_message_input_desktop.dart:545` `_handleKeyEvent`:
+  `(event.isShiftPressed || isAltPressed || isControlPressed || isMetaPressed)
+  && isPressEnter` → INSERTS `\n` at the cursor + returns `handled` (NO send);
+  plain Enter sends. So case 56 is FULLY DRIVEABLE: osascript `key code 36 using
+  shift down` (new `Inst.osaShiftReturn`) inserts the newline, then a plain
+  `osaReturn` sends. Asserts the delivered bubble text == `line1\n line2` and B
+  receives it. NOT a SKIP — the multiline affordance exists.
+
+  **FORWARD FINDING (case 63, S17):** the real desktop forward picker mounts
+  ("Forward Individually" header) and the Recent tab lists the available target
+  conversations (`message_actions_menu_real_ui_test.dart` S17). With ONE friend
+  there is only ONE target conversation — the same C2C row — so case 63 forwards
+  BACK INTO the C2C chat (selecting the friend's nickname in the Recent tab +
+  Send). This still exercises the real picker → real forward-send path end to end
+  (HARD: picker surfaced + dismissed after Send + a SECOND copy of the forwarded
+  text lands, i.e. forwardedCount≥2). The brief's "forward to a group" variant
+  would need a pre-created group; deferred to Batch 7's group surface (the
+  forward MECHANISM is proven here).
+
+  **OFFLINE FINDING (case 68, S25/S13 — SKIP, verified not assumed):** a
+  self-message becomes `isPending` ONLY while the PEER is unreachable
+  (`message_converter.dart:77`: `isPending == V2TIM_MSG_STATUS_SENDING`). There
+  is NO ungated l3 seam to force a pending/offline C2C send (grep
+  `l3_set_connection`/`l3_disconnect`/`l3_offline` → none;
+  `drive_fixture_c_network_drop.dart`'s `network_drop` drives the CALL reconnect
+  path `markReconnecting()`, not the message offline queue; `isPending` is
+  derived from native send status, no setter). The only way A's C2C send goes
+  pending is making B unreachable — stopping B's process, which the launch-reuse
+  rule FORBIDS. So the pending→deliver transition is un-seedable on a reused
+  launch → SKIP. Returns null (the sweep tallies SKIP; individual dispatch exits
+  75 = `_realUiSkipExitCode`). Logs a non-asserting breadcrumb (a normal send is
+  NOT pending — the connected path) but never fakes the flip.
+
+  **REPLY FINDING (case 62, S18 — SKIP, verified not assumed):** the REAL Reply
+  menu item is STRIPPED from TEXT bubbles and only appears on a QUOTABLE
+  (custom-elem) bubble (`message_actions_menu_real_ui_test.dart` S15+S18: text
+  menus offer EXACTLY copy/forward/delete; the only reply gate is on the
+  custom-elem fixture). On a reused launch there is NO way to produce a quotable
+  INBOUND C2C bubble: B's REAL composer only sends TEXT (reply-stripped), and
+  there is NO C2C custom-elem inbound-injection seam (only `l3_inject_group_text`
+  exists — group text, not a C2C custom elem). EVEN IF one were seeded, the
+  composer quote banner (`TencentCloudChatMessageInputReplyContainer`) carries NO
+  ValueKey, so the harness cannot assert it mounted. A fully-real reply would
+  need TWO new pieces — (1) a C2C custom-elem inbound seed seam in ffi/l3, (2) a
+  ValueKey on the reply container — both FLAGGED as fork/ffi rebuild needs. The
+  reply METADATA path already has hermetic L1 coverage (the S18 test drives the
+  real Reply item → real quote banner → send carrying `messageReply`
+  cloudCustomData). SKIP (returns null), never a fake pass. Case 62 LOGS a
+  surface breadcrumb (the reply item is ABSENT on a fresh TEXT bubble, confirming
+  the fork-strip) but never claims a pass.
+
+  **MESSAGE MENU TRIGGER (the brief's Batch-0 recipe — used verbatim):**
+  `Inst.secondaryTapKey('message_list_item:<msgID>')` (Batch-0 `ui_secondary_tap`
+  → a real `PointerDownEvent(kind:mouse, buttons:kSecondaryMouseButton)`) opens
+  the REAL desktop menu via the `Listener` in
+  `TencentCloudChatMessageItemWithMenu.desktopBuilder`; the items are then tapped
+  by `message_menu_item:<action>` (copy/forward/delete present on a fresh OWN text
+  bubble — the fork strips reply/multiSelect/translate; verified). Delete confirm
+  uses the keyed `confirm_dialog_primary_button`. Cases 60/61/63/64 single-fire
+  the keyed items with `tapKeyCenter` (a route-popping `PopupMenuItem`/menu item
+  must not double-fire). OWN-message row ids come from the dump `messages[]`
+  (`_ownMessageId` matches isSelf+text). The keys are all PROVEN to exist by the
+  passing hermetic tests in `test/ui/chat/` (Batch 6 reads them, adds no message
+  widget key).
+
+  **EMOJI/STICKER FINDING (cases 58/59, S22/S23):** the panel trigger is the
+  keyed `sticker_panel_button` (`tencent_cloud_chat_message_input_desktop.dart:385`)
+  — opens the real panel. BUT the panel GRID CELLS carry NO per-cell ValueKey
+  (the hermetic `sticker_send_real_ui_test.dart` matches them by AssetImage), so
+  flutter_skill can't tap a cell by key. So case 58 asserts the real panel
+  SURFACE opens (HARD) + an emoji-TOKEN message (`[Smile]`-form, the same `[xxx]`
+  the panel inserts) round-trips both ways through the real composer (HARD); case
+  59 asserts the panel surface opens (HARD) — the type-1 face SEND has hermetic
+  L1 coverage (the grid GestureDetector → sendStickerMessage path), and a real-UI
+  face-SEND assertion would need a keyed face cell (FLAGGED as a fork rebuild
+  need). A coordinate tap on the unkeyed cell is logged best-effort.
+
+  **HISTORY / LOAD-MORE (case 65, S14):** the production list AUTO-loads older
+  history with a `lastMsgID` cursor when scrolled toward the top
+  (`message_history_load_more_real_ui_test.dart`). `_seedChatHistory` does ~24
+  alternating REAL composer sends (A and B), then case 65 reopens the chat fresh
+  and wheel-scrolls UP via the Batch-0 `scrollAt('message_list_item:<anchor>',
+  dy:-600)` until the EARLIEST seeded text becomes present in the dump (the older
+  page loaded). The same ~24-msg seed serves case 66.
+
+  **INBOUND-WHILE-SCROLLED-UP (case 66):** the fork renders a "new messages"
+  button (the `newMessageCount` notifier in `message_list.dart:604`) when an
+  inbound arrives while scrolled up, but it carries NO stable key. So the HARD
+  signal is: the inbound IS delivered (in A's dump) AND A STAYS IN THE CHAT
+  (activeConversation unchanged == the C2C id — no forced jump/teardown). The
+  keyless new-messages chip is logged best-effort, not gated.
+
+  **MEDIA (cases 69/70, S88/S21/S24):** `l3_send_file` (test-gated → unblocked by
+  the marker) does a REAL Tox file transfer (writes a temp file → `provider.sendFile`
+  → delivers to the peer), so B→A delivers a genuine inbound image/file message
+  that A renders as a real bubble. Case 69 asserts an inbound `mediaKind=='image'`
+  message + its bubble row renders (HARD); the tap→preview is best-effort (the
+  image's tappable GestureDetector mounts only AFTER an async load — not driveable
+  at the widget layer, per the hermetic test's own scope note). Case 70 asserts an
+  inbound `mediaKind=='file'` message + the filename text + the bubble row (HARD);
+  the tap-open dispatches `_openFile()` (routes to the OS, best-effort).
+
+  **2p STATE CONTRACT (registered):** `sweep_chat` required=no-friend (does its
+  OWN real-UI handshake at the top, reusing Batch-4's
+  `_establishFriendshipForSweep`), result=friends (no case deletes the friend; the
+  end-guard re-seeds a row + verifies the launch ends friends-with-a-visible-row,
+  recomputed from the live state — the runner never trusts an unachieved result).
+  Planner dry-run confirmed: `sweep_chat` → a FRESH `launch_fixture_c_pair.sh` (no
+  restore, no `--boot-restored`); the individual cases → `paired_for_e2e` +
+  `--boot-restored`.
+
+  **ORDER (state-poison-aware):** handshake once → mark BOTH test → 55 open-from-row
+  → 57 long-text (BEFORE 56 so the multiline `\n` can't poison it) → 56 multiline
+  → 58 emoji → 59 sticker → 60 menu surface → 61 copy → 62 reply (SKIP) → 63
+  forward → seed ~24-msg history → 65 load-more → 66 inbound-while-scrolled-up →
+  67 header→profile → 64 DELETE (AFTER the menu cases that needed a bubble) → 68
+  offline (SKIP) → 69 image → 70 file → end-guard re-seeds a row.
+
+  **PRODUCTION CHANGES (3, intentional + tested + mobile-covered, shared Dart):**
+  (1) `lib/ui/testing/l3_debug_tools.dart` — the new UNGATED
+  `l3_mark_current_account_test` (the gating-answer unblock seam) + its inverse
+  `l3_unmark_current_account_test` (codex P1: the marker grants the WHOLE gated
+  surface, not just seeding, AND persists, so the sweep REVOKES it in its
+  end-guard so the launch ends with the same non-test privilege state — no hidden
+  grant left behind for a reused launch). (2) the fork desktop sticker panel
+  (`tencent_cloud_chat_message_input_sticker_panel.dart`) gets a stable
+  `ValueKey('desktop_sticker_panel')` on its overlay Container so cases 58/59 can
+  assert the panel actually OPENED (not just that the trigger button exists;
+  codex P1 false-pass fix) — automation-only, no semantic content. No MESSAGE
+  widget key was added (every menu/row/header key the cases drive already ships in
+  the fork, proven by the passing `test/ui/chat/` hermetic tests). Mobile parity:
+  the l3 tools are platform-agnostic Dart; the seeding they unblock (image/file
+  inbound, clear-history) is the same shared-Dart path on every platform; the
+  sticker panel key is on the desktop overlay (the mobile panel is an inline
+  `_showStickerPanel` toggle — a mobile real-UI test would assert that state). The
+  message context menu is desktop right-click vs mobile long-press — SAME shared
+  handler (`message_menu_item:*` actions), identical asserted behavior; this
+  harness drives the desktop secondary-tap (mobile would use a long-press
+  primitive or the existing `l3_invoke_message_action`).
+
+  **Codex review (mandatory, telemetry-off — 1 review round + 1 confirm round,
+  ALL findings applied):** round 1 found 5 P1 + 1 P2 + 1 P3, every one fixed:
+  **P1.1** the marker tool grants the WHOLE
+  test-account surface (not just seeding) → tightened the doc to be honest +
+  added `l3_unmark_current_account_test`. **P1.2** the marker persists as hidden
+  state-poison for a reused launch → the sweep end-guard + the individual media
+  dispatch (try/finally) now REVOKE it via `unmarkAccountTest`. **P1.3** cases
+  58/59 could PASS on a no-op panel tap (only the trigger BUTTON was asserted) →
+  added the `desktop_sticker_panel` fork key and gated both cases on the panel
+  OVERLAY actually appearing. **P1.4** case 65 read the dump `messages[]` (full
+  persisted history regardless of scroll) → now gates on the earliest ROW being
+  RENDERED (`waitKey('message_list_item:<earliestId>')`) after scrolling — the
+  load-more page actually mounting, not the persisted list; `_seedChatHistory`
+  now returns the earliest msgID. **P1.5** case 66 only proved delivery +
+  same-conversation → now proves NO FORCED JUMP (the scrolled-up older ROW stays
+  rendered after the inbound; a jump-to-bottom would un-mount it). **P2** case 69
+  accepted the first inbound `mediaKind=='image'` (stale-image false-pass on a
+  restored run) → now matches the UNIQUE seeded `fileName`. **P3** the individual
+  SKIP dispatch mapped `true→75` (latent if 62/68 ever became runnable) → a
+  `skipMap(bool?)` now maps `null→75, false→1, true→0`. The CONFIRM round verified
+  P1.1/P1.2/P1.3/P2/P3 resolved and flagged 2 residuals, both fixed: (a) **P1.4/P1.5
+  scroll anchor** — the scroll loop used the FIRST persisted msgID (the OLDEST,
+  OFFSCREEN row), whose key has no RenderBox so `ui_scroll_at` fails without moving
+  the list; switched to a VIEWPORT COORDINATE scroll (new `Inst.scrollAtCoords` →
+  `ui_scroll_at` raw `x,y`), and case 65 now FAILS (not vacuously passes) when the
+  earliest row is already rendered on open (history too short to prove load-more =
+  a seed failure). (b) **P1.1 residual prose** — removed the lingering
+  "grants only the seeding surface" claim from the tool doc / inst helper / sweep
+  comment / file header / campaign doc (the marker authorizes the whole gated
+  surface; honest everywhere now). After the confirm-round fixes: analyze still 222
+  (0 NEW), planner/validate/campaign-list/INDEX/self-test green, touched hermetic
+  tests 46/46 still PASS.
+
+  **Gates green:** `flutter analyze lib tool` 222 (0 NEW vs the Batch-0 baseline —
+  the new part file + the `osaShiftReturn`/`markAccountTest` inst additions + the
+  new l3 tool are all clean); `--plan-json --class=2proc-ui` exit 0 (JSON parses);
+  `--validate-only` exit 0; `--list-real-ui-campaigns` shows `rui-chat: sweep_chat`;
+  the `rui-chat` campaign + the individual `chat_*` cases dry-run plan correctly
+  (fresh-vs-restored); driver `--self-test-shell-recovery` PASS;
+  `gen_scenario_index.dart --check` green (178 playbooks, no invariant violations);
+  touched-surface hermetic tests `flutter test test/l3_seed_marker_test.dart
+  test/ui/chat/ test/ui/testing/ui_drive_tools_test.dart
+  test/ui/testing/l3_debug_tools_environment_test.dart` 46/46 PASS (the chat tests
+  prove every `message_menu_item:*` / `sticker_panel_button` / `message_list_item:*`
+  / `confirm_dialog_primary_button` / `message_header_profile_avatar` key the cases
+  depend on is live; the seed-marker test gains a case for the new tool's wiring).
 
 ## Run phase (after ALL batches written) — protocol
 

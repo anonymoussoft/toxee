@@ -161,6 +161,32 @@ const _validRealUiScenarios = {
   'conv_preview_updates_on_inbound',
   'conv_presence_dot_flips',
   'conv_search_filter_clear',
+  // Batch 6 — chat surface C2C (TWO-PROCESS). sweep_chat chains all 16 on one
+  // launch: required=no-friend (it does its OWN handshake) and result=friends
+  // (no case deletes the friend; the sweep ends with the C2C conversation alive).
+  // All cases are friendship-dependent (B's real sends seed history; l3 seeding
+  // delivers inbound media). Case 62 (reply) is a SKIP — the reply menu item only
+  // exists on quotable custom-elem bubbles and there is no C2C custom-inbound
+  // seed seam. Case 68 (offline-pending) is a SKIP — the pending→deliver flip is
+  // un-seedable on a reused launch (no ungated offline seam; stopping B is
+  // forbidden).
+  'sweep_chat',
+  'chat_open_from_row',
+  'chat_multiline_send',
+  'chat_long_text_send',
+  'chat_emoji_insert_send',
+  'chat_sticker_panel_send',
+  'chat_msg_menu_surface',
+  'chat_copy_message_clipboard',
+  'chat_reply_quote_roundtrip',
+  'chat_forward_to_other_conv',
+  'chat_delete_message_gone',
+  'chat_history_scroll_load_more',
+  'chat_inbound_while_scrolled_up',
+  'chat_header_opens_profile',
+  'chat_offline_pending_then_deliver',
+  'chat_image_bubble_open_preview',
+  'chat_file_bubble_present_open',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -181,6 +207,10 @@ const _realUiCampaigns = <String, List<String>>{
   // launch ends friends with a visible row). Case 53 (presence) is a SKIP inside
   // the chain — the friend online flag is un-seedable on a reused launch.
   'rui-conv': ['sweep_conv'],
+  // Batch 6 — chat surface C2C (the whole 16-case chain on one TWO-PROCESS
+  // launch; one handshake at the top, marks both accounts test to unblock l3
+  // SEEDING). Cases 62 (reply) + 68 (offline) are SKIPs inside the chain.
+  'rui-chat': ['sweep_chat'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -1065,6 +1095,25 @@ String _requiredRealUiState(String scenario) {
     case 'conv_preview_updates_on_inbound':
     case 'conv_presence_dot_flips':
     case 'conv_search_filter_clear':
+    // Batch 6 — friendship-dependent chat-surface cases: the runner restores
+    // paired_for_e2e so the C2C chat can be seeded by B before the case drives
+    // the composer / menu / media bubbles.
+    case 'chat_open_from_row':
+    case 'chat_multiline_send':
+    case 'chat_long_text_send':
+    case 'chat_emoji_insert_send':
+    case 'chat_sticker_panel_send':
+    case 'chat_msg_menu_surface':
+    case 'chat_copy_message_clipboard':
+    case 'chat_reply_quote_roundtrip':
+    case 'chat_forward_to_other_conv':
+    case 'chat_delete_message_gone':
+    case 'chat_history_scroll_load_more':
+    case 'chat_inbound_while_scrolled_up':
+    case 'chat_header_opens_profile':
+    case 'chat_offline_pending_then_deliver':
+    case 'chat_image_bubble_open_preview':
+    case 'chat_file_bubble_present_open':
       return _realUiStateFriends;
     case 'handshake':
     case 'handshake_detail':
@@ -1130,6 +1179,9 @@ String _requiredRealUiState(String scenario) {
     // Batch 5 — sweep_conv runs its OWN handshake, so it requires a fresh
     // NO-FRIEND pair launch (driving both A and B).
     case 'sweep_conv':
+    // Batch 6 — sweep_chat runs its OWN handshake, so it requires a fresh
+    // NO-FRIEND pair launch (driving both A and B).
+    case 'sweep_chat':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1178,6 +1230,26 @@ String _resultRealUiState(String scenario) {
     case 'conv_preview_updates_on_inbound':
     case 'conv_presence_dot_flips':
     case 'conv_search_filter_clear':
+    // Batch 6 — chat-surface cases LEAVE the friendship intact (no case deletes
+    // the friend; every case sends/menus/reads messages). sweep_chat re-seeds a
+    // row at the end, so the whole launch ends friends.
+    case 'sweep_chat':
+    case 'chat_open_from_row':
+    case 'chat_multiline_send':
+    case 'chat_long_text_send':
+    case 'chat_emoji_insert_send':
+    case 'chat_sticker_panel_send':
+    case 'chat_msg_menu_surface':
+    case 'chat_copy_message_clipboard':
+    case 'chat_reply_quote_roundtrip':
+    case 'chat_forward_to_other_conv':
+    case 'chat_delete_message_gone':
+    case 'chat_history_scroll_load_more':
+    case 'chat_inbound_while_scrolled_up':
+    case 'chat_header_opens_profile':
+    case 'chat_offline_pending_then_deliver':
+    case 'chat_image_bubble_open_preview':
+    case 'chat_file_bubble_present_open':
       return _realUiStateFriends;
     case 'decline':
     case 'custom_message':

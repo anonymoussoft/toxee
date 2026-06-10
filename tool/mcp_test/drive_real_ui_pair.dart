@@ -107,6 +107,12 @@ import 'fixture_c_bootstrap.dart';
 //                   preview-on-inbound, presence SKIP, conversation search) +
 //                   the sweep_conv chain (TWO-PROCESS: one handshake, delete-row
 //                   near last + re-seed so the launch ends friends).
+//   chat          — Batch-6 chat-surface C2C sweep (open-from-row, multiline +
+//                   long-text + emoji + sticker send, message context menu /
+//                   copy / forward / delete, history load-more, inbound while
+//                   scrolled up, header->profile, image/file bubbles; reply +
+//                   offline SKIP) + the sweep_chat chain (TWO-PROCESS: one
+//                   handshake, marks both accounts test to unblock l3 SEEDING).
 part 'drive_real_ui_pair_inst.dart';
 part 'drive_real_ui_pair_shell.dart';
 part 'drive_real_ui_pair_friends.dart';
@@ -120,6 +126,7 @@ part 'drive_real_ui_pair_contacts.dart';
 part 'drive_real_ui_pair_group_profile.dart';
 part 'drive_real_ui_pair_group_menu.dart';
 part 'drive_real_ui_pair_conv.dart';
+part 'drive_real_ui_pair_chat.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -520,6 +527,121 @@ Future<int> _main(List<String> args) async {
           return await _convPresenceDotFlips(a, cTox2B) == false ? 1 : 75;
         case 'conv_search_filter_clear':
           return await _convSearchFilterClear(a, cTox2B, nickB) ? 0 : 1;
+      }
+    }
+    // Batch 6 — chat surface C2C (TWO-PROCESS). sweep_chat chains all 16 on one
+    // launch (the canonical entry; one handshake at the top, marks both accounts
+    // test to unblock l3 SEEDING). The individual cases are dispatchable too: all
+    // need an A<->B friendship, so they establish it first via the real-UI
+    // handshake (or reuse the runner's restored paired_for_e2e). The cases that
+    // SEED via the test-gated tools (image/file) mark the account test inline.
+    if (scenario == 'sweep_chat') {
+      return await runChatSweep(a, b, nickA, nickB);
+    }
+    if (scenario == 'chat_open_from_row' ||
+        scenario == 'chat_multiline_send' ||
+        scenario == 'chat_long_text_send' ||
+        scenario == 'chat_emoji_insert_send' ||
+        scenario == 'chat_sticker_panel_send' ||
+        scenario == 'chat_msg_menu_surface' ||
+        scenario == 'chat_copy_message_clipboard' ||
+        scenario == 'chat_reply_quote_roundtrip' ||
+        scenario == 'chat_forward_to_other_conv' ||
+        scenario == 'chat_delete_message_gone' ||
+        scenario == 'chat_history_scroll_load_more' ||
+        scenario == 'chat_inbound_while_scrolled_up' ||
+        scenario == 'chat_header_opens_profile' ||
+        scenario == 'chat_offline_pending_then_deliver' ||
+        scenario == 'chat_image_bubble_open_preview' ||
+        scenario == 'chat_file_bubble_present_open') {
+      if (!bootRestored) {
+        await ensureHome(a, nickA);
+        await ensureHome(b, nickB, requireHomeMenu: false);
+      }
+      final chTox2A =
+          (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+      final chTox2B =
+          (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
+      if (chTox2A.isEmpty || chTox2B.isEmpty) {
+        throw DriveError('missing tox ids for $scenario: A=$chTox2A B=$chTox2B');
+      }
+      if (!await _establishFriendshipForSweep(
+          a, b, chTox2A, chTox2B, nickA, nickB)) {
+        print('[pair] $scenario: could not establish friendship');
+        return 1;
+      }
+      // Cases that SEED via test-gated tools need the seed marker on both peers.
+      // The marker grants the WHOLE gated surface, so REVOKE it in a `finally`
+      // so the individual dispatch doesn't leave a privileged account behind
+      // (codex P1 — mirrors the sweep's end-guard).
+      final needsMarker = scenario == 'chat_image_bubble_open_preview' ||
+          scenario == 'chat_file_bubble_present_open';
+      if (needsMarker) {
+        await a.markAccountTest();
+        await b.markAccountTest();
+      }
+      // Map a `bool?` runner: null → SKIP (75), false → FAIL (1), true → PASS (0).
+      int skipMap(bool? r) => r == null ? 75 : (r ? 0 : 1);
+      try {
+        switch (scenario) {
+          case 'chat_open_from_row':
+            return await _chatOpenFromRow(a, chTox2B) ? 0 : 1;
+          case 'chat_multiline_send':
+            return await _chatMultilineSend(a, b, chTox2A, chTox2B) ? 0 : 1;
+          case 'chat_long_text_send':
+            return await _chatLongTextSend(a, b, chTox2A, chTox2B) ? 0 : 1;
+          case 'chat_emoji_insert_send':
+            return await _chatEmojiInsertSend(a, b, chTox2A, chTox2B) ? 0 : 1;
+          case 'chat_sticker_panel_send':
+            return await _chatStickerPanelSend(a, chTox2B) ? 0 : 1;
+          case 'chat_msg_menu_surface':
+            return await _chatMsgMenuSurface(a, chTox2B) ? 0 : 1;
+          case 'chat_copy_message_clipboard':
+            return await _chatCopyMessageClipboard(a, chTox2B) ? 0 : 1;
+          case 'chat_reply_quote_roundtrip':
+            // SKIP — no driveable C2C reply surface (always returns null → 75).
+            return skipMap(await _chatReplyQuoteRoundtrip(a, chTox2B));
+          case 'chat_forward_to_other_conv':
+            return await _chatForwardToOtherConv(a, chTox2B, nickB) ? 0 : 1;
+          case 'chat_delete_message_gone':
+            return await _chatDeleteMessageGone(a, chTox2B) ? 0 : 1;
+          case 'chat_history_scroll_load_more':
+            {
+              final seeded = await _seedChatHistory(a, b, chTox2A, chTox2B);
+              return await _chatHistoryScrollLoadMore(a, b, chTox2A, chTox2B,
+                      earliestText: seeded?.earliestText ?? '',
+                      earliestId: seeded?.earliestId ?? '')
+                  ? 0
+                  : 1;
+            }
+          case 'chat_inbound_while_scrolled_up':
+            {
+              final seeded = await _seedChatHistory(a, b, chTox2A, chTox2B);
+              return await _chatInboundWhileScrolledUp(a, b, chTox2A, chTox2B,
+                      earliestText: seeded?.earliestText ?? '',
+                      earliestId: seeded?.earliestId ?? '')
+                  ? 0
+                  : 1;
+            }
+          case 'chat_header_opens_profile':
+            return await _chatHeaderOpensProfile(a, chTox2B) ? 0 : 1;
+          case 'chat_offline_pending_then_deliver':
+            // SKIP — offline-pending un-seedable (always returns null → 75).
+            return skipMap(await _chatOfflinePendingThenDeliver(a, chTox2B));
+          case 'chat_image_bubble_open_preview':
+            return await _chatImageBubbleOpenPreview(a, b, chTox2A, chTox2B)
+                ? 0
+                : 1;
+          case 'chat_file_bubble_present_open':
+            return await _chatFileBubblePresentOpen(a, b, chTox2A, chTox2B)
+                ? 0
+                : 1;
+        }
+      } finally {
+        if (needsMarker) {
+          await a.unmarkAccountTest();
+          await b.unmarkAccountTest();
+        }
       }
     }
     if (scenario == 'group_profile_open') {

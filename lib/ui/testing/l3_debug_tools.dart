@@ -327,6 +327,8 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3LeaveGroupUncheckedEntry());
   addMcpTool(_l3ClearGroupHistoryEntry());
   addMcpTool(_l3SetActiveConversationEntry());
+  addMcpTool(_l3MarkCurrentAccountTestEntry());
+  addMcpTool(_l3UnmarkCurrentAccountTestEntry());
 }
 
 /// Exact fixture identities the mutating/destructive tools are allowed to
@@ -4199,6 +4201,102 @@ MCPCallEntry _l3SetActiveConversationEntry() => MCPCallEntry.tool(
         'userId': StringSchema(description: 'Alias for conversationId.'),
       },
     ),
+  ),
+);
+
+/// UNGATED harness hook: grant the CURRENT account the L3 seed-account marker
+/// ([Prefs.addL3SeedToxId]) so the test-account-gated tools act on this account.
+///
+/// SCOPE (honest — codex P1): the marker is the SAME `[_activeAccountIsTest]`
+/// grant `l3_register_account` writes, so it authorizes the WHOLE
+/// test-account-gated surface (l3_send_file / l3_clear_history / l3_send_text /
+/// l3_set_blocked / l3_create_group / l3_set_pinned / …), NOT a "seeding-only"
+/// subset — there is no per-tool scope today. The campaign uses it only to SEED
+/// (the asserted action in every case stays the real widget/gesture), but the
+/// privilege it confers is broad, so a sweep MUST revoke it
+/// (`l3_unmark_current_account_test`) before it ends so the launch does not
+/// leave a privileged account behind for a reused launch (the result-state
+/// poison codex P1 flagged).
+///
+/// WHY THIS IS SAFE + IN-CONTRACT (Batch-6 gating answer): the whole L3 surface
+/// only registers when the app is BUILT with `kDebugMode && TOXEE_L3_TEST`
+/// (kL3TestSurfaceEnabled) — a debug harness build, never release. An account
+/// REGISTERED through the real UI (every fresh real-UI sweep launch) carries NO
+/// seed marker, so the gated tools refuse it with `non_test_account` — which
+/// blocks the SEEDING the campaign contract explicitly allows. This tool lets a
+/// sweep mark its OWN throwaway account, exactly as `l3_register_account` does,
+/// and the marker is also revoked when the account is deleted
+/// (Prefs.removeL3SeedToxId in removeAccount), so the grant can't outlive the
+/// account. Pure harness plumbing, like `l3_open_add_friend_dialog`.
+MCPCallEntry _l3MarkCurrentAccountTestEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final toxId = (await Prefs.getCurrentAccountToxId() ?? '').trim();
+    if (toxId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_mark_current_account_test: no active account',
+        parameters: {'ok': false, 'error': 'no_active_account'},
+      );
+    }
+    await Prefs.addL3SeedToxId(toxId);
+    final isTest = await _activeAccountIsTest();
+    AppLogger.info(
+      '[L3] l3_mark_current_account_test: seed-marker recorded for '
+      '$toxId (isTest=$isTest)',
+    );
+    return MCPCallResult(
+      message: 'current account marked as L3 seed account',
+      parameters: {'ok': true, 'toxId': toxId, 'isTestAccount': isTest},
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_mark_current_account_test',
+    description:
+        'UNGATED harness hook: record the CURRENT account in the persistent '
+        'L3 seed-account marker (Prefs.l3SeedToxIds) so the test-account-gated '
+        'tools act on it. NOTE: this grants the WHOLE gated surface (not just '
+        'seeding) — pair it with l3_unmark_current_account_test to revoke before '
+        'the launch ends. The whole L3 surface is already kDebugMode + '
+        'TOXEE_L3_TEST gated; the marker is also revoked when the account is '
+        'deleted.',
+    inputSchema: ObjectSchema(properties: {}),
+  ),
+);
+
+/// UNGATED harness hook: REVOKE the CURRENT account's L3 seed-account marker
+/// ([Prefs.removeL3SeedToxId]) — the inverse of `l3_mark_current_account_test`.
+/// A sweep that marked its throwaway account calls this in its end-guard so the
+/// launch ends with the SAME (non-test) privilege state it started, leaving no
+/// hidden grant behind for a reused launch (codex P1). No-op if the current
+/// account was never marked or is a permanent fixture (nickname/prefix-based,
+/// which the marker can't revoke — those aren't marker-granted).
+MCPCallEntry _l3UnmarkCurrentAccountTestEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final toxId = (await Prefs.getCurrentAccountToxId() ?? '').trim();
+    if (toxId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_unmark_current_account_test: no active account',
+        parameters: {'ok': false, 'error': 'no_active_account'},
+      );
+    }
+    await Prefs.removeL3SeedToxId(toxId);
+    final isTest = await _activeAccountIsTest();
+    AppLogger.info(
+      '[L3] l3_unmark_current_account_test: seed-marker revoked for '
+      '$toxId (isTest=$isTest)',
+    );
+    return MCPCallResult(
+      message: 'current account seed-marker revoked',
+      parameters: {'ok': true, 'toxId': toxId, 'isTestAccount': isTest},
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_unmark_current_account_test',
+    description:
+        'UNGATED harness hook: revoke the CURRENT account\'s L3 seed-account '
+        'marker (the inverse of l3_mark_current_account_test) so a sweep that '
+        'temporarily marked its throwaway account ends with the same non-test '
+        'privilege state it started. No-op for permanent fixtures.',
+    inputSchema: ObjectSchema(properties: {}),
   ),
 );
 

@@ -253,6 +253,30 @@ class Inst {
     return r['ok'] == true;
   }
 
+  /// Grant the CURRENT (real-UI-registered, non-test) account the L3
+  /// seed-account marker so the test-account-gated tools (`l3_send_file`,
+  /// `l3_clear_history`, …) act on it. NOTE: the marker authorizes the WHOLE
+  /// gated surface, not just seeding — pair with [unmarkAccountTest] in an
+  /// end-guard so the launch ends with the same non-test privilege state. The
+  /// campaign uses it only to SEED (the asserted UI action stays the real
+  /// widget/gesture). Returns whether the account is a test account afterwards.
+  Future<bool> markAccountTest() async {
+    final r = await l3('l3_mark_current_account_test');
+    return r['ok'] == true && r['isTestAccount'] == true;
+  }
+
+  /// Revoke the seed-account marker granted by [markAccountTest] so the launch
+  /// ends with the same (non-test) privilege state it started — no hidden grant
+  /// left behind for a reused launch. Best-effort (returns whether it succeeded).
+  Future<bool> unmarkAccountTest() async {
+    try {
+      final r = await l3('l3_unmark_current_account_test');
+      return r['ok'] == true;
+    } on DriveError {
+      return false;
+    }
+  }
+
   Future<bool> deleteFriendViaL3(String userId) async {
     final r = await l3('l3_delete_friend', {'userId': userId});
     return r['ok'] == true;
@@ -368,6 +392,24 @@ class Inst {
     }
   }
 
+  /// One mouse-wheel scroll at raw global coords (dy positive scrolls down).
+  /// Use this when the row to scroll on isn't keyed/rendered yet — a coordinate
+  /// over the message-list viewport hits whatever Scrollable is under it, so the
+  /// scroll lands even when the oldest row is offscreen (a key-center scroll on
+  /// an unrendered row would have no RenderBox to resolve).
+  Future<void> scrollAtCoords(num x, num y,
+      {double dx = 0, required double dy}) async {
+    final r = await l3('ui_scroll_at', {
+      'x': '$x',
+      'y': '$y',
+      'dx': '$dx',
+      'dy': '$dy',
+    });
+    if (r['ok'] != true) {
+      throw DriveError('[$name] ui_scroll_at ($x,$y) failed: $r');
+    }
+  }
+
   /// Touch-drag [key]'s center by (dx,dy) over [steps] moves.
   Future<void> dragBy(
     String key, {
@@ -450,6 +492,14 @@ class Inst {
       _osa('tell application "System Events" to keystroke "$text"');
   Future<void> osaReturn() =>
       _osa('tell application "System Events" to key code 36');
+
+  /// Shift+Enter — the desktop composer maps Shift/Alt/Ctrl/Meta+Enter to
+  /// INSERT a newline (no send); see `_handleKeyEvent` in
+  /// tencent_cloud_chat_message_input_desktop.dart. A genuine OS chord so the
+  /// production RawKeyEvent path runs (synthetic enterText can't reach it).
+  Future<void> osaShiftReturn() => _osa(
+        'tell application "System Events" to key code 36 using shift down',
+      );
   Future<void> osaEscape() =>
       _osa('tell application "System Events" to key code 53');
 
