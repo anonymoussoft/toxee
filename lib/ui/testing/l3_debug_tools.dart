@@ -100,6 +100,8 @@ typedef L3OpenAddGroupDialogInvoker = Future<bool> Function();
 L3OpenAddGroupDialogInvoker? _l3OpenAddGroupDialogInvoker;
 typedef L3OpenGroupAddMemberInvoker = Future<bool> Function(String groupId);
 L3OpenGroupAddMemberInvoker? _l3OpenGroupAddMemberInvoker;
+typedef L3OpenGroupMemberListInvoker = Future<bool> Function(String groupId);
+L3OpenGroupMemberListInvoker? _l3OpenGroupMemberListInvoker;
 typedef L3OpenConversationMenuInvoker =
     Future<bool> Function(String conversationId, {String? action});
 L3OpenConversationMenuInvoker? _l3OpenConversationMenuInvoker;
@@ -151,6 +153,10 @@ void registerL3OpenAddGroupDialogInvoker(L3OpenAddGroupDialogInvoker? fn) {
 
 void registerL3OpenGroupAddMemberInvoker(L3OpenGroupAddMemberInvoker? fn) {
   if (kL3TestSurfaceEnabled) _l3OpenGroupAddMemberInvoker = fn;
+}
+
+void registerL3OpenGroupMemberListInvoker(L3OpenGroupMemberListInvoker? fn) {
+  if (kL3TestSurfaceEnabled) _l3OpenGroupMemberListInvoker = fn;
 }
 
 void registerL3OpenConversationMenuInvoker(L3OpenConversationMenuInvoker? fn) {
@@ -286,6 +292,7 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3OpenAddFriendDialogEntry());
   addMcpTool(_l3OpenAddGroupDialogEntry());
   addMcpTool(_l3OpenGroupAddMemberEntry());
+  addMcpTool(_l3OpenGroupMemberListEntry());
   addMcpTool(_l3OpenConversationMenuEntry());
   addMcpTool(_l3InvokeMessageActionEntry());
   addMcpTool(_l3MarkReadEntry());
@@ -1690,6 +1697,71 @@ MCPCallEntry _l3OpenGroupAddMemberEntry() => MCPCallEntry.tool(
         'Open the real group add-member screen for a joined group. '
         'Navigation-stability harness hook only; the member is selected + '
         'invited (inviteUserToGroup) through the real add-member UI.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'groupId': StringSchema(
+          description: 'Local group id (tox_N), with or without the '
+              '"group_" conversation prefix.',
+        ),
+      },
+    ),
+  ),
+);
+
+/// Deep-link to OPEN the REAL group member-list page for [groupId], skipping the
+/// brittle chat→header-avatar→group-profile→"Group Members" navigation hops
+/// (the members entry is a KeyedSubtree that also wraps the "+ Add Members"
+/// affordance, so a coordinate tap is ambiguous). The member-list page is then
+/// driven through REAL widgets: the keyed per-member rows
+/// (`group_member_list_item:<userId>`), the desktop kick menu
+/// (`group_member_desktop_kick_item` via a real secondary-tap), and member-list
+/// scrolling. Mirrors `l3_open_group_add_member` — navigation-stability harness
+/// hook only, UNGATED on purpose (driven on freshly-registered non-test
+/// accounts).
+MCPCallEntry _l3OpenGroupMemberListEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_open_group_member_list: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    var groupId = (request['groupId'] as Object?)?.toString().trim() ?? '';
+    if (groupId.startsWith('group_')) groupId = groupId.substring(6);
+    if (groupId.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_open_group_member_list: need "groupId"',
+        parameters: {'ok': false, 'error': 'missing_group_id'},
+      );
+    }
+    if (!ffi.knownGroups.contains(groupId)) {
+      return MCPCallResult(
+        message: 'l3_open_group_member_list: not a joined group: $groupId',
+        parameters: {'ok': false, 'error': 'not_joined', 'groupId': groupId},
+      );
+    }
+    final invoker = _l3OpenGroupMemberListInvoker;
+    if (invoker == null) {
+      return MCPCallResult(
+        message: 'l3_open_group_member_list: invoker not registered',
+        parameters: {'ok': false, 'error': 'invoker_not_registered'},
+      );
+    }
+    final opened = await invoker(groupId);
+    return MCPCallResult(
+      message: opened
+          ? 'group member-list page opened'
+          : 'group member-list page unavailable',
+      parameters: {'ok': opened, 'groupId': groupId},
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_open_group_member_list',
+    description:
+        'Open the real group member-list page for a joined group. '
+        'Navigation-stability harness hook only; the member rows / desktop kick '
+        'menu / scrolling are driven through the real member-list UI.',
     inputSchema: ObjectSchema(
       properties: {
         'groupId': StringSchema(

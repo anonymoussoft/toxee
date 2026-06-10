@@ -187,6 +187,29 @@ const _validRealUiScenarios = {
   'chat_offline_pending_then_deliver',
   'chat_image_bubble_open_preview',
   'chat_file_bubble_present_open',
+  // Batch 7 — group / conference (MIXED single-instance + two-process).
+  // sweep_group2 chains all 14 on one launch: required=no-friend (it does its
+  // OWN handshake) and result=friends (no case deletes the FRIEND — case 78
+  // kicks B from the group, case 75 leaves the group, but the A<->B friendship
+  // stays intact). The single-instance create cases (71/72/82) are no-friend;
+  // the rest of the single-instance group/conference cases create their own
+  // group standalone (no friendship needed); the 2p cases (77/78/79/81) need a
+  // friendship (the standalone dispatch establishes it + joins B).
+  'sweep_group2',
+  'group_create_cancel',
+  'group_create_type_selector_surface',
+  'group_rename_updates_header',
+  'group_profile_members_entry',
+  'group_mute_toggle',
+  'group_profile_clear_history',
+  'group_add_member_full_join',
+  'group_member_list_scroll',
+  'group_unread_badge_two_proc',
+  'group_kick_member_ui',
+  'group_leave_via_profile_confirm',
+  'conf_create_dialog_surface',
+  'conf_row_menu_surface',
+  'conf_member_list_renders',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -211,6 +234,12 @@ const _realUiCampaigns = <String, List<String>>{
   // launch; one handshake at the top, marks both accounts test to unblock l3
   // SEEDING). Cases 62 (reply) + 68 (offline) are SKIPs inside the chain.
   'rui-chat': ['sweep_chat'],
+  // Batch 7 — group / conference (the whole 14-case chain on one TWO-PROCESS
+  // launch; one handshake at the top, one shared PRIVATE group + one shared
+  // conference created via the REAL add-group dialog and reused across cases.
+  // Case 78 kicks B from the group, case 75 leaves the group, but the A<->B
+  // friendship stays intact, so the launch ends FRIENDS.
+  'rui-group2': ['sweep_group2'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -1114,6 +1143,12 @@ String _requiredRealUiState(String scenario) {
     case 'chat_offline_pending_then_deliver':
     case 'chat_image_bubble_open_preview':
     case 'chat_file_bubble_present_open':
+    // Batch 7 — the two-process group cases need a friendship (the standalone
+    // dispatch establishes it + joins B); the runner restores paired_for_e2e.
+    case 'group_add_member_full_join':
+    case 'group_member_list_scroll':
+    case 'group_unread_badge_two_proc':
+    case 'group_kick_member_ui':
       return _realUiStateFriends;
     case 'handshake':
     case 'handshake_detail':
@@ -1182,6 +1217,21 @@ String _requiredRealUiState(String scenario) {
     // Batch 6 — sweep_chat runs its OWN handshake, so it requires a fresh
     // NO-FRIEND pair launch (driving both A and B).
     case 'sweep_chat':
+    // Batch 7 — sweep_group2 runs its OWN handshake, so it requires a fresh
+    // NO-FRIEND pair launch. The single-instance create cases (71/72/82) +
+    // the single-instance group/conference cases that create their own group
+    // standalone (76/73/80/74/75/83/84) need no friendship either.
+    case 'sweep_group2':
+    case 'group_create_cancel':
+    case 'group_create_type_selector_surface':
+    case 'group_rename_updates_header':
+    case 'group_profile_members_entry':
+    case 'group_mute_toggle':
+    case 'group_profile_clear_history':
+    case 'group_leave_via_profile_confirm':
+    case 'conf_create_dialog_surface':
+    case 'conf_row_menu_surface':
+    case 'conf_member_list_renders':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1250,6 +1300,15 @@ String _resultRealUiState(String scenario) {
     case 'chat_offline_pending_then_deliver':
     case 'chat_image_bubble_open_preview':
     case 'chat_file_bubble_present_open':
+    // Batch 7 — sweep_group2 ends FRIENDS (no case deletes the friend; case 78
+    // kicks B from the group + case 75 leaves the group, but the A<->B
+    // friendship stays intact). The two-process group cases also leave the
+    // friendship intact (kick/scroll/unread never delete the friend).
+    case 'sweep_group2':
+    case 'group_add_member_full_join':
+    case 'group_member_list_scroll':
+    case 'group_unread_badge_two_proc':
+    case 'group_kick_member_ui':
       return _realUiStateFriends;
     case 'decline':
     case 'custom_message':
@@ -1308,6 +1367,19 @@ String _resultRealUiState(String scenario) {
     case 'add_friend_self_id_guard':
     case 'contacts_subtabs_cycle':
     case 'friendprof_delete_friend_confirm':
+    // Batch 7 — the single-instance create cases + the standalone
+    // single-instance group/conference cases never form a friendship, so the
+    // launch ends NO-FRIEND.
+    case 'group_create_cancel':
+    case 'group_create_type_selector_surface':
+    case 'group_rename_updates_header':
+    case 'group_profile_members_entry':
+    case 'group_mute_toggle':
+    case 'group_profile_clear_history':
+    case 'group_leave_via_profile_confirm':
+    case 'conf_create_dialog_surface':
+    case 'conf_row_menu_surface':
+    case 'conf_member_list_renders':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');

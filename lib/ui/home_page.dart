@@ -78,6 +78,7 @@ import 'package:tencent_cloud_chat_common/router/tencent_cloud_chat_route_names.
 import 'package:tencent_cloud_chat_common/router/tencent_cloud_chat_navigator.dart';
 import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_user_profile_options.dart';
 import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_group_add_member_options.dart';
+import 'package:tencent_cloud_chat_common/components/component_options/tencent_cloud_chat_group_member_list_options.dart';
 import 'package:tencent_cloud_chat_sticker/tencent_cloud_chat_sticker.dart';
 import 'package:tencent_cloud_chat_sticker/tencent_cloud_chat_sticker_init_data.dart';
 import 'package:tencent_cloud_chat_text_translate/tencent_cloud_chat_text_translate.dart';
@@ -1925,6 +1926,48 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         memberList: memberList,
         contactList: contactList,
       ),
+    );
+    return true;
+  }
+
+  /// Deep-link to the REAL group member-list page for [groupId]. Mirrors
+  /// `_openGroupAddMember`: a navigation-stability harness hook for the real-UI
+  /// sweep (the member-list page is then driven through real widgets — the keyed
+  /// member rows / desktop kick menu / scroll). Resolves the same group info +
+  /// member list the group profile's "Group Members" entry would pass to
+  /// `navigateToGroupMemberList`, so it pushes the identical production page.
+  Future<bool> _openGroupMemberList(String groupId) async {
+    if (!mounted) return false;
+    var gid = groupId.trim();
+    if (gid.startsWith('group_')) gid = gid.substring(6);
+    if (gid.isEmpty) return false;
+
+    V2TimGroupInfo groupInfo = UikitDataFacade.getGroupInfo(gid);
+    if (groupInfo.groupID.isEmpty) {
+      groupInfo = UikitDataFacade.groupList.firstWhere(
+        (g) => g.groupID == gid,
+        orElse: () => V2TimGroupInfo(groupID: gid, groupType: 'Work'),
+      );
+    }
+
+    final memberList = UikitDataFacade.getGroupMemberList(
+      gid,
+    ).whereType<V2TimGroupMemberFullInfo>().toList();
+
+    // No await between the `mounted` guard and this context use, so the
+    // BuildContext is still valid (use_build_context_synchronously is satisfied).
+    // unawaited(): navigateToGroupMemberList returns the pushed page's pop
+    // Future, which this fire-and-forget invoker intentionally does not await
+    // (return as soon as the page is on screen).
+    unawaited(
+      navigateToGroupMemberList<void>(
+            context: context,
+            options: TencentCloudChatGroupMemberListOptions(
+              groupInfo: groupInfo,
+              memberInfoList: memberList,
+            ),
+          ) ??
+          Future<void>.value(),
     );
     return true;
   }

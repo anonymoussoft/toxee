@@ -254,6 +254,15 @@ class UiKeys {
     'group_profile_clear_history_button',
   );
   static const Key groupProfileLeaveButton = Key('group_profile_leave_button');
+  // Group-profile do-not-disturb (mute) switch — the `controlKey` on the
+  // upstream state-button do-not-disturb OperationBar
+  // (tencent_cloud_chat_group_profile_body.dart). toxee does NOT override the
+  // state-button builder, so the upstream do-not-disturb + pin switches render;
+  // keying the mute Switch lets real-UI automation toggle the group mute
+  // (setGroupReceiveMessageOpt) and read its value via interactiveStructured,
+  // exactly like the friend-profile `user_profile_conversation_mute_switch`.
+  // Automation-only, shared Dart → mobile covered.
+  static const Key groupProfileMuteSwitch = Key('group_profile_mute_switch');
 
   // Conversation context menu (lib/ui/home_page.dart).
   static const Key conversationContextMenuPinItem = Key(
@@ -350,6 +359,22 @@ class UiKeys {
   static const Key groupMemberActionKickButton = Key(
     'group_member_action_kick_button',
   );
+  // Per-member ROW in the group member list
+  // (tencent_cloud_chat_group_member_list.dart). The row is a GestureDetector
+  // whose `onSecondaryTapDown` opens the DESKTOP member context menu (the kick
+  // affordance) and `onTap` opens the mobile manage sheet. Keyed per-member so
+  // real-UI automation can target a SPECIFIC member's row (e.g. to right-click
+  // B and kick). Automation-only, shared Dart → mobile covered.
+  static Key groupMemberListItem(String userId) =>
+      Key('group_member_list_item:$userId');
+  // The DESKTOP member context-menu "remove/kick" PopupMenuItem
+  // (tencent_cloud_chat_group_member_list.dart `_showDesktopContextMenu`). The
+  // PopupMenuItem carries `value:'remove'` but no key of its own; a KeyedSubtree
+  // wraps its child so automation can tap it locale-independently (the mobile
+  // action sheet's kick action already has `group_member_action_kick_button`).
+  static const Key groupMemberDesktopKickItem = Key(
+    'group_member_desktop_kick_item',
+  );
   static const Key groupMemberInfoCopyIdButton = Key(
     'group_member_info_copy_id_button',
   );
@@ -373,6 +398,12 @@ class UiKeys {
   // `messageInputBuilder` override.
   static const Key chatInputTextField = Key('chat_input_text_field');
   static const Key chatSendButton = Key('chat_send_button');
+  // Chat HEADER title text (the open conversation's group/conference/C2C name) —
+  // tencent_cloud_chat_message_header_info.dart. Distinct from the
+  // conversation-LIST row showName: real-UI automation asserts the OPEN-chat
+  // header reflects a rename (the group-rename case). Automation-only, shared
+  // Dart → mobile covered.
+  static const Key chatHeaderTitleText = Key('chat_header_title_text');
 
   // Friend profile "Send Message" tile (Contacts tab → friend → profile).
   // Wrapped at the `userProfileChatButtonBuilder` override in

@@ -1045,6 +1045,16 @@ extension _HomePageBootstrap on _HomePageState {
       return _openGroupAddMember(groupId);
     });
     _bag.add(() => registerL3OpenGroupAddMemberInvoker(null));
+    registerL3OpenGroupMemberListInvoker((groupId) async {
+      if (!mounted) return false;
+      // Same fire-and-forget contract as the add-member invoker above: PUSH the
+      // real member-list page and return as soon as it is on screen so the
+      // l3_open_group_member_list service-extension response is not blocked
+      // until the page is popped. The member rows / kick menu / scroll are then
+      // driven through the real member-list UI.
+      return _openGroupMemberList(groupId);
+    });
+    _bag.add(() => registerL3OpenGroupMemberListInvoker(null));
     registerL3OpenConversationMenuInvoker((conversationId, {action}) async {
       if (!mounted) return false;
       // Resolve the conversation from the live UIKit list (the same source the

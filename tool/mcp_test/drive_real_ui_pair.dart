@@ -127,6 +127,7 @@ part 'drive_real_ui_pair_group_profile.dart';
 part 'drive_real_ui_pair_group_menu.dart';
 part 'drive_real_ui_pair_conv.dart';
 part 'drive_real_ui_pair_chat.dart';
+part 'drive_real_ui_pair_group2.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -643,6 +644,18 @@ Future<int> _main(List<String> args) async {
           await b.unmarkAccountTest();
         }
       }
+    }
+    // Batch 7 — group / conference (MIXED single-instance + two-process).
+    // sweep_group2 chains all 14 on one launch (the canonical entry; one
+    // handshake at the top, one shared PRIVATE group + one shared conference
+    // created via the REAL add-group dialog). The individual group/conference
+    // cases are dispatchable too — they establish their OWN minimal precondition
+    // (handshake + a fresh private/conference group; 2p cases also join B).
+    if (scenario == 'sweep_group2') {
+      return await runGroup2Sweep(a, b, nickA, nickB);
+    }
+    if (_isGroup2CaseScenario(scenario)) {
+      return await runGroup2Case(a, b, nickA, nickB, scenario);
     }
     if (scenario == 'group_profile_open') {
       return await runGroupProfileOpen(a, nickA);

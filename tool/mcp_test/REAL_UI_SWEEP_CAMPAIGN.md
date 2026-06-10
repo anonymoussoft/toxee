@@ -225,22 +225,22 @@ Sweep: `sweep_chat` · Campaign: `rui-chat`. **Batch 6 STATUS: DONE** (14/16 WRI
 
 | # | Case | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 71 | group_create_cancel | 1i | S32 | add-group dialog → Cancel → no group created | TODO |
-| 72 | group_create_type_selector_surface | 1i | S32 | dialog type selector renders options; pick private → created | TODO |
-| 73 | group_profile_members_entry | 1i | S121 | group profile → members entry → member list page | TODO |
-| 74 | group_profile_clear_history | 1i | S122 | seed own sends → profile clear-history → chat empty | TODO |
-| 75 | group_leave_via_profile_confirm | 1i | S123/S150 | leave/dissolve button → keyed confirm → conv row gone | TODO |
-| 76 | group_rename_updates_header | 1i | S153 | rename via profile → open chat header shows new name | TODO |
-| 77 | group_add_member_full_join | 2p-r | S124/S81 | add-member picker → invite B → B auto-joins → member list shows 2 | TODO |
-| 78 | group_kick_member_ui | 2p-r | S37 | kick B via member-list UI → B's side reflects removal (mesh bootstrap; destructive, LAST group case) | TODO |
-| 79 | group_member_list_scroll | 2p-r | S36 | member list drag-scrolls (ui_drag) without error | TODO |
-| 80 | group_mute_toggle | 1i | S83 | group profile mute switch → dump flips, no crash | TODO |
-| 81 | group_unread_badge_two_proc | 2p-r | S90 | B group-sends → A row badge bumps; open → clears | TODO |
-| 82 | conf_create_dialog_surface | 1i | S156 | conference type create → conv row appears | TODO |
-| 83 | conf_row_menu_surface | 1i | S161 | conference row menu renders expected items | TODO |
-| 84 | conf_member_list_renders | 1i | — | conference profile member list mounts | TODO |
+| 71 | group_create_cancel | 1i | S32 | add-group dialog → ESC (no Cancel button) → no group created | WRITTEN |
+| 72 | group_create_type_selector_surface | 1i | S32 | dialog type selector renders all 3 segments; pick private → created (SHARED group) | WRITTEN |
+| 73 | group_profile_members_entry | 1i | S121 | group profile members entry → member list PAGE mounts (self row) | WRITTEN (l3_open_group_member_list, see log) |
+| 74 | group_profile_clear_history | 1i | S122 | seed own sends → profile clear-history → confirm-by-label → chat empty | WRITTEN |
+| 75 | group_leave_via_profile_confirm | 1i | S123/S150 | leave/dissolve button → confirm-by-label → conv row gone (LAST group case) | WRITTEN |
+| 76 | group_rename_updates_header | 1i | S153 | rename via profile → open chat header shows new name | WRITTEN |
+| 77 | group_add_member_full_join | 2p-r | S124/S81 | add-member picker → invite B → B auto-joins → member count ≥2 | WRITTEN |
+| 78 | group_kick_member_ui | 2p-r | S37 | kick B via REAL desktop member-row right-click → keyed kick item → A member list drops B | WRITTEN (fork keys added, see log) |
+| 79 | group_member_list_scroll | 2p-r | S36 | member list drag (ui_drag) executes; rows intact (2 members — honest low-value gate) | WRITTEN |
+| 80 | group_mute_toggle | 1i | S83 | group profile do-not-disturb switch ×2 → value flips, no crash (recvOpt soft) | WRITTEN (fork mute key added, see log) |
+| 81 | group_unread_badge_two_proc | 2p-r | S90 | B group-sends → A row badge bumps; open → clears | WRITTEN |
+| 82 | conf_create_dialog_surface | 1i | S156 | conference segment create → conv row appears (SHARED conference) | WRITTEN |
+| 83 | conf_row_menu_surface | 1i | S161 | conference row menu renders pin/mark-read/delete (shared type-agnostic menu) | WRITTEN |
+| 84 | conf_member_list_renders | 1i | — | conference profile member list PAGE mounts (self row) | WRITTEN |
 
-Sweep: `sweep_group2` · Campaign: `rui-group2`. **Batch 7 STATUS: TODO**
+Sweep: `sweep_group2` · Campaign: `rui-group2`. **Batch 7 STATUS: DONE**
 
 #### Batch 8 — Calls + misc (10 cases, 2p-r; media cases consecutive to reuse call state)
 
@@ -1185,6 +1185,175 @@ AppleScript System Events window resize, SKIP with reason if refused)
   prove every `message_menu_item:*` / `sticker_panel_button` / `message_list_item:*`
   / `confirm_dialog_primary_button` / `message_header_profile_avatar` key the cases
   depend on is live; the seed-marker test gains a case for the new tool's wiring).
+
+- 2026-06-10 **Batch 7 DONE** (group / conference — 14 MIXED single-instance +
+  two-process cases WRITTEN+unrun, 0 SKIP; NOT live-run, per write-phase
+  protocol). New part file `tool/mcp_test/drive_real_ui_pair_group2.dart`
+  (~1000 LOC) declared in the `drive_real_ui_pair.dart` part list; 14 per-case
+  functions + `runGroup2Sweep` (chains all 14 on ONE 2p launch, per-case
+  `[sweep] <case>: PASS|FAIL` + final counts + an end-state guard, exits non-zero
+  if any HARD case fails — all 14 hard) + `runGroup2Case` (individual dispatch:
+  each case builds its OWN minimal precondition). Runner: 15 ids (`sweep_group2`
+  + 14) added to `_validRealUiScenarios` + both state tables; campaign
+  `rui-group2 = [sweep_group2]`.
+
+  **KICK-UI ANSWER (the brief's open question — a REAL desktop kick surface
+  EXISTS for PRIVATE groups; verified not assumed):** on DESKTOP, kicking a
+  member is the member ROW's `onSecondaryTapDown` →
+  `_showDesktopContextMenu` (`tencent_cloud_chat_group_member_list.dart`) → a
+  `showMenu` whose 'remove' PopupMenuItem renders only when `canDeleteMember()`
+  (requires `myRole==OWNER` — A is the creator/owner — AND target role != OWNER
+  AND `groupType != AVChatRoom`). So a PRIVATE NGC group OWNER CAN kick a member
+  through the real UI. Two surfaces were UNKEYED and ADDED at the fork boundary
+  (flagged rebuild): the per-member ROW key `group_member_list_item:<userId>`
+  (on the row `GestureDetector`) and the desktop kick menu item
+  `group_member_desktop_kick_item` (a `KeyedSubtree` around the 'remove'
+  PopupMenuItem child; the mobile action sheet already had
+  `group_member_action_kick_button`). Case 78 right-clicks B's row
+  (`ui_secondary_tap`) → taps the keyed kick item → asserts B leaves A's
+  authoritative member list (A's `l3_group_member_count` drops back to 1, the
+  moderator view that confirms the kick — an invite auto-join does NOT propagate
+  B's removal to B's `knownGroups`, matching the S37 PRIVATE-path A-side check).
+  For a CONFERENCE (AVChatRoom) `canDeleteMember()` is FALSE (no roles) — the
+  kick is a NEGATIVE there (the S173 finding), which is exactly why case 78 is
+  PRIVATE-group only and the conference cases (82-84) don't kick.
+
+  **GROUP-MUTE ROUTING ANSWER (the brief's open question):** toxee's group
+  profile does NOT add its own mute control. The upstream group-profile body
+  (`tencent_cloud_chat_group_profile_body.dart`) renders the
+  `getGroupProfileStateButtonBuilder` slot, which toxee does NOT override, so the
+  upstream `TencentCloudChatGroupProfileStateButton` renders a "Do not disturb"
+  `OperationBar` switch (→ `setGroupReceiveMessageOpt`) + a Pin switch. The
+  do-not-disturb switch was UNKEYED; a `controlKey: ValueKey('group_profile_mute_switch')`
+  was ADDED on it at the fork boundary (the `OperationBar` already plumbs
+  `controlKey` to its inner `Switch`; mirrors the friend-profile
+  `user_profile_conversation_mute_switch`). Case 80 toggles it ×2 and reads its
+  `value` via `interactiveStructured` (HARD: value flips ON then OFF + both
+  sessions stay alive; recvOpt dump is SOFT — the native→Dart sync residual).
+
+  **MEMBER-LIST OPEN (new navigation hook):** the group profile's "Group Members
+  (N)" entry is a `KeyedSubtree` (`group_profile_members_entry`) that ALSO wraps
+  the "+ Add Members" affordance, so a coordinate tap on the entry is ambiguous
+  (header vs add). A NEW UNGATED `l3_open_group_member_list` navigation-stability
+  hook (mirrors `l3_open_group_add_member` / `l3_open_conversation_menu`:
+  `_openGroupMemberList` in `home_page.dart` + an invoker in
+  `home_page_bootstrap.dart` + the MCPCallEntry + typedef in `l3_debug_tools.dart`)
+  pushes the REAL member-list page; the page is then driven through REAL widgets
+  (the keyed member rows, the desktop kick menu, member-list `ui_drag`). The
+  ASSERTED action in every case is always the production widget/gesture — l3 is
+  used only for navigation-stability opens (the established add-member/conv-menu
+  exception) + the seeding/identity/bootstrap plumbing the existing group drivers
+  already use (full-mesh bootstrap, auto-accept, member-count polling).
+
+  **SWEEP ORDER (state-poison-aware, shared-resource reuse):** handshake once →
+  wire full-mesh bootstrap + B auto-accept (2p prereqs) → 71 create-cancel (ESC;
+  no group) → 72 create-type-selector (CREATES the SHARED private group, B not
+  in it) → 76 rename (renames the shared group; later cases use the new name) →
+  73 members-entry → 80 mute toggle → 74 clear-history → 77 add B via the REAL
+  add-member UI (B now in the shared group) → 79 member-list scroll → 81 unread
+  badge → 78 kick B (destructive; B leaves the group) → 75 leave via profile
+  (LAST group case; destroys the shared group) → 82 conf create (SHARED
+  conference) → 83 conf row menu → 84 conf member list. End-guard restores B's
+  auto-accept + lands both home; the friendship is NEVER deleted → ends FRIENDS.
+
+  **CASE-SHAPE NOTES (faithful, in-code):**
+  - **71 create-cancel:** the AddGroupDialog has NO Cancel button — ESC
+    (CallbackShortcuts(escape) → maybePop) is the only dismiss. The case opens the
+    real dialog (`l3_open_add_group_dialog`), ESCs, and asserts no new group
+    conversation appeared.
+  - **74 clear-history / 75 leave:** the group-profile adaptive confirm dialogs
+    (Clear-History / Quit) have NO keyed Confirm button — the Confirm is tapped by
+    the localized "Confirm" label; the fork's one-shot `handled` guard makes a
+    flutter_skill double-fire safe (it pops + runs the action exactly once).
+  - **79 member-list scroll (HONEST low-value gate):** with only 2 members the
+    AzListView can't actually scroll far, so the assertion is the `ui_drag`
+    EXECUTES without error AND the member rows are STILL rendered afterwards (the
+    list survived the gesture). Stated as low-value-but-cheap in-code.
+  - **83 conf row menu:** the conference reuses the SAME type-agnostic
+    conversation-row menu (the shared `conversation_context_menu_*` keys, S161),
+    so it drives `l3_open_conversation_menu` (the established conv-menu hook) and
+    asserts the pin/mark-read/delete items render.
+
+  **2p STATE CONTRACT (registered):** `sweep_group2` required=no-friend (does its
+  OWN handshake), result=friends (case 78 kicks B from the GROUP + case 75 leaves
+  the GROUP, but the A<->B FRIENDSHIP is never deleted; the end-guard recomputes
+  `endFriends` from the live state so the runner never trusts an unachieved
+  result). The single-instance cases (71/72/82 + the standalone group/conference
+  cases) require/result no-friend; the 2p cases (77/78/79/81) restore
+  `paired_for_e2e`. Planner dry-run confirmed: `sweep_group2` → a FRESH
+  `launch_fixture_c_pair.sh` (no restore); `group_kick_member_ui` (2p) →
+  `TOXEE_FIXTURE_C_RESTORE=paired_for_e2e` + `--boot-restored`;
+  `group_mute_toggle` (1i) → FRESH, no restore.
+
+  **PRODUCTION + FORK CHANGES (all intentional + tested + mobile-covered, shared
+  Dart):** (1) `lib/ui/testing/ui_keys.dart` — `groupProfileMuteSwitch`,
+  `groupMemberListItem(userId)`, `groupMemberDesktopKickItem`,
+  `chatHeaderTitleText`. (2) the fork member-list
+  (`tencent_cloud_chat_group_member_list.dart`) — per-member row key +
+  `group_member_desktop_kick_item` on the desktop 'remove' menu item. (3) the
+  fork group-profile body (`tencent_cloud_chat_group_profile_body.dart`) — the
+  `controlKey: group_profile_mute_switch` on the do-not-disturb OperationBar.
+  (4) the fork chat header (`tencent_cloud_chat_message_header_info.dart`) — a
+  `chat_header_title_text` key on the title `Text` (the OPEN-chat header rename
+  assertion, codex P1.2). (5) `lib/ui/home_page.dart` + `home_page_bootstrap.dart`
+  + `l3_debug_tools.dart` — the new ungated `l3_open_group_member_list` navigation
+  hook. All shared Dart with no platform split — the kick is desktop right-click
+  vs mobile long-press (same shared handler + `kickGroupMember`); the mute /
+  member rows / header title render identically on iOS/Android/desktop.
+
+  **Codex review (mandatory, telemetry-off — 1 review round + 1 confirm round,
+  ALL findings applied):** round 1 found 2 P1, both fixed:
+  - **P1.1** standalone `group_add_member_full_join` (case 77 individual
+    dispatch) could FALSE-PASS — `runGroup2Case` pre-built the group with
+    `_establishTwoProcessGroup`, which ITSELF invites+joins B (via
+    `l3_invite_to_group` on the fixture accounts), so `memberCount>=2` was already
+    true BEFORE the real add-member UI ran. FIX: case 77 standalone is now
+    special-cased to establish the friendship + 2p prereqs + create the group with
+    B NOT invited, then drive the REAL add-member UI (`_groupAddMemberFullJoin`)
+    as the asserted action. (The SWEEP path was already correct — case 72 creates
+    the shared group empty, case 77 invites B over the real UI.)
+  - **P1.2** `group_rename_updates_header` only asserted the conversation-LIST row
+    showName (dump), so a stale OPEN-chat header would still PASS. FIX: keyed the
+    chat header title `Text` (`chat_header_title_text`) and assert it equals the
+    new name via `interactiveStructured` (`_waitChatHeaderTitle` / `_keyedText`)
+    after reopening the chat — the load-bearing header assertion.
+  The CONFIRM round verified P1.1/P1.2 resolved + flagged 1 NEW P2, fixed: the
+  new standalone case-77 path IGNORED the `_waitAutoAcceptGroupInvites` bool, so a
+  not-yet-propagated auto-accept would let it create+invite anyway and B could
+  miss the auto-join (flaky/false-FAIL). FIX: the standalone path now HARD-gates
+  on the returned bool — restore auto-accept + abort before create/invite if it
+  never goes live (mirrors `_establishTwoProcessGroup`); the SWEEP prelude logs a
+  WARN-and-continue (the 1i cases don't need it; the 2p cases give it more time
+  via case-77's 90s member-count poll + retries and FAIL honestly on their own
+  member-count gate). After the fixes: analyze still 222 (0 NEW),
+  planner/validate/campaign-list/INDEX/self-test green, touched hermetic tests
+  green.
+
+  **Gates green:** `flutter analyze lib tool` 222 (0 NEW vs the Batch-0 baseline —
+  the new part file + the 5 production/fork key additions + the new l3 hook are
+  all clean); `--plan-json --class=2proc-ui` exit 0 (JSON parses);
+  `--validate-only` exit 0; `--list-real-ui-campaigns` shows
+  `rui-group2: sweep_group2`; the `rui-group2` campaign + the individual cases
+  dry-run plan correctly (fresh-vs-restored); driver `--self-test-shell-recovery`
+  PASS; `gen_scenario_index.dart --check` green (178 playbooks, no invariant
+  violations); touched-surface hermetic tests `flutter test test/ui/conference/
+  test/ui/group/ test/ui/chat/ test/ui/conversation/ test/ui/testing/
+  test/ui/home/toxee_message_header_info_test.dart
+  test/ui/chat/chat_header_call_action_keys_test.dart
+  test/message_header_actions_test.dart test/l3_seed_marker_test.dart
+  test/ui/add_group_dialog_test.dart` ALL PASS (these prove S173 still holds with
+  the new member-list keys, the chat header still renders with the title key, and
+  the conference create/member surfaces are intact).
+
+  **Mobile parity:** every driven widget + the 5 production/fork changes are
+  shared Dart with no platform split — the do-not-disturb mute switch, the
+  per-member rows, the chat header title, and the add-group dialog render
+  identically on iOS/Android/desktop. The kick is desktop right-click
+  (`_showDesktopContextMenu`) vs mobile long-press (`onManageMember` →
+  `group_member_action_kick_button`) — the SAME `onDeleteGroupMember` /
+  `kickGroupMember` handler, identical asserted behavior; this harness drives the
+  desktop secondary-tap (a mobile real-UI test would tap the action sheet's keyed
+  kick button). The conference kick NEGATIVE (S173) applies identically on mobile.
 
 ## Run phase (after ALL batches written) — protocol
 
