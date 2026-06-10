@@ -40,6 +40,16 @@ class UiKeys {
   static const Key sidebarSettings = Key('sidebar_settings_tab');
   static const Key sidebarUserAvatar = Key('sidebar_user_avatar');
 
+  /// The mobile-layout bottom navigation bar (lib/ui/home_page.dart). Rendered
+  /// only when `ResponsiveLayout.shouldShowBottomNav` is true (viewport width
+  /// < 720pt) — which is a pure WIDTH check (no platform branch), so narrowing
+  /// the desktop window past the breakpoint swaps the home shell from the
+  /// permanent sidebar to this bottom nav. Automation-only anchor: a real-UI
+  /// test narrows the window and asserts this key APPEARS (the responsive
+  /// layout swap signal), then restores the width and asserts it's GONE. The
+  /// bar carries no semantic content of its own, so keying it is safe.
+  static const Key homeBottomNav = Key('home_bottom_nav');
+
   // Login page (lib/ui/login_page.dart).
   static const Key loginPageRestoreFromToxFile = Key(
     'login_page_restore_from_tox_file',

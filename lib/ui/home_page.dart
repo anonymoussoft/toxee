@@ -1348,6 +1348,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return DecoratedBox(
+      // Automation anchor: this bottom nav renders ONLY in the bottom-nav
+      // (mobile) layout tier (`useBottomNav`/`shouldShowBottomNav`, a pure
+      // width check), so its presence is the responsive layout-swap signal a
+      // real-UI test asserts after narrowing the window past 720pt.
+      key: UiKeys.homeBottomNav,
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         border: Border(top: BorderSide(color: scheme.outlineVariant, width: 1)),

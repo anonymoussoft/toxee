@@ -246,20 +246,22 @@ Sweep: `sweep_group2` · Campaign: `rui-group2`. **Batch 7 STATUS: DONE**
 
 | # | Case | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 85 | call_video_accept_hangup | 2p-r | S66 | video button → B accepts → both inCall → hangup → idle | TODO |
-| 86 | call_mute_toggle_incall | 2p-r | S74 | during voice call: mute → state flips → unmute | TODO |
-| 87 | call_camera_toggle_incall | 2p-r | S75 | during video call: camera off/on via keyed dock button | TODO |
-| 88 | call_missed_record_row | 2p-r | S77 | B calls, B cancels before answer → A missed-call record renders | TODO |
-| 89 | call_callee_hangup | 2p-r | S76 | callee (A) ends the call → both sides idle | TODO |
-| 90 | call_record_bubble_renders | 2p-r | — | after a completed call: call-record bubble in chat history | TODO |
-| 91 | home_tabs_cycle_state_retained | 1i | — | chats→contacts→settings→chats; open chat retained (IndexedStack) | TODO |
-| 92 | theme_switch_chat_open | 2p-r | S57 | with chat open: switch dark/light → chat re-renders, no crash, bubbles intact | TODO |
-| 93 | window_resize_responsive | 1i | S60 | osascript-resize window narrow → mobile layout swap; restore → desktop (SKIP allowed w/ reason) | TODO |
-| 94 | search_chat_history_window_open | 2p-r | S93 | open in-conversation search → type → match highlight surface | TODO |
+| 85 | call_video_accept_hangup | 2p-r | S66 | video button → B accepts → both inCall+mode==video → hangup → idle | WRITTEN |
+| 86 | call_mute_toggle_incall | 2p-r | S74 | voice call → A accepts → `call_mic_mute_button` flips `call.isMuted` on/off; leaves inCall for 89 | WRITTEN |
+| 87 | call_camera_toggle_incall | 2p-r | S75 | DURING the video call: `call_camera_toggle_button` flips `call.isVideoEnabled` off/on | WRITTEN |
+| 88 | call_missed_record_row | 2p-r | S77 | B calls, B cancels before answer → A's call-record count increases + row renders | WRITTEN |
+| 89 | call_callee_hangup | 2p-r | S76 | callee (A) ends THIS voice call → both sides idle | WRITTEN |
+| 90 | call_record_bubble_renders | 2p-r | — | after the completed call: a NEW call-record bubble (count>baseline) renders in chat history | WRITTEN |
+| 91 | home_tabs_cycle_state_retained | 1i | — | real sidebar tabs chats→contacts→settings→chats; `homeShellCurrentConversationId` retained (IndexedStack) | WRITTEN |
+| 92 | theme_switch_chat_open | 2p-r | S57 | with chat open: flip dark/light via real Appearance → seeded bubble ROW re-renders, no crash; restore | WRITTEN |
+| 93 | window_resize_responsive | 1i | S60 | osascript narrow past 720pt → `home_bottom_nav` appears + drives bottom-nav routing; restore → gone (SKIP if resize refused) | WRITTEN |
+| 94 | search_chat_history_window_open | 2p-r | S93 | seed term → Cmd+Ctrl+F overlay → `search_result_message:<conv>` → tap → SearchChatHistoryWindow mounts | WRITTEN |
 
-Sweep: `sweep_calls_misc` · Campaign: `rui-calls-misc`. **Batch 8 STATUS: TODO** (hint:
-chain call cases on ONE friendship — voice block then video block; case 93 may use
-AppleScript System Events window resize, SKIP with reason if refused)
+Sweep: `sweep_calls_misc` · Campaign: `rui-calls-misc`. **Batch 8 STATUS: DONE** (10/10
+WRITTEN+unrun, 0 SKIP — case 93 is SKIP-able at RUN time if the window refuses scripted
+resize, but is written as a real gate; analyze 0-NEW vs 222 baseline; planner/validate/
+campaign-list/INDEX/self-test green; touched hermetic tests 58/58; codex PASS — 3 P1 + 1 P2
+applied + P3 mobile-parity gap closed by driving the bottom-nav routing)
 
 ## Batch log (append-only)
 
@@ -1354,6 +1356,199 @@ AppleScript System Events window resize, SKIP with reason if refused)
   `kickGroupMember` handler, identical asserted behavior; this harness drives the
   desktop secondary-tap (a mobile real-UI test would tap the action sheet's keyed
   kick button). The conference kick NEGATIVE (S173) applies identically on mobile.
+
+- 2026-06-10 **Batch 8 DONE** (calls / misc — FINAL write batch; 10 MIXED
+  two-process + single-instance cases WRITTEN+unrun, 0 SKIP at write time; NOT
+  live-run, per write-phase protocol). New part file
+  `tool/mcp_test/drive_real_ui_pair_calls_misc.dart` (~1050 LOC) declared in the
+  `drive_real_ui_pair.dart` part list; 10 per-case functions + `runCallsMiscSweep`
+  (chains all 10 on ONE 2p launch, per-case `[sweep] <case>: PASS|FAIL|SKIP` +
+  final counts + an end-state guard, exits non-zero if any HARD case fails — 9
+  hard, 1 SKIP-able) + `runCallsMiscCase` (individual dispatch; each builds its
+  own minimal precondition). Runner: 11 ids (`sweep_calls_misc` + 10) added to
+  `_validRealUiScenarios` + both state tables; campaign
+  `rui-calls-misc = [sweep_calls_misc]`.
+
+  **CALL-STATE CHAINING (the brief's efficiency directive — done):** the call
+  cases reuse live call state instead of tearing every call fully down. ONE
+  friendship; a VOICE BLOCK then a VIDEO BLOCK:
+  - 86 starts a voice call (B=caller rings A=callee, exactly like
+    `runCallVoice`'s direction), A accepts → both `inCall`, then toggles
+    `call_mic_mute_button` and asserts `call.isMuted` flips ON then OFF (the REAL
+    dock-state signal, not a log grep) — and LEAVES the call inCall.
+  - 89 (callee-hangup) ends THAT SAME call: A (the callee) taps
+    `call_hangup_button` → both settle to idle (re-establishes a quick call first
+    if 86 already tore it down, so the callee-hangup path is still the asserted
+    action).
+  - 90 reads the completed call's `mediaKind=='call_record'` bubble (the
+    FakeUIKit `_insertCallRecord` path) from the conversation-scoped dump +
+    asserts a `message_list_item:<recordMsgID>` row renders.
+  - 88 (missed) reuses the missed-call recipe
+    (`drive_fixture_c_missed_call.dart`): B rings A, B CANCELS while A is still
+    ringing (a missed incoming call from A's side) → A's call-record count
+    INCREASES + a row renders.
+  - 85+87 are driven TOGETHER (`_callVideoWithCameraToggle`): a video call
+    (`chat_call_video_button` → A accepts → both inCall + `call.mode=='video'`),
+    the camera toggle (87) runs DURING that call (`call_camera_toggle_button`
+    flips `call.isVideoEnabled` off/on), then the hangup (85) → both idle.
+
+  **CALL-ISOLATION DISCIPLINE (the "double-invite miscount" lesson — enforced):**
+  `_ensureBothIdle(a,b)` runs before each call block AND its `false` result is a
+  HARD failure (a lingering call can't poison the next case). The voice block
+  ends idle before 88; the video block ends idle before the misc cases.
+
+  **CALL DOCK KEYS (verified in the fork + lib/call, not assumed):** the chat
+  header start buttons (`chat_call_voice_button` / `chat_call_video_button`,
+  `tencent_cloud_chat_message_header_actions.dart`); the incoming dock
+  (`call_accept_button` / `call_decline_button`, `incoming_call_view.dart` →
+  `UiKeys.callAcceptButton/callDeclineButton`); the in-call dock
+  (`call_mic_mute_button` / `call_camera_toggle_button` [video-only] /
+  `call_hangup_button`, `in_call_view.dart` → `UiKeys.call*`). All are
+  `CallDockAction` keys plumbed onto the actual tappable `InkWell`
+  (`call_ui_components.dart:386`), so `find.byKey` / flutter_skill lands them.
+  The dump `call` object exposes `{state, mode, isMuted, isVideoEnabled, ...}`
+  (`l3_debug_tools.dart:4900`) — the REAL state signals the toggles assert.
+
+  **SEARCH-ENTRY ANSWER (the brief's case-94 open question):** the in-conversation
+  `SearchChatHistoryWindow` (`lib/ui/search/search_chat_history_window.dart`) is
+  reached ONLY through the GLOBAL search overlay
+  (`lib/ui/search/custom_search.dart:829`): typing a message term surfaces a
+  per-conversation `search_result_message:<conversationID>` row whose `onTap`
+  PUSHES `SearchChatHistoryWindow`. There is NO standalone in-chat search button
+  and NO `Cmd+Ctrl+F`-while-in-chat shortcut to it — the ONLY entry to message
+  search is the global overlay (opened via `Inst.osaSearchShortcut`, the
+  Cmd+Ctrl+F chord, the Batch-5 finding). NOTE: the global overlay AND
+  `SearchChatHistoryWindow` SHARE `UiKeys.messageSearchField` ('message_search_field'),
+  so the window can't be told apart by that key — case 94 distinguishes it by its
+  "Search Chat History" AppBar title. So case 94 = seed a unique message term →
+  Cmd+Ctrl+F overlay → type → `search_result_message:<conv>` row renders → tap →
+  the window mounts (title asserted) → ESC closes. The screenshot-pipeline
+  RUN_NOTES "owed Cmd+Ctrl+F shortcut" is the GLOBAL overlay shortcut (now wired +
+  the only entry), not a separate in-conversation one. The S93 drill-down surface
+  has hermetic L1 coverage in `test/ui/search/search_flows_real_ui_test.dart`
+  (passing), proving the `search_result_message` row + the window keys case 94
+  drives are live.
+
+  **RESIZE ANSWER (the brief's case-93 open question):** `ResponsiveLayout`'s
+  `shouldShowBottomNav` is a PURE width check (`size.width < 720`, no platform
+  branch — `responsive_layout.dart:205`), so narrowing the macOS window past
+  720pt DOES swap the home shell from the permanent sidebar to a
+  `BottomNavigationBar` (the mobile tier). New `Inst.resizeWindow(w,h)` +
+  `windowSize()` osascript primitives (System Events `set/get size of window 1`
+  of the process with this pid — the same selector `foreground()` uses) drive +
+  read the window bounds. The swap is asserted via a NEW `home_bottom_nav` key on
+  the bottom nav (`home_page.dart` `_buildBottomNavigationBar` — automation-only,
+  no semantic content) appearing when narrow + GONE when restored, AND the
+  mobile bottom-nav ROUTING is driven (tap the Contacts label → `homeShellTab`
+  goes 'contacts', tap Chats → back) — so it's not just a visual swap, the bottom
+  nav actually NAVIGATES (this also closes the codex-P3 mobile-parity gap: the
+  desktop sidebar and the mobile bottom nav share the same `onTap → _index`
+  setState, so this is the only place the harness exercises the mobile routing
+  path). If the raw-launched window REFUSES scripted resize (osascript error) OR
+  the OS CLAMPS the minimum width to >=720 (window_manager min-size), the case
+  returns null → `SKIP(resize-refused)` — never a fake pass (individual dispatch
+  exits 75 = `_realUiSkipExitCode`; the sweep tallies SKIP and does NOT fail).
+  Whether the window actually size-scripts is a RUN-PHASE determination; written
+  as a real both-directions gate.
+
+  **OTHER CASE NOTES (faithful, in-code):**
+  - **91 home-tabs-cycle:** drives the REAL sidebar tabs
+    (`sidebar_contacts_tab` / `sidebar_settings_tab` / `sidebar_chats_tab` — a
+    plain IndexedStack `_index` setState, `home_page.dart:1580`, verified NOT to
+    clear `_currentConversationID`), NOT `_forceHomeRootAndWait` (which NULLS the
+    chats-tab detail — `home_page_bootstrap.dart:996` — and would make the
+    retention assertion vacuous; codex P1). Asserts the dump
+    `homeShellCurrentConversationId` STAYS the C2C id THROUGH the contacts +
+    settings detour AND after returning to chats, where the chat surface
+    re-renders WITHOUT a re-open (the IndexedStack KeptAlive branch).
+  - **92 theme-switch-with-chat-open:** seeds a real own bubble, flips the
+    Appearance segment (the Batch-1 `_tapThemeSegment` single-fire), reopens the
+    chat, and asserts the seeded message's REAL chat-surface ROW
+    (`message_list_item:<msgID>` via `_ownMessageId`) re-renders after the theme
+    rebuild — NOT the conversation-list preview (codex P1: `_lastMessage` reads
+    the LIST preview, not the open chat surface) — plus `sessionReady` (no crash);
+    restores the original theme (poison guard).
+  - **90 call-record:** requires a NEW record (`count > baseline`, snapshotted
+    BEFORE the voice block) so a restored `paired_for_e2e` launch's stale records
+    can't false-pass (codex P2).
+
+  **2p STATE CONTRACT (registered):** `sweep_calls_misc` required=no-friend (does
+  its OWN handshake, reusing Batch-4's `_establishFriendshipForSweep`),
+  result=friends (no case deletes the friend; the calls end idle, the
+  conversation row stays alive; the end-guard restores a desktop window width +
+  lands both home + recomputes `endFriends` from the live state so the runner
+  never trusts an unachieved result). The call cases + the chat-open misc cases
+  (91/92/94) are friendship-dependent (restore `paired_for_e2e` for standalone
+  dispatch); `window_resize_responsive` is single-instance no-friend (fresh
+  launch). Planner dry-run confirmed: `sweep_calls_misc` → a FRESH
+  `launch_fixture_c_pair.sh` (no restore); `call_mute_toggle_incall` (2p) →
+  `TOXEE_FIXTURE_C_RESTORE=paired_for_e2e` + `--boot-restored`;
+  `window_resize_responsive` (1i) → FRESH, no restore.
+
+  **ORDER (call-isolation + state-poison-aware):** handshake once → wait
+  connectivity → VOICE BLOCK (snapshot record baseline → 86 mute-in-call leaves
+  inCall → 89 callee-hangup ends it → 90 record bubble) → 88 missed → VIDEO BLOCK
+  (85 video + 87 camera together) → ensure idle → 91 tabs-cycle → 92
+  theme-with-chat-open → 94 search-window → 93 resize LAST. End-guard restores
+  the window width + lands both home; the friendship is never deleted → ends
+  FRIENDS.
+
+  **PRODUCTION CHANGES (2, intentional + tested + mobile-covered, shared Dart):**
+  (1) `lib/ui/testing/ui_keys.dart` — `UiKeys.homeBottomNav` ('home_bottom_nav').
+  (2) `lib/ui/home_page.dart` — the `key: UiKeys.homeBottomNav` on the
+  `_buildBottomNavigationBar` root `DecoratedBox` (renders only in the bottom-nav
+  tier, so its presence IS the responsive-swap signal; automation-only, no
+  semantic content). Plus 2 harness-only `Inst` primitives in
+  `drive_real_ui_pair_inst.dart` (`resizeWindow` / `windowSize`, osascript window
+  bounds). Mobile parity: the `home_bottom_nav` key is on the SHARED mobile
+  bottom nav (the same widget that renders on a real phone), and case 93 DRIVES
+  its routing — so this batch directly exercises the mobile bottom-nav path
+  (which the desktop sidebar can't), closing the codex-P3 gap. The call dock /
+  search / sidebar-tab / theme widgets the other cases drive are all shared Dart
+  with no platform split — calls, the call-record bubble, the search window, the
+  IndexedStack retention, and the theme flip render identically on
+  iOS/Android/desktop.
+
+  **Codex review (mandatory, telemetry-off — 1 review round + 1 confirm round,
+  ALL findings applied):** round 1 found 3 P1 + 1 P2 + 1 P3, every one fixed:
+  - **P1.1** `home_tabs_cycle` reopened the chat via
+    `_reopenChatFromConversationList` (which CLEARS the active conv first), so it
+    could PASS even if the tab switches dropped the chat → switched to driving the
+    REAL sidebar tabs + asserting `homeShellCurrentConversationId` survives the
+    detour AND a `_chatSurfaceReady` with NO re-open.
+  - **P1.2** `theme_switch` gated "bubbles intact" on `_lastMessage` (the
+    conversation-LIST preview, not the chat surface) → now resolves the seeded
+    own `msgID` and asserts `message_list_item:<id>` renders in the reopened chat.
+  - **P1.3** `_ensureBothIdle`'s `false` was ignored before new call blocks
+    (call-isolation poison) → made it a HARD failure in
+    `_callMuteToggleIncall` / `_callMissedRecordRow` / `_callVideoWithCameraToggle`
+    (`_callCalleeHangup` already gated its return on idle).
+  - **P2** `call_record_bubble_renders` required only `count >= 1` (a restored
+    launch's stale records false-pass) → snapshots the baseline BEFORE the call +
+    requires `count > baseline` (sweep + standalone).
+  - **P3** the resize case only proved the bottom bar appears/disappears (mobile
+    routing unexercised) → case 93 now also TAPS the bottom-nav Contacts/Chats
+    items and asserts `homeShellTab` changes (drives the mobile routing path the
+    desktop sidebar can't reach). The CONFIRM round verified P1.1/P1.2/P1.3/P2
+    RESOLVED + the homeShellCurrentConversationId retention signal correct +
+    no new false-pass/hang/poison (the only remaining note was the P3 mobile
+    routing, since addressed).
+
+  **Gates green:** `flutter analyze lib tool` 222 (0 NEW vs the Batch-0 baseline —
+  the new part file + the 2 production keys + the 2 osascript inst primitives are
+  all clean); `--plan-json --class=2proc-ui` exit 0 (JSON parses);
+  `--validate-only` exit 0; `--list-real-ui-campaigns` shows
+  `rui-calls-misc: sweep_calls_misc`; the `rui-calls-misc` campaign + the
+  individual cases dry-run plan correctly (fresh-vs-restored); driver
+  `--self-test-shell-recovery` PASS; `gen_scenario_index.dart --check` green (178
+  playbooks, no invariant violations); touched-surface hermetic tests
+  `flutter test test/ui/mobile/ test/ui/call/ test/ui/search/ test/ui/home/
+  test/ui/chat/chat_header_call_action_keys_test.dart` ALL PASS (the call-controls
+  tests prove `call_mic_mute_button` / `call_camera_toggle_button` /
+  `call_hangup_button` are live; the search-flows tests prove the
+  `search_result_message` row + `SearchChatHistoryWindow` surface case 94 drives;
+  Batch 8 adds the `home_bottom_nav` key, which the existing mobile bottom-nav
+  test does not pump `HomePage` so it stays green).
 
 ## Run phase (after ALL batches written) — protocol
 

@@ -215,6 +215,49 @@ class Inst {
     await Future<void>.delayed(const Duration(milliseconds: 700));
   }
 
+  /// Resize this instance's macOS window to [width]x[height] logical points via
+  /// System Events (targeting the window of the process with this [pid], the
+  /// same selector [foreground] uses). Returns whether the resize osascript
+  /// succeeded (false, no throw, when the window can't be sized — e.g. a
+  /// window_manager constraint or a raw-launched window that refuses scripted
+  /// resize). Used by the responsive layout-swap case (narrow the window past
+  /// the 720pt bottom-nav breakpoint, then restore).
+  Future<bool> resizeWindow(num width, num height) async {
+    await foreground();
+    final r = await Process.run('osascript', [
+      '-e',
+      'tell application "System Events" to tell '
+          '(first process whose unix id is $pid) to set size of window 1 '
+          'to {$width, $height}',
+    ]);
+    if (r.exitCode != 0) {
+      print('[$name] WARN resizeWindow($width,$height) failed: ${r.stderr}');
+      return false;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    return true;
+  }
+
+  /// Read this instance's macOS window size as `{w, h}` logical points via
+  /// System Events, or null if it can't be read. Lets a resize case verify the
+  /// OS actually applied the new bounds (so a refused/clamped resize is detected
+  /// rather than silently treated as applied).
+  Future<({num w, num h})?> windowSize() async {
+    final r = await Process.run('osascript', [
+      '-e',
+      'tell application "System Events" to tell '
+          '(first process whose unix id is $pid) to get size of window 1',
+    ]);
+    if (r.exitCode != 0) return null;
+    final out = '${r.stdout}'.trim();
+    final parts = out.split(',').map((s) => s.trim()).toList();
+    if (parts.length != 2) return null;
+    final w = num.tryParse(parts[0]);
+    final h = num.tryParse(parts[1]);
+    if (w == null || h == null) return null;
+    return (w: w, h: h);
+  }
+
   Future<Map<String, dynamic>> dumpState({
     String? userId,
     String? conversationId,

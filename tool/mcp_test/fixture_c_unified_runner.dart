@@ -210,6 +210,24 @@ const _validRealUiScenarios = {
   'conf_create_dialog_surface',
   'conf_row_menu_surface',
   'conf_member_list_renders',
+  // Batch 8 — calls / misc (FINAL batch; MIXED two-process + single-instance).
+  // sweep_calls_misc chains all 10 on one launch: required=no-friend (it does
+  // its OWN handshake) and result=friends (no case deletes the friend; the
+  // calls end idle, the conversation row stays alive). The call cases + the
+  // chat-open misc cases (91/92/94) are friendship-dependent (the standalone
+  // dispatch establishes it); window_resize_responsive is single-instance and
+  // is a SKIP-able case (exit 75) when the raw-launched window refuses resize.
+  'sweep_calls_misc',
+  'call_video_accept_hangup',
+  'call_mute_toggle_incall',
+  'call_camera_toggle_incall',
+  'call_missed_record_row',
+  'call_callee_hangup',
+  'call_record_bubble_renders',
+  'home_tabs_cycle_state_retained',
+  'theme_switch_chat_open',
+  'search_chat_history_window_open',
+  'window_resize_responsive',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -240,6 +258,12 @@ const _realUiCampaigns = <String, List<String>>{
   // Case 78 kicks B from the group, case 75 leaves the group, but the A<->B
   // friendship stays intact, so the launch ends FRIENDS.
   'rui-group2': ['sweep_group2'],
+  // Batch 8 — calls / misc (the whole 10-case chain on one TWO-PROCESS launch;
+  // one handshake at the top, the call state chained — voice block then video
+  // block — then the misc cases. The friendship is never deleted, so the launch
+  // ends FRIENDS. Case 93 (window-resize) is a SKIP inside the chain when the
+  // raw-launched window won't size-script.
+  'rui-calls-misc': ['sweep_calls_misc'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -1149,6 +1173,18 @@ String _requiredRealUiState(String scenario) {
     case 'group_member_list_scroll':
     case 'group_unread_badge_two_proc':
     case 'group_kick_member_ui':
+    // Batch 8 — the call cases + the chat-open misc cases need a friendship (the
+    // call signaling + the C2C chat); the runner restores paired_for_e2e for the
+    // standalone dispatch.
+    case 'call_video_accept_hangup':
+    case 'call_mute_toggle_incall':
+    case 'call_camera_toggle_incall':
+    case 'call_missed_record_row':
+    case 'call_callee_hangup':
+    case 'call_record_bubble_renders':
+    case 'home_tabs_cycle_state_retained':
+    case 'theme_switch_chat_open':
+    case 'search_chat_history_window_open':
       return _realUiStateFriends;
     case 'handshake':
     case 'handshake_detail':
@@ -1232,6 +1268,11 @@ String _requiredRealUiState(String scenario) {
     case 'conf_create_dialog_surface':
     case 'conf_row_menu_surface':
     case 'conf_member_list_renders':
+    // Batch 8 — sweep_calls_misc runs its OWN handshake, so it requires a fresh
+    // NO-FRIEND pair launch. window_resize_responsive is single-instance (drive
+    // only A, no friendship needed).
+    case 'sweep_calls_misc':
+    case 'window_resize_responsive':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1309,6 +1350,19 @@ String _resultRealUiState(String scenario) {
     case 'group_member_list_scroll':
     case 'group_unread_badge_two_proc':
     case 'group_kick_member_ui':
+    // Batch 8 — sweep_calls_misc ends FRIENDS (no case deletes the friend; the
+    // calls end idle and the conversation row stays alive). The call cases + the
+    // chat-open misc cases also leave the friendship intact.
+    case 'sweep_calls_misc':
+    case 'call_video_accept_hangup':
+    case 'call_mute_toggle_incall':
+    case 'call_camera_toggle_incall':
+    case 'call_missed_record_row':
+    case 'call_callee_hangup':
+    case 'call_record_bubble_renders':
+    case 'home_tabs_cycle_state_retained':
+    case 'theme_switch_chat_open':
+    case 'search_chat_history_window_open':
       return _realUiStateFriends;
     case 'decline':
     case 'custom_message':
@@ -1380,6 +1434,9 @@ String _resultRealUiState(String scenario) {
     case 'conf_create_dialog_surface':
     case 'conf_row_menu_surface':
     case 'conf_member_list_renders':
+    // Batch 8 — window_resize_responsive is single-instance and forms no
+    // friendship, so the launch ends NO-FRIEND.
+    case 'window_resize_responsive':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');

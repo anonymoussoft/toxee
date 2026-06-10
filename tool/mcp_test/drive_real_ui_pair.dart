@@ -128,6 +128,7 @@ part 'drive_real_ui_pair_group_menu.dart';
 part 'drive_real_ui_pair_conv.dart';
 part 'drive_real_ui_pair_chat.dart';
 part 'drive_real_ui_pair_group2.dart';
+part 'drive_real_ui_pair_calls_misc.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -656,6 +657,20 @@ Future<int> _main(List<String> args) async {
     }
     if (_isGroup2CaseScenario(scenario)) {
       return await runGroup2Case(a, b, nickA, nickB, scenario);
+    }
+    // Batch 8 — calls / misc (TWO-PROCESS for the call + chat-open cases,
+    // single-instance for window-resize). sweep_calls_misc chains all 10 on one
+    // launch (the canonical entry; one handshake at the top, the call state
+    // chained efficiently — voice block then video block — and the friendship
+    // never deleted so the launch ends friends). The individual cases are
+    // dispatchable too: the friendship cases establish it first (or reuse the
+    // runner's restored paired_for_e2e); window-resize is single-instance.
+    if (scenario == 'sweep_calls_misc') {
+      return await runCallsMiscSweep(a, b, nickA, nickB);
+    }
+    if (_isCallsMiscCaseScenario(scenario)) {
+      return await runCallsMiscCase(a, b, nickA, nickB, scenario,
+          bootRestored: bootRestored);
     }
     if (scenario == 'group_profile_open') {
       return await runGroupProfileOpen(a, nickA);
