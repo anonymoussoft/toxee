@@ -1,0 +1,316 @@
+// ignore_for_file: avoid_print
+part of 'drive_real_ui_pair.dart';
+
+/// Open the Settings tab and wait for a settings landmark. Robust against a
+/// transient post-dialog re-render or a backgrounded window: re-foreground and
+/// re-tap the sidebar tab a few rounds before giving up.
+Future<void> _openSettings(Inst inst) async {
+  for (var round = 0; round < 5; round++) {
+    await inst.foreground();
+    if (await inst.waitKey('settings_copy_tox_id_button', timeoutSecs: 2)) {
+      return;
+    }
+    await inst.tryTapKey('sidebar_settings_tab');
+    if (await inst.waitKey('settings_copy_tox_id_button', timeoutSecs: 5)) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+  }
+  await inst.shot('/tmp/ui_settings_noopen_${inst.name}.png');
+  throw DriveError('[${inst.name}] settings did not open from sidebar tab');
+}
+
+/// Poll l3_dump_state until a top-level bool field equals [want] (no throw).
+Future<bool> _waitBoolState(
+  Inst inst,
+  String field,
+  bool want, {
+  int timeoutSecs = 10,
+}) async {
+  final deadline = DateTime.now().add(Duration(seconds: timeoutSecs));
+  while (DateTime.now().isBefore(deadline)) {
+    if ((await inst.dumpState())[field] == want) return true;
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  }
+  return false;
+}
+
+/// S100 — copy Tox ID from settings: real tap on the keyed copy button surfaces
+/// the "ID copied to clipboard" snackbar.
+Future<bool> _settingsCopyId(Inst inst) async {
+  await _openSettings(inst);
+  await inst.tapKey('settings_copy_tox_id_button');
+  final ok = await inst.waitText('ID copied to clipboard', timeoutSecs: 8);
+  print('[pair] settings_copy_id: snackbar=$ok');
+  return ok;
+}
+
+/// Auto-login switch: real tap flips `autoLogin` in l3_dump_state; tap back
+/// restores it (proves the switch drives the real Prefs-backed setting).
+Future<bool> _settingsAutoLogin(Inst inst) async {
+  await _openSettings(inst);
+  final before = (await inst.dumpState())['autoLogin'] == true;
+  await inst.tapKey('settings_auto_login_switch');
+  final flipped = await _waitBoolState(inst, 'autoLogin', !before);
+  await inst.tapKey('settings_auto_login_switch');
+  final restored = await _waitBoolState(inst, 'autoLogin', before);
+  print(
+    '[pair] settings_autologin: before=$before flipped=$flipped '
+    'restored=$restored',
+  );
+  return flipped && restored;
+}
+
+/// Notification-sound switch: real tap flips `notificationSound` in dump_state.
+/// The switch lives in the lower GlobalSettingsSection, so it can be below the
+/// fold — best-effort (a false here is reported, not a hard sweep failure).
+Future<bool> _settingsNotification(Inst inst) async {
+  await _openSettings(inst);
+  final before = (await inst.dumpState())['notificationSound'] == true;
+  if (!await inst.tryTapKey('settings_notification_sound_switch')) {
+    print('[pair] settings_notification: switch not tappable (below fold?)');
+    return false;
+  }
+  final flipped = await _waitBoolState(inst, 'notificationSound', !before);
+  // Only restore if the first tap actually flipped it, so a passing result never
+  // leaves notificationSound mutated.
+  if (flipped) {
+    await inst.tryTapKey('settings_notification_sound_switch');
+    await _waitBoolState(inst, 'notificationSound', before);
+  }
+  print('[pair] settings_notification: before=$before flipped=$flipped');
+  return flipped;
+}
+
+/// S105 — export chooser: real tap on Export Account mounts the chooser dialog
+/// with both the .tox and full-backup options. ESC dismisses it without firing
+/// the native save panel.
+Future<bool> _settingsExportChooser(Inst inst) async {
+  await _openSettings(inst);
+  await inst.tapKey('settings_export_account_button');
+  final tox = await inst.waitKey(
+    'settings_export_profile_tox_option',
+    timeoutSecs: 8,
+  );
+  final zip = await inst.waitKey(
+    'settings_export_full_backup_option',
+    timeoutSecs: 4,
+  );
+  try {
+    await inst.osaEscape();
+  } on DriveError {
+    // best effort
+  }
+  await Future<void>.delayed(const Duration(milliseconds: 600));
+  print('[pair] settings_export_chooser: tox=$tox zip=$zip');
+  return tox && zip;
+}
+
+/// Set/change-password dialog: real tap opens it (keyed new/confirm fields),
+/// fill matching values, Save → the dialog closes on the success path (real
+/// PBKDF2 runs on the live isolate).
+Future<bool> _settingsPassword(Inst inst) async {
+  await _openSettings(inst);
+  // Below-fold opener: drive it with `tap` (its direct _tryInvokeCallback opens
+  // the dialog even off-screen; a coordinate tapAt would miss). See the logout
+  // flow above for the same rationale.
+  await inst.tapKey('settings_set_password_button');
+  if (!await inst.waitKey('settings_set_password_new_field', timeoutSecs: 8)) {
+    print('[pair] settings_password: dialog did not open');
+    return false;
+  }
+  final pw = 'RuiPw-${DateTime.now().millisecondsSinceEpoch ~/ 1000}';
+  await inst.focusType('settings_set_password_new_field', pw);
+  await inst.focusType('settings_set_password_confirm_field', pw);
+  // SINGLE-FIRE the save button: it calls Navigator.pop(password) on success, so
+  // flutter_skill's double-firing tap would pop the dialog AND HomePage (blanking
+  // the app) and tear down the ScaffoldMessenger before the success snackbar.
+  if (!await inst.tapKeyCenter('settings_set_password_save_button')) {
+    print('[pair] settings_password: save button not tappable');
+    return false;
+  }
+  // The dialog pops on matching input BEFORE the async
+  // AccountService.setAccountPassword write completes — so "dialog closed" alone
+  // is a false pass. Assert the REAL save via the success snackbar (only shown
+  // when setAccountPassword returns ok; real PBKDF2 runs on the live isolate, so
+  // allow time).
+  final saved = await inst.waitText(
+    'Password set successfully',
+    timeoutSecs: 25,
+  );
+  // Also require the dialog to be fully GONE. Unlike logout (whose
+  // pushAndRemoveUntil tears down any stray route), nothing here cleans up a
+  // second dialog if the below-fold opener ever double-opened — the single-fire
+  // save would pop only the top one, the snackbar would still fire, and the
+  // residual dialog (same field key) would leave a dirty false-green. Asserting
+  // the field is gone catches that and proves the save closed the dialog.
+  final dialogClosed = await inst.waitKeyGone(
+    'settings_set_password_new_field',
+    timeoutSecs: 8,
+  );
+  print(
+    '[pair] settings_password: passwordSavedSnackbar=$saved '
+    'dialogClosed=$dialogClosed',
+  );
+  return saved && dialogClosed;
+}
+
+/// Logout + saved-account relogin: real tap Logout → confirm → the app returns
+/// to the login page (sessionReady=false) showing this account's saved-account
+/// card → tap the card to quick-login back to HomePage (sessionReady=true).
+///
+/// PRECONDITION: the current account has NO password — tapping the saved-account
+/// card then quick-logs-in directly. On a password-protected account `_quickLogin`
+/// shows a password prompt instead, which this driver cannot satisfy (it does not
+/// know the password), so the relogin times out and the gate fails cleanly. Run
+/// on a freshly-registered account (which `ensureHome` provides), and in
+/// `runSettingsSweep` this runs BEFORE `settings_password` for exactly this reason.
+Future<bool> _settingsLogoutRelogin(Inst inst) async {
+  final toxId =
+      (await inst.dumpState())['currentAccountToxId']?.toString() ?? '';
+  if (toxId.isEmpty) {
+    print('[pair] logout_relogin: no current toxId');
+    return false;
+  }
+  await _openSettings(inst);
+  // The logout button sits low in the (scrollable) settings list — often below
+  // the fold. flutter_skill's `tap` opens it anyway via its direct
+  // `_tryInvokeCallback` (the synthetic pointer misses off-screen, so the
+  // callback fires exactly once → one dialog). A coordinate `tapAt` would miss.
+  await inst.tapKey('settings_logout_button');
+  if (!await inst.waitKey('settings_logout_confirm_button', timeoutSecs: 8)) {
+    print('[pair] logout_relogin: confirm dialog did not open');
+    return false;
+  }
+  // SINGLE-FIRE the confirm: it is an on-screen dialog button, so flutter_skill's
+  // `tap` fires it TWICE (synthetic pointer hit + direct onPressed) → pops the
+  // dialog AND HomePage, and `_logout`'s trailing `if (!mounted) return` then
+  // skips `pushAndRemoveUntil(LoginPage)`, leaving an empty Navigator (blank
+  // screen). tapKeyCenter dispatches exactly one pointer tap. See tapKeyCenter.
+  if (!await inst.tapKeyCenter('settings_logout_confirm_button')) {
+    print('[pair] logout_relogin: confirm button not tappable');
+    return false;
+  }
+  final cardKey = 'login_page_account_card:$toxId';
+  // Logout pushes the login page; the async saved-account-list load only pumps
+  // while the window is FOREGROUND (a backgrounded window stalls it → blank
+  // screenshot + card never renders). Re-foreground each round until the card
+  // appears.
+  var loggedOut = false;
+  var cardShows = false;
+  for (var round = 0; round < 15 && !cardShows; round++) {
+    await inst.foreground();
+    loggedOut = (await inst.dumpState())['sessionReady'] != true;
+    if (loggedOut) {
+      cardShows = await inst.waitKey(cardKey, timeoutSecs: 2);
+    }
+    if (!cardShows) {
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+    }
+  }
+  print(
+    '[pair] logout_relogin: loggedOut=$loggedOut cardShows=$cardShows '
+    '(tox=${_shortId(toxId)})',
+  );
+  if (!loggedOut || !cardShows) {
+    await inst.foreground();
+    await inst.shot('/tmp/ui_logout_${inst.name}.png');
+    try {
+      final inter = await inst.skill('interactiveStructured', const {});
+      final keys = RegExp('login_page_account_card:[A-Za-z0-9]+')
+          .allMatches(inter.toString())
+          .map((m) => m.group(0))
+          .toSet();
+      print('[pair] logout DIAG: card keys seen=$keys want=$cardKey');
+    } catch (_) {}
+    return false;
+  }
+  // Quick-login back via the saved-account card (this account has no password).
+  await inst.tapKey(cardKey);
+  await inst.foreground();
+  final relogin = await _waitBoolState(
+    inst,
+    'sessionReady',
+    true,
+    timeoutSecs: 40,
+  );
+  print('[pair] logout_relogin: reloginSessionReady=$relogin');
+  return relogin;
+}
+
+/// LIVE proof of the production `popDialogIfCurrent` guard. Drives the logout
+/// confirm with the DOUBLE-FIRING `tapKey` (flutter_skill `tap` invokes onPressed
+/// twice: synthetic pointer + direct `_tryInvokeCallback`). Before the guard this
+/// popped the dialog AND HomePage, so `_logout`'s trailing `if (!mounted) return`
+/// skipped `pushAndRemoveUntil(LoginPage)` → EMPTY Navigator (blank). With the
+/// guard the 2nd pop is a no-op, so the app must land on the LoginPage: logged
+/// out, NOT blank (interactiveStructured non-empty), saved-account card present.
+Future<bool> _settingsLogoutDoubleFire(Inst inst) async {
+  final toxId =
+      (await inst.dumpState())['currentAccountToxId']?.toString() ?? '';
+  await _openSettings(inst);
+  await inst.tapKey('settings_logout_button'); // below-fold opener (fires once)
+  if (!await inst.waitKey('settings_logout_confirm_button', timeoutSecs: 8)) {
+    print('[pair] logout_double_fire: confirm dialog did not open');
+    return false;
+  }
+  // DELIBERATE double-fire of the on-screen confirm — the exact scenario that
+  // used to blank the app. The production guard must absorb the 2nd pop.
+  await inst.tapKey('settings_logout_confirm_button');
+  final cardKey = 'login_page_account_card:$toxId';
+  var loggedOut = false, notBlank = false, cardShows = false;
+  for (var round = 0; round < 15 && !(loggedOut && notBlank && cardShows);
+      round++) {
+    await inst.foreground();
+    loggedOut = (await inst.dumpState())['sessionReady'] != true;
+    final inter = await inst.skill('interactiveStructured', const {});
+    final data = inter['data'];
+    final els = data is Map ? data['elements'] : null;
+    notBlank = els is List && els.isNotEmpty; // empty == the blank-Navigator bug
+    if (loggedOut) cardShows = await inst.waitKey(cardKey, timeoutSecs: 1);
+    if (!(loggedOut && notBlank && cardShows)) {
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+    }
+  }
+  print(
+    '[pair] logout_double_fire: loggedOut=$loggedOut notBlank=$notBlank '
+    'cardShows=$cardShows (guard ${loggedOut && notBlank && cardShows ? "HELD" : "FAILED"})',
+  );
+  return loggedOut && notBlank && cardShows;
+}
+
+/// settings_sweep — run the whole login+settings real-UI click suite on ONE
+/// launch (reuses startup; maximizes cases per batch). logout_relogin runs LAST
+/// because it mutates the session; password runs before it (also mutating).
+Future<int> runSettingsSweep(Inst inst, String nick) async {
+  await ensureHome(inst, nick);
+  await inst.waitState(
+    (s) => s['isConnected'] == true,
+    label: '$nick connected',
+    timeoutSecs: 90,
+  );
+  // Order matters: the deterministic real-click gates first; logout_relogin
+  // BEFORE password (relogin via the saved-account card assumes no password);
+  // password LAST (it sets a password — harmless once nothing follows).
+  final results = <String, bool>{};
+  results['copy_id'] = await _settingsCopyId(inst);
+  results['export_chooser'] = await _settingsExportChooser(inst);
+  results['autologin'] = await _settingsAutoLogin(inst);
+  results['notification'] = await _settingsNotification(inst);
+  results['logout_relogin'] = await _settingsLogoutRelogin(inst);
+  results['password'] = await _settingsPassword(inst);
+  final passed = results.values.where((v) => v).length;
+  final total = results.length;
+  print('[pair] settings_sweep RESULTS: $results ($passed/$total passed)');
+  await inst.shot('/tmp/ui_settings_sweep_${inst.name}.png');
+  // autologin + notification are best-effort: flutter_skill's synthetic tap on a
+  // Material Switch does not reliably trigger onChanged (a known harness gap, like
+  // the documented enterText{key}-needs-editable limitation), and the
+  // notification switch can sit below the fold (flutter_skill has no scroll). The
+  // HARD gates are the deterministic real-click flows: copy_id, export_chooser,
+  // logout_relogin, password.
+  final hardOk = results.entries
+      .where((e) => e.key != 'notification' && e.key != 'autologin')
+      .every((e) => e.value);
+  return hardOk ? 0 : 1;
+}
