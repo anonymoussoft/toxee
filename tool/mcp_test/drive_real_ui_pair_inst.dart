@@ -492,6 +492,18 @@ class Inst {
     return r['gone'] == true;
   }
 
+  /// Poll until a widget with visible [text] is GONE (e.g. a transient SnackBar
+  /// has dismissed), via flutter_skill's `waitForGone` text matcher (timeout in
+  /// ms, like waitText). Lets a later case avoid false-greening on a stale toast
+  /// from an earlier case that asserts the SAME text.
+  Future<bool> waitTextGone(String text, {int timeoutSecs = 8}) async {
+    final r = await skill('waitForGone', {
+      'text': text,
+      'timeout': '${timeoutSecs * 1000}',
+    });
+    return r['gone'] == true;
+  }
+
   /// Poll a top-level dump_state scalar until [test] passes.
   Future<Map<String, dynamic>> waitState(
     bool Function(Map<String, dynamic>) test, {

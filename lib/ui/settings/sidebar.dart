@@ -120,6 +120,7 @@ Future<void> showSelfProfile(
             appBar: AppBar(
               title: Text(title),
               leading: IconButton(
+                key: UiKeys.profileCloseButton,
                 icon: const Icon(Icons.close),
                 tooltip: AppLocalizations.of(routeContext)?.close ?? 'Close',
                 onPressed: () => Navigator.of(routeContext).maybePop(),
@@ -180,6 +181,7 @@ Future<void> showSelfProfile(
                     top: 4,
                     right: 4,
                     child: IconButton(
+                      key: UiKeys.profileCloseButton,
                       icon: const Icon(Icons.close),
                       tooltip:
                           AppLocalizations.of(dialogContext)?.close ?? 'Close',

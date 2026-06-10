@@ -128,16 +128,16 @@ hermetic tests 59/59 still green)
 
 | # | Case | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 13 | profile_open_sidebar_avatar | 1i | S104 | tap sidebar avatar → self-profile overlay mounts | TODO |
-| 14 | profile_edit_toggle_roundtrip | 1i | S101 | edit pencil enter/exit edit mode | TODO |
-| 15 | profile_edit_nickname_persists | 1i | S8 | edit nickname via real field (+osascript) → save → dump + sidebar reflect | TODO |
-| 16 | profile_edit_status_persists | 1i | S8 | same for status message | TODO |
-| 17 | profile_copy_toxid_snackbar | 1i | S102 | copy button → snackbar | TODO |
-| 18 | profile_qr_copy | 1i | S103 | QR section copy action → snackbar | TODO |
-| 19 | profile_avatar_picker_opens | 1i | S79 | avatar tap → default-avatar grid/picker surface mounts (native picker untouched) | TODO |
-| 20 | profile_avatar_select_default_applies | 1i | S79 | select a bundled default avatar → avatar updates (faceUrl changes) | TODO |
+| 13 | profile_open_sidebar_avatar | 1i | S104 | tap sidebar avatar → self-profile overlay mounts | WRITTEN |
+| 14 | profile_edit_toggle_roundtrip | 1i | S101 | edit pencil enter/exit edit mode | WRITTEN |
+| 15 | profile_edit_nickname_persists | 1i | S8 | edit nickname via real field (+osascript) → save → dump + sidebar reflect | WRITTEN (restores original nick) |
+| 16 | profile_edit_status_persists | 1i | S8 | same for status message | WRITTEN (restores original status) |
+| 17 | profile_copy_toxid_snackbar | 1i | S102 | copy button → snackbar | WRITTEN |
+| 18 | profile_qr_copy | 1i | S103 | QR section copy action → snackbar | WRITTEN (waits for QR FutureBuilder) |
+| 19 | profile_avatar_picker_opens | 1i | S79 | avatar tap → default-avatar grid/picker surface mounts (native picker untouched) | SKIP(no in-app avatar picker — native NSOpenPanel only; l3 override test-gated) |
+| 20 | profile_avatar_select_default_applies | 1i | S79 | select a bundled default avatar → avatar updates (faceUrl changes) | SKIP(no in-app default-avatar selection surface — same root as 19) |
 
-Sweep: `sweep_profile` · Campaign: `rui-profile`. **Batch 2 STATUS: TODO**
+Sweep: `sweep_profile` · Campaign: `rui-profile`. **Batch 2 STATUS: DONE** (6/8 WRITTEN+unrun, 2 SKIP — no in-app avatar surface; analyze 0-new; planner + campaign-list green; profile hermetic tests 10/10 green)
 
 #### Batch 3 — Login / register (9 cases, 1i; password cases mutate then restore state)
 
@@ -444,6 +444,93 @@ AppleScript System Events window resize, SKIP with reason if refused)
     campaign run (no same-launch rerun), so it cannot poison a real run; the
     `_normalizeBetweenCases` guard covers the only same-launch poison that actually matters
     (locale + bootstrap mode, which gate later text assertions).
+
+- 2026-06-10 **Batch 2 DONE** (self profile — 6 single-instance cases WRITTEN+unrun, 2
+  avatar cases SKIP; NOT live-run, per write-phase protocol). New part file
+  `tool/mcp_test/drive_real_ui_pair_profile.dart` (~530 LOC) declared in the
+  `drive_real_ui_pair.dart` part list; 8 per-case functions + `runProfileSweep` (chains all
+  8 on ONE launch, per-case `[sweep] <case>: PASS|FAIL|SKIP` + final counts, exits non-zero
+  if any HARD case fails — 6 are hard, 2 are SKIPs). Each case individually dispatchable in
+  `drive_real_ui_pair.dart` (scenario ids = the campaign table ids). Runner: 9 ids
+  (`sweep_profile` + 8) added to `_validRealUiScenarios` + both state tables
+  (`no-friend`, single-instance like `sweep_settings2`); campaign `rui-profile =
+  [sweep_profile]`. Gates green: `flutter analyze lib tool` 222 (0 NEW — matches the Batch-0
+  baseline); `--plan-json --class=2proc-ui` exit 0; `--validate-only` exit 0;
+  `--list-real-ui-campaigns` shows `rui-profile`; driver `--self-test-shell-recovery` PASS;
+  touched-lib hermetic profile tests `flutter test test/ui/profile_*` 10/10 PASS (the
+  `profile_close_button` key addition didn't disturb the close-button test, which still
+  finds the close button by its `Icons.close` predicate).
+
+  **Keys used / production keys added (for later batches):**
+  - **Self profile is an OVERLAY** (`showSelfProfile` → desktop `showDialog` / mobile
+    `MaterialPageRoute`), opened by the persistent sidebar avatar `InkWell`
+    (`UiKeys.sidebarUserAvatar == 'sidebar_user_avatar'`) → `_openProfile`. The avatar is
+    onstage on EVERY home tab (it's in the left rail `buildSidebar`), so it's reachable from
+    chats/contacts/settings alike.
+  - **Profile keys already existed** (`ui_keys.dart`, attached to the production widgets in
+    `lib/ui/profile/`): `profile_edit_toggle` (IconButton, TOGGLES `_editMode`),
+    `profile_nickname_field` + `profile_status_field` (bare keyed `TextField`s, edit-mode
+    only), `profile_save_button` (FilledButton, runs `_handleSave` → setState, NO
+    Navigator.pop), `profile_tox_id_copy_button` (`_copyToxId` → clipboard +
+    `'ID copied to clipboard'` snackbar), `profile_qr_copy_button` (`_copyQrImage` → same
+    snackbar — but it only MOUNTS after the QR `FutureBuilder` resolves real canvas→PNG
+    generation, so case 18 waits up to 20s for the key), `profile_tox_id_selectable_text`.
+  - **PRODUCTION KEY ADDED (allowed, precedented):** `UiKeys.profileCloseButton ==
+    'profile_close_button'` on BOTH self-profile overlay close `IconButton`s in
+    `lib/ui/settings/sidebar.dart` (the desktop dialog `Positioned` close + the mobile route
+    `AppBar` leading close). Lets `_closeSelfProfile` dismiss the overlay deterministically
+    (single-fire `tapKeyCenter`, then ESC fallback) between cases, instead of a fragile
+    top-right coordinate. Automation-only, shared Dart → mobile covered.
+  - **The edit fields DRIVE FINE via `focusType`/`enterText`** (the old REAL_UI_TWO_PROCESS
+    "inline edit field/save keys did not land via tap{key}" note is now MOOT for toxee): the
+    keys sit directly on the `TextField`s, and `enterText` (no-key) targets the focused
+    editable + does a FULL-text `updateEditingValue` REPLACE (so it doesn't matter that
+    `osaClear` precedes it — kept as belt-and-suspenders, mirrors settings case 5). Save
+    persists to Prefs; assert via `l3_dump_state.nickname` / `.statusMessage` (the latter is
+    null→'' coerced, so a restore-to-empty round-trips). Cases 15/16 RESTORE the original
+    registered values (poison guard — later batches assert the registered nick).
+  - **TOGGLE double-fire discipline:** `profile_edit_toggle` flips `_editMode = !_editMode`,
+    so flutter_skill's double-firing `tap` is a net no-op → driven with single-fire
+    `tapKeyCenter` (Batch-1 pattern). `_enterProfileEditMode` retries the single-fire toggle
+    up to 3× (an even-count correction). The avatar open is ALSO single-fired (tapKeyCenter,
+    NO double-fire fallback) so it can't stack two profile dialogs.
+  - **AVATAR cases 19/20 SKIP — verified, not assumed (per "don't trust doc conclusions"):**
+    read `lib/ui/profile/profile_avatar_picker.dart` + `git show 5867fdc`. The self-profile
+    avatar tap (`onAvatarTap → _pickAvatar → pickAndPersistAvatar`) opens the NATIVE
+    NSOpenPanel directly via `FilePicker.platform.pickFiles` — there is NO in-app
+    default-avatar grid/picker surface (the "default avatars" of 5867fdc are a
+    REGISTRATION-TIME fallback INSTALLER in `lib/util/default_avatar_installer.dart`, not a
+    chooser UI; the only avatar grid in the tree is upstream UIKit's GROUP-avatar
+    `ChooseGroupAvatar`). The l3 override that bypasses the native panel
+    (`l3_set_avatar_pick_path` / `l3_pick_avatar`) is TEST-ACCOUNT-gated → refused on the
+    fresh non-test real-UI account, and would be a forbidden l3 bypass of the asserted
+    action anyway. Both return null (SKIP). NEW runner plumbing: `_realUiSkipExitCode = 75`
+    so the individual avatar dispatch returns 75 (the runner logs SKIP + continues, distinct
+    from 0=PASS/78=BLOCKED — without this a `null→0` would be tallied a PASS upstream).
+  - **No `--boot-restored` / no friendship:** all single-instance no-friend (like
+    `sweep_settings2`); planner launches a FRESH pair (drives A; B idle).
+  - **Codex review (2 rounds, mandatory):** round 1 found 4 (3 P1 + 1 P2), ALL applied:
+    (P1) the avatar SKIP returned exit 0 → reported as PASS upstream → added the
+    `_realUiSkipExitCode=75` SKIP code + runner handling; (P1) `_openSelfProfile`
+    short-circuited if the overlay was already up → case 13 could false-PASS without tapping
+    the avatar → it now CLOSES any pre-existing overlay + asserts `closedBefore` first, and
+    `runProfileSweep` normalizes before the first case; (P1) case 18 could false-green on
+    case 17's lingering `'ID copied to clipboard'` toast (same text, ~3s lifetime) → added
+    `Inst.waitTextGone`, case 17 clears the toast and case 18 REQUIRES it dismissed before
+    tapping QR-copy; (P2) the double-fire avatar `tap` could stack two dialogs → switched the
+    open to single-fire `tapKeyCenter`. I tried a production re-entry guard in `sidebar.dart`
+    but REVERTED it (a module-global flag broke widget-test isolation: `.whenComplete` never
+    fires when a test force-dismisses via a direct `onPressed` call — so the guard is a
+    harness-layer concern, fixed at the harness layer). Round 2 verified P1.1/P1.2/P1.3
+    correct + flagged ONE residual: the `_openSelfProfile` double-fire `tryTapKey` FALLBACK
+    was still reachable on a slow/unsized frame → REMOVED the fallback (tapKeyCenter already
+    retries bounds 5×/~1s and the avatar is always sized; the outer loop re-foregrounds and
+    retries). Round 2 then found no further false-pass/poison/hang.
+  - **Mobile parity:** all driven widgets are shared Dart (`lib/ui/profile/`,
+    `lib/ui/settings/sidebar.dart`); the `profile_close_button` key is on both the desktop
+    dialog and the mobile route close buttons, so the close affordance is covered on mobile
+    too. The avatar SKIP applies identically on mobile (the native picker is the only avatar
+    surface there as well; there is no in-app default-avatar chooser on any platform).
 
 ## Run phase (after ALL batches written) — protocol
 

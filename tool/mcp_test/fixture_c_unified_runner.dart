@@ -47,6 +47,13 @@ const _defaultRealUiNickB = 'RealUiBob';
 const _validTiers = {'non-media', 'media', 'all'};
 const _validClasses = {'2proc-l3', '2proc-ui'};
 const _validBases = {'paired_for_e2e', 'fresh', 'real-ui'};
+/// Exit code a real-UI driver returns when a scenario is a SKIP (its surface
+/// genuinely does not exist on this platform — e.g. the Batch-2 avatar cases,
+/// whose self-profile avatar tap opens a native NSOpenPanel with no in-app
+/// picker grid). Distinct from 0 (PASS), non-zero failures, and 78 (BLOCKED) so
+/// the runner does not tally a SKIP as a PASS. EX_NOPERM-adjacent; arbitrary but
+/// reserved here.
+const _realUiSkipExitCode = 75;
 const _validRealUiScenarios = {
   'handshake',
   'message',
@@ -88,10 +95,25 @@ const _validRealUiScenarios = {
   'settings_notifsound_toggle_hard',
   'settings_password_mismatch_error',
   'settings_logout_cancel',
+  // Batch 2 — self profile (single-instance, no-friend). The 8 cases are
+  // individually runnable; sweep_profile chains them on one launch. Cases 19/20
+  // (avatar) are SKIPs inside the sweep — no in-app avatar picker surface.
+  'sweep_profile',
+  'profile_open_sidebar_avatar',
+  'profile_edit_toggle_roundtrip',
+  'profile_edit_nickname_persists',
+  'profile_edit_status_persists',
+  'profile_copy_toxid_snackbar',
+  'profile_qr_copy',
+  'profile_avatar_picker_opens',
+  'profile_avatar_select_default_applies',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
   'rui-settings2': ['sweep_settings2'],
+  // Batch 2 — self profile (the whole 8-case chain on one launch; cases 19/20
+  // are SKIPs inside the chain).
+  'rui-profile': ['sweep_profile'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -980,6 +1002,17 @@ String _requiredRealUiState(String scenario) {
     case 'settings_notifsound_toggle_hard':
     case 'settings_password_mismatch_error':
     case 'settings_logout_cancel':
+    // Batch 2 — self profile: single-instance (drive only A, B idle), no
+    // friendship required, so they run from a fresh no-friend launch.
+    case 'sweep_profile':
+    case 'profile_open_sidebar_avatar':
+    case 'profile_edit_toggle_roundtrip':
+    case 'profile_edit_nickname_persists':
+    case 'profile_edit_status_persists':
+    case 'profile_copy_toxid_snackbar':
+    case 'profile_qr_copy':
+    case 'profile_avatar_picker_opens':
+    case 'profile_avatar_select_default_applies':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1028,6 +1061,16 @@ String _resultRealUiState(String scenario) {
     case 'settings_notifsound_toggle_hard':
     case 'settings_password_mismatch_error':
     case 'settings_logout_cancel':
+    // Batch 2 — self profile: single-instance, leaves friendship untouched.
+    case 'sweep_profile':
+    case 'profile_open_sidebar_avatar':
+    case 'profile_edit_toggle_roundtrip':
+    case 'profile_edit_nickname_persists':
+    case 'profile_edit_status_persists':
+    case 'profile_copy_toxid_snackbar':
+    case 'profile_qr_copy':
+    case 'profile_avatar_picker_opens':
+    case 'profile_avatar_select_default_applies':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1235,6 +1278,14 @@ Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
       if (rc == 78) {
         return rc;
       }
+      // A SKIP (e.g. a scenario whose surface does not exist on desktop — the
+      // Batch-2 avatar cases) is NOT a pass and NOT a failure: log it and move
+      // on without updating pairState (the scenario did nothing). Without this,
+      // a SKIP returning 0 would be tallied upstream as a PASS.
+      if (rc == _realUiSkipExitCode) {
+        stdout.writeln('[unified] SKIP real-ui scenario "$scenario" (surface n/a)');
+        continue;
+      }
       if (rc != 0 && resetApplied) {
         rc = await _retryRealUiScenarioFromFreshLaunch(
           requiredState: requiredState,
@@ -1310,7 +1361,7 @@ Future<int> _retryRealUiScenarioFromFreshLaunch({
       scenario,
       bootRestored: requiredState == _realUiStateFriends,
     );
-    if (rc == 78) {
+    if (rc == 78 || rc == _realUiSkipExitCode) {
       return rc;
     }
     if (rc == 0) {

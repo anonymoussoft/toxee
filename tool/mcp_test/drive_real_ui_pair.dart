@@ -87,6 +87,9 @@ import 'fixture_c_bootstrap.dart';
 //   settings2     — Batch-1 settings sweep 2 (theme/locale/download/bootstrap/
 //                   switch-toggle/password-mismatch/logout-cancel) + the
 //                   sweep_settings2 chain.
+//   profile       — Batch-2 self-profile sweep (open overlay / edit-toggle /
+//                   nickname+status edit / copy-toxid / qr-copy; avatar SKIPs) +
+//                   the sweep_profile chain.
 //   group_profile — group profile, rename, search, add-member, member list.
 //   group_menu    — conversation-row menu (pin/mark-read/clear/delete) + bursts.
 part 'drive_real_ui_pair_inst.dart';
@@ -96,6 +99,7 @@ part 'drive_real_ui_pair_message_call.dart';
 part 'drive_real_ui_pair_group.dart';
 part 'drive_real_ui_pair_settings.dart';
 part 'drive_real_ui_pair_settings2.dart';
+part 'drive_real_ui_pair_profile.dart';
 part 'drive_real_ui_pair_group_profile.dart';
 part 'drive_real_ui_pair_group_menu.dart';
 
@@ -252,6 +256,48 @@ Future<int> _main(List<String> args) async {
     if (scenario == 'settings_logout_cancel') {
       await ensureHome(a, nickA);
       return await _settingsLogoutCancel(a) ? 0 : 1;
+    }
+    // Batch 2 — self profile (single-instance; drive only A). A `bool?` runner
+    // returning null is a SKIP (no in-app avatar surface — cases 19/20), which
+    // maps to a non-failing exit 0 here (the sweep tallies it as a SKIP).
+    if (scenario == 'sweep_profile') {
+      return await runProfileSweep(a, nickA);
+    }
+    if (scenario == 'profile_open_sidebar_avatar') {
+      await ensureHome(a, nickA);
+      return await _profileOpenSidebarAvatar(a) ? 0 : 1;
+    }
+    if (scenario == 'profile_edit_toggle_roundtrip') {
+      await ensureHome(a, nickA);
+      return await _profileEditToggleRoundtrip(a) ? 0 : 1;
+    }
+    if (scenario == 'profile_edit_nickname_persists') {
+      await ensureHome(a, nickA);
+      return await _profileEditNicknamePersists(a) ? 0 : 1;
+    }
+    if (scenario == 'profile_edit_status_persists') {
+      await ensureHome(a, nickA);
+      return await _profileEditStatusPersists(a) ? 0 : 1;
+    }
+    if (scenario == 'profile_copy_toxid_snackbar') {
+      await ensureHome(a, nickA);
+      return await _profileCopyToxIdSnackbar(a) ? 0 : 1;
+    }
+    if (scenario == 'profile_qr_copy') {
+      await ensureHome(a, nickA);
+      return await _profileQrCopy(a) ? 0 : 1;
+    }
+    if (scenario == 'profile_avatar_picker_opens') {
+      await ensureHome(a, nickA);
+      // A `bool?` runner returning null is a SKIP — exit 75 (the runner's
+      // _realUiSkipExitCode, distinct from 0=PASS / 78=BLOCKED) so it is NOT
+      // tallied as a PASS. false → 1 (FAIL); true → 0 (PASS) — neither happens
+      // for these no-surface cases, which always return null.
+      return await _profileAvatarPickerOpens(a) == false ? 1 : 75;
+    }
+    if (scenario == 'profile_avatar_select_default_applies') {
+      await ensureHome(a, nickA);
+      return await _profileAvatarSelectDefaultApplies(a) == false ? 1 : 75;
     }
     if (scenario == 'group_profile_open') {
       return await runGroupProfileOpen(a, nickA);

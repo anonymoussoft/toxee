@@ -142,6 +142,13 @@ class UiKeys {
   static const Key profileToxIdSelectableText = Key(
     'profile_tox_id_selectable_text',
   );
+  // Self-profile overlay close affordance (lib/ui/settings/sidebar.dart). The
+  // desktop `showSelfProfile` dialog and the mobile fullscreen route each render
+  // an `Icons.close` IconButton to dismiss the profile; keying it lets real-UI
+  // automation close the overlay deterministically between cases (instead of
+  // tapping a fragile top-right coordinate). Automation-only, shared Dart so
+  // mobile is covered.
+  static const Key profileCloseButton = Key('profile_close_button');
 
   // Settings export flow (lib/ui/settings/settings_page*.dart).
   //
