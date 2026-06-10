@@ -36,9 +36,65 @@ jobs:
       - name: Complexity guard
         run: dart run tool/check_complexity.dart
 
-      # Advisory coverage baseline. continue-on-error because 2 known test
-      # failures exist today; do not block PRs. TODO: once those are fixed,
-      # flip continue-on-error off and introduce a minimum-coverage gate.
+  # Separate job so the fast lint/complexity gate above is never blocked by the
+  # native build. The unit/widget suite constructs real FfiChatService
+  # instances, whose constructor opens libtim2tox_ffi (Tim2ToxFfi.open) — so the
+  # suite needs the native lib present on the Linux runner. Without it, every
+  # FfiChatService-touching test throws at construction
+  # ("Failed to load dynamic library 'libtim2tox_ffi.so'"). Same build + stage
+  # recipe as the E2E workflow.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: 'stable'
+
+      - name: Install Linux native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            clang \
+            libgtk-3-dev \
+            liblzma-dev \
+            libstdc++-12-dev \
+            libsodium-dev \
+            libopus-dev \
+            libvpx-dev \
+            libsqlite3-dev
+
+      - name: Bootstrap dependencies
+        run: dart run tool/bootstrap_deps.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build libtim2tox_ffi (Linux, debug + toxav)
+        run: bash tool/ci/build_tim2tox.sh --target linux --mode debug --toxav
+
+      - name: Stage libtim2tox_ffi.so for runtime loader
+        run: |
+          set -euo pipefail
+          src_dir="$GITHUB_WORKSPACE/build/native-artifacts/linux"
+          if [[ ! -f "$src_dir/libtim2tox_ffi.so" ]]; then
+            echo "::error::libtim2tox_ffi.so not found under $src_dir"
+            ls -la "$src_dir" || true
+            exit 1
+          fi
+          echo "LD_LIBRARY_PATH=$src_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      # Was advisory because the suite could not load libtim2tox_ffi on CI and
+      # ~68 FfiChatService-touching tests threw at construction. With the lib
+      # built + staged above they now run for real. Kept advisory for THIS
+      # commit to confirm the suite is green on the Linux runner; flips to a
+      # hard gate (continue-on-error removed) in the immediate follow-up.
       - name: Flutter test with coverage (advisory)
         continue-on-error: true
         run: flutter test --coverage
