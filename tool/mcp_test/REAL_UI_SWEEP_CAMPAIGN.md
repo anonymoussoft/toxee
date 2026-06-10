@@ -1550,6 +1550,22 @@ applied + P3 mobile-parity gap closed by driving the bottom-nav routing)
   Batch 8 adds the `home_bottom_nav` key, which the existing mobile bottom-nav
   test does not pump `HomePage` so it stays green).
 
+## Run phase — STATUS: IN PROGRESS (started 2026-06-10)
+
+Write phase complete: batches 0–8 all DONE (commits b1a7baf..b89feb6), 94 cases
+(88 WRITTEN + 6 evidence-based SKIP: 19/20 avatar native-picker-only, 26 restore
+native-picker-only, 53 presence un-seedable on reused launch, 62 reply not wired for
+C2C text bubbles, 68 offline no ungated seam). App rebuilt via build_all.sh macos debug
+(new service extensions ui_scroll_at/ui_drag/ui_secondary_tap +
+l3_mark_current_account_test + fork keys are in the binary).
+Run order (one campaign at a time, serial — osascript foreground is exclusive):
+rui-settings2 → rui-profile → rui-login → rui-contacts → rui-conv → rui-chat →
+rui-group2 → rui-calls-misc. Record per-sweep results + fixes in "Run log".
+
+### Run log (append-only)
+
+- 2026-06-10: write phase closed; app rebuilt (build_all.sh exit 0).
+
 ## Run phase (after ALL batches written) — protocol
 
 1. Rebuild app so new service extensions are in the binary: `./build_all.sh --platform
