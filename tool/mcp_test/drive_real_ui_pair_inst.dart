@@ -351,6 +351,79 @@ class Inst {
     return false;
   }
 
+  // --- Pointer-event primitives (Batch-0 ui_drive_tools). flutter_skill has no
+  // scroll/drag/right-click; these route through the app's ui_* service
+  // extensions, which dispatch REAL pointer events into the production gesture
+  // pipeline. ---
+
+  /// One mouse-wheel scroll at [key]'s center (dy positive scrolls down).
+  Future<void> scrollAt(String key, {double dx = 0, required double dy}) async {
+    final r = await l3('ui_scroll_at', {
+      'key': key,
+      'dx': '$dx',
+      'dy': '$dy',
+    });
+    if (r['ok'] != true) {
+      throw DriveError('[$name] ui_scroll_at "$key" failed: $r');
+    }
+  }
+
+  /// Touch-drag [key]'s center by (dx,dy) over [steps] moves.
+  Future<void> dragBy(
+    String key, {
+    double dx = 0,
+    required double dy,
+    int steps = 12,
+  }) async {
+    final r = await l3('ui_drag', {
+      'key': key,
+      'dx': '$dx',
+      'dy': '$dy',
+      'steps': '$steps',
+    });
+    if (r['ok'] != true) {
+      throw DriveError('[$name] ui_drag "$key" failed: $r');
+    }
+  }
+
+  /// Right-click (secondary tap) at [key]'s center — opens the desktop chat
+  /// message context menu / conversation-row menu.
+  Future<void> secondaryTapKey(String key) async {
+    final r = await l3('ui_secondary_tap', {'key': key});
+    if (r['ok'] != true) {
+      throw DriveError('[$name] ui_secondary_tap "$key" failed: $r');
+    }
+  }
+
+  /// Scroll [scrollableKey] by [dyPerStep] (negative = wheel up to reveal
+  /// earlier content; positive = down) until [targetKey] appears, up to
+  /// [maxSteps] wheel ticks. Foregrounds first (like other UI phases). Returns
+  /// whether the target became visible. Best-effort: a missing scrollable key
+  /// stops the loop and returns false instead of throwing.
+  Future<bool> scrollUntilKey(
+    String scrollableKey,
+    String targetKey, {
+    double dyPerStep = -300,
+    int maxSteps = 20,
+  }) async {
+    await foreground();
+    if (await waitKey(targetKey, timeoutSecs: 2)) return true;
+    for (var step = 0; step < maxSteps; step++) {
+      final r = await l3('ui_scroll_at', {
+        'key': scrollableKey,
+        'dx': '0',
+        'dy': '$dyPerStep',
+      });
+      if (r['ok'] != true) {
+        print('[$name] WARN scrollUntilKey stop: ui_scroll_at failed: $r');
+        return false;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (await waitKey(targetKey, timeoutSecs: 1)) return true;
+    }
+    return false;
+  }
+
   // --- Real OS input (foreground window). The desktop chat composer is an
   // ExtendedTextField whose ExtendedEditableText cannot be driven by synthetic
   // enterText, and Enter-to-send rides the legacy FocusNode.onKey RawKeyEvent

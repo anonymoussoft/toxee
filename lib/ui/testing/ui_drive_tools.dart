@@ -1,0 +1,363 @@
+// UI-drive MCP tools — REAL pointer-event primitives for the real-UI sweep
+// campaign (see tool/mcp_test/REAL_UI_SWEEP_CAMPAIGN.md, Batch 0).
+//
+// WHY: flutter_skill (the default `skill` binding) only exposes tap / tapAt /
+// enterText / waitForElement / interactiveStructured — it has NO scroll, drag,
+// or secondary (right-click) primitive. Several sweep scenarios need to scroll
+// a long list onstage, touch-drag a member list, or open the desktop chat
+// message context menu (a right-click). These tools dispatch GENUINE pointer
+// events through `GestureBinding.instance.handlePointerEvent`, so the SAME
+// production hit-test / gesture / scroll-physics pipeline runs that a real user
+// (or WidgetTester's TestPointer) drives. They do NOT re-implement any
+// production behaviour — they only synthesize the input.
+//
+// SAFETY: registered ONLY behind [kDebugMode] (tree-shaken out of
+// profile/release). UNGATED by the test-account guard on purpose: they are pure
+// input plumbing (no data mutation of their own, no account-scoped side effect)
+// that must work on FRESH non-test accounts — exactly like the ungated l3
+// plumbing tools (l3_open_group_add_member / l3_set_active_conversation).
+//
+// MOBILE PARITY: this is shared Dart. The pointer-event dispatch + element
+// resolution are platform-agnostic (the same widget tree exists on iOS/Android),
+// so these tools apply to mobile builds automatically — `ui_drag` in particular
+// synthesizes a TOUCH drag, the canonical mobile scroll gesture.
+//
+// Tools (callable as `ext.mcp.toolkit.ui_*`):
+//   - ui_scroll_at  {key?|x,y?, dx?, dy}     one mouse-wheel PointerScrollEvent
+//   - ui_drag       {key?|fromX,fromY?, dx?, dy, steps?} touch drag (down/moves/up)
+//   - ui_secondary_tap {key?|x,y?}           right-button mouse down/up
+//
+// Each returns {ok:true} or {ok:false, error:"..."} (+ a "candidates" count when
+// a key resolves to multiple onstage matches, for debuggability).
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/widgets.dart';
+import 'package:mcp_toolkit/mcp_toolkit.dart';
+
+import '../../util/logger.dart';
+
+/// Unique pointer ids per dispatched gesture so successive/concurrent gestures
+/// never collide on the same id (the arena/router keys state by pointer id).
+int _uiDrivePointerSeq = 7000;
+int _nextPointerId() => _uiDrivePointerSeq++;
+
+/// Resolution outcome for a `{key?|x,y?}` target.
+@visibleForTesting
+class UiTargetResolution {
+  UiTargetResolution.point(this.point, {this.candidates = 1}) : error = null;
+  UiTargetResolution.failure(this.error)
+    : point = null,
+      candidates = 0;
+
+  final Offset? point;
+  final String? error;
+  final int candidates;
+
+  bool get ok => point != null;
+}
+
+/// Find the global CENTER point of the on-screen [RenderBox] for the widget
+/// carrying `ValueKey(keyName)`. Onstage candidates are gathered by walking
+/// `Element.debugVisitOnstageChildren` from the root — the canonical Flutter
+/// traversal that test finders use, which an `Offstage(offstage:true)` AND an
+/// `IndexedStack`'s hidden branches override to prune. That is the documented
+/// hazard: a plain `visitChildren` walk matches keyed widgets inside offstage
+/// IndexedStack subtrees (HomePage's IndexedStack tabs); the onstage walk skips
+/// them. Each onstage candidate is still required to be an attached,
+/// positively-sized RenderBox. When several ONSTAGE candidates remain the first
+/// is used and `candidates` reflects the count.
+@visibleForTesting
+UiTargetResolution resolveKeyCenter(String keyName) {
+  final root = WidgetsBinding.instance.rootElement;
+  if (root == null) {
+    return UiTargetResolution.failure('no_root_element');
+  }
+  bool matchesKey(Element element) {
+    final key = element.widget.key;
+    return key is ValueKey && key.value == keyName;
+  }
+
+  // Onstage walk: prunes offstage Offstage / IndexedStack branches.
+  final onstage = <Element>[];
+  void visitOnstage(Element element) {
+    if (matchesKey(element) && _isSizedRenderBox(element)) onstage.add(element);
+    element.debugVisitOnstageChildren(visitOnstage);
+  }
+
+  visitOnstage(root);
+
+  if (onstage.isNotEmpty) {
+    final box = onstage.first.renderObject! as RenderBox;
+    final center = box.localToGlobal(box.size.center(Offset.zero));
+    return UiTargetResolution.point(center, candidates: onstage.length);
+  }
+
+  // No onstage match: distinguish "exists but only offstage" from "absent" via
+  // a full traversal, so a driver can tell a wrong-tab key from a typo.
+  var existsAnywhere = false;
+  void visitAll(Element element) {
+    if (matchesKey(element)) existsAnywhere = true;
+    element.visitChildren(visitAll);
+  }
+
+  visitAll(root);
+  return UiTargetResolution.failure(
+    existsAnywhere ? 'key_offstage_only:$keyName' : 'key_not_found:$keyName',
+  );
+}
+
+/// True when [element]'s render object is an attached, positively-sized
+/// RenderBox (so `localToGlobal`/`size.center` are meaningful).
+bool _isSizedRenderBox(Element element) {
+  final ro = element.renderObject;
+  return ro is RenderBox && ro.attached && ro.hasSize && !ro.size.isEmpty;
+}
+
+/// Resolve a `{key?|x,y?}` request into a global point. `key` wins when present;
+/// otherwise [xParam]/[yParam] are parsed as raw global coordinates.
+@visibleForTesting
+UiTargetResolution resolveTarget(
+  String? key, {
+  String? xParam,
+  String? yParam,
+}) {
+  if (key != null && key.trim().isNotEmpty) {
+    return resolveKeyCenter(key.trim());
+  }
+  final x = double.tryParse(xParam ?? '');
+  final y = double.tryParse(yParam ?? '');
+  if (x == null || y == null) {
+    return UiTargetResolution.failure('need_key_or_xy');
+  }
+  return UiTargetResolution.point(Offset(x, y));
+}
+
+double _num(String? raw, double fallback) =>
+    double.tryParse(raw ?? '') ?? fallback;
+
+// ---------------------------------------------------------------------------
+// Pure handlers — directly callable from tests (no MCP harness needed).
+// They synthesize input via GestureBinding and pump live frames between moves.
+// ---------------------------------------------------------------------------
+
+/// One mouse-wheel scroll at the resolved point. Hit-testing for a
+/// `PointerSignalEvent` happens inside `handlePointerEvent`, so the Scrollable
+/// under [at] receives the scroll — the same mechanism WidgetTester's
+/// `TestPointer.scroll` exercises.
+@visibleForTesting
+Map<String, Object?> uiScrollAtHandler({
+  String? key,
+  String? x,
+  String? y,
+  String? dx,
+  String? dy,
+}) {
+  final resolved = resolveTarget(key, xParam: x, yParam: y);
+  if (!resolved.ok) return {'ok': false, 'error': resolved.error};
+  final delta = Offset(_num(dx, 0), _num(dy, 0));
+  GestureBinding.instance.handlePointerEvent(
+    PointerScrollEvent(
+      position: resolved.point!,
+      scrollDelta: delta,
+      kind: PointerDeviceKind.mouse,
+    ),
+  );
+  return {'ok': true, 'candidates': resolved.candidates};
+}
+
+/// Touch drag: PointerDown → N PointerMove → PointerUp, with a short awaited
+/// delay between moves so the host pumps live frames and scroll physics engage.
+/// In a hermetic widget test the caller pumps; the delay is harmless there.
+@visibleForTesting
+Future<Map<String, Object?>> uiDragHandler({
+  String? key,
+  String? fromX,
+  String? fromY,
+  String? dx,
+  String? dy,
+  String? steps,
+  Duration stepDelay = const Duration(milliseconds: 16),
+}) async {
+  final resolved = resolveTarget(key, xParam: fromX, yParam: fromY);
+  if (!resolved.ok) return {'ok': false, 'error': resolved.error};
+  final start = resolved.point!;
+  final total = Offset(_num(dx, 0), _num(dy, 0));
+  final stepCount = int.tryParse(steps ?? '') ?? 12;
+  final n = stepCount < 1 ? 1 : stepCount;
+  final pointer = _nextPointerId();
+  final binding = GestureBinding.instance;
+
+  binding.handlePointerEvent(
+    PointerDownEvent(
+      pointer: pointer,
+      position: start,
+      kind: PointerDeviceKind.touch,
+    ),
+  );
+  final perStep = total / n.toDouble();
+  var current = start;
+  for (var i = 0; i < n; i++) {
+    current += perStep;
+    binding.handlePointerEvent(
+      PointerMoveEvent(
+        pointer: pointer,
+        position: current,
+        delta: perStep,
+        kind: PointerDeviceKind.touch,
+      ),
+    );
+    // Only await a real inter-move delay when one is requested. In a live app
+    // this lets frames pump so scroll physics engage; passing Duration.zero
+    // (hermetic widget tests) skips the await entirely — a zero-duration
+    // Future.delayed schedules a fake-async timer the test can't fire while the
+    // handler is still suspended, which would deadlock the test (FakeAsync).
+    if (stepDelay > Duration.zero) {
+      await Future<void>.delayed(stepDelay);
+    }
+  }
+  binding.handlePointerEvent(
+    PointerUpEvent(
+      pointer: pointer,
+      position: current,
+      kind: PointerDeviceKind.touch,
+    ),
+  );
+  return {'ok': true, 'candidates': resolved.candidates};
+}
+
+/// Right-click: a secondary-button mouse PointerDown then PointerUp at the
+/// resolved point. Drives the production secondary-tap handlers (e.g. the
+/// desktop chat message menu's `Listener.onPointerDown` buttons check).
+@visibleForTesting
+Map<String, Object?> uiSecondaryTapHandler({String? key, String? x, String? y}) {
+  final resolved = resolveTarget(key, xParam: x, yParam: y);
+  if (!resolved.ok) return {'ok': false, 'error': resolved.error};
+  final point = resolved.point!;
+  final pointer = _nextPointerId();
+  final binding = GestureBinding.instance;
+  binding.handlePointerEvent(
+    PointerDownEvent(
+      pointer: pointer,
+      position: point,
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    ),
+  );
+  binding.handlePointerEvent(
+    PointerUpEvent(
+      pointer: pointer,
+      position: point,
+      kind: PointerDeviceKind.mouse,
+      // Mouse-up reports no buttons held (the secondary button was released).
+    ),
+  );
+  return {'ok': true, 'candidates': resolved.candidates};
+}
+
+MCPCallResult _result(Map<String, Object?> r) => MCPCallResult(
+  message: r['ok'] == true ? 'ok' : 'error: ${r['error']}',
+  parameters: r,
+);
+
+// ---------------------------------------------------------------------------
+// Thin MCP registration around the pure handlers.
+// ---------------------------------------------------------------------------
+
+MCPCallEntry _uiScrollAtEntry() => MCPCallEntry.tool(
+  handler: (request) async => _result(
+    uiScrollAtHandler(
+      key: request['key'],
+      x: request['x'],
+      y: request['y'],
+      dx: request['dx'],
+      dy: request['dy'],
+    ),
+  ),
+  definition: MCPToolDefinition(
+    name: 'ui_scroll_at',
+    description:
+        'DEBUG-ONLY (ungated): dispatch one mouse-wheel PointerScrollEvent at a '
+        'widget key center (key) or raw global coords (x,y), with dx/dy delta. '
+        'Runs the real hit-test/scroll pipeline. Returns {ok, error?, candidates}.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'key': StringSchema(description: 'ValueKey of the scroll point center.'),
+        'x': StringSchema(description: 'Raw global x (when no key).'),
+        'y': StringSchema(description: 'Raw global y (when no key).'),
+        'dx': StringSchema(description: 'Horizontal scroll delta (default 0).'),
+        'dy': StringSchema(description: 'Vertical scroll delta (down positive).'),
+      },
+    ),
+  ),
+);
+
+MCPCallEntry _uiDragEntry() => MCPCallEntry.tool(
+  handler: (request) async => _result(
+    await uiDragHandler(
+      key: request['key'],
+      fromX: request['fromX'],
+      fromY: request['fromY'],
+      dx: request['dx'],
+      dy: request['dy'],
+      steps: request['steps'],
+    ),
+  ),
+  definition: MCPToolDefinition(
+    name: 'ui_drag',
+    description:
+        'DEBUG-ONLY (ungated): touch-drag (PointerDown -> N PointerMove -> '
+        'PointerUp) from a key center (key) or raw coords (fromX,fromY) by '
+        '(dx,dy) over steps moves (default 12). Engages real scroll physics; '
+        'mobile-style touch scroll. Returns {ok, error?, candidates}.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'key': StringSchema(description: 'ValueKey of the drag start center.'),
+        'fromX': StringSchema(description: 'Raw global start x (when no key).'),
+        'fromY': StringSchema(description: 'Raw global start y (when no key).'),
+        'dx': StringSchema(description: 'Total horizontal drag (default 0).'),
+        'dy': StringSchema(description: 'Total vertical drag (up negative).'),
+        'steps': StringSchema(description: 'Number of move events (default 12).'),
+      },
+    ),
+  ),
+);
+
+MCPCallEntry _uiSecondaryTapEntry() => MCPCallEntry.tool(
+  handler: (request) async => _result(
+    uiSecondaryTapHandler(
+      key: request['key'],
+      x: request['x'],
+      y: request['y'],
+    ),
+  ),
+  definition: MCPToolDefinition(
+    name: 'ui_secondary_tap',
+    description:
+        'DEBUG-ONLY (ungated): right-click (secondary-button mouse PointerDown '
+        'then PointerUp) at a key center (key) or raw coords (x,y). Opens the '
+        'desktop chat message context menu. Returns {ok, error?, candidates}.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'key': StringSchema(description: 'ValueKey of the right-click center.'),
+        'x': StringSchema(description: 'Raw global x (when no key).'),
+        'y': StringSchema(description: 'Raw global y (when no key).'),
+      },
+    ),
+  ),
+);
+
+/// Register the UI-drive pointer tools. No-op outside [kDebugMode]
+/// (tree-shaken from profile/release). Call after
+/// `MCPToolkitBinding.instance.initialize()` in `main()`. UNGATED — these are
+/// pure input plumbing and must work on fresh non-test accounts.
+void registerUiDriveToolsIfDebug() {
+  if (!kDebugMode) return;
+  AppLogger.info(
+    '[ui-drive] Registering pointer-event tools '
+    '(ui_scroll_at, ui_drag, ui_secondary_tap).',
+  );
+  addMcpTool(_uiScrollAtEntry());
+  addMcpTool(_uiDragEntry());
+  addMcpTool(_uiSecondaryTapEntry());
+}

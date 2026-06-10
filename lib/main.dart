@@ -19,6 +19,7 @@ import 'ui/home_page.dart';
 import 'ui/startup_loading_screen.dart';
 import 'ui/upgrade_required_screen.dart';
 import 'ui/testing/l3_debug_tools.dart';
+import 'ui/testing/ui_drive_tools.dart';
 import 'sdk_fake/fake_uikit_core.dart';
 import 'util/theme_controller.dart';
 import 'util/locale_controller.dart';
@@ -141,6 +142,10 @@ Future<void> main() async {
         // No-op unless TOXEE_L3_TEST is set (injected by run_toxee.sh on the
         // canonical L3 launch). See lib/ui/testing/l3_debug_tools.dart.
         registerL3DebugToolsIfEnabled();
+        // UNGATED real-pointer-event tools (scroll/drag/secondary-tap) for the
+        // real-UI sweep campaign. Debug-only, no test-account gate — pure input
+        // plumbing usable on fresh accounts. See lib/ui/testing/ui_drive_tools.dart.
+        registerUiDriveToolsIfDebug();
       }
 
       final result = await AppBootstrap.initialize();

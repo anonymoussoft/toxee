@@ -92,7 +92,11 @@ Inst helpers in `drive_real_ui_pair_inst.dart`: `scrollUntilKey`, `secondaryTapK
 actually opened in production (hover-more-button? secondary tap? long-press) — write the
 finding into the Batch log; suites 6 depends on it.
 
-**Batch 0 STATUS: TODO**
+**Batch 0 STATUS: DONE** — `lib/ui/testing/ui_drive_tools.dart` (ungated, debug-only)
+ships `ui_scroll_at` / `ui_drag` / `ui_secondary_tap` real pointer-event service
+extensions; `test/ui/testing/ui_drive_tools_test.dart` 5/5 pass; Inst helpers
+(`scrollAt`/`dragBy`/`secondaryTapKey`/`scrollUntilKey`) added; message-menu trigger
+investigated (see Batch log).
 
 ### Suites (batches 1–8) — 94 cases
 
@@ -260,6 +264,80 @@ AppleScript System Events window resize, SKIP with reason if refused)
   flutter_skill is a pub package (^0.9.36) with NO scroll/right-click → Batch 0 builds
   our own pointer-event service extensions (real production gesture pipeline).
   App build present at build/macos/Build/Products/Debug/Toxee.app (Jun 9, dylib fresh).
+
+- 2026-06-10 **Batch 0 DONE** (ui_drive pointer primitives, written + hermetically
+  verified; NOT yet live-run — needs an app rebuild so the new service extensions are
+  in the binary, per the Run-phase protocol):
+  - New `lib/ui/testing/ui_drive_tools.dart` (364 LOC; ungated, `kDebugMode`-only;
+    registered in `main.dart` via `registerUiDriveToolsIfDebug()` right after the l3
+    registration, NOT behind `TOXEE_L3_TEST` so it works on fresh non-test accounts).
+    Three tools dispatch genuine `PointerEvent`s through
+    `GestureBinding.instance.handlePointerEvent` so the real hit-test / gesture /
+    scroll-physics pipeline runs: `ui_scroll_at` (mouse-wheel `PointerScrollEvent`),
+    `ui_drag` (touch down→N moves→up, awaited inter-move delay so live frames pump),
+    `ui_secondary_tap` (secondary-button mouse down/up). All return
+    `{ok, error?, candidates}`. Pure handlers are `@visibleForTesting` and directly
+    callable; the `MCPCallEntry`s are a thin wrapper.
+  - **Widget resolution / offstage filtering — root-caused a real subtlety.** Keys are
+    resolved to the GLOBAL CENTER of their `RenderBox` via `localToGlobal`. The
+    documented hazard (key lookups matching widgets in offstage `IndexedStack` subtrees,
+    e.g. HomePage's tab IndexedStack) is filtered by walking
+    `Element.debugVisitOnstageChildren` from the root rather than `visitChildren` — the
+    SAME traversal Flutter's own finders use. NOTE: `IndexedStack` does NOT wrap hidden
+    children in a plain `Offstage` widget (Flutter 3.41.9 wraps them in
+    `Visibility(maintainSize/State/Interactivity:true)`), so an ancestor-`Offstage`
+    scan does NOT catch them — only `debugVisitOnstageChildren` (overridden by
+    `_IndexedStackElement` and `_OffstageElement`) prunes them. Candidates are then
+    required to be attached, positively-sized RenderBoxes. Offstage-only matches return
+    `key_offstage_only:<key>`; absent keys return `key_not_found:<key>` (distinct, via a
+    fallback full-tree walk). When multiple onstage matches remain the first is used and
+    `candidates` is returned for debuggability. Unique per-call pointer ids (static
+    counter from 7000) avoid arena collisions.
+  - **FakeAsync deadlock fixed:** `ui_drag`'s inter-move `Future.delayed` is now only
+    awaited when `stepDelay > Duration.zero`. A zero-duration `Future.delayed` schedules
+    a fake-async timer the widget test can't fire while the handler is suspended → 10-min
+    test timeout. Hermetic tests pass `Duration.zero`; production keeps the 16 ms default.
+  - Hermetic gates `test/ui/testing/ui_drive_tools_test.dart` (5/5 PASS): scroll moves a
+    real ListView offset + fires a ScrollNotification; touch drag scrolls; secondary tap
+    fires `GestureDetector.onSecondaryTapDown` once at the widget center; an onstage
+    IndexedStack twin is chosen over its offstage sibling (candidates==1, offstage twin
+    never fires); an offstage-only key returns `ok:false`/`key_offstage_only` and a typo
+    returns `key_not_found`.
+  - Inst helpers added to `drive_real_ui_pair_inst.dart` (route to the `ui_*` extensions
+    over the existing `l3()` transport): `scrollAt`, `dragBy`, `secondaryTapKey`, and
+    `scrollUntilKey` (foreground()s first, fast-paths if target already visible, then
+    wheel-scrolls up to maxSteps polling `waitKey`).
+  - Quality gates: `flutter analyze lib tool` → 0 NEW issues in touched files (total 222,
+    all pre-existing); `check_complexity.dart` does NOT flag ui_drive_tools.dart (364
+    LOC); `fixture_c_unified_runner --plan-json --class=2proc-ui` parses + exits 0.
+  - **DESKTOP message context-menu finding (for Batch 6):** the desktop chat message menu
+    opens via a `Listener` in
+    `TencentCloudChatMessageItemWithMenu.desktopBuilder`
+    (`third_party/chat-uikit-flutter/.../menu/tencent_cloud_chat_message_item_with_menu.dart:684`):
+    `onPointerDown` fires `_openDesktopMessageMenu(event.position)` ONLY when
+    `event.kind == PointerDeviceKind.mouse && event.buttons == kSecondaryMouseButton`. It
+    is NOT a `GestureDetector.onSecondaryTap` and NOT a hover-more-button — it is a raw
+    secondary-button mouse-DOWN on the Listener wrapping
+    `widget.methods.getMessageItemWidget(key: _messageKey)`, where `_messageKey == null`
+    (the item widget itself is unkeyed on desktop). So `ui_secondary_tap` (which sends a
+    `PointerDownEvent(kind: mouse, buttons: kSecondaryMouseButton)`) is EXACTLY the right
+    primitive and must hit a point inside that Listener's child. The stable keyed target
+    is the ROW container key `ValueKey('message_list_item:<msgID>')`
+    (`tencent_cloud_chat_message_row_container.dart:286`) — its center lies inside the
+    bubble/Listener region. Batch 6 should `ui_secondary_tap('message_list_item:<msgID>')`
+    to open the menu, then tap the keyed items `ValueKey('message_menu_item:<action>')`
+    (copy/forward/delete[/recall for a fresh self message]; per the fork, TEXT bubbles
+    STRIP reply/multiSelect/translate — see `message_actions_menu_real_ui_test.dart`).
+    MOBILE parity trigger: on non-desktop screen modes the same row uses
+    `GestureDetector.onLongPress` (`_onLongPressMessageOnMobile`, defaultBuilder:604) — a
+    long-press, which `ui_drag`/secondary-tap do not cover; mobile would need a
+    long-press primitive or the existing l3 `l3_invoke_message_action` bypass.
+  - **Deviations from the spec:** (1) The optional `ui_hover` tool was NOT added — the spec
+    marked it "if needed", and the message menu is a secondary-tap (not a hover
+    affordance), so no hover is required for the planned scenarios; add it in a later
+    batch if a hover-only surface appears. (2) `scrollUntilKey`'s signature uses
+    `dyPerStep`/`maxSteps` (negative dy = wheel up to reveal earlier content) matching the
+    spec; it foreground()s first like other UI phases.
 
 ## Run phase (after ALL batches written) — protocol
 
