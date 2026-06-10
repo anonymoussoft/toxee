@@ -90,16 +90,18 @@ jobs:
           fi
           echo "LD_LIBRARY_PATH=$src_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
-      # Was advisory because the suite could not load libtim2tox_ffi on CI and
-      # ~68 FfiChatService-touching tests threw at construction. With the lib
-      # built + staged above they now run for real. Kept advisory for THIS
-      # commit to confirm the suite is green on the Linux runner; flips to a
-      # hard gate (continue-on-error removed) in the immediate follow-up.
-      - name: Flutter test with coverage (advisory)
-        continue-on-error: true
+      # Hard gate. The suite constructs real FfiChatService instances that load
+      # libtim2tox_ffi (built + staged above), so it runs for real on CI. This
+      # was advisory while the lib was missing and ~68 FfiChatService-touching
+      # tests threw at construction; with the lib present the full suite is
+      # green (747 passed / 0 failed on the prove-green run a8d3ad7), so the
+      # continue-on-error is removed. The coverage steps below use `if: always()`
+      # so a future test failure still publishes the partial coverage report.
+      - name: Flutter test with coverage
         run: flutter test --coverage
 
       - name: Summarize lcov coverage
+        if: ${{ always() }}
         continue-on-error: true
         run: |
           if [ ! -f coverage/lcov.info ]; then
@@ -118,7 +120,7 @@ jobs:
                }' coverage/lcov.info
 
       - name: Upload coverage artifact
-        if: ${{ hashFiles('coverage/lcov.info') != '' }}
+        if: ${{ always() && hashFiles('coverage/lcov.info') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: toxee-coverage-lcov
