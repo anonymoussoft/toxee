@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online friends=1 history=seeded(2)`
 **Harness mode**: peerHarness=none
 **Promotion target**: L2 candidate once UIKit-fork per-item `ValueKey('message_menu_item_*')` lands; L3 today because menu lives entirely in UIKit `OverlayEntry` with no toxee builder slot
-**Status**: covered (variants 6a/6b/6c)
+**Status**: covered (variants 6a/6b/6c). Also covered at the widget layer (L1) by WidgetTester real-UI gates: the REAL `TencentCloudChatMessage` page is mounted at 1400×900 (desktop) and 400×800 (mobile), the menu is triggered via the production right-click `Listener` (desktop) and `GestureDetector.onLongPress` (mobile), all menu items are asserted by `ValueKey('message_menu_item:<action>')`, and the delete confirmation + the recall-window gating are driven end-to-end.
+**Covered-by**: test/ui/chat/message_actions_menu_real_ui_test.dart (desktop), test/ui/chat/message_actions_menu_mobile_real_ui_test.dart (mobile)
 
 S15 = menu surface gate only. Tap-item side effects belong to S16/S17/S18.
 

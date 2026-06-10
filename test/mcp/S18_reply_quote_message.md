@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online friends=1 history=seeded(2)`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned because exercises cloudCustomData → `[REPLY_START]…[REPLY_END]` Tox encoding via real `MessageReplyUtil` C++ path; needs UIKit-fork menu-item + reply-banner keys for stable targeting
-**Status**: covered (online + offline variants)
+**Status**: covered (online + offline variants). Also covered at the widget layer (L1) by WidgetTester real-UI gates: the REAL `Reply` menu item tap runs the production `dataProvider.quotedMessage = _message` handler, mounts the real `TencentCloudChatMessageInputReplyContainer` quote banner, and the real send path emits `cloudCustomData` containing `{"messageReply":{"messageID":..., "messageSender":...}}` which is asserted directly. Desktop and mobile both gated; the send path is shared Dart code and covers both platforms.
+**Covered-by**: test/ui/chat/message_actions_menu_real_ui_test.dart (desktop), test/ui/chat/message_actions_menu_mobile_real_ui_test.dart (mobile)
 
 Shares menu-open path with S15/S17. Layered tests: menu surface (S15), forward (S17), reply data path (S18).
 

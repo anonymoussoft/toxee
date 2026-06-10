@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online friends=3+(distinct nicknames) history=≥1 msg/friend`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned because exercises pane swap + full-text history scan; needs realistic UIKit conversation tree
-**Status**: covered
+**Status**: covered. The interactive global-search FLOW is now covered at the widget layer (L1): `test/ui/search/search_flows_real_ui_test.dart` mounts the REAL `CustomSearch` (global, non-embedded → the production `message_search_field` renders), types a query into the production field, and asserts the REAL `_matchesKeywordCaseInsensitive` filter narrows the rendered contact result rows (`Ali` → Alice only; the shared `neighbour` token → all three), that clearing the field empties the result rows, that re-querying restores the full match set, and that matching is case-insensitive. Only the FFI-backed singleton fetch is replaced (via the new `CustomSearch.rawSearchDataOverride` seam — raw, PRE-FILTER inputs); the filter/render/highlight are production. A new per-contact-row key `UiKeys.searchResultContact(uid)` was added to `custom_search.dart` (the highlighted title is a RichText, so name-based finds are unreliable — this brings contact rows to parity with the already-keyed group/conversation rows). Shell-level pane swap back to the conversation list on clear (A4/A5 conversation-row restore) remains the home surface's territory; this gate owns the result-emptying half. The full-text message-content path is still gated by `custom_search_keys_test.dart` (S93). Shared desktop+mobile (same widget + filter).
+**Covered-by**: `test/ui/search/search_flows_real_ui_test.dart`
 
 ## Precondition
 - One signed-in account A on HomePage.

@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any friends=1`
 **Harness mode**: peerHarness=none
 **Promotion target**: **L2 candidate once harnessed.** The render-only path needs real bundled assets + real plugin lifecycle + real widget tree — all L2-reachable (no live DHT, F may be offline). The `tencent_cloud_chat_sticker` plugin registers in `HomePage._initAfterSessionReady` which L2's host-bundle init exercises. Send-side bubble assertions (A6/A7) are deterministic against a stub friend; an integration_test smoke can hold the assertions. Sibling of S23 (sticker/custom-face panel).
-**Status**: covered
+**Status**: covered at the widget layer (L1). Real tap on the REAL vendored sticker panel (`TencentCloudChatStickerPanel`) wired to the REAL desktop composer drives the REAL UIKit event bus end-to-end: tapping a default-emoji cell inserts the token into the composer's real `ExtendedTextField` controller as exactly `" [TUIEmoji_Smile]"` (A4 — the empty-field leading-space branch in the real `input_desktop.uikitListener` type-0 path). The token-transport-as-text and inline-image bubble substitution (A6/A7, render-only) still need a real native backend (L2/L3).
+**Covered-by**: `test/ui/chat/sticker_send_real_ui_test.dart`
 
 ## Precondition
 - Account A logged in, plaintext, sidebar reached `<nicknameA>\nOnline` (or `Connecting`)

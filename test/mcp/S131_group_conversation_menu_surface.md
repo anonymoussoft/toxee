@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online groups=[gidG] history=seeded`
 **Harness mode**: peerHarness=none (single-instance real UI)
 **Promotion target**: L1/L3 candidate once right-click/long-press on group rows is runner-covered; adjacent sibling is S117
-**Status**: covered — **live-validated 2026-06-08** by the `group_conversation_menu` real-UI gate (`drive_real_ui_pair.dart`, campaign `group-menu-surface`): A creates a group, opens its conversation-row context menu via the ungated `l3_open_conversation_menu` deep-link (flutter_skill cannot right-click / long-press), and asserts the Pin + Mark-as-read + Delete item keys surface. Single-instance (no friendship).
+**Status**: covered at the widget layer (L1) — NGC group row tap selecting currentConversation + menu item key enumeration (pin/mark-read/delete present; unpin absent when unpinned; unpin present and pin absent when pinned) are gated by `test/ui/conversation/conversation_row_menu_group_real_ui_test.dart`. Also live-validated 2026-06-08 by the `group_conversation_menu` real-UI gate.
+**Covered-by**: `test/ui/conversation/conversation_row_menu_group_real_ui_test.dart`
 
 ## Precondition
 - Group `<gidG>` is visible in the chats list.

@@ -4,8 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online friends=1 history=seeded`
 **Harness mode**: peerHarness=echo_live
 **Promotion target**: L2/L1 — the deterministic typing+Enter→real-send is ALREADY a PASSING WidgetTester (`test/ui/chat_core_real_ui_test.dart:191`, "desktop composer: typing + Enter invokes the real send path"). The live-DHT round-trip stays L3 (a real peer is L3-only).
-**Status**: **covered (L1 WidgetTester gate #1 exists for typing + Enter → real send; live send is L3).** The marionette desktop send needs a REAL OS Return (synthetic Enter does NOT reach the legacy `RawKeyEvent` handler); the deterministic send→persist assertion belongs at L1 (REAL_UI_GATES #1).
-**Covered-by**: test/ui/chat_core_real_ui_test.dart
+**Status**: **covered (L1 WidgetTester gates exist for both the DESKTOP typing + Enter → real send AND the MOBILE in-row send affordance; live send is L3).** The marionette desktop send needs a REAL OS Return (synthetic Enter does NOT reach the legacy `RawKeyEvent` handler); the deterministic send→persist assertion belongs at L1 (REAL_UI_GATES #1). The MOBILE leg ("mobile sends via the in-row send affordance", below) is now covered at the widget layer (L1): typing into the real `TencentCloudChatMessageInputMobile` field reveals the production send button (an empty field shows the press-to-record mic instead) and tapping it drives the real `sendTextMessage` path.
+**Covered-by**: test/ui/chat_core_real_ui_test.dart (desktop Enter→send); test/ui/mobile/mobile_composer_real_ui_test.dart (mobile in-row send affordance, L1)
 
 > The composer is the toxee override boundary (`KeyedSubtree(key: UiKeys.chatInputTextField)`, home_page_bootstrap.dart:628-629) wrapping the UIKit fork input. S120 = focus the composer, type, and send; assert the self message persists. Desktop send is Enter-only (no tappable Send button); mobile sends via the in-row send affordance.
 

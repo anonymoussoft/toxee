@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any friends=1(F, echo-peer seed) history=seeded`
 **Harness mode**: peerHarness=echo_seeded
 **Promotion target**: L3-pinned for the real-tap path (the `Switch.onChanged` → `_setC2CReceiveOpt` → `setC2CReceiveMessageOpt` + UIKit conversation-cache write needs the real engine + Prefs); the OS-banner-suppression PROOF stays the two-process `run_fixture_c_mute.sh` (S83). The setting round-trip is an L1/L2 candidate behind a seam.
-**Status**: covered (data-half gate exists — `l3_recvopt_mute_toggle` proves `conversations[].recvOpt` 0→2→0; the real mute-switch tap is L3 / L1 WidgetTester candidate, not yet a runnable UI gate)
+**Status**: covered — the real mute-switch tap is covered at the widget layer (L1): tapping the real Do-Not-Disturb `Switch` dispatches the production receive-opt write (mute=`V2TIM_RECEIVE_NOT_NOTIFY_MESSAGE`, unmute=`V2TIM_RECEIVE_MESSAGE`) for the friend, and the switch state persists across both flips. Captured at the SDK-call boundary via the widget's canonical `setC2CReceiveMessageOpt` constructor seam — the vendored v2_tim_message_manager.dart routes this call platform-side only under `kIsWeb`, so the platform-layer capture used by S111/S113 is unreachable here. The data-half (`l3_recvopt_mute_toggle` proves `conversations[].recvOpt` 0→2→0) remains covered by the L3 scenario; the OS-banner-suppression proof stays S83.
+**Covered-by**: test/ui/contact/friend_profile_ops_real_ui_test.dart (S114 widget-layer switch), tool/mcp_test/scenarios/l3_recvopt_mute_toggle.json (data-half)
 
 > Real-tap upgrade of S83's setting half. S83's runner gate drives `l3_set_c2c_recv_opt` directly; S114 drives the actual Do-Not-Disturb `Switch` so `_setC2CReceiveOpt(true)` and the UIKit conversation-cache `recvOpt` write are exercised through a real tap.
 
@@ -23,7 +24,7 @@
 dart run tool/mcp_test/run_l3_scenarios.dart --only L3-recvopt-mute-toggle
 ```
 
-`tool/mcp_test/scenarios/l3_recvopt_mute_toggle.json` is the hermetic data-half: it waits for the seeded conversation to hydrate and to NOT already carry `recvOpt: 2`, calls `set_recv_opt {opt: 2}` (= `l3_set_c2c_recv_opt`), asserts `state{field: conversations, contains: "recvOpt: 2"}`, then restores `opt: 0` and asserts `notContains: "recvOpt: 2"`. `recvOpt == 2` is the exact input `_shouldSuppress` reads (notification_message_listener.dart:224). It does NOT tap the `Switch` — that real-tap leg is the S114 UI Driver below and has no runnable UI gate yet. The OS-banner-absence proof remains the two-process `tool/mcp_test/run_fixture_c_mute.sh` (S83).
+`tool/mcp_test/scenarios/l3_recvopt_mute_toggle.json` is the hermetic data-half: it waits for the seeded conversation to hydrate and to NOT already carry `recvOpt: 2`, calls `set_recv_opt {opt: 2}` (= `l3_set_c2c_recv_opt`), asserts `state{field: conversations, contains: "recvOpt: 2"}`, then restores `opt: 0` and asserts `notContains: "recvOpt: 2"`. `recvOpt == 2` is the exact input `_shouldSuppress` reads (notification_message_listener.dart:224). It does NOT tap the `Switch` — that real-tap leg is now covered at the widget layer (L1) by `test/ui/contact/friend_profile_ops_real_ui_test.dart` (real Switch taps → `setC2CReceiveMessageOpt` captured at the SDK-call boundary via the widget's constructor seam, both flips + state persistence); the live-engine walkthrough below remains the L3 variant. The OS-banner-absence proof remains the two-process `tool/mcp_test/run_fixture_c_mute.sh` (S83).
 
 ## UI Driver
 1. `marionette.tap(UiKeys.sidebarContacts)` (`sidebar_contacts_tab`).

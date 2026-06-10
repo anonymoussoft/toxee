@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=any friends=1 history=seeded`
 **Harness mode**: peerHarness=echo_seeded
 **Promotion target**: L1 WidgetTester — the conversation right-click menu already opens in a real-UI gate (`test/ui/chat_core_real_ui_test.dart:368`, "conversation list item: right-click opens the real context menu"); pinning the keyed item is the L1-promotable step. L3 today because the marionette right-click / long-press menu-open gesture path is not yet a runnable gate.
-**Status**: covered (this is the real-MENU upgrade of S84's hermetic `l3_set_pinned` data-half; the menu-item TAP itself is a marionette UI step, NOT executable). The data-half gate `l3_pin_toggle.json` remains the stable hard gate.
+**Status**: covered at the widget layer (L1) — the pin/unpin key flip (isPinned controls which key is exposed) is gated by `test/ui/conversation/conversation_row_menu_c2c_real_ui_test.dart` (tests "S116 C2C conversation-row menu pin item key flips with pinned state" and "S116 C2C pin and unpin items both carry value:pin"). The data-half gate `l3_pin_toggle.json` remains the stable hard gate for the Prefs round-trip.
+**Covered-by**: `test/ui/conversation/conversation_row_menu_c2c_real_ui_test.dart`
 
 > Real-MENU upgrade of S84. S84 drives `FakeConversationManager.setPinned` directly (hermetic data-half). S116 opens the row's REAL context menu and taps the keyed Pin / Unpin item, so the toggle flows through the actual UI path: menu item → `pinConversation` (home_page.dart:1601-1605).
 

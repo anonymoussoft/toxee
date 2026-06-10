@@ -105,7 +105,17 @@ Widget _directHarness(_StubFfiChatService service) {
     supportedLocales: const [Locale('en')],
     home: Scaffold(
       body: SingleChildScrollView(
-        child: AddGroupDialog(service: service, onShowSnackBar: (_) {}),
+        child: AddGroupDialog(
+          service: service,
+          onShowSnackBar: (_) {},
+          // The production create path now installs a default group avatar
+          // (real asset+file IO via DefaultAvatarInstaller) — inject the seam
+          // the dialog exposes for exactly this, or the IO never completes
+          // under FakeAsync and pumpAndSettle times out.
+          installDefaultGroupAvatar:
+              ({required String groupId, String? toxId}) async =>
+                  '/tmp/$groupId-default.png',
+        ),
       ),
     ),
   );

@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any friends=1 history=present(c2c with F)`
 **Harness mode**: peerHarness=echo_seeded
 **Promotion target**: L3-pinned because the flow exercises toxee's overridden conversation context menu (`home_page.dart:1442-1577`) plus a confirmation dialog plus the FfiChatService disk-cleanup chain — needs the real binary's post-frame handler registration. Sibling of S28 (which deletes the friend itself); the discriminator is friendship intact vs not.
-**Status**: covered (assertions A3+A4+A7+A9 are the primary gates)
+**Status**: covered at the widget layer (L1) — friendship-preservation surface (delete-conversation dialog title is deleteConversationTitle, distinct from any friend-removal dialog; confirm button is the conversation-delete key) is gated by `test/ui/conversation/conversation_row_menu_c2c_real_ui_test.dart` (test "S20 C2C delete dialog labels the action as delete-conversation (not delete-friend)"). Full data-layer gates (A3+A4+A7+A9) require the live L3 path.
+**Covered-by**: `test/ui/conversation/conversation_row_menu_c2c_real_ui_test.dart`
 
 ## Precondition
 - **Seeded fixture**: `bash tool/mcp_test/restore_echo_peer_seed.sh` — restores `~/Library/Containers/com.toxee.app/Data/...` (profiles + account_data) + Prefs (`flutter.account_list`, `flutter.current_account_tox_id`, `flutter.local_friends_<prefix>`, scoped per-account keys) from cached tarball at `tool/mcp_test/fixtures/.cache/echo_peer_seeded_<machine_id>.tar.zst`. The restore wipes existing toxee state.

@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online sessionPwd=any locale=fresh`
 **Harness mode**: peerHarness=none
 **Promotion target**: L2 candidate for non-RTL flips (zh↔en); L3-pinned for Arabic RTL because Directionality propagation through `MaterialApp.locale` needs full widget tree
-**Status**: covered
+**Status**: covered at the widget layer (L1). A real app shell wired to the PRODUCTION `AppLocale.locale` notifier (mirroring `main.dart`'s root `MaterialApp.locale`) with the REAL `GlobalSettingsSection`: a real tap on the real language picker (`简体中文`) flips `AppLocale.locale` to zh/Hans AND live-rebuilds a descendant `AppLocalizations` string (`Appearance` → `外观`); selecting `العربية` flips the ambient `Directionality` of descendants to RTL. The Prefs write-back half is gated separately in `settings_sections_global_real_ui_test.dart`; full multi-delegate sidebar snapshots + `defaults read` persistence remain L2/L3.
+**Covered-by**: `test/ui/settings/theme_locale_live_apply_real_ui_test.dart` (live-apply; Prefs write-back in `test/ui/settings/settings_sections_global_real_ui_test.dart`)
 
 ## Precondition
 - One signed-in account A on HomePage.

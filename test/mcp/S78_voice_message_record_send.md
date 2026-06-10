@@ -4,7 +4,9 @@
 **Fixture vector**: `accounts=2 current=A autoLogin=on network=online friends=1(paired, both online) history=empty`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned — record dialog gates on a real mic (`AudioRecorder.hasPermission()`, `tencent_cloud_chat_message_input_recording_desktop.dart:73`) AND delivery confirmation needs a second live toxee receiving the sound file over the DHT (Fixture C).
-**Status**: covered by executable Fixture C gate — `tool/mcp_test/run_fixture_c_voice_msg.sh` (a voice message is an audio file send: l3_send_file with a .ogg name → mediaKind='audio' on the sender, auto-accepted with mediaKind='audio' on the receiver). Validated live 2026-06-01.
+**Status**: end-to-end delivery is covered by the Fixture C gate `tool/mcp_test/run_fixture_c_voice_msg.sh` (a voice message is an audio file send: l3_send_file with a .ogg name → mediaKind='audio' on the sender, auto-accepted with mediaKind='audio' on the receiver; validated live 2026-06-01). The MOBILE record UI half is additionally covered at the widget layer (L1): the production `TencentCloudChatMessageInputRecording` state machine (start → recording-state render → slide-to-cancel-no-send → normal-release voice-message path) and the press-and-hold mic affordance in `TencentCloudChatMessageInputMobile` are driven directly with the `record` plugin MethodChannel stubbed (no real microphone).
+
+**Covered-by** (mobile record UI, L1): `test/ui/mobile/mobile_voice_record_real_ui_test.dart`
 
 ## Precondition
 - Feature IS implemented (see Notes for send chain).

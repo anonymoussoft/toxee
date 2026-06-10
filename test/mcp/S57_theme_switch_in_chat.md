@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=online history=≥3-msgs theme=light`
 **Harness mode**: peerHarness=none
 **Promotion target**: L2 candidate — hermetic test with pumped `MaterialApp` and stub chat panel can cover A1/A2/A3/A11; L3-pinned today because pixel-sample assertions (A4/A5/A6) require a real render and DHT-online sidebar.
-**Status**: covered.
+**Status**: covered at the widget layer (L1). A real app shell wired to the PRODUCTION `AppTheme.mode` notifier (mirroring `main.dart`'s root `MaterialApp.themeMode`) with the REAL `GlobalSettingsSection`: a real tap on the real `SegmentedButton<ThemeMode>` "Dark" segment drives `applyThemeModeEverywhere`, flips a descendant `Theme.of(context).brightness` light→dark, and rebuilds a real fork chat subtree (`TencentCloudChatThemeWidget`) across the change without throwing — with its UIKit `colorTheme.backgroundColor` flipping too (the brightness eventBus the applier fires, i.e. the `_syncUIKitThemeBrightness`/A11 line). The pixel-sample assertions (A4/A5/A6/A7) and the in-flight `TextEditingController`-survives-rebuild checks (A1/A2/A3, IndexedStack) still need a real render (L3).
+Covered-by: test/ui/settings/theme_locale_live_apply_real_ui_test.dart (theme live-apply; Prefs write-back in test/ui/settings/settings_sections_global_real_ui_test.dart)
 
 ## Precondition
 - Account A signed in, online, plaintext profile.

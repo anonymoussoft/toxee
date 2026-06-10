@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=toggle(online→offline→online) friends=1 history=seeded`
 **Harness mode**: peerHarness=echo_live
 **Promotion target**: L3-pinned — proving the resend lands needs live DHT delivery against a real peer; an L2 stub can flip `isPending`/`SEND_FAIL` but can't prove network arrival.
-**Status**: covered (two retry paths — V1 auto-drain, V2 tap-to-resend)
+**Covered-by**: `test/ui/chat/message_pending_resend_real_ui_test.dart` (UI half of V2: pending spinner render, SEND_FAIL Retry affordance render, tap-to-resend → real `onResendMessage` re-dispatch of the same msgID, and the failed→succeeded bubble flip; mobile + desktop bubble branches).
+**Status**: covered. Network-delivery + V1 offline-queue auto-drain stay L3-pinned (live DHT arrival cannot be proven at the widget layer). The V2 tap-to-resend UI is additionally covered at the widget layer (L1) by the real production status indicator + resend handler. V1 has NO tappable affordance (the refresh glyph is SEND_FAIL-gated only, per Notes), so only V2 is widget-reachable.
 
 ## Precondition
 - Account A plaintext; friend F == echo peer, paired + reachable on the DHT (`bash tool/mcp_test/ensure_echo_peer.sh`; read 76-char `peer_id` from `tool/mcp_test/echo_peer.json`).

@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=any(offline OK) friends=1 history=seeded(2)`
 **Harness mode**: peerHarness=echo_seeded
 **Promotion target**: L3-pinned — ground truth is the OS pasteboard (`pbpaste`), a cross-process read no in-Dart `TestWidgetsFlutterBinding` can observe. L2 could probe `Clipboard.setData` via a channel double, but that proves the call, not that text landed on the system clipboard.
-**Status**: covered (received + self variants)
+**Status**: covered (received + self variants). Also covered at the widget layer (L1) by WidgetTester real-UI gates that intercept the `SystemChannels.platform` method handler: the real `Copy` menu item handler calls `Clipboard.setData` with the verbatim message text, which is captured and asserted byte-identical to the fixture bubble text.
+**Covered-by**: test/ui/chat/message_actions_menu_real_ui_test.dart (desktop), test/ui/chat/message_actions_menu_mobile_real_ui_test.dart (mobile)
 
 ## Precondition
 - A signed in, plaintext. No `Online` requirement — copy works pre-DHT-bootstrap.

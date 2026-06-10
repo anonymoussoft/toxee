@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=any friends=1 history=seeded(1 inbound unread)`
 **Harness mode**: peerHarness=echo_seeded
 **Promotion target**: L1 WidgetTester — `chat_core_real_ui_test.dart:368` already proves the REAL conversation context menu opens on right-click (`find.text('Delete')`); enumerating the keyed items is the L1-promotable surface gate.
-**Status**: covered (surface gate only — item side effects are S116 pin / S118 mark-read / S119 delete). NOT "covered (executable)": the marionette menu-open + item-enumeration is a UI step, not a runnable gate.
+**Status**: covered at the widget layer (L1) — C2C row tap selecting currentConversation + menu item key enumeration (pin/mark-read/delete present; unpin absent when unpinned; unpin present and pin absent when pinned) are gated by `test/ui/conversation/conversation_row_menu_c2c_real_ui_test.dart`.
+**Covered-by**: `test/ui/conversation/conversation_row_menu_c2c_real_ui_test.dart`
 
 S117 = the conversation-row analog of S15 (which gates the MESSAGE context-menu surface). Surface gate only: assert the expected keyed items are present and the menu dismisses with zero side effects. Tap-item behavior belongs to S116/S118/S119.
 

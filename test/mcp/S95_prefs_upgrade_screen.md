@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=0-or-1 current=any autoLogin=any network=offline prefsSchemaVersion=NEWER`
 **Harness mode**: peerHarness=none
 **Promotion target**: L2 candidate — `PrefsUpgrader.run` + `UpgradeRequiredApp` could be exercised in a pure widget test with a `SharedPreferences.setMockInitialValues({'prefs_schema_version': 99})` + pumped `UpgradeRequiredApp`. L3-pinned here because the assertion is the REAL cold-start branch in `main()` (the `runApp(UpgradeRequiredApp(...))` arm), which only fires through the full `AppBootstrap.initialize()` → `PrefsBootstrap.initialize()` path.
-**Status**: covered (requires a crafted Prefs fixture; NOT the runner's seeded account). Feature **A3** (Prefs 版本/升级检测 → 升级屏; `lib/bootstrap/prefs_bootstrap.dart`, `lib/util/prefs_upgrader.dart`, `lib/ui/upgrade_required_screen.dart`).
+**Status**: covered. The `UpgradeRequiredScreen` surface (title, version-aware message body, system-update chip, and the primary "Update" action firing its production handler) is now covered at the widget layer (L1). The end-to-end cold-start gate (the `main()` upgrade arm reached via the crafted Prefs fixture) remains an L3 playbook, since it needs a deliberately-newer `prefs_schema_version` store that the runner's seeded account never has. Feature **A3** (Prefs 版本/升级检测 → 升级屏; `lib/bootstrap/prefs_bootstrap.dart`, `lib/util/prefs_upgrader.dart`, `lib/ui/upgrade_required_screen.dart`).
+**Covered-by**: `test/ui/startup/upgrade_required_screen_real_ui_test.dart` (widget-layer L1: renders the real `UpgradeRequiredScreen`; the "Update" button drives its production handler via the canonical `onUpdate` ctor seam over `_openReleasesPage`).
 
 ## Precondition
 - A crafted SharedPreferences store where the global schema key `prefs_schema_version` holds an int GREATER than `currentGlobalPrefsVersion` (currently **2**, `prefs_upgrader.dart:7` / key `prefs_schema_version`, `prefs_upgrader.dart:21`). Pre-write e.g. `99`.

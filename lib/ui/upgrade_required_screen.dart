@@ -125,10 +125,16 @@ class UpgradeRequiredScreen extends StatelessWidget {
     super.key,
     required this.storedVersion,
     required this.currentVersion,
+    this.onUpdate,
   });
 
   final int storedVersion;
   final int currentVersion;
+
+  /// Seam: invoked by the primary "Update" action. Defaults to opening the
+  /// canonical releases page in the system browser. Overridable so the real
+  /// button handler can be driven in widget tests without a live url_launcher.
+  final Future<void> Function()? onUpdate;
 
   Future<void> _openReleasesPage() async {
     final uri = Uri.parse(_kReleasesUrl);
@@ -206,7 +212,7 @@ class UpgradeRequiredScreen extends StatelessWidget {
                   // Primary action: open the releases page in the system
                   // browser so the user can download the latest build.
                   FilledButton.icon(
-                    onPressed: _openReleasesPage,
+                    onPressed: onUpdate ?? _openReleasesPage,
                     icon: const Icon(Icons.open_in_new),
                     label: Text(l10n.update),
                     style: FilledButton.styleFrom(

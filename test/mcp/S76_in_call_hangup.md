@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=2 current=A autoLogin=on network=online friends=1`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned — ending a *connected* call needs two live toxees + a real ToxAV media leg; no L2 surface produces a real `inCall`.
-**Status**: covered by executable Fixture C call gate — `tool/mcp_test/run_fixture_c_call.sh voice` (from `inCall`, A `l3_call_action hangup`; both A and B return to `ended`/`idle`). Validated live 2026-06-01.
+**Covered-by**: `test/ui/call/in_call_controls_real_ui_test.dart` (UI half, L1 widget-layer); `tool/mcp_test/run_fixture_c_call.sh voice` (L3 two-process teardown).
+**Status**: UI half covered at the widget layer (L1) — `test/ui/call/in_call_controls_real_ui_test.dart` pumps the real `CallOverlay` (its `ListenableBuilder` + `AnimatedSwitcher` view switching) from a connected `inCall` (A1) and taps the real `UiKeys.callHangupButton`, asserting the tap dispatches `hangUp` exactly once through the production `CallOverlayManager` interface (manager = test double delegating to the same `CallStateNotifier.endCall()` the production `CallServiceManager` calls; the real teardown body stays on the 2proc gate), the call ends, and the real overlay reflects it — `ValueKey('inCall')` leaves, the brief `ValueKey('ended')` affordance (`callEnded`) shows, then the overlay auto-resets back to its child (A4). The connected two-process teardown (A2 call record, A6 peer `stateFinished`) stays L3-pinned and is exercised by `tool/mcp_test/run_fixture_c_call.sh voice` (from `inCall`, A `l3_call_action hangup`; both A and B return to `ended`/`idle`; validated live 2026-06-01).
 
 ## Precondition
 - A signed in, online; one C2C with paired friend B (`friends=1`); both Online.

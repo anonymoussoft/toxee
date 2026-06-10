@@ -25,11 +25,47 @@ import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_common/utils/tencent_cloud_chat_utils.dart';
 
 /// Custom search component to replace tencent_cloud_chat_search
+/// Raw (pre-filter) search inputs for the GLOBAL search path. In production
+/// these come from the FFI-backed `searchSDK`; the optional
+/// [CustomSearch.rawSearchDataOverride] seam lets a test feed them directly so
+/// the REAL keyword filter (`_matchesKeywordCaseInsensitive`), row render, and
+/// highlight run without the singleton SDK/FFI stack.
+typedef RawGlobalSearchData = ({
+  List<V2TimFriendInfoResult> contacts,
+  List<V2TimGroupInfo> groups,
+  List<TencentCloudChatSearchResultItemData> messages,
+});
+
+/// Fetches the raw global-search inputs for [keyword].
+typedef RawGlobalSearchFetcher = Future<RawGlobalSearchData> Function(
+  String keyword,
+);
+
+/// Opens the target conversation for a tapped result. In production this drives
+/// the UIKit data facade + conversation SDK ([_CustomSearchState._navigateToMessage]);
+/// the optional [CustomSearch.onOpenConversation] seam lets a test observe the
+/// open-target without the singleton.
+typedef OpenConversationCallback = void Function({
+  String? userID,
+  String? groupID,
+  V2TimMessage? targetMessage,
+});
+
 class CustomSearch extends StatefulWidget {
   final String? userID;
   final String? groupID;
   final String? keyWord;
   final VoidCallback? closeFunc;
+
+  /// Test seam: when set, replaces the FFI-backed `searchSDK` fetch in the
+  /// GLOBAL search path. The real keyword filter + render + highlight still run
+  /// on the supplied data. Production leaves this null.
+  final RawGlobalSearchFetcher? rawSearchDataOverride;
+
+  /// Test seam: when set, [_CustomSearchState._navigateToMessage] reports the
+  /// open-target here instead of mutating the UIKit data facade. Production
+  /// leaves this null.
+  final OpenConversationCallback? onOpenConversation;
 
   const CustomSearch({
     super.key,
@@ -37,6 +73,8 @@ class CustomSearch extends StatefulWidget {
     this.groupID,
     this.keyWord,
     this.closeFunc,
+    this.rawSearchDataOverride,
+    this.onOpenConversation,
   });
 
   @override
@@ -250,7 +288,7 @@ class _CustomSearchState extends State<CustomSearch> {
     try {
       if (_isGlobalSearch) {
         final keyword = _searchKeyword.trim();
-        final searchSDK = TencentCloudChat.instance.chatSDKInstance.searchSDK;
+        final override = widget.rawSearchDataOverride;
 
         // Use cached contacts/groups when refining an existing query (incremental typing).
         final bool canFilterLocally =
@@ -259,31 +297,43 @@ class _CustomSearchState extends State<CustomSearch> {
 
         List<V2TimFriendInfoResult> rawContacts;
         List<V2TimGroupInfo> rawGroups;
-        (int?, String?, List<TencentCloudChatSearchResultItemData>, String?)
-        messageResult;
+        List<TencentCloudChatSearchResultItemData> rawMessages;
 
-        if (canFilterLocally) {
-          rawContacts = _cachedRawContacts;
-          rawGroups = _cachedRawGroups;
-          messageResult = await searchSDK.searchMessages(keyword: keyword);
+        if (override != null) {
+          // Test seam: supply raw inputs; the real filter/render/highlight run
+          // below. No singleton SDK/FFI or local-history fallback is touched.
+          final data = await override(keyword);
+          rawContacts = data.contacts;
+          rawGroups = data.groups;
+          rawMessages = data.messages;
         } else {
-          final results = await Future.wait([
-            searchSDK.searchContacts(keyword),
-            searchSDK.searchGroups(keyword),
-            searchSDK.searchMessages(keyword: keyword),
-          ]);
-          rawContacts = results[0] as List<V2TimFriendInfoResult>;
-          rawGroups = results[1] as List<V2TimGroupInfo>;
-          messageResult =
-              results[2]
-                  as (
-                    int?,
-                    String?,
-                    List<TencentCloudChatSearchResultItemData>,
-                    String?,
-                  );
-          _cachedRawContacts = rawContacts;
-          _cachedRawGroups = rawGroups;
+          final searchSDK = TencentCloudChat.instance.chatSDKInstance.searchSDK;
+          (int?, String?, List<TencentCloudChatSearchResultItemData>, String?)
+          messageResult;
+          if (canFilterLocally) {
+            rawContacts = _cachedRawContacts;
+            rawGroups = _cachedRawGroups;
+            messageResult = await searchSDK.searchMessages(keyword: keyword);
+          } else {
+            final results = await Future.wait([
+              searchSDK.searchContacts(keyword),
+              searchSDK.searchGroups(keyword),
+              searchSDK.searchMessages(keyword: keyword),
+            ]);
+            rawContacts = results[0] as List<V2TimFriendInfoResult>;
+            rawGroups = results[1] as List<V2TimGroupInfo>;
+            messageResult =
+                results[2]
+                    as (
+                      int?,
+                      String?,
+                      List<TencentCloudChatSearchResultItemData>,
+                      String?,
+                    );
+            _cachedRawContacts = rawContacts;
+            _cachedRawGroups = rawGroups;
+          }
+          rawMessages = messageResult.$3;
         }
         _lastSearchedKeyword = keyword;
 
@@ -299,10 +349,13 @@ class _CustomSearchState extends State<CustomSearch> {
           return _matchesKeywordCaseInsensitive(e.groupName, keyword) ||
               _matchesKeywordCaseInsensitive(e.groupID, keyword);
         }).toList();
-        List<TencentCloudChatSearchResultItemData> messages = messageResult.$3;
+        List<TencentCloudChatSearchResultItemData> messages = rawMessages;
 
-        // When SDK returns no message results, search chat content locally (in-memory + persisted history)
-        if (messages.isEmpty) {
+        // When SDK returns no message results, search chat content locally
+        // (in-memory + persisted history). Skipped under the test seam, whose
+        // supplied messages are authoritative (the seam must not reach the
+        // singleton-backed local fallback).
+        if (messages.isEmpty && widget.rawSearchDataOverride == null) {
           messages = await _searchLocalMessageContent(keyword);
         }
 
@@ -466,6 +519,17 @@ class _CustomSearchState extends State<CustomSearch> {
     String? groupID,
     V2TimMessage? targetMessage,
   }) async {
+    final openOverride = widget.onOpenConversation;
+    if (openOverride != null) {
+      // Test seam: observe the open-target instead of mutating the UIKit data
+      // facade / hitting the singleton conversation SDK.
+      openOverride(
+        userID: userID,
+        groupID: groupID,
+        targetMessage: targetMessage,
+      );
+      return;
+    }
     if (targetMessage != null) {
       UikitDataFacade.currentTargetMessage = targetMessage;
     }
@@ -686,6 +750,11 @@ class _CustomSearchState extends State<CustomSearch> {
               label: l10n.searchResultContactSemantics(name),
               button: true,
               child: ListTile(
+                // Keyed so UI automation taps THIS contact row deterministically
+                // (the highlighted title is a RichText, and tapping by name
+                // collides with the query text in the search field). onTap opens
+                // the C2C chat via _navigateToMessage(userID:).
+                key: UiKeys.searchResultContact(uid),
                 leading: _avatarWidget(faceUrl, const Icon(Icons.person)),
                 title: _buildHighlightedText(
                   name,

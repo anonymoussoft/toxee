@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online→offline→online sessionPwd=none profileCrypt=plaintext`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned because requires real `ifconfig <iface> down/up` (root) and live Tox DHT recovery
-**Status**: covered
+**Status**: covered. The full offline→online round-trip (sidebar dot/label flip driven by the real DHT) stays an L3 playbook. The **UI half** — the connection-status banner reacting to the production `isConnected` stream (`FfiChatService.connectionStatusStream`), plus the send-error banner — is now covered at the widget layer (L1).
+**Covered-by** (UI half): `test/ui/home/home_banners_real_ui_test.dart` (widget-layer L1: drives the real `ConnectionStatusBanner` via its production `Stream<bool>` status source — offline tick shows the banner, reconnect collapses it, banner tap invokes the production `onRetry`; also covers the `ErrorBanner` send-error surface and its retry/dismiss handlers).
 
 Connection-state-only baseline. Sister scenario `S25_offline_queue.md` is the messages-queued variant; S25 depends on S10 passing.
 

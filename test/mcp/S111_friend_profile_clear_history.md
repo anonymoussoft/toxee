@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any friends=1(F, echo-peer seed, ≥3 persisted C2C messages) history=seeded`
 **Harness mode**: peerHarness=echo_seeded
 **Promotion target**: L3-pinned for the real-UI tap path (UIKit profile body + adaptive confirm dialog mount under the real engine); the data-half is hermetic and already gated. The destructive `clearC2CHistoryMessage` + dialog confirm is a WidgetTester (L1) candidate once the profile body can be mounted behind a seam.
-**Status**: covered (data-half gate exists — `l3_clear_history` proves messageCount→0; the real-UI clear-history tap + confirm dialog is L3 / L1 WidgetTester candidate, not yet a runnable UI gate)
+**Status**: covered — the real-UI tap path is covered at the widget layer (L1): the destructive clear-history row opens the real adaptive confirm dialog, Cancel dispatches nothing, Confirm dispatches the production `clearC2CHistoryMessage(userID)` (captured at the `TencentCloudChatSdkPlatform` routing layer) and dismisses the dialog. The data-half (`l3_clear_history` proves messageCount→0) remains covered by the L3 scenario.
+**Covered-by**: test/ui/contact/friend_profile_ops_real_ui_test.dart (S111 widget-layer tap + dialog), tool/mcp_test/scenarios/l3_clear_history.json (data-half)
 
 > Real-UI upgrade of the `l3_clear_history` reset primitive. That gate drives `clear_history` directly; S111 drives it through the actual friend-profile destructive row + confirm dialog so the upper row (`deleteAllMessages`) is exercised distinctly from the lower delete-friend row (S112).
 
@@ -23,7 +24,7 @@
 dart run tool/mcp_test/run_l3_scenarios.dart --only L3-clear-history
 ```
 
-`tool/mcp_test/scenarios/l3_clear_history.json` is the hermetic data-half: it sends 3 self texts carrying a per-run `{{nonce}}`, waits for the last to persist, calls the `clear_history` action (= `l3_clear_history`), then asserts each text's `message_count_text == 0` AND the conversation-wide `state{field: messageCount, equals: 0}`. This proves the clear path empties persistence. It does NOT tap the profile-body destructive row or mount the confirm dialog — that real-UI leg is the S111 UI Driver below and has no runnable UI gate yet.
+`tool/mcp_test/scenarios/l3_clear_history.json` is the hermetic data-half: it sends 3 self texts carrying a per-run `{{nonce}}`, waits for the last to persist, calls the `clear_history` action (= `l3_clear_history`), then asserts each text's `message_count_text == 0` AND the conversation-wide `state{field: messageCount, equals: 0}`. This proves the clear path empties persistence. It does NOT tap the profile-body destructive row or mount the confirm dialog — that leg is now covered at the widget layer (L1) by `test/ui/contact/friend_profile_ops_real_ui_test.dart` (row tap → real confirm dialog → cancel/confirm legs); the live-engine walkthrough below remains the L3 variant.
 
 ## UI Driver
 1. `marionette.tap(UiKeys.sidebarContacts)` (`sidebar_contacts_tab`); wait for the Contacts tab.

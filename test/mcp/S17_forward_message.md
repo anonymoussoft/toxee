@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A autoLogin=on network=online friends=2 history=seeded`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned because picker is UIKit `TencentCloudChatDesktopPopup` overlay / `showModalBottomSheet` with no toxee builder slot; needs UIKit-fork keys for stable targeting
-**Status**: covered (online default + offline-target + multi-target sub-variants)
+**Status**: covered (online default + offline-target + multi-target sub-variants). Also covered at the widget layer (L1) by WidgetTester real-UI gates: the desktop gate drives the REAL `Forward` menu item tap → `TencentCloudChatDesktopPopup` forward-picker overlay → target-row selection → `Send` → asserts the real `createForwardMessage` and `sendMessage` recording SDK calls. The mobile gate now drives the FULL chain: long-press → `Forward` item → bottom-sheet opens without layout overflow → target selected → `Send` → asserts `createForwardMessage` and `sendMessage` recording calls. The prior mobile overflow bug (Row without Expanded in `_renderHeader()` at `tencent_cloud_chat_message_forward.dart:44`) was fixed (2026-06-10); the mobile gate is no longer presence-only.
+**Covered-by**: test/ui/chat/message_actions_menu_real_ui_test.dart (desktop; full end-to-end), test/ui/chat/message_actions_menu_mobile_real_ui_test.dart (mobile; full end-to-end including overflow fix)
 
 Shares menu-open path with S15/S18.
 

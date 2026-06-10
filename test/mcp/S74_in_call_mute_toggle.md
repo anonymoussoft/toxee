@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=2 current=A autoLogin=on network=online friends=1`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned — real ToxAV audio leg + connected two-process call; no L2 surface.
-**Status**: covered by executable Fixture C call gate — `tool/mcp_test/run_fixture_c_call.sh voice` (in an `inCall` voice call, A `l3_call_action mute`; `call.isMuted` flips true). Validated live 2026-06-01.
+**Covered-by**: `test/ui/call/in_call_controls_real_ui_test.dart` (UI half, L1 widget-layer); `tool/mcp_test/run_fixture_c_call.sh voice` (L3 two-process media leg).
+**Status**: UI half covered at the widget layer (L1) — `test/ui/call/in_call_controls_real_ui_test.dart` pumps the real `CallOverlay` → `InCallView` dock and taps the real `UiKeys.callMicMuteButton`, asserting the tap dispatches `toggleMute` exactly once through the production `CallOverlayManager` interface (the manager itself is a test double delegating to the same `CallStateNotifier` mutators `CallServiceManager` calls — the real service method body stays on the 2proc gate) and the dock icon/label flip `mic`→`mic_off`/Mute→Unmute and back (A1/A3) while `inCall` persists (A4). The media leg (A2 `avMuteAudioNative`) stays L3-pinned and is exercised by the Fixture C call gate `tool/mcp_test/run_fixture_c_call.sh voice` (in an `inCall` voice call, A `l3_call_action mute`; `call.isMuted` flips true; validated live 2026-06-01).
 
 ## Precondition
 - A and B both online; one C2C (paired); B is a second live toxee.

@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=2 current=A autoLogin=on network=online friends=1`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned — real camera capture + ToxAV video leg + connected two-process video call; no L2 surface.
-**Status**: covered by executable Fixture C call gate — `tool/mcp_test/run_fixture_c_call.sh video` (in an `inCall` video call, A `l3_call_action video`; `call.isVideoEnabled` flips). Validated live 2026-06-01.
+**Covered-by**: `test/ui/call/in_call_controls_real_ui_test.dart` (UI half, L1 widget-layer); `tool/mcp_test/run_fixture_c_call.sh video` (L3 two-process media leg).
+**Status**: UI half covered at the widget layer (L1) — `test/ui/call/in_call_controls_real_ui_test.dart` pumps the real `CallOverlay` → `InCallView` in a VIDEO call and taps the real `UiKeys.callCameraToggleButton`, asserting the tap dispatches `toggleVideo` through the production `CallOverlayManager` interface (manager = test double delegating to the same `CallStateNotifier` mutators `CallServiceManager` calls; the real service method body stays on the 2proc gate) and the dock icon/label flip `videocam`→`videocam_off`/Video off→Video on and back (A1/A3); a second case drives the permission-gate negative (A5) where a denied camera leaves `isVideoEnabled` false and the dock unchanged. Camera capture/PiP (A3 `startCapture`, A4 preview card driven by `manager.previewListenable`) and the ToxAV video leg (A2/A3 `avMuteVideoNative`) stay L3-pinned and are exercised by `tool/mcp_test/run_fixture_c_call.sh video` (in an `inCall` video call, A `l3_call_action video`; `call.isVideoEnabled` flips; validated live 2026-06-01).
 
 ## Precondition
 - A and B both online; one C2C (paired); B is a second live toxee.

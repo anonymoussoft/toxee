@@ -5,7 +5,8 @@
 **Harness mode**: peerHarness=echo_seeded
 **Promotion target**: **L1 WidgetTester candidate** — the modify-remark dialog is a pure UIKit state machine (open → `TextField.onChanged` accumulates → confirm calls `_onChangeFriendRemark`), drivable behind a constructor seam with a stub `setFriendInfo`/Prefs; the only L3-only bit is the real `SharedPreferencesAdapter.setFriendRemark` round-trip, which L2 covers. Sibling of S30 (data-set path) and S28/S111/S112 (same profile-body entry).
 **Runner gate (data-half)**: `tool/mcp_test/scenarios/l3_friend_remark_toggle.json`
-**Status**: covered (data-half gate exists — `l3_friend_remark_toggle` proves `friends[].remark` set/clear round-trip; the real-dialog enter-text + confirm tap is L3 / L1 WidgetTester candidate, not yet a runnable UI gate)
+**Status**: covered — the real-dialog flow is covered at the widget layer (L1): the pencil button opens the real modify-remark `AlertDialog`, typed text + Confirm dispatch the production `setFriendInfo(userID, friendRemark)` (captured at the `TencentCloudChatSdkPlatform` routing layer), the dialog dismisses, and the displayed name live-updates to the saved remark. The data-half (`l3_friend_remark_toggle` proves `friends[].remark` set/clear round-trip) remains covered by the L3 scenario.
+**Covered-by**: test/ui/contact/friend_profile_ops_real_ui_test.dart (S113 widget-layer dialog flow), tool/mcp_test/scenarios/l3_friend_remark_toggle.json (data-half)
 
 > Real-dialog upgrade of S30. S30's runner gate drives `l3_set_friend_remark` directly; S113 drives the actual pencil-button → `AlertDialog` → `TextField` → confirm flow so the dialog state machine and the name-text live update are exercised through real taps.
 
@@ -25,7 +26,7 @@
 dart run tool/mcp_test/run_l3_scenarios.dart --only L3-friend-remark-toggle
 ```
 
-`tool/mcp_test/scenarios/l3_friend_remark_toggle.json` is the hermetic data-half: it waits for the friends list to be free of a `L3rmk-{{nonce}}` remark, sets that nonce remark via `l3_set_friend_remark`, asserts `state{field: friends, contains: L3rmk-{{nonce}}}`, then clears it (empty string) and asserts `state{field: friends, notContains: L3rmk-{{nonce}}}`. This proves the account-scoped `Prefs.setFriendRemark` round-trip (distinct from the Tox `nickName`). It does NOT open the `AlertDialog` or type into the `TextField` — that real-dialog leg is the S113 UI Driver below and has no runnable UI gate yet.
+`tool/mcp_test/scenarios/l3_friend_remark_toggle.json` is the hermetic data-half: it waits for the friends list to be free of a `L3rmk-{{nonce}}` remark, sets that nonce remark via `l3_set_friend_remark`, asserts `state{field: friends, contains: L3rmk-{{nonce}}}`, then clears it (empty string) and asserts `state{field: friends, notContains: L3rmk-{{nonce}}}`. This proves the account-scoped `Prefs.setFriendRemark` round-trip (distinct from the Tox `nickName`). It does NOT open the `AlertDialog` or type into the `TextField` — that real-dialog leg is now covered at the widget layer (L1) by `test/ui/contact/friend_profile_ops_real_ui_test.dart` (pencil tap → real dialog → enter text → confirm → `setFriendInfo` capture + name live-update); the live-engine walkthrough below remains the L3 variant.
 
 ## UI Driver
 1. `marionette.tap(UiKeys.sidebarContacts)` (`sidebar_contacts_tab`).

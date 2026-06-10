@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=toggle(online→offline→online) friends=1(reachable on DHT)`
 **Harness mode**: peerHarness=echo_live
 **Promotion target**: L3-pinned forever — flow requires hard-killing the network (`sudo ifconfig en0 down/up`), force-killing the Toxee binary, real Tox DHT bootstrap on both ends. This is the primary regression gate for the offline-first claim.
-**Status**: covered
+**Covered-by**: `test/ui/chat/message_pending_resend_real_ui_test.dart` (UI half: a pending/in-flight outbound bubble renders the real SENDING spinner — the visible signal A3 asserts; the queue durability + reconnect-drain flow stays L3).
+**Status**: covered. The offline-queue durability + reconnect-deliver flow stays L3-pinned (needs real network flap + SIGKILL + DHT). The pending-bubble rendering that A3 relies on is additionally covered at the widget layer (L1) via the real message status indicator (mobile + desktop).
 
 ## Precondition
 - **Echo peer running**: `bash tool/mcp_test/ensure_echo_peer.sh` — idempotent; on first call, builds + launches the bot if needed; waits for ID emission. Reads `tool/mcp_test/echo_peer.json` to capture `peer_id` (76-char Tox address). Bot auto-accepts friend requests + echoes received c2c text verbatim.

@@ -4,7 +4,8 @@
 **Fixture vector**: `accounts=1 current=A1 autoLogin=on network=any friends=1`
 **Harness mode**: peerHarness=none
 **Promotion target**: L3-pinned because the path is "tap → automatic send" (no Enter), needs the sticker plugin's `getStickerWidgetForMessageItem` asset lookup, and exercises the `__face__:{json}` wire serialization. Sibling of S22 (emoji insertion). The defining invariant: tapping a custom face MUST NOT touch the input text.
-**Status**: covered
+**Status**: covered at the widget layer (L1). Real tap on the REAL vendored sticker panel (`TencentCloudChatStickerPanel`) wired to the REAL desktop composer drives the REAL UIKit event bus: the defining invariant (a custom-face tap leaves the composer text untouched + closes the panel via the real type-1 desktop listener) is asserted, and the real `stickClick{type:1}` event the panel emits — the seam `TencentCloudChatMessageSeparateData.uikitListener` → `sendFaceMessage` consumes — is captured and asserted (incl. the production bracket-strip: the wire name is `gcs00`, not `[gcs00]`). The live-online `__face__:{json}` wire-send + the rendered ~100px sticker bubble (A7/A9) still need a real native backend (L3).
+**Covered-by**: `test/ui/chat/sticker_send_real_ui_test.dart`
 
 ## Precondition
 - Account A logged in, plaintext, sidebar Online/Connecting
