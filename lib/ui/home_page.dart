@@ -47,6 +47,8 @@ import 'package:tencent_cloud_chat_contact/tencent_cloud_chat_contact.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_contact_item.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_contact_group_list.dart';
 import 'contact/contact_builder_override.dart';
+import 'contact/contact_application_item_content_override.dart';
+import 'contact/friend_request_display_name.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile.dart';
 import 'package:tencent_cloud_chat_contact/widgets/tencent_cloud_chat_user_profile_body.dart';
 import 'package:tencent_cloud_chat_intl/tencent_cloud_chat_intl.dart';
@@ -1909,12 +1911,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       );
     }
 
-    final memberList = UikitDataFacade.getGroupMemberList(gid)
-        .whereType<V2TimGroupMemberFullInfo>()
-        .toList();
-    final contactList = List<V2TimFriendInfo>.from(
-      UikitDataFacade.contactList,
-    );
+    final memberList = UikitDataFacade.getGroupMemberList(
+      gid,
+    ).whereType<V2TimGroupMemberFullInfo>().toList();
+    final contactList = List<V2TimFriendInfo>.from(UikitDataFacade.contactList);
 
     // No await between the `mounted` guard and this context use, so the
     // BuildContext is still valid (use_build_context_synchronously is satisfied).
@@ -1955,10 +1955,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // _CastError on submit — record types are matched exactly, and the analyzer
     // can't see across the showDialog/Navigator.pop boundary.
     final result =
-        await showDialog<({String channel, String? password, String? nickname})>(
-      context: context,
-      builder: (ctx) => const IrcChannelDialog(),
-    );
+        await showDialog<
+          ({String channel, String? password, String? nickname})
+        >(context: context, builder: (ctx) => const IrcChannelDialog());
 
     if (result == null || result.channel.isEmpty) return;
 

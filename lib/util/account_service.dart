@@ -13,6 +13,7 @@ import 'prefs.dart';
 import 'prefs_upgrader.dart';
 import 'app_paths.dart';
 import 'account_export_service.dart';
+import 'default_avatar_installer.dart';
 import 'session_password_store.dart';
 import 'group_member_list_debouncer.dart';
 import 'irc_app_manager.dart';
@@ -90,8 +91,9 @@ class AccountService {
     // every subsequent guard skips silently rather than acting on
     // a placeholder.
     final toxId = service?.getSelfToxId() ?? '';
-    final sessionPassword =
-        toxId.isNotEmpty ? SessionPasswordStore.get(toxId) : null;
+    final sessionPassword = toxId.isNotEmpty
+        ? SessionPasswordStore.get(toxId)
+        : null;
 
     // 1 & 2. Dispose session runtime (FakeUIKit + platform)
     await SessionRuntimeCoordinator.disposeRuntime();
@@ -110,7 +112,10 @@ class AccountService {
         await service.dispose();
       } catch (e, st) {
         AppLogger.logError(
-            '[AccountService] teardown: service.dispose error', e, st);
+          '[AccountService] teardown: service.dispose error',
+          e,
+          st,
+        );
       }
     }
 
@@ -120,16 +125,20 @@ class AccountService {
         sessionPassword.isNotEmpty &&
         toxId.isNotEmpty) {
       try {
-        final profileDir =
-            await AppPaths.getProfileDirectoryForToxId(toxId);
+        final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
         final profilePath = AppPaths.profileFileInDirectory(profileDir);
         if (await File(profilePath).exists()) {
           await AccountExportService.encryptProfileFile(
-              profilePath, sessionPassword);
+            profilePath,
+            sessionPassword,
+          );
         }
       } catch (e, st) {
         AppLogger.logError(
-            '[AccountService] teardown: re-encrypt profile error', e, st);
+          '[AccountService] teardown: re-encrypt profile error',
+          e,
+          st,
+        );
       }
     }
 
@@ -161,7 +170,9 @@ class AccountService {
   /// only updated when it did (a failed verifier write must not arm logout to
   /// encrypt under a password the user can't later verify).
   static Future<bool> setAccountPassword(
-      FfiChatService service, String password) async {
+    FfiChatService service,
+    String password,
+  ) async {
     final toxId = service.getSelfToxId();
     if (toxId == null || toxId.isEmpty) return false;
     final ok = await Prefs.setAccountPassword(toxId, password);
@@ -233,8 +244,9 @@ class AccountService {
       await AppPaths.migrateAccountDataFromLegacy(toxId);
 
       final historyDirectory = await AppPaths.getAccountChatHistoryPath(toxId);
-      final queueFilePath =
-          await AppPaths.getAccountOfflineQueueFilePath(toxId);
+      final queueFilePath = await AppPaths.getAccountOfflineQueueFilePath(
+        toxId,
+      );
       final fileRecvPath = await AppPaths.getAccountFileRecvPath(toxId);
       final avatarsPath = await AppPaths.getAccountAvatarsPath(toxId);
       await Directory(historyDirectory).create(recursive: true);
@@ -249,15 +261,17 @@ class AccountService {
           await Directory(profileDir).create(recursive: true);
           await File(legacyPath).copy(profileFile);
           AppLogger.log(
-              '[AccountService] Migrated profile from legacy to $profileDir');
+            '[AccountService] Migrated profile from legacy to $profileDir',
+          );
         } else {
           throw Exception('Profile not found for account');
         }
       }
 
       if (password != null && password.isNotEmpty) {
-        final isEncrypted =
-            await AccountExportService.isProfileFileEncrypted(profileFile);
+        final isEncrypted = await AccountExportService.isProfileFileEncrypted(
+          profileFile,
+        );
         if (isEncrypted) {
           await AccountExportService.decryptProfileFile(profileFile, password);
           // Only mark as decrypted if we actually performed the decrypt — the
@@ -270,7 +284,10 @@ class AccountService {
 
       final prefs = await SharedPreferences.getInstance();
       service = FfiChatService(
-        preferencesService: SharedPreferencesAdapter(prefs, accountPrefix: accountPrefix),
+        preferencesService: SharedPreferencesAdapter(
+          prefs,
+          accountPrefix: accountPrefix,
+        ),
         loggerService: AppLoggerAdapter(),
         bootstrapService: BootstrapNodesAdapter(prefs),
         historyDirectory: historyDirectory,
@@ -293,7 +310,8 @@ class AccountService {
       // / on-disk prefix is identical between 64 and 76 representations
       // (the long form is `public_key || nospam || checksum`), so no scoped
       // state needs re-keying.
-      canonicalToxId = await ShortToxIdBackfill.backfillIfNeeded(
+      canonicalToxId =
+          await ShortToxIdBackfill.backfillIfNeeded(
             service: service,
             persistedToxId: toxId,
           ) ??
@@ -385,10 +403,7 @@ class AccountService {
           password != null &&
           password.isNotEmpty) {
         try {
-          await AccountExportService.encryptProfileFile(
-            profileFile,
-            password,
-          );
+          await AccountExportService.encryptProfileFile(profileFile, password);
         } catch (encryptError, encryptSt) {
           AppLogger.logError(
             '[AccountService] Failed to re-encrypt profile after init failure',
@@ -416,10 +431,12 @@ class AccountService {
     await Directory(historyDirectory).create(recursive: true);
     await Directory(avatarsPath).create(recursive: true);
 
-    final accountPrefix =
-        toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
+    final accountPrefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
     final svc = FfiChatService(
-      preferencesService: SharedPreferencesAdapter(prefs, accountPrefix: accountPrefix),
+      preferencesService: SharedPreferencesAdapter(
+        prefs,
+        accountPrefix: accountPrefix,
+      ),
       loggerService: AppLoggerAdapter(),
       bootstrapService: BootstrapNodesAdapter(prefs),
       historyDirectory: historyDirectory,
@@ -487,7 +504,9 @@ class AccountService {
           bootstrapService: BootstrapNodesAdapter(prefs),
         );
         tempDir = p.join(
-            root, '.tmp_register_${DateTime.now().millisecondsSinceEpoch}');
+          root,
+          '.tmp_register_${DateTime.now().millisecondsSinceEpoch}',
+        );
         await Directory(tempDir).create(recursive: true);
 
         service = svc;
@@ -519,13 +538,15 @@ class AccountService {
             await Directory(tempDir).delete(recursive: true);
           } catch (e) {
             AppLogger.warn(
-                '[AccountService] Register: failed to clean up temp dir $tempDir: $e');
+              '[AccountService] Register: failed to clean up temp dir $tempDir: $e',
+            );
           }
           if (attempt + 1 >= maxAttempts) {
             throw Exception('Could not create unique profile');
           }
           AppLogger.log(
-              '[AccountService] Register: profile path collision, retrying');
+            '[AccountService] Register: profile path collision, retrying',
+          );
           continue;
         }
         break;
@@ -537,10 +558,14 @@ class AccountService {
 
       final svc = service!;
       final tid = toxId!;
+      final defaultAvatarPath =
+          await DefaultAvatarInstaller.installDefaultUserAvatar(toxId: tid);
 
       // 5. Update profile
       await svc.updateSelfProfile(
-          nickname: nickname, statusMessage: statusMessage);
+        nickname: nickname,
+        statusMessage: statusMessage,
+      );
 
       // 6. Save to Prefs
       await Prefs.setNickname(nickname);
@@ -550,8 +575,9 @@ class AccountService {
         toxId: tid,
         nickname: nickname,
         statusMessage: statusMessage,
-        avatarPath: null,
+        avatarPath: defaultAvatarPath,
       );
+      await Prefs.setAvatarPath(defaultAvatarPath);
       accountVisible = true;
 
       // 7. Handle password encryption if needed
@@ -577,7 +603,9 @@ class AccountService {
         // instance, or the running Tox keeps an empty name and friends receive
         // an empty `friend_name` (display falls back to the raw tox-id).
         await newService.updateSelfProfile(
-            nickname: nickname, statusMessage: statusMessage);
+          nickname: nickname,
+          statusMessage: statusMessage,
+        );
 
         return RegisterResult(
           service: newService,
@@ -597,7 +625,9 @@ class AccountService {
       // See the password branch above: set the name on the live scoped instance
       // (the pre-dispose temp service's name set is lost on reopen).
       await scopedService.updateSelfProfile(
-          nickname: nickname, statusMessage: statusMessage);
+        nickname: nickname,
+        statusMessage: statusMessage,
+      );
 
       return RegisterResult(
         service: scopedService,
@@ -610,7 +640,8 @@ class AccountService {
         await service?.dispose();
       } catch (de) {
         AppLogger.warn(
-            '[AccountService] Register: dispose during error rollback failed: $de');
+          '[AccountService] Register: dispose during error rollback failed: $de',
+        );
       }
 
       if (toxId != null && toxId.isNotEmpty) {
@@ -634,7 +665,8 @@ class AccountService {
           }
         } catch (de) {
           AppLogger.warn(
-              '[AccountService] Register: rollback temp dir cleanup failed: $de');
+            '[AccountService] Register: rollback temp dir cleanup failed: $de',
+          );
         }
       }
 
@@ -646,7 +678,8 @@ class AccountService {
           }
         } catch (de) {
           AppLogger.warn(
-              '[AccountService] Register: rollback final dir cleanup failed: $de');
+            '[AccountService] Register: rollback final dir cleanup failed: $de',
+          );
         }
       }
 
@@ -673,12 +706,14 @@ class AccountService {
       await service.clearAllAccountData();
     } catch (e, st) {
       AppLogger.logError(
-          '[AccountService] clearAllAccountData before teardown failed', e, st);
+        '[AccountService] clearAllAccountData before teardown failed',
+        e,
+        st,
+      );
     }
 
     // 2. Teardown without re-encrypting (we're deleting the profile)
-    await teardownCurrentSession(
-        service: service, reEncryptProfile: false);
+    await teardownCurrentSession(service: service, reEncryptProfile: false);
 
     // 3-5. Clear prefs (includes scoped keys + password hash)
     await Prefs.clearAccountData(toxId);
@@ -691,15 +726,17 @@ class AccountService {
 
     // 8. Delete profile directory
     try {
-      final profileDir =
-          await AppPaths.getProfileDirectoryForToxId(toxId);
+      final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
       final dir = Directory(profileDir);
       if (await dir.exists()) {
         await dir.delete(recursive: true);
       }
     } catch (e, st) {
       AppLogger.logError(
-          '[AccountService] Failed to delete profile directory', e, st);
+        '[AccountService] Failed to delete profile directory',
+        e,
+        st,
+      );
     }
 
     // 9. Delete account data directory
@@ -711,14 +748,16 @@ class AccountService {
       }
     } catch (e, st) {
       AppLogger.logError(
-          '[AccountService] Failed to delete account data directory', e, st);
+        '[AccountService] Failed to delete account data directory',
+        e,
+        st,
+      );
     }
 
     // 10. Clean up UIKit failed message keys
     try {
       final prefs = await SharedPreferences.getInstance();
-      final prefix =
-          toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
+      final prefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
       final allKeys = prefs.getKeys().toList();
       for (final key in allKeys) {
         if (key.contains('tencent_cloud_chat_failed_messages') &&
@@ -728,7 +767,8 @@ class AccountService {
       }
     } catch (e) {
       AppLogger.warn(
-          '[AccountService] failed to clean UIKit failed-message prefs: $e');
+        '[AccountService] failed to clean UIKit failed-message prefs: $e',
+      );
     }
 
     // 11. Clear current account ID
@@ -753,15 +793,17 @@ class AccountService {
 
     // Delete profile directory
     try {
-      final profileDir =
-          await AppPaths.getProfileDirectoryForToxId(toxId);
+      final profileDir = await AppPaths.getProfileDirectoryForToxId(toxId);
       final dir = Directory(profileDir);
       if (await dir.exists()) {
         await dir.delete(recursive: true);
       }
     } catch (e, st) {
       AppLogger.logError(
-          '[AccountService] Failed to delete profile directory', e, st);
+        '[AccountService] Failed to delete profile directory',
+        e,
+        st,
+      );
     }
 
     // Delete account data directory
@@ -773,14 +815,16 @@ class AccountService {
       }
     } catch (e, st) {
       AppLogger.logError(
-          '[AccountService] Failed to delete account data directory', e, st);
+        '[AccountService] Failed to delete account data directory',
+        e,
+        st,
+      );
     }
 
     // Clean up UIKit failed message keys
     try {
       final prefs = await SharedPreferences.getInstance();
-      final prefix =
-          toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
+      final prefix = toxId.length >= 16 ? toxId.substring(0, 16) : toxId;
       final allKeys = prefs.getKeys().toList();
       for (final key in allKeys) {
         if (key.contains('tencent_cloud_chat_failed_messages') &&
@@ -790,7 +834,8 @@ class AccountService {
       }
     } catch (e) {
       AppLogger.warn(
-          '[AccountService] failed to clean UIKit failed-message prefs: $e');
+        '[AccountService] failed to clean UIKit failed-message prefs: $e',
+      );
     }
 
     // Clear current account ID if we just deleted the active account, so a

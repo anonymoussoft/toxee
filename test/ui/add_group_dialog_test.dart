@@ -34,6 +34,7 @@ import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'package:toxee/i18n/app_localizations.dart';
 import 'package:toxee/ui/add_group_dialog.dart';
 import 'package:toxee/ui/testing/ui_keys.dart';
+import 'package:toxee/util/prefs.dart';
 
 // A valid join/group id is exactly 64 hex chars (Tox CONFERENCE_ID_SIZE /
 // public group chat_id). The dialog validator is
@@ -103,6 +104,9 @@ Widget _harness(_StubFfiChatService service, void Function(String) onSnack) {
                 child: AddGroupDialog(
                   service: service,
                   onShowSnackBar: onSnack,
+                  installDefaultGroupAvatar:
+                      ({required String groupId, String? toxId}) async =>
+                          '/tmp/$groupId-default.png',
                 ),
               ),
             ),
@@ -124,9 +128,11 @@ Future<void> _openDialog(WidgetTester tester) async {
 Future<void> _tapButton(WidgetTester tester, String label) async {
   final button = find.widgetWithText(FilledButton, label);
   await tester.ensureVisible(button);
-  await tester.pumpAndSettle();
+  await tester.pump();
   await tester.tap(button);
-  await tester.pumpAndSettle();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 150));
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 void main() {
@@ -137,14 +143,19 @@ void main() {
   // SystemChannels.platform with the JSON codec — mock it or the call throws.
   const platformChannel = MethodChannel('flutter/platform', JSONMethodCodec());
 
-  setUp(() {
+  setUp(() async {
     // Prefs.setGroupName / setGroupAlias on the success path need a backing
     // SharedPreferences; provide an in-memory mock.
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    final prefs = await SharedPreferences.getInstance();
+    await Prefs.initialize(prefs);
+    await Prefs.setCurrentAccountToxId('B' * 76);
     messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
-        platformChannel, (MethodCall call) async => null);
+      platformChannel,
+      (MethodCall call) async => null,
+    );
   });
 
   tearDown(() {
@@ -154,50 +165,69 @@ void main() {
   // ---- S32: create group -------------------------------------------------
 
   testWidgets(
-      'S32 create: empty group name shows validator error and does NOT call createGroup',
-      (WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    'S32 create: empty group name shows validator error and does NOT call createGroup',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final service = _StubFfiChatService(createGroupResult: _validGroupId);
-    addTearDown(service.disposeStub);
+      final service = _StubFfiChatService(createGroupResult: _validGroupId);
+      addTearDown(service.disposeStub);
 
-    await tester.pumpWidget(_harness(service, (_) {}));
-    await _openDialog(tester);
+      await tester.pumpWidget(_harness(service, (_) {}));
+      await _openDialog(tester);
 
-    // Submit the create card with an empty name field.
-    await _tapButton(tester, 'Create Group');
+      // Submit the create card with an empty name field.
+      await _tapButton(tester, 'Create Group');
 
-    expect(find.text('Please enter Group Name'), findsOneWidget,
-        reason: 'empty group name must surface the required-name validator');
-    expect(service.createCalled, isFalse,
-        reason: 'createGroup must not fire when the name validator fails');
-  });
+      expect(
+        find.text('Please enter Group Name'),
+        findsOneWidget,
+        reason: 'empty group name must surface the required-name validator',
+      );
+      expect(
+        service.createCalled,
+        isFalse,
+        reason: 'createGroup must not fire when the name validator fails',
+      );
+    },
+  );
 
   testWidgets(
-      'S32 create: valid name passes validation and calls createGroup with the name',
-      (WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    'S32 create: valid name passes validation and calls createGroup with the name',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final service = _StubFfiChatService(createGroupResult: _validGroupId);
-    addTearDown(service.disposeStub);
+      final service = _StubFfiChatService(createGroupResult: _validGroupId);
+      addTearDown(service.disposeStub);
 
-    await tester.pumpWidget(_harness(service, (_) {}));
-    await _openDialog(tester);
+      await tester.pumpWidget(_harness(service, (_) {}));
+      await _openDialog(tester);
 
-    await tester.enterText(
-        find.byKey(UiKeys.addGroupCreateNameInput), 'my group');
-    await tester.pumpAndSettle();
-    await _tapButton(tester, 'Create Group');
+      await tester.enterText(
+        find.byKey(UiKeys.addGroupCreateNameInput),
+        'my group',
+      );
+      await tester.pumpAndSettle();
+      await _tapButton(tester, 'Create Group');
 
-    expect(find.text('Please enter Group Name'), findsNothing,
-        reason: 'a non-empty name must clear the required-name validator');
-    expect(service.createCalled, isTrue,
-        reason: 'createGroup must fire once the name validator passes');
-    expect(service.createNameArg, 'my group',
-        reason: 'createGroup must receive the entered (trimmed) group name');
-  });
+      expect(
+        find.text('Please enter Group Name'),
+        findsNothing,
+        reason: 'a non-empty name must clear the required-name validator',
+      );
+      expect(
+        service.createCalled,
+        isTrue,
+        reason: 'createGroup must fire once the name validator passes',
+      );
+      expect(
+        service.createNameArg,
+        'my group',
+        reason: 'createGroup must receive the entered (trimmed) group name',
+      );
+    },
+  );
 
   // S32 create: group-type selector → FFI type-string mapping. The dialog's
   // SegmentedButton (add_group_dialog.dart:450-486, key addGroupTypeSelector)
@@ -221,9 +251,9 @@ void main() {
         ? "default 'Public' selection"
         : "'$segmentLabel' selection";
 
-    testWidgets(
-        'S32 create: $selectionDesc maps to FFI type "$expectedType"',
-        (WidgetTester tester) async {
+    testWidgets('S32 create: $selectionDesc maps to FFI type "$expectedType"', (
+      WidgetTester tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(1280, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -234,7 +264,9 @@ void main() {
       await _openDialog(tester);
 
       await tester.enterText(
-          find.byKey(UiKeys.addGroupCreateNameInput), 'a group');
+        find.byKey(UiKeys.addGroupCreateNameInput),
+        'a group',
+      );
       await tester.pumpAndSettle();
 
       // Drive the type selector (default selection needs no tap).
@@ -251,16 +283,22 @@ void main() {
 
       await _tapButton(tester, 'Create Group');
 
-      expect(service.createCalled, isTrue,
-          reason: 'createGroup must fire once the name validator passes');
-      expect(service.createTypeArg, expectedType,
-          reason: '$selectionDesc must map to FFI type "$expectedType"');
+      expect(
+        service.createCalled,
+        isTrue,
+        reason: 'createGroup must fire once the name validator passes',
+      );
+      expect(
+        service.createTypeArg,
+        expectedType,
+        reason: '$selectionDesc must map to FFI type "$expectedType"',
+      );
     });
   }
 
-  testWidgets(
-      'S158 create: selecting Conference updates the helper hint text',
-      (WidgetTester tester) async {
+  testWidgets('S158 create: selecting Conference updates the helper hint text', (
+    WidgetTester tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(1280, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -272,9 +310,11 @@ void main() {
 
     expect(
       find.text(
-          'Public group — discoverable on the DHT and joinable by anyone with the chat ID.'),
+        'Public group — discoverable on the DHT and joinable by anyone with the chat ID.',
+      ),
       findsOneWidget,
-      reason: 'the dialog starts on the Public segment and should show its hint',
+      reason:
+          'the dialog starts on the Public segment and should show its hint',
     );
 
     final conferenceSegment = find.descendant(
@@ -287,8 +327,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(
-          'Legacy conference — older protocol, no roles or persistence.'),
+      find.text('Legacy conference — older protocol, no roles or persistence.'),
       findsOneWidget,
       reason:
           'selecting the Conference segment should switch the helper hint text',
@@ -298,103 +337,145 @@ void main() {
   // ---- S33: join group by ID ---------------------------------------------
 
   testWidgets(
-      'S33 join: empty group ID shows validator error and does NOT call joinGroup',
-      (WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    'S33 join: empty group ID shows validator error and does NOT call joinGroup',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final service = _StubFfiChatService();
-    addTearDown(service.disposeStub);
+      final service = _StubFfiChatService();
+      addTearDown(service.disposeStub);
 
-    await tester.pumpWidget(_harness(service, (_) {}));
-    await _openDialog(tester);
+      await tester.pumpWidget(_harness(service, (_) {}));
+      await _openDialog(tester);
 
-    await _tapButton(tester, 'Send Join Request');
+      await _tapButton(tester, 'Send Join Request');
 
-    expect(find.text('Please enter Group ID'), findsOneWidget,
-        reason: 'empty join id must surface the required-id validator');
-    expect(service.joinCalled, isFalse,
-        reason: 'joinGroup must not fire when the id validator fails');
-  });
-
-  testWidgets(
-      'S33 join: non-hex group ID shows the hex validator and does NOT call joinGroup',
-      (WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    final service = _StubFfiChatService();
-    addTearDown(service.disposeStub);
-
-    await tester.pumpWidget(_harness(service, (_) {}));
-    await _openDialog(tester);
-
-    // 'xyz' + 61 zeros: 64 chars long but contains non-hex characters.
-    await tester.enterText(
-        find.byKey(UiKeys.addGroupJoinIdInput), 'xyz${'0' * 61}');
-    await tester.pumpAndSettle();
-    await _tapButton(tester, 'Send Join Request');
-
-    expect(find.text('Can only contain hexadecimal characters'), findsOneWidget,
-        reason: 'non-hex characters must surface the hex validator');
-    expect(service.joinCalled, isFalse,
-        reason: 'joinGroup must not fire on a non-hex id');
-  });
-
-  testWidgets(
-      'S33 join: wrong-length hex id shows the length validator and does NOT call joinGroup',
-      (WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    final service = _StubFfiChatService();
-    addTearDown(service.disposeStub);
-
-    await tester.pumpWidget(_harness(service, (_) {}));
-    await _openDialog(tester);
-
-    // 'deadbeef' is valid hex but only 8 chars (≠ 64).
-    await tester.enterText(
-        find.byKey(UiKeys.addGroupJoinIdInput), 'deadbeef');
-    await tester.pumpAndSettle();
-    await _tapButton(tester, 'Send Join Request');
-
-    expect(find.text('Invalid ID length'),
+      expect(
+        find.text('Please enter Group ID'),
         findsOneWidget,
-        reason: 'a hex id of the wrong length must surface the length validator');
-    expect(service.joinCalled, isFalse,
-        reason: 'joinGroup must not fire on a wrong-length id');
-  });
+        reason: 'empty join id must surface the required-id validator',
+      );
+      expect(
+        service.joinCalled,
+        isFalse,
+        reason: 'joinGroup must not fire when the id validator fails',
+      );
+    },
+  );
 
   testWidgets(
-      'S33 join: valid 64-hex id passes validation and calls joinGroup with the id',
-      (WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    'S33 join: non-hex group ID shows the hex validator and does NOT call joinGroup',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final service = _StubFfiChatService();
-    addTearDown(service.disposeStub);
+      final service = _StubFfiChatService();
+      addTearDown(service.disposeStub);
 
-    await tester.pumpWidget(_harness(service, (_) {}));
-    await _openDialog(tester);
+      await tester.pumpWidget(_harness(service, (_) {}));
+      await _openDialog(tester);
 
-    await tester.enterText(
-        find.byKey(UiKeys.addGroupJoinIdInput), _validGroupId);
-    await tester.pumpAndSettle();
-    await _tapButton(tester, 'Send Join Request');
+      // 'xyz' + 61 zeros: 64 chars long but contains non-hex characters.
+      await tester.enterText(
+        find.byKey(UiKeys.addGroupJoinIdInput),
+        'xyz${'0' * 61}',
+      );
+      await tester.pumpAndSettle();
+      await _tapButton(tester, 'Send Join Request');
 
-    expect(find.text('Please enter Group ID'), findsNothing,
-        reason: 'a valid id must clear the required-id validator');
-    expect(find.text('Can only contain hexadecimal characters'), findsNothing,
-        reason: 'a valid hex id must clear the hex validator');
-    expect(find.text('Invalid ID length'),
+      expect(
+        find.text('Can only contain hexadecimal characters'),
+        findsOneWidget,
+        reason: 'non-hex characters must surface the hex validator',
+      );
+      expect(
+        service.joinCalled,
+        isFalse,
+        reason: 'joinGroup must not fire on a non-hex id',
+      );
+    },
+  );
+
+  testWidgets(
+    'S33 join: wrong-length hex id shows the length validator and does NOT call joinGroup',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final service = _StubFfiChatService();
+      addTearDown(service.disposeStub);
+
+      await tester.pumpWidget(_harness(service, (_) {}));
+      await _openDialog(tester);
+
+      // 'deadbeef' is valid hex but only 8 chars (≠ 64).
+      await tester.enterText(
+        find.byKey(UiKeys.addGroupJoinIdInput),
+        'deadbeef',
+      );
+      await tester.pumpAndSettle();
+      await _tapButton(tester, 'Send Join Request');
+
+      expect(
+        find.text('Invalid ID length'),
+        findsOneWidget,
+        reason:
+            'a hex id of the wrong length must surface the length validator',
+      );
+      expect(
+        service.joinCalled,
+        isFalse,
+        reason: 'joinGroup must not fire on a wrong-length id',
+      );
+    },
+  );
+
+  testWidgets(
+    'S33 join: valid 64-hex id passes validation and calls joinGroup with the id',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final service = _StubFfiChatService();
+      addTearDown(service.disposeStub);
+
+      await tester.pumpWidget(_harness(service, (_) {}));
+      await _openDialog(tester);
+
+      await tester.enterText(
+        find.byKey(UiKeys.addGroupJoinIdInput),
+        _validGroupId,
+      );
+      await tester.pumpAndSettle();
+      await _tapButton(tester, 'Send Join Request');
+
+      expect(
+        find.text('Please enter Group ID'),
         findsNothing,
-        reason: 'a 64-char id must clear the length validator');
-    expect(service.joinCalled, isTrue,
-        reason: 'joinGroup must fire once the id validator passes');
-    expect(service.joinIdArg, _validGroupId,
-        reason: 'joinGroup must receive the entered (trimmed) group id');
-  });
+        reason: 'a valid id must clear the required-id validator',
+      );
+      expect(
+        find.text('Can only contain hexadecimal characters'),
+        findsNothing,
+        reason: 'a valid hex id must clear the hex validator',
+      );
+      expect(
+        find.text('Invalid ID length'),
+        findsNothing,
+        reason: 'a 64-char id must clear the length validator',
+      );
+      expect(
+        service.joinCalled,
+        isTrue,
+        reason: 'joinGroup must fire once the id validator passes',
+      );
+      expect(
+        service.joinIdArg,
+        _validGroupId,
+        reason: 'joinGroup must receive the entered (trimmed) group id',
+      );
+    },
+  );
 
   // S128 create copy-id: after a successful create the dialog shows the
   // created-info card (new group id + Copy ID button). The dialog normally
@@ -402,51 +483,68 @@ void main() {
   // DIRECTLY as the body (not via showDialog) — maybePop then has nothing to
   // pop and the card stays mounted for assertion.
   testWidgets(
-      'S128 create success renders the created-info card with Copy ID button and the new id',
-      (WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    'S128 create success renders the created-info card with Copy ID button and the new id',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final service = _StubFfiChatService(createGroupResult: _validGroupId);
-    addTearDown(service.disposeStub);
+      final service = _StubFfiChatService(createGroupResult: _validGroupId);
+      addTearDown(service.disposeStub);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          TencentCloudChatLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [Locale('en')],
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: AddGroupDialog(service: service, onShowSnackBar: (_) {}),
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            TencentCloudChatLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('en')],
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AddGroupDialog(
+                service: service,
+                onShowSnackBar: (_) {},
+                installDefaultGroupAvatar:
+                    ({required String groupId, String? toxId}) async =>
+                        '/tmp/$groupId-default.png',
+                closeOnCreateSuccess: false,
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    // Created-info card (and its Copy ID button) is absent before a create.
-    expect(find.byKey(UiKeys.addGroupCopyIdButton), findsNothing);
+      // Created-info card (and its Copy ID button) is absent before a create.
+      expect(find.byKey(UiKeys.addGroupCopyIdButton), findsNothing);
 
-    await tester.enterText(
-        find.byKey(UiKeys.addGroupCreateNameInput), 'copy-id group');
-    await tester.pumpAndSettle();
-    await _tapButton(tester, 'Create Group');
+      await tester.enterText(
+        find.byKey(UiKeys.addGroupCreateNameInput),
+        'copy-id group',
+      );
+      await tester.pumpAndSettle();
+      await _tapButton(tester, 'Create Group');
 
-    expect(service.createCalled, isTrue,
-        reason: 'createGroup must fire once the name validator passes');
-    // After create, the created-info card renders the Copy ID button + the id.
-    expect(find.byKey(UiKeys.addGroupCopyIdButton), findsOneWidget,
-        reason: 'the created-info Copy ID button should render after create');
-    expect(
-      find.byWidgetPredicate(
-          (w) => w is SelectableText && w.data == _validGroupId),
-      findsOneWidget,
-      reason: 'the created-info card should display the new group id',
-    );
-  });
+      expect(
+        service.createCalled,
+        isTrue,
+        reason: 'createGroup must fire once the name validator passes',
+      );
+      // After create, the created-info card renders the Copy ID button + the id.
+      expect(
+        find.byKey(UiKeys.addGroupCopyIdButton),
+        findsOneWidget,
+        reason: 'the created-info Copy ID button should render after create',
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is SelectableText && w.data == _validGroupId,
+        ),
+        findsOneWidget,
+        reason: 'the created-info card should display the new group id',
+      );
+    },
+  );
 }

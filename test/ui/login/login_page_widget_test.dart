@@ -286,8 +286,9 @@ void main() {
   // and the test would observe stale state with no exception. Mirror the
   // in-memory channel mock used by account_password_lifecycle_test.dart.
   final secureStore = <String, String>{};
-  const secureChannel =
-      MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  const secureChannel = MethodChannel(
+    'plugins.it_nomads.com/flutter_secure_storage',
+  );
 
   setUp(() {
     secureStore.clear();
@@ -353,16 +354,14 @@ void main() {
       expect(find.text('Saved Accounts'), findsNothing);
     });
 
-    testWidgets('Settings icon button is rendered in the app bar', (
+    testWidgets('Settings button is rendered on the login page', (
       tester,
     ) async {
       await _initEmptyPrefs();
       await _pumpAndLoad(tester, _pumpableLoginPage());
 
-      // The AppBar action is an IconButton with Icons.settings — find by icon
-      // rather than tooltip to avoid coupling to the localized string.
       expect(
-        find.byIcon(Icons.settings),
+        find.byKey(UiKeys.loginPageSettingsButton),
         findsOneWidget,
         reason: 'Settings entry must be reachable from the login page',
       );

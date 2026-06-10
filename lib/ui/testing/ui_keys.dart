@@ -44,6 +44,7 @@ class UiKeys {
   static const Key loginPageRestoreFromToxFile = Key(
     'login_page_restore_from_tox_file',
   );
+  static const Key loginPageSettingsButton = Key('login_page_settings_button');
 
   /// Stable automation anchor for a specific LoginPage saved-account card.
   ///
@@ -85,14 +86,18 @@ class UiKeys {
   // ButtonSegment takes no key, so the "Private" label is wrapped in a
   // KeyedSubtree carrying this key — lets UI automation pick Private
   // (invite-only, reliable same-host) without depending on the localized label.
-  static const Key addGroupTypePrivateSegment =
-      Key('add_group_type_private_segment');
-  static const Key addGroupTypePublicSegment =
-      Key('add_group_type_public_segment');
-  static const Key addGroupTypeConferenceSegment =
-      Key('add_group_type_conference_segment');
-  static const Key addGroupCreateSubmitButton =
-      Key('add_group_create_submit_button');
+  static const Key addGroupTypePrivateSegment = Key(
+    'add_group_type_private_segment',
+  );
+  static const Key addGroupTypePublicSegment = Key(
+    'add_group_type_public_segment',
+  );
+  static const Key addGroupTypeConferenceSegment = Key(
+    'add_group_type_conference_segment',
+  );
+  static const Key addGroupCreateSubmitButton = Key(
+    'add_group_create_submit_button',
+  );
   static const Key addGroupCopyIdButton = Key('add_group_copy_id_button');
 
   // New-entry popup menu (lib/ui/home/home_widgets.dart).

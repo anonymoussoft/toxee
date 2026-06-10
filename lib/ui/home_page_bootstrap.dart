@@ -52,6 +52,8 @@ extension _HomePageBootstrap on _HomePageState {
         key: UiKeys.contactListTile(friend.userID),
         child: TencentCloudChatContactItemContent(friend: friend),
       ),
+      contactApplicationItemContentBuilder: (application) =>
+          ContactApplicationItemContentOverride(application: application),
       contactGroupListItemContentBuilder: (group) => KeyedSubtree(
         key: UiKeys.groupListTile(group.groupID),
         child: TencentCloudChatContactGroupItemContent(group: group),
@@ -218,6 +220,8 @@ extension _HomePageBootstrap on _HomePageState {
         key: UiKeys.contactListTile(friend.userID),
         child: TencentCloudChatContactItemContent(friend: friend),
       ),
+      contactApplicationItemContentBuilder: (application) =>
+          ContactApplicationItemContentOverride(application: application),
       contactGroupListItemContentBuilder: (group) => KeyedSubtree(
         key: UiKeys.groupListTile(group.groupID),
         child: TencentCloudChatContactGroupItemContent(group: group),
@@ -951,13 +955,15 @@ extension _HomePageBootstrap on _HomePageState {
       // L1-testable (S47) without pumping HomePage. mirrorToUi runs before the
       // push (matching the original order so a throwing FFI setter can't drop
       // the UI mirror — codex).
-      unawaited(loadAndApplyAutoAcceptGroupInvites(
-        widget.service,
-        toxId,
-        isStillMounted: () => mounted,
-        mirrorToUi: (value) =>
-            _bootstrapSetState(() => _autoAcceptGroupInvites = value),
-      ));
+      unawaited(
+        loadAndApplyAutoAcceptGroupInvites(
+          widget.service,
+          toxId,
+          isStillMounted: () => mounted,
+          mirrorToUi: (value) =>
+              _bootstrapSetState(() => _autoAcceptGroupInvites = value),
+        ),
+      );
     }
 
     // S46/S47: let the L3 surface drive the LIVE auto-accept setters (cached
@@ -1195,17 +1201,18 @@ extension _HomePageBootstrap on _HomePageState {
               mounted && identical(widget.service, boundService);
           try {
             if (!stillCurrent()) return;
-            final mapped = list
-                .map(
-                  (a) => V2TimFriendApplication(
-                    userID: a.userID,
-                    addWording: a.wording,
-                    type: 1,
-                    nickname: "",
-                    faceUrl: "",
-                  ),
-                )
-                .toList();
+            final mapped = list.map((a) {
+              final inferredNickname = inferFriendRequestNicknameFromWording(
+                a.wording,
+              );
+              return V2TimFriendApplication(
+                userID: a.userID,
+                addWording: a.wording,
+                type: 1,
+                nickname: inferredNickname,
+                faceUrl: null,
+              );
+            }).toList();
             UikitDataFacade.buildApplicationList(mapped, "home");
             UikitDataFacade.setApplicationUnreadCount(mapped);
             _pendingFriendApps = List<V2TimFriendApplication>.from(mapped);
@@ -1220,12 +1227,15 @@ extension _HomePageBootstrap on _HomePageState {
                 if (uid.isEmpty) continue;
                 if (_notifiedFriendReqUserIds.contains(uid)) continue;
                 _notifiedFriendReqUserIds.add(uid);
+                final senderName = resolveFriendRequestDisplayName(
+                  userId: uid,
+                  nickname: app.nickname,
+                  wording: app.addWording,
+                );
                 unawaited(
                   NotificationService.instance.showFriendRequestNotification(
                     senderId: uid,
-                    senderName: uid.length > 16
-                        ? '${uid.substring(0, 16)}…'
-                        : uid,
+                    senderName: senderName,
                     requestMessage: app.addWording ?? '',
                   ),
                 );

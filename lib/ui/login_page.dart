@@ -7,7 +7,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 // ignore: directives_ordering
 import 'widgets/safe_dialog_pop.dart';
 import 'package:flutter/material.dart';
@@ -854,6 +853,44 @@ class _LoginPageState extends State<LoginPage> {
     if (mounted) _loadSettings();
   }
 
+  Widget _buildFloatingSettingsButton(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: (isDark ? scheme.surface : Colors.white).withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.72),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: UiKeys.loginPageSettingsButton,
+          borderRadius: BorderRadius.circular(AppThemeConfig.cardBorderRadius),
+          onTap: _openSettings,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Icon(
+              Icons.settings_rounded,
+              color: scheme.onSurface.withValues(alpha: 0.86),
+              size: 22,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -870,19 +907,6 @@ class _LoginPageState extends State<LoginPage> {
         estimatedSavedAccountsHeight > maxSavedAccountsHeight;
     return TencentCloudChatThemeWidget(
       build: (context, colorTheme, textStyle) => Scaffold(
-        appBar: AppBar(
-          title: const SizedBox.shrink(),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings),
-              tooltip: AppLocalizations.of(context)!.settings,
-              onPressed: _openSettings,
-            ),
-            SizedBox(
-              width: ResponsiveLayout.responsiveHorizontalPadding(context),
-            ),
-          ],
-        ),
         body: SafeArea(
           child: Container(
             decoration: BoxDecoration(
@@ -900,226 +924,247 @@ class _LoginPageState extends State<LoginPage> {
                       ],
               ),
             ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  // Mobile uses full width (500 cap above mobile breakpoint
-                  // is effectively a no-op); tablet/desktop tighten to 440 so
-                  // the form reads like a focused card rather than stretching
-                  // edge-to-edge on wide screens.
-                  maxWidth: ResponsiveLayout.isMobile(context)
-                      ? double.infinity
-                      : 440.0,
+            child: Stack(
+              children: [
+                Positioned(
+                  top: AppSpacing.md,
+                  right: ResponsiveLayout.responsiveHorizontalPadding(context),
+                  child: Tooltip(
+                    message: AppLocalizations.of(context)!.settings,
+                    child: _buildFloatingSettingsButton(context),
+                  ),
                 ),
-                child: Padding(
-                  padding: ResponsiveLayout.isMobile(context)
-                      ? const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: AppSpacing.sm,
-                        )
-                      : ResponsiveLayout.responsivePadding(context),
-                  child: Form(
-                    key: _formKey,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Saved accounts list (main content)
-                          if (_accountList.isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsetsDirectional.fromSTEB(
-                                AppSpacing.xs,
-                                0,
-                                0,
-                                AppSpacing.md,
-                              ),
-                              child: Text(
-                                AppLocalizations.of(context)!.savedAccounts,
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.6),
-                                      letterSpacing: 0.4,
-                                    ),
-                              ),
-                            ),
-                            SizedBox(
-                              height: savedAccountsHeight,
-                              child: Scrollbar(
-                                controller: _savedAccountsScrollController,
-                                thumbVisibility: savedAccountsNeedsScroll,
-                                child: ListView.builder(
-                                  controller: _savedAccountsScrollController,
-                                  primary: false,
-                                  padding: EdgeInsets.zero,
-                                  itemCount: _accountList.length,
-                                  itemBuilder: (context, index) {
-                                    final entry = MapEntry(
-                                      index,
-                                      _accountList[index],
-                                    );
-                                    final i = entry.key;
-                                    final account = entry.value;
-                                    final nickname = account['nickname'] ?? '';
-                                    final statusMsg =
-                                        account['statusMessage'] ?? '';
-                                    final lastLogin = account['lastLoginTime'];
-                                    final toxId = account['toxId'] ?? '';
-                                    final toxIdPrefix = toxId.length >= 8
-                                        ? toxId.substring(0, 8)
-                                        : toxId;
-
-                                    String formatLastLogin(String? isoString) {
-                                      if (isoString == null ||
-                                          isoString.isEmpty)
-                                        return AppLocalizations.of(
-                                          context,
-                                        )!.never;
-                                      try {
-                                        final dateTime = DateTime.parse(
-                                          isoString,
+                Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      // Mobile uses full width (500 cap above mobile breakpoint
+                      // is effectively a no-op); tablet/desktop tighten to 440 so
+                      // the form reads like a focused card rather than stretching
+                      // edge-to-edge on wide screens.
+                      maxWidth: ResponsiveLayout.isMobile(context)
+                          ? double.infinity
+                          : 440.0,
+                    ),
+                    child: Padding(
+                      padding: ResponsiveLayout.isMobile(context)
+                          ? const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg,
+                              vertical: AppSpacing.sm,
+                            )
+                          : ResponsiveLayout.responsivePadding(context),
+                      child: Form(
+                        key: _formKey,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Saved accounts list (main content)
+                              if (_accountList.isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsetsDirectional.fromSTEB(
+                                    AppSpacing.xs,
+                                    0,
+                                    0,
+                                    AppSpacing.md,
+                                  ),
+                                  child: Text(
+                                    AppLocalizations.of(context)!.savedAccounts,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.6),
+                                          letterSpacing: 0.4,
+                                        ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: savedAccountsHeight,
+                                  child: Scrollbar(
+                                    controller: _savedAccountsScrollController,
+                                    thumbVisibility: savedAccountsNeedsScroll,
+                                    child: ListView.builder(
+                                      controller:
+                                          _savedAccountsScrollController,
+                                      primary: false,
+                                      padding: EdgeInsets.zero,
+                                      itemCount: _accountList.length,
+                                      itemBuilder: (context, index) {
+                                        final entry = MapEntry(
+                                          index,
+                                          _accountList[index],
                                         );
-                                        final now = DateTime.now();
-                                        final difference = now.difference(
-                                          dateTime,
-                                        );
+                                        final i = entry.key;
+                                        final account = entry.value;
+                                        final nickname =
+                                            account['nickname'] ?? '';
+                                        final statusMsg =
+                                            account['statusMessage'] ?? '';
+                                        final lastLogin =
+                                            account['lastLoginTime'];
+                                        final toxId = account['toxId'] ?? '';
+                                        final toxIdPrefix = toxId.length >= 8
+                                            ? toxId.substring(0, 8)
+                                            : toxId;
 
-                                        // TODO(i18n): replace daysAgo/hoursAgo/minutesAgo with
-                                        // ICU {count, plural, ...} forms in next round. Passing
-                                        // an empty string for the {plural} placeholder so RTL/Arabic
-                                        // doesn't render a stray ASCII "s" inside the localized
-                                        // string. English degrades to "1 day ago / 2 day ago"
-                                        // (the singular "day" baked into the en string) until ICU
-                                        // plural support is wired up.
-                                        if (difference.inDays > 0) {
-                                          return AppLocalizations.of(
-                                            context,
-                                          )!.daysAgo(difference.inDays, '');
-                                        } else if (difference.inHours > 0) {
-                                          return AppLocalizations.of(
-                                            context,
-                                          )!.hoursAgo(difference.inHours, '');
-                                        } else if (difference.inMinutes > 0) {
-                                          return AppLocalizations.of(
-                                            context,
-                                          )!.minutesAgo(
-                                            difference.inMinutes,
-                                            '',
-                                          );
-                                        } else {
-                                          return AppLocalizations.of(
-                                            context,
-                                          )!.justNow;
-                                        }
-                                      } catch (e) {
-                                        return AppLocalizations.of(
-                                          context,
-                                        )!.unknown;
-                                      }
-                                    }
+                                        String formatLastLogin(
+                                          String? isoString,
+                                        ) {
+                                          if (isoString == null ||
+                                              isoString.isEmpty)
+                                            return AppLocalizations.of(
+                                              context,
+                                            )!.never;
+                                          try {
+                                            final dateTime = DateTime.parse(
+                                              isoString,
+                                            );
+                                            final now = DateTime.now();
+                                            final difference = now.difference(
+                                              dateTime,
+                                            );
 
-                                    return StaggeredListItem(
-                                      index: i,
-                                      child: _PressableScale(
-                                        child: Card(
-                                          margin: const EdgeInsets.only(
-                                            bottom: AppSpacing.sm,
-                                          ),
-                                          elevation: 0,
-                                          shape: RoundedRectangleBorder(
-                                            side: BorderSide(
-                                              color: Theme.of(
+                                            // TODO(i18n): replace daysAgo/hoursAgo/minutesAgo with
+                                            // ICU {count, plural, ...} forms in next round. Passing
+                                            // an empty string for the {plural} placeholder so RTL/Arabic
+                                            // doesn't render a stray ASCII "s" inside the localized
+                                            // string. English degrades to "1 day ago / 2 day ago"
+                                            // (the singular "day" baked into the en string) until ICU
+                                            // plural support is wired up.
+                                            if (difference.inDays > 0) {
+                                              return AppLocalizations.of(
                                                 context,
-                                              ).colorScheme.outlineVariant,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              AppThemeConfig.cardBorderRadius,
-                                            ),
-                                          ),
-                                          clipBehavior: Clip.antiAlias,
-                                          child: MouseRegion(
-                                            cursor: SystemMouseCursors.click,
-                                            child: InkWell(
-                                              key: UiKeys.loginPageAccountCard(
-                                                toxId,
+                                              )!.daysAgo(difference.inDays, '');
+                                            } else if (difference.inHours > 0) {
+                                              return AppLocalizations.of(
+                                                context,
+                                              )!.hoursAgo(
+                                                difference.inHours,
+                                                '',
+                                              );
+                                            } else if (difference.inMinutes >
+                                                0) {
+                                              return AppLocalizations.of(
+                                                context,
+                                              )!.minutesAgo(
+                                                difference.inMinutes,
+                                                '',
+                                              );
+                                            } else {
+                                              return AppLocalizations.of(
+                                                context,
+                                              )!.justNow;
+                                            }
+                                          } catch (e) {
+                                            return AppLocalizations.of(
+                                              context,
+                                            )!.unknown;
+                                          }
+                                        }
+
+                                        return StaggeredListItem(
+                                          index: i,
+                                          child: _PressableScale(
+                                            child: Card(
+                                              margin: const EdgeInsets.only(
+                                                bottom: AppSpacing.sm,
                                               ),
-                                              onTap: () => _quickLogin(account),
-                                              onLongPress: () =>
-                                                  _showAccountManagementMenu(
-                                                    account,
-                                                  ),
-                                              onSecondaryTapUp: (details) =>
-                                                  _showAccountManagementMenu(
-                                                    account,
-                                                    position:
-                                                        details.globalPosition,
-                                                  ),
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(
-                                                  AppSpacing.lg,
+                                              elevation: 0,
+                                              shape: RoundedRectangleBorder(
+                                                side: BorderSide(
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.outlineVariant,
                                                 ),
-                                                child: Row(
-                                                  children: [
-                                                    _buildAccountAvatar(
-                                                      account,
-                                                      nickname,
-                                                      colorTheme,
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                      AppThemeConfig
+                                                          .cardBorderRadius,
                                                     ),
-                                                    AppSpacing.horizontalMd,
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Text(
-                                                            nickname.isNotEmpty
-                                                                ? nickname
-                                                                : AppLocalizations.of(
-                                                                    context,
-                                                                  )!.unnamedAccount,
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .titleSmall,
-                                                          ),
-                                                          if (statusMsg
-                                                              .isNotEmpty) ...[
-                                                            AppSpacing
-                                                                .verticalXs,
-                                                            Text(
-                                                              statusMsg,
-                                                              style: Theme.of(context)
-                                                                  .textTheme
-                                                                  .bodySmall
-                                                                  ?.copyWith(
-                                                                    color:
-                                                                        Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.onSurface.withValues(
-                                                                          alpha:
-                                                                              0.7,
-                                                                        ),
-                                                                  ),
-                                                              maxLines: 1,
-                                                              overflow:
-                                                                  TextOverflow
-                                                                      .ellipsis,
-                                                            ),
-                                                          ],
-                                                          AppSpacing.verticalXs,
-                                                          Row(
+                                              ),
+                                              clipBehavior: Clip.antiAlias,
+                                              child: MouseRegion(
+                                                cursor:
+                                                    SystemMouseCursors.click,
+                                                child: InkWell(
+                                                  key:
+                                                      UiKeys.loginPageAccountCard(
+                                                        toxId,
+                                                      ),
+                                                  onTap: () =>
+                                                      _quickLogin(account),
+                                                  onLongPress: () =>
+                                                      _showAccountManagementMenu(
+                                                        account,
+                                                      ),
+                                                  onSecondaryTapUp: (details) =>
+                                                      _showAccountManagementMenu(
+                                                        account,
+                                                        position: details
+                                                            .globalPosition,
+                                                      ),
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                          AppSpacing.lg,
+                                                        ),
+                                                    child: Row(
+                                                      children: [
+                                                        _buildAccountAvatar(
+                                                          account,
+                                                          nickname,
+                                                          colorTheme,
+                                                        ),
+                                                        AppSpacing.horizontalMd,
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
                                                             children: [
                                                               Text(
-                                                                '${AppLocalizations.of(context)!.userId}: $toxIdPrefix…',
-                                                                style: Theme.of(context)
-                                                                    .textTheme
-                                                                    .labelSmall
-                                                                    ?.copyWith(
+                                                                nickname.isNotEmpty
+                                                                    ? nickname
+                                                                    : AppLocalizations.of(
+                                                                        context,
+                                                                      )!.unnamedAccount,
+                                                                style: Theme.of(
+                                                                  context,
+                                                                ).textTheme.titleSmall,
+                                                              ),
+                                                              if (statusMsg
+                                                                  .isNotEmpty) ...[
+                                                                AppSpacing
+                                                                    .verticalXs,
+                                                                Text(
+                                                                  statusMsg,
+                                                                  style: Theme.of(context)
+                                                                      .textTheme
+                                                                      .bodySmall
+                                                                      ?.copyWith(
+                                                                        color:
+                                                                            Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.onSurface.withValues(
+                                                                              alpha: 0.7,
+                                                                            ),
+                                                                      ),
+                                                                  maxLines: 1,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                              ],
+                                                              AppSpacing
+                                                                  .verticalXs,
+                                                              Row(
+                                                                children: [
+                                                                  Text(
+                                                                    '${AppLocalizations.of(context)!.userId}: $toxIdPrefix…',
+                                                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                                                       fontFamily:
                                                                           'monospace',
                                                                       color: Theme.of(context)
@@ -1130,173 +1175,188 @@ class _LoginPageState extends State<LoginPage> {
                                                                                 0.5,
                                                                           ),
                                                                     ),
-                                                              ),
-                                                              AppSpacing
-                                                                  .horizontalSm,
-                                                              Text(
-                                                                '• ${formatLastLogin(lastLogin)}',
-                                                                style: Theme.of(context)
-                                                                    .textTheme
-                                                                    .labelSmall
-                                                                    ?.copyWith(
-                                                                      color: Theme.of(context)
-                                                                          .colorScheme
-                                                                          .onSurface
-                                                                          .withValues(
-                                                                            alpha:
-                                                                                0.5,
-                                                                          ),
-                                                                    ),
+                                                                  ),
+                                                                  AppSpacing
+                                                                      .horizontalSm,
+                                                                  Text(
+                                                                    '• ${formatLastLogin(lastLogin)}',
+                                                                    style: Theme.of(context)
+                                                                        .textTheme
+                                                                        .labelSmall
+                                                                        ?.copyWith(
+                                                                          color:
+                                                                              Theme.of(
+                                                                                context,
+                                                                              ).colorScheme.onSurface.withValues(
+                                                                                alpha: 0.5,
+                                                                              ),
+                                                                        ),
+                                                                  ),
+                                                                ],
                                                               ),
                                                             ],
                                                           ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    Icon(
-                                                      _trailingChevron(context),
-                                                      size: 20,
-                                                      color: Theme.of(context)
-                                                          .iconTheme
-                                                          .color
-                                                          ?.withValues(
-                                                            alpha: 0.4,
+                                                        ),
+                                                        Icon(
+                                                          _trailingChevron(
+                                                            context,
                                                           ),
+                                                          size: 20,
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .iconTheme
+                                                                  .color
+                                                                  ?.withValues(
+                                                                    alpha: 0.4,
+                                                                  ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                AppSpacing.verticalMd,
+                              ],
+                              if (_accountList.isEmpty) ...[
+                                // First-run welcome: only shown to brand-new users
+                                // (no saved accounts). Returning users with cached
+                                // accounts skip this and go straight to the picker.
+                                Center(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 360,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.shield_outlined,
+                                          size: 56,
+                                          color: colorTheme.primaryColor,
                                         ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                            AppSpacing.verticalMd,
-                          ],
-                          if (_accountList.isEmpty) ...[
-                            // First-run welcome: only shown to brand-new users
-                            // (no saved accounts). Returning users with cached
-                            // accounts skip this and go straight to the picker.
-                            Center(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 360,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.shield_outlined,
-                                      size: 56,
-                                      color: colorTheme.primaryColor,
+                                        AppSpacing.verticalLg,
+                                        Text(
+                                          AppLocalizations.of(
+                                                context,
+                                              )?.appTitle ??
+                                              'toxee',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        AppSpacing.verticalLg,
+                                        Text(
+                                          // TODO(l10n): key=appTagline
+                                          'A private, peer-to-peer messenger',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withValues(alpha: 0.7),
+                                              ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
                                     ),
-                                    AppSpacing.verticalLg,
-                                    Text(
-                                      AppLocalizations.of(context)?.appTitle ??
-                                          'toxee',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                AppSpacing.verticalLg,
+                              ],
+                              // Restore-from-.tox is a top-level, peer-prominence
+                              // action with Register: a user who has just lost a
+                              // device must find this entry without digging into
+                              // "Import account…" or settings.
+                              _LoginActionCard(
+                                key: UiKeys.loginPageRestoreFromToxFile,
+                                icon: Icons.restore_outlined,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.restoreFromToxFile,
+                                color: colorTheme.primaryColor,
+                                isPrimary: true,
+                                onTap: _busy ? null : _restoreFromToxFile,
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              _LoginActionCard(
+                                // Automation anchor for the "Import account" action.
+                                key: const Key(
+                                  'login_page_import_account_card',
+                                ),
+                                icon: Icons.download_outlined,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.importAccount,
+                                color: colorTheme.primaryColor,
+                                onTap: _busy ? null : _importToxProfile,
+                              ),
+                              if (FeatureFlags.enableQRPairing) ...[
+                                const SizedBox(height: AppSpacing.sm),
+                                _LoginActionCard(
+                                  icon: Icons.qr_code_scanner_outlined,
+                                  label: AppLocalizations.of(
+                                    context,
+                                  )!.pairWithAnotherDevice,
+                                  color: colorTheme.primaryColor,
+                                  onTap: _busy ? null : _startPairingAsClient,
+                                ),
+                              ],
+                              const SizedBox(height: AppSpacing.sm),
+                              _LoginActionCard(
+                                icon: Icons.person_add_outlined,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.registerNewAccount,
+                                color: colorTheme.primaryColor,
+                                isPrimary: true,
+                                onTap: _busy
+                                    ? null
+                                    : () async {
+                                        await Navigator.of(context).push<void>(
+                                          AppPageRoute(
+                                            page: const RegisterPage(),
                                           ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    AppSpacing.verticalLg,
-                                    Text(
-                                      // TODO(l10n): key=appTagline
-                                      'A private, peer-to-peer messenger',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withValues(alpha: 0.7),
-                                          ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
+                                        );
+                                        if (mounted) {
+                                          await _loadAccountList();
+                                        }
+                                      },
+                              ),
+                              if (_error != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: AppSpacing.md,
+                                  ),
+                                  child: ErrorBanner(
+                                    message: _error!,
+                                    onRetry: () {
+                                      setState(() => _error = null);
+                                      _login();
+                                    },
+                                  ),
                                 ),
-                              ),
-                            ),
-                            AppSpacing.verticalLg,
-                          ],
-                          // Restore-from-.tox is a top-level, peer-prominence
-                          // action with Register: a user who has just lost a
-                          // device must find this entry without digging into
-                          // "Import account…" or settings.
-                          _LoginActionCard(
-                            key: UiKeys.loginPageRestoreFromToxFile,
-                            icon: Icons.restore_outlined,
-                            label: AppLocalizations.of(
-                              context,
-                            )!.restoreFromToxFile,
-                            color: colorTheme.primaryColor,
-                            isPrimary: true,
-                            onTap: _busy ? null : _restoreFromToxFile,
+                            ],
                           ),
-                          const SizedBox(height: AppSpacing.sm),
-                          _LoginActionCard(
-                            // Automation anchor for the "Import account" action.
-                            key: const Key('login_page_import_account_card'),
-                            icon: Icons.download_outlined,
-                            label: AppLocalizations.of(context)!.importAccount,
-                            color: colorTheme.primaryColor,
-                            onTap: _busy ? null : _importToxProfile,
-                          ),
-                          if (FeatureFlags.enableQRPairing) ...[
-                            const SizedBox(height: AppSpacing.sm),
-                            _LoginActionCard(
-                              icon: Icons.qr_code_scanner_outlined,
-                              label: AppLocalizations.of(
-                                context,
-                              )!.pairWithAnotherDevice,
-                              color: colorTheme.primaryColor,
-                              onTap: _busy ? null : _startPairingAsClient,
-                            ),
-                          ],
-                          const SizedBox(height: AppSpacing.sm),
-                          _LoginActionCard(
-                            icon: Icons.person_add_outlined,
-                            label: AppLocalizations.of(
-                              context,
-                            )!.registerNewAccount,
-                            color: colorTheme.primaryColor,
-                            isPrimary: true,
-                            onTap: _busy
-                                ? null
-                                : () async {
-                                    await Navigator.of(context).push<void>(
-                                      AppPageRoute(page: const RegisterPage()),
-                                    );
-                                    if (mounted) _loadAccountList();
-                                  },
-                          ),
-                          if (_error != null)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                top: AppSpacing.md,
-                              ),
-                              child: ErrorBanner(
-                                message: _error!,
-                                onRetry: () {
-                                  setState(() => _error = null);
-                                  _login();
-                                },
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),

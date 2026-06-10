@@ -161,35 +161,36 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   final secureStore = <String, String>{};
-  const secureChannel =
-      MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  const secureChannel = MethodChannel(
+    'plugins.it_nomads.com/flutter_secure_storage',
+  );
 
   setUp(() {
     secureStore.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(secureChannel, (MethodCall call) async {
-      final args =
-          (call.arguments as Map?)?.cast<String, dynamic>() ?? const {};
-      switch (call.method) {
-        case 'write':
-          secureStore[args['key'] as String] = args['value'] as String;
-          return null;
-        case 'read':
-          return secureStore[args['key'] as String];
-        case 'delete':
-          secureStore.remove(args['key'] as String);
-          return null;
-        case 'containsKey':
-          return secureStore.containsKey(args['key'] as String);
-        case 'readAll':
-          return Map<String, String>.from(secureStore);
-        case 'deleteAll':
-          secureStore.clear();
-          return null;
-        default:
-          return null;
-      }
-    });
+          final args =
+              (call.arguments as Map?)?.cast<String, dynamic>() ?? const {};
+          switch (call.method) {
+            case 'write':
+              secureStore[args['key'] as String] = args['value'] as String;
+              return null;
+            case 'read':
+              return secureStore[args['key'] as String];
+            case 'delete':
+              secureStore.remove(args['key'] as String);
+              return null;
+            case 'containsKey':
+              return secureStore.containsKey(args['key'] as String);
+            case 'readAll':
+              return Map<String, String>.from(secureStore);
+            case 'deleteAll':
+              secureStore.clear();
+              return null;
+            default:
+              return null;
+          }
+        });
   });
 
   tearDown(() {
@@ -235,8 +236,11 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
-        expect(controller.restoreCalls, 1,
-            reason: 'Tapping Restore must invoke restoreFromToxFile');
+        expect(
+          controller.restoreCalls,
+          1,
+          reason: 'Tapping Restore must invoke restoreFromToxFile',
+        );
         // Success SnackBar names the recovered account.
         expect(find.textContaining('Recovered'), findsWidgets);
 
@@ -248,16 +252,24 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
-        expect(find.byType(AlertDialog), findsNothing,
-            reason:
-                'The restored password must be reused — no re-prompt on the '
-                'follow-up quick-login');
-        expect(controller.lastLoginParams, isNotNull,
-            reason: 'The restored account tap must proceed into login');
+        expect(
+          find.byType(AlertDialog),
+          findsNothing,
+          reason:
+              'The restored password must be reused — no re-prompt on the '
+              'follow-up quick-login',
+        );
+        expect(
+          controller.lastLoginParams,
+          isNotNull,
+          reason: 'The restored account tap must proceed into login',
+        );
         expect(controller.lastLoginParams!.nickname, 'Recovered');
-        expect(controller.lastLoginParams!.password,
-            _RestoringController.password,
-            reason: 'The cached restore password must flow into login()');
+        expect(
+          controller.lastLoginParams!.password,
+          _RestoringController.password,
+          reason: 'The cached restore password must flow into login()',
+        );
       },
     );
   });
@@ -273,19 +285,27 @@ void main() {
           _pumpableLoginPage(loginPageController: controller),
         );
 
-        expect(find.byKey(_importCardKey), findsOneWidget,
-            reason: 'Import action card must be present');
+        expect(
+          find.byKey(_importCardKey),
+          findsOneWidget,
+          reason: 'Import action card must be present',
+        );
         await tester.tap(find.byKey(_importCardKey));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
-        expect(controller.importCalls, 1,
-            reason: 'Tapping Import must invoke importAccount exactly once');
+        expect(
+          controller.importCalls,
+          1,
+          reason: 'Tapping Import must invoke importAccount exactly once',
+        );
         // The production handler passes l10n.importedAccountDefaultName.
         expect(controller.lastImportedDefaultName, isNotNull);
-        expect(controller.lastImportedDefaultName!.isNotEmpty, isTrue,
-            reason:
-                'importAccount must receive a non-empty default account name');
+        expect(
+          controller.lastImportedDefaultName!.isNotEmpty,
+          isTrue,
+          reason: 'importAccount must receive a non-empty default account name',
+        );
       },
     );
   });
@@ -311,14 +331,23 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
-        expect(controller.loginCalls, 1,
-            reason: 'The first tap must invoke login once');
+        expect(
+          controller.loginCalls,
+          1,
+          reason: 'The first tap must invoke login once',
+        );
         // The REAL ErrorBanner renders the failure message + a Retry button.
-        expect(find.textContaining('login boom'), findsWidgets,
-            reason: 'The error banner must carry the failure message');
+        expect(
+          find.textContaining('login boom'),
+          findsWidgets,
+          reason: 'The error banner must carry the failure message',
+        );
         final retry = find.widgetWithText(TextButton, 'Retry');
-        expect(retry, findsOneWidget,
-            reason: 'The error banner must expose a Retry action');
+        expect(
+          retry,
+          findsOneWidget,
+          reason: 'The error banner must expose a Retry action',
+        );
 
         // Tapping Retry clears the error and re-invokes login (which fails
         // again, re-rendering the banner).
@@ -326,39 +355,40 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
-        expect(controller.loginCalls, 2,
-            reason: 'Retry must re-invoke login');
-        expect(find.textContaining('login boom'), findsWidgets,
-            reason: 'The banner re-renders after the retry also fails');
+        expect(controller.loginCalls, 2, reason: 'Retry must re-invoke login');
+        expect(
+          find.textContaining('login boom'),
+          findsWidgets,
+          reason: 'The banner re-renders after the retry also fails',
+        );
       },
     );
   });
 
   group('LoginPage settings navigation', () {
-    testWidgets(
-      'tapping the AppBar settings icon pushes a new route',
-      (tester) async {
-        await initEmpty();
-        final recorder = _RouteRecorder();
-        await _pumpAndLoad(
-          tester,
-          _pumpableLoginPage(observers: [recorder]),
-        );
+    testWidgets('tapping the login settings button pushes a new route', (
+      tester,
+    ) async {
+      await initEmpty();
+      final recorder = _RouteRecorder();
+      await _pumpAndLoad(tester, _pumpableLoginPage(observers: [recorder]));
 
-        final pushedBefore = recorder.pushed.length;
-        expect(find.byIcon(Icons.settings), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.settings));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+      final pushedBefore = recorder.pushed.length;
+      expect(find.byKey(UiKeys.loginPageSettingsButton), findsOneWidget);
+      await tester.tap(find.byKey(UiKeys.loginPageSettingsButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-        expect(recorder.pushed.length, greaterThan(pushedBefore),
-            reason:
-                'Tapping the settings icon must push the LoginSettingsPage '
-                'route onto the navigator');
-        // The most-recently pushed route is the settings page (a non-dialog
-        // PageRoute). Its presence proves navigation, not just a SnackBar.
-        expect(recorder.pushed.last, isA<PageRoute<dynamic>>());
-      },
-    );
+      expect(
+        recorder.pushed.length,
+        greaterThan(pushedBefore),
+        reason:
+            'Tapping the login settings button must push the LoginSettingsPage '
+            'route onto the navigator',
+      );
+      // The most-recently pushed route is the settings page (a non-dialog
+      // PageRoute). Its presence proves navigation, not just a SnackBar.
+      expect(recorder.pushed.last, isA<PageRoute<dynamic>>());
+    });
   });
 }

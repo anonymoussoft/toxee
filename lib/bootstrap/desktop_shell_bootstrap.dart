@@ -36,7 +36,6 @@ class DesktopShellBootstrap {
 
   static Future<void> initializeIfNeeded() async {
     if (!PlatformUtils.isDesktop) return;
-    if (!AppTray.instance.isSupported) return;
 
     await windowManager.ensureInitialized();
     const minSize = Size(960, 600);
@@ -47,6 +46,8 @@ class DesktopShellBootstrap {
       minimumSize: minSize,
       title: 'Toxee',
       center: true,
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false,
     );
 
     final savedBounds = await Prefs.getWindowBounds();
@@ -55,7 +56,8 @@ class DesktopShellBootstrap {
     // multi-display API, so we reject obviously-off-screen origins (e.g.
     // the user unplugged the secondary monitor between sessions) and fall
     // back to the centered default rather than restoring an invisible window.
-    final validBounds = savedBounds != null &&
+    final validBounds =
+        savedBounds != null &&
         savedBounds.width >= minSize.width &&
         savedBounds.height >= minSize.height &&
         savedBounds.width <= 4096 &&
@@ -68,7 +70,7 @@ class DesktopShellBootstrap {
     windowManager.addListener(_WindowStateListener());
     await windowManager.setPreventClose(true);
 
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
       if (validBounds) {
         try {
           await windowManager.setBounds(savedBounds);
@@ -86,6 +88,8 @@ class DesktopShellBootstrap {
         }
       }
     });
-    await AppTray.instance.init();
+    if (AppTray.instance.isSupported) {
+      await AppTray.instance.init();
+    }
   }
 }

@@ -21,11 +21,7 @@ import '../../util/responsive_layout.dart';
 /// roughly the same font size per breakpoint (`textStyle.fontsize_34` on
 /// mobile, `textStyle.fontsize_24 + 4` on desktop).
 class ContactAppBarNameOverride extends StatelessWidget {
-  const ContactAppBarNameOverride({
-    super.key,
-    this.title,
-    this.trailing,
-  });
+  const ContactAppBarNameOverride({super.key, this.title, this.trailing});
 
   final String? title;
 
@@ -43,13 +39,16 @@ class ContactAppBarNameOverride extends StatelessWidget {
         final localizations = TencentCloudChatLocalizations.of(context);
         final effectiveTitle = title ?? localizations?.contacts ?? '';
         final isDesktop = ResponsiveLayout.isDesktop(context);
-        final fontSize =
-            isDesktop ? textStyle.fontsize_24 + 4 : textStyle.fontsize_34;
+        final fontSize = isDesktop
+            ? textStyle.fontsize_24 + 4
+            : textStyle.fontsize_34;
         return Row(
           children: [
             Expanded(
               child: Text(
                 effectiveTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: colorTheme.contactItemFriendNameColor,
                   fontSize: fontSize,
@@ -58,9 +57,12 @@ class ContactAppBarNameOverride extends StatelessWidget {
               ),
             ),
             if (trailing != null)
-              KeyedSubtree(
-                key: const ValueKey('contact_app_bar_trailing_override'),
-                child: trailing!,
+              Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: KeyedSubtree(
+                  key: const ValueKey('contact_app_bar_trailing_override'),
+                  child: trailing!,
+                ),
               ),
           ],
         );

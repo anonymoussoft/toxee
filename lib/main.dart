@@ -24,6 +24,7 @@ import 'util/theme_controller.dart';
 import 'util/locale_controller.dart';
 import 'i18n/app_localizations.dart';
 import 'util/logger.dart';
+import 'util/platform_utils.dart';
 import 'call/call_overlay.dart';
 import 'call/call_effects_listener.dart';
 import 'navigation/app_navigation.dart';
@@ -38,6 +39,7 @@ import 'startup/startup_step.dart';
 
 import 'bootstrap/app_bootstrap.dart';
 import 'bootstrap/app_bootstrap_result.dart';
+import 'ui/widgets/desktop_window_frame.dart';
 
 /// Routes print() output to AppLogger. Parses TCCF lines (TencentCloudChatLog)
 /// so level and body are normalized instead of duplicating timestamp in body.
@@ -357,6 +359,9 @@ class _EchoUIKitAppState extends State<EchoUIKitApp>
                           ),
                         );
                       }
+                    }
+                    if (PlatformUtils.isDesktop) {
+                      content = DesktopWindowFrame(child: content);
                     }
                     return content;
                   },
