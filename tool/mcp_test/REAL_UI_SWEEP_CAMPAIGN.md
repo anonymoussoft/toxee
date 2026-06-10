@@ -163,23 +163,23 @@ touched-lib hermetic tests 57/57 green; 4 codex rounds, all findings applied)
 
 | # | Case | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 30 | add_friend_dialog_esc_close | 1i | S5 | new-entry → Add Contact → ESC closes dialog | TODO |
-| 31 | add_friend_invalid_id_error | 1i | S5 | garbage ID → inline error, no crash | TODO |
-| 32 | add_friend_self_id_guard | 1i | S55 | own tox ID → self-add guard error | TODO |
-| 33 | add_friend_duplicate_guard | 2p-r | S56 | friend's ID again → dedup guard error | TODO |
-| 34 | contacts_subtabs_cycle | 1i | S106 | New Contacts ↔ Blocked Users sub-tab switching renders each list | TODO |
-| 35 | contacts_row_opens_friend_profile | 2p-r | S52 | tap friend row → friend profile sheet mounts | TODO |
-| 36 | friendprof_send_message_tile | 2p-r | S115 | Send-Message tile → chat opens for that friend | TODO |
-| 37 | friendprof_pin_toggle | 2p-r | S84 | pin switch → pinnedConversations flips + row reorders | TODO |
-| 38 | friendprof_block_unblock | 2p-r | S29 | block switch on→off → blockedUsers flips both ways | TODO |
-| 39 | friendprof_mute_toggle_regression | 2p-r | S114/S83 | mute switch ×2 → no crash (ABI regression gate) + recvOpt/dump flip | TODO |
-| 40 | friendprof_remark_edit_persists | 2p-r | S113/S30 | remark dialog real input → Confirm → UI + dump show remark (KNOWN native bug — expect FAIL → root-cause fix in run phase) | TODO |
-| 41 | friendprof_clear_history | 2p-r | S111 | seed a few messages; clear → chat empty + history file cleared | TODO |
-| 42 | blocked_list_unblock_row | 2p-r | S107 | block via profile → Blocked Users tab row → unblock button → row gone | TODO |
-| 43 | contact_search_filter_clear | 2p-r | S49 | contact search: type filter → matches; clear → full list | TODO |
-| 44 | friendprof_delete_friend_confirm | 2p-r | S112/S28 | delete friend → keyed confirm → friend gone both lists (LAST; sweep ends no-friend) | TODO |
+| 30 | add_friend_dialog_esc_close | 1i | S5 | new-entry → Add Contact → ESC closes dialog | WRITTEN |
+| 31 | add_friend_invalid_id_error | 1i | S5 | garbage ID → inline error, no crash | WRITTEN |
+| 32 | add_friend_self_id_guard | 1i | S55 | own tox ID → self-add guard error | WRITTEN |
+| 33 | add_friend_duplicate_guard | 2p-r | S56 | friend's ID again → dedup guard error | WRITTEN |
+| 34 | contacts_subtabs_cycle | 1i | S106 | New Contacts ↔ Blocked Users sub-tab switching renders each list | WRITTEN |
+| 35 | contacts_row_opens_friend_profile | 2p-r | S52 | tap friend row → friend profile sheet mounts | WRITTEN |
+| 36 | friendprof_send_message_tile | 2p-r | S115 | Send-Message tile → chat opens for that friend | WRITTEN |
+| 37 | friendprof_pin_toggle | 2p-r | S84 | pin switch → pinnedConversations flips + row reorders | WRITTEN |
+| 38 | friendprof_block_unblock | 2p-r | S29 | block switch on→off → blockedUsers flips both ways | WRITTEN |
+| 39 | friendprof_mute_toggle_regression | 2p-r | S114/S83 | mute switch ×2 → no crash (ABI regression gate, HARD) + recvOpt dump flip (SOFT) | WRITTEN |
+| 40 | friendprof_remark_edit_persists | 2p-r | S113/S30 | remark dialog real input → Confirm → UI + dump show remark (HARD; KNOWN native bug — EXPECTED FAIL live → run-phase signal to fix native setFriendInfo) | WRITTEN |
+| 41 | friendprof_clear_history | 2p-r | S111 | seed a few messages; clear → chat empty + history file cleared | WRITTEN |
+| 42 | blocked_list_unblock_row | 2p-r | S107 | block via profile → Blocked Users tab row → unblock → row gone | WRITTEN |
+| 43 | contact_search_filter_clear | 2p-r | S49 | contact search: type filter → matches; clear → full list | WRITTEN |
+| 44 | friendprof_delete_friend_confirm | 2p-r | S112/S28 | delete friend → keyed confirm → friend gone both lists (LAST; sweep ends no-friend) | WRITTEN |
 
-Sweep: `sweep_contacts` (handshake once at top) · Campaign: `rui-contacts`. **Batch 4 STATUS: TODO**
+Sweep: `sweep_contacts` (handshake once at top) · Campaign: `rui-contacts`. **Batch 4 STATUS: DONE** (15/15 WRITTEN+unrun; no production change — every friend-profile/contact key already in the fork; 2p state contract no-friend→no-friend; analyze 0-NEW; planner/validate/campaign-list/self-test green)
 
 #### Batch 5 — Conversation list C2C (10 cases, 2p-r, one launch + one handshake)
 
@@ -627,6 +627,163 @@ AppleScript System Events window resize, SKIP with reason if refused)
   affordance and the strength caption render identically on iOS/Android/desktop. Case 26's SKIP
   applies on mobile too (the restore card opens the platform file picker there as well; no
   in-app pre-picker exists on any platform).
+
+- 2026-06-10 **Batch 4 DONE** (contacts / friend profile — 15 TWO-PROCESS cases
+  WRITTEN+unrun; NOT live-run, per write-phase protocol). New part file
+  `tool/mcp_test/drive_real_ui_pair_contacts.dart` (~770 LOC) declared in the
+  `drive_real_ui_pair.dart` part list; 15 per-case functions +
+  `_establishFriendshipForSweep` (real-UI handshake helper) + `runContactsSweep`
+  (chains all 15 on ONE pair launch, per-case `[sweep] <case>: PASS|FAIL` + final
+  counts + an end-state reset guard, exits non-zero if any HARD case fails — all 15
+  are hard). Each case individually dispatchable in `drive_real_ui_pair.dart` (the
+  add-friend guards 30/31/32 + subtab cycle 34 run on a fresh no-friend launch;
+  the friendship-dependent cases 33/35–44 boot `--boot-restored` paired_for_e2e or
+  establish the friendship inline). Runner: 16 ids (`sweep_contacts` + 15) added to
+  `_validRealUiScenarios` + both state tables; campaign `rui-contacts =
+  [sweep_contacts]`.
+
+  **NO PRODUCTION CHANGE in this batch** — every friend-profile / contact key the
+  cases drive was ALREADY in the fork
+  (`third_party/chat-uikit-flutter/.../tencent_cloud_chat_user_profile_body.dart`,
+  `.../tencent_cloud_chat_contact_item.dart`, `.../tencent_cloud_chat_contact_tab.dart`,
+  `.../tencent_cloud_chat_contact_app_bar.dart`). Verified-not-assumed (per "don't
+  trust doc conclusions"):
+  - **The delete-friend CONFIRM button IS keyed** — `user_profile_delete_friend_confirm_button`
+    (+ a Cancel key, + a `handled` one-shot double-fire guard) on BOTH the
+    Cupertino (macOS/iOS) and Material branches. The REAL_UI_TWO_PROCESS note that
+    "the confirm button key (`user_profile_delete_friend_button`) wasn't found" was
+    STALE / conflated two DISTINCT keys: the OPENER (`user_profile_delete_friend_button`,
+    a GestureDetector) vs the CONFIRM (`user_profile_delete_friend_confirm_button`).
+    Case 44 needs no production fix.
+  - **Pin/Block are real `Switch`es via OperationBar `controlKey`**
+    (`user_profile_pin_switch` / `user_profile_block_switch`) — single-fired with
+    `tapKeyCenter` (a flutter_skill double-fire would toggle a Switch twice = net
+    no-op). Mute is a bare `Switch` (`user_profile_conversation_mute_switch`).
+  - **Send-Message tile is keyed per-tile** (`friend_profile_send_message_tile`, the
+    leftmost of [Send,Voice,Video]) — case 36 single-fires it; toxee's
+    `onTapContactItem` toggles profile→chat (when `_inContactProfileContext`).
+  - **Contact row tap opens the PROFILE** (toxee's `onTapContactItem` →
+    `_showUserProfileOnRight`), NOT the chat — confirmed in `home_page.dart`. The
+    fork's `contact_list_item:<userID>.onTap = navigateToChat` is intercepted by
+    toxee's `onNavigateToChat` handler returning true. Case 35 relies on this.
+  - **Contact search field is keyed** `contact_search_field` (writes
+    `contactSearchQuery`); the az-list filters case-insensitively on
+    remark/nickname/userID — case 43's matching/non-matching/clear assertions.
+  - **Subtab rows are keyed + tappable** (`contact_new_contacts_tab` /
+    `contact_blocked_users_tab` on the InkWell/GestureDetector on desktop too) —
+    the older "key on a non-tappable element" note is stale for these.
+
+  **dump_state fields used (assertions, never the asserted action):**
+  `blockedUsers` (live FfiChatService set, Prefs-backed — case 38/42),
+  `pinnedConversations` (Prefs-backed — case 37), `conversations[].recvOpt`
+  (case 39 SOFT), `conversations[].messageCount` via `dumpState(conversationId:)`
+  (case 41 clear), `friends[].nickName` via `friendNick` (case 40 remark + case 44
+  delete).
+
+  **KNOWN-BUG cases asserted HARD on purpose (run-phase signals):**
+  - **case 39 mute** (S114/S83): HARD = no-crash (BOTH sessions stay `sessionReady`
+    across two toggles — the original ABI bug SIGSEGV'd both) + the switch tappable.
+    SOFT (logged, NOT gated): the `recvOpt` dump value — the binary-replacement path
+    stores `opt` in a C++ map distinct from the Prefs-backed conversation cache l3
+    reads (the documented native→Dart sync residual). This is the REGRESSION GATE
+    for the already-fixed `DartSetC2CReceiveMessageOpt` 3-arg ABI.
+  - **case 40 remark** (S113/S30): HARD assertion that the remark PERSISTS — but
+    EXPECTED TO FAIL live because `_onChangeFriendRemark` → SDK `setFriendInfo`
+    (native binary-replacement path) is KNOWN BROKEN (input lands, Confirm doesn't
+    persist). **A live FAIL here is the actionable signal to root-fix the native
+    `dart_compat` setFriendInfo path in the run phase** (mirroring the mute ABI fix —
+    likely another `Dart*` signature/stub drift vs the generated bindings;
+    `abi_audit.py` for count/ptr, codex for width/signedness).
+
+  **2p STATE CONTRACT (registered):** `sweep_contacts` required=no-friend (does its
+  OWN real-UI handshake at the top), result=no-friend (case 44 deletes on both
+  sides + a `finally` end-guard calls `runResetFriendship` if anything is still
+  friended). Planner dry-run confirmed: `sweep_contacts` → a FRESH
+  `launch_fixture_c_pair.sh` (no restore); the friendship-dependent individual
+  cases → `TOXEE_FIXTURE_C_RESTORE=paired_for_e2e` + `--boot-restored`.
+
+  **ORDER (state-poison-aware):** 30/31/32 (add-friend dialog guards — ESC close /
+  inline invalid-ID error / self-add snackbar) BEFORE the handshake (no friendship
+  needed; all back out without sending) → handshake once → 33 duplicate-guard (B
+  re-adds A → "already in your friend list" snackbar) → 34 subtabs cycle → 35
+  row-opens-profile → 36 send-message-tile (→chat) → 37 pin (restore unpinned) → 38
+  block/unblock (ends unblocked) → 39 mute regression → 40 remark (expected-FAIL) →
+  41 clear-history (seed 3 via the REAL composer, clear via profile, assert
+  messageCount→0) → 42 block-via-profile → Blocked Users tab row → unblock → row
+  gone → 43 contact search filter/clear → 44 DELETE friend (LAST; keyed confirm;
+  ends no-friend BOTH sides). Each profile-control case re-opens the profile via
+  `_ensureFriendProfileOpen` (tolerant, no-throw) and lands back on the Contacts
+  shell so the next case starts clean.
+
+  **Gates green:** `flutter analyze lib tool` 222 (0 NEW — matches the Batch-0
+  baseline); `--plan-json --class=2proc-ui` exit 0; `--validate-only` exit 0;
+  `--list-real-ui-campaigns` shows `rui-contacts: sweep_contacts`; dry-run of the
+  `rui-contacts` campaign + the individual friendship-dependent cases plan
+  correctly; driver `--self-test-shell-recovery` PASS; touched-surface hermetic
+  tests `flutter test test/ui/contact/ test/ui/add_friend_*` 42/42 PASS (the
+  invalid-ID hint text case 31 asserts —
+  `'Tox address must be 76 hexadecimal characters'` — matches the production en
+  string verbatim).
+
+  **HARNESS FIX (shared helper, benefits the whole campaign — codex P1.2):**
+  `deleteFriendViaProfile` (`drive_real_ui_pair_friends.dart`, used by
+  `runResetFriendship` campaign-wide) was STALE — it only tapped the delete
+  OPENER (`user_profile_delete_friend_button`) and never the keyed CONFIRM
+  (`user_profile_delete_friend_confirm_button`), so it could stop at the confirm
+  dialog and leave the friendship INTACT. Fixed to single-fire the keyed confirm
+  (fallback "Confirm" label). This is the real correctness fix behind the
+  REAL_UI_TWO_PROCESS "delete confirm button not found → incomplete" observation —
+  the key was always there, the helper just never tapped it. Harness-layer
+  (shared Dart driver helper), so it covers every batch's friendship reset.
+
+  **Codex review (mandatory, telemetry-off — 1 round, ALL findings applied):**
+  3 P1 + 2 P2 + 2 P3, every one fixed:
+  - **P1.1** `runContactsSweep` returned `failed==0` even if the end-clean reset
+    failed → the runner could trust an unachieved no-friend result. FIX: track
+    `endNoFriend` (default false), recompute it from the actual friendship state
+    AFTER the reset, and gate the return on `failed==0 && endNoFriend`.
+  - **P1.2** the stale `deleteFriendViaProfile` (above) — case 44's mirror-delete
+    fallback + the end-guard reset both depend on it.
+  - **P1.3** case 39 (mute) liveness-only gate would FALSE-PASS a dead/no-op
+    switch. FIX: also assert the Switch's `value` actually flips ON then OFF —
+    read via flutter_skill `interactiveStructured` (it merges each Switch
+    element's `state['value']` into the entry, verified in the 0.9.36 source).
+    `onChanged` does `setState(disturb=value)` synchronously regardless of the
+    SDK result, so the rendered value is the right HARD signal (the recvOpt dump
+    stays SOFT).
+  - **P2.1** case 40 weakened its assertion to `uiShowsRemark || dumpNick==...`
+    (a transient toast could satisfy it). FIX: gate on the DUMP only
+    (`dumpNick == remark`) + require the dialog CLOSED (a stuck modal can't false
+    "remark shows").
+  - **P2.2** case 40 claimed to restore the original remark but only logged it.
+    FIX: added `_setFriendRemark` to restore via the real dialog when (and only
+    when) the remark actually persisted — so once the native path is fixed, case
+    43's nickB search + case 44 aren't poisoned.
+  - **P3.1** case 34 (subtabs) accepted the TAB CONTROL key + ambiguous labels as
+    "detail shown" → false-pass. FIX: assert DETAIL-PANE-ONLY markers (Blocked
+    Users → "No blocked users" block-list empty-state copy; New Contacts →
+    `contact_applications_list_empty` key), opening Blocked FIRST so New Contacts
+    proves a real SWAP back.
+  - **P3.2** case 36's `_tryTapText('Send Message')` fallback reintroduced the
+    double-fire hazard on a route-changing tile. FIX: removed the fallback —
+    single-fire `tapKeyCenter` only (it already retries bounds 5×); a missing
+    tile is a hard FAIL, not a double-fire risk.
+
+  After the fixes: analyze still 222 (0 NEW); planner/validate/campaign-list/
+  self-test green; 42/42 touched-surface hermetic tests still PASS; `dart analyze`
+  on the three touched driver/runner files clean (codex re-ran it). (The first
+  codex attempt hung on the provider — TLS-flakiness, per the codex-telemetry
+  memory; killed + re-ran with a bounded timeout; the second run completed.)
+
+  **Mobile parity:** every widget the cases drive is shared Dart (the fork's
+  friend-profile / contact-item / contact-tab / contact-app-bar widgets +
+  toxee's `home_page.dart` `onTapContactItem`) with no platform split — the same
+  add-friend guards, profile controls, search filter, and delete-confirm render
+  identically on iOS/Android/desktop. The two KNOWN-BUG cases apply on mobile too:
+  the mute ABI fix was a NATIVE FFI fix (covers both); the remark `setFriendInfo`
+  path is the same native binary-replacement path on every platform, so a run-phase
+  fix there covers mobile as well. (This harness drives the macOS desktop app; the
+  hermetic L1 WidgetTester gates in `test/ui/contact/` cover the mobile builders.)
 
 ## Run phase (after ALL batches written) — protocol
 

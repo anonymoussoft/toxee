@@ -94,6 +94,11 @@ import 'fixture_c_bootstrap.dart';
 //                   register open/back + validation, restore SKIP, quick-login
 //                   wrong/correct password + remove, account switch) +
 //                   the sweep_login chain.
+//   contacts      — Batch-4 contacts/friend-profile sweep (add-friend dialog
+//                   guards, contact subtabs, row->profile, send-message tile,
+//                   pin/block/mute/remark, clear-history, blocked-list unblock,
+//                   contact search, delete-friend) + the sweep_contacts chain
+//                   (TWO-PROCESS: one handshake at the top, delete-friend last).
 //   group_profile — group profile, rename, search, add-member, member list.
 //   group_menu    — conversation-row menu (pin/mark-read/clear/delete) + bursts.
 part 'drive_real_ui_pair_inst.dart';
@@ -105,6 +110,7 @@ part 'drive_real_ui_pair_settings.dart';
 part 'drive_real_ui_pair_settings2.dart';
 part 'drive_real_ui_pair_profile.dart';
 part 'drive_real_ui_pair_login.dart';
+part 'drive_real_ui_pair_contacts.dart';
 part 'drive_real_ui_pair_group_profile.dart';
 part 'drive_real_ui_pair_group_menu.dart';
 
@@ -363,6 +369,90 @@ Future<int> _main(List<String> args) async {
       await ensureHome(a, nickA);
       final tox = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
       return await _accountSwitchSecondAccount(a, tox) ? 0 : 1;
+    }
+    // Batch 4 — contacts / friend profile (TWO-PROCESS). sweep_contacts chains
+    // all 15 on one launch (the canonical entry; one handshake at the top,
+    // delete-friend last so the launch ends no-friend). The individual cases
+    // are dispatchable too: the add-friend dialog guards (30/31/32) run on a
+    // fresh no-friend launch (A-only); the friendship-dependent cases (33+)
+    // establish the A<->B friendship first via the real-UI handshake.
+    if (scenario == 'sweep_contacts') {
+      return await runContactsSweep(a, b, nickA, nickB);
+    }
+    if (scenario == 'add_friend_dialog_esc_close' ||
+        scenario == 'add_friend_invalid_id_error' ||
+        scenario == 'add_friend_self_id_guard') {
+      await ensureHome(a, nickA);
+      final tox = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+      switch (scenario) {
+        case 'add_friend_dialog_esc_close':
+          return await _addFriendDialogEscClose(a) ? 0 : 1;
+        case 'add_friend_invalid_id_error':
+          return await _addFriendInvalidIdError(a) ? 0 : 1;
+        case 'add_friend_self_id_guard':
+          return await _addFriendSelfIdGuard(a, tox) ? 0 : 1;
+      }
+    }
+    if (scenario == 'contacts_subtabs_cycle') {
+      await ensureHome(a, nickA);
+      return await _contactsSubtabsCycle(a) ? 0 : 1;
+    }
+    if (scenario == 'add_friend_duplicate_guard' ||
+        scenario == 'contacts_row_opens_friend_profile' ||
+        scenario == 'friendprof_send_message_tile' ||
+        scenario == 'friendprof_pin_toggle' ||
+        scenario == 'friendprof_block_unblock' ||
+        scenario == 'friendprof_mute_toggle_regression' ||
+        scenario == 'friendprof_remark_edit_persists' ||
+        scenario == 'friendprof_clear_history' ||
+        scenario == 'blocked_list_unblock_row' ||
+        scenario == 'contact_search_filter_clear' ||
+        scenario == 'friendprof_delete_friend_confirm') {
+      // Friendship-dependent: ensure A<->B friends first (the runner restores
+      // paired_for_e2e for these, but a standalone direct invocation may need
+      // the handshake). ensureHome both, then establish the friendship.
+      if (!bootRestored) {
+        await ensureHome(a, nickA);
+        await ensureHome(b, nickB, requireHomeMenu: false);
+      }
+      final tox2A =
+          (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+      final tox2B =
+          (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
+      if (tox2A.isEmpty || tox2B.isEmpty) {
+        throw DriveError('missing tox ids for $scenario: A=$tox2A B=$tox2B');
+      }
+      if (!await _establishFriendshipForSweep(
+          a, b, tox2A, tox2B, nickA, nickB)) {
+        print('[pair] $scenario: could not establish friendship');
+        return 1;
+      }
+      switch (scenario) {
+        case 'add_friend_duplicate_guard':
+          return await _addFriendDuplicateGuard(b, tox2A) ? 0 : 1;
+        case 'contacts_row_opens_friend_profile':
+          return await _contactsRowOpensFriendProfile(a, tox2B) ? 0 : 1;
+        case 'friendprof_send_message_tile':
+          return await _friendprofSendMessageTile(a, tox2B) ? 0 : 1;
+        case 'friendprof_pin_toggle':
+          return await _friendprofPinToggle(a, tox2B) ? 0 : 1;
+        case 'friendprof_block_unblock':
+          return await _friendprofBlockUnblock(a, tox2B) ? 0 : 1;
+        case 'friendprof_mute_toggle_regression':
+          return await _friendprofMuteToggleRegression(a, b, tox2B) ? 0 : 1;
+        case 'friendprof_remark_edit_persists':
+          return await _friendprofRemarkEditPersists(a, tox2B) ? 0 : 1;
+        case 'friendprof_clear_history':
+          return await _friendprofClearHistory(a, tox2B) ? 0 : 1;
+        case 'blocked_list_unblock_row':
+          return await _blockedListUnblockRow(a, tox2B) ? 0 : 1;
+        case 'contact_search_filter_clear':
+          return await _contactSearchFilterClear(a, tox2B, nickB) ? 0 : 1;
+        case 'friendprof_delete_friend_confirm':
+          return await _friendprofDeleteFriendConfirm(a, b, tox2A, tox2B)
+              ? 0
+              : 1;
+      }
     }
     if (scenario == 'group_profile_open') {
       return await runGroupProfileOpen(a, nickA);

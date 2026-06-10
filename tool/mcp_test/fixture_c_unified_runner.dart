@@ -121,6 +121,28 @@ const _validRealUiScenarios = {
   'login_password_wrong_error',
   'login_password_correct_unlocks',
   'account_switch_second_account',
+  // Batch 4 — contacts / friend profile (TWO-PROCESS). sweep_contacts chains
+  // all 15 on one launch: required=no-friend (it does its OWN handshake) and
+  // result=no-friend (case 44 deletes the friend on both sides). The individual
+  // cases are runnable too — the add-friend dialog guards (30/31/32) + subtab
+  // cycle (34) are no-friend; the friendship-dependent cases (33, 35–43)
+  // require/leave a friendship; 44 leaves no-friend.
+  'sweep_contacts',
+  'add_friend_dialog_esc_close',
+  'add_friend_invalid_id_error',
+  'add_friend_self_id_guard',
+  'add_friend_duplicate_guard',
+  'contacts_subtabs_cycle',
+  'contacts_row_opens_friend_profile',
+  'friendprof_send_message_tile',
+  'friendprof_pin_toggle',
+  'friendprof_block_unblock',
+  'friendprof_mute_toggle_regression',
+  'friendprof_remark_edit_persists',
+  'friendprof_clear_history',
+  'blocked_list_unblock_row',
+  'contact_search_filter_clear',
+  'friendprof_delete_friend_confirm',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -131,6 +153,11 @@ const _realUiCampaigns = <String, List<String>>{
   // Batch 3 — login / register (the whole 9-case chain on one launch; case 26
   // is a SKIP inside the chain — native picker only).
   'rui-login': ['sweep_login'],
+  // Batch 4 — contacts / friend profile (the whole 15-case chain on one
+  // TWO-PROCESS launch; one handshake at the top, delete-friend last so the
+  // launch ends no-friend on both sides). Case 40 (remark) is a HARD gate that
+  // is EXPECTED to FAIL live until the native setFriendInfo path is fixed.
+  'rui-contacts': ['sweep_contacts'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -988,6 +1015,20 @@ String _requiredRealUiState(String scenario) {
     case 'conference_message':
     case 'call_voice':
     case 'call_reject':
+    // Batch 4 — friendship-dependent contacts/friend-profile cases: the runner
+    // restores paired_for_e2e so the friend exists before the case drives the
+    // friend profile / duplicate-add guard.
+    case 'add_friend_duplicate_guard':
+    case 'contacts_row_opens_friend_profile':
+    case 'friendprof_send_message_tile':
+    case 'friendprof_pin_toggle':
+    case 'friendprof_block_unblock':
+    case 'friendprof_mute_toggle_regression':
+    case 'friendprof_remark_edit_persists':
+    case 'friendprof_clear_history':
+    case 'blocked_list_unblock_row':
+    case 'contact_search_filter_clear':
+    case 'friendprof_delete_friend_confirm':
       return _realUiStateFriends;
     case 'handshake':
     case 'handshake_detail':
@@ -1042,6 +1083,14 @@ String _requiredRealUiState(String scenario) {
     case 'login_password_wrong_error':
     case 'login_password_correct_unlocks':
     case 'account_switch_second_account':
+    // Batch 4 — sweep_contacts runs its OWN handshake, so it requires a fresh
+    // NO-FRIEND pair launch (driving both A and B). The add-friend dialog guard
+    // cases (30/31/32) + the subtab cycle (34) need no friendship either.
+    case 'sweep_contacts':
+    case 'add_friend_dialog_esc_close':
+    case 'add_friend_invalid_id_error':
+    case 'add_friend_self_id_guard':
+    case 'contacts_subtabs_cycle':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1063,6 +1112,18 @@ String _resultRealUiState(String scenario) {
     case 'conference_message':
     case 'call_voice':
     case 'call_reject':
+    // Batch 4 — these friendship-dependent cases LEAVE the friendship intact
+    // (they toggle profile controls / read the list, never delete the friend).
+    case 'add_friend_duplicate_guard':
+    case 'contacts_row_opens_friend_profile':
+    case 'friendprof_send_message_tile':
+    case 'friendprof_pin_toggle':
+    case 'friendprof_block_unblock':
+    case 'friendprof_mute_toggle_regression':
+    case 'friendprof_remark_edit_persists':
+    case 'friendprof_clear_history':
+    case 'blocked_list_unblock_row':
+    case 'contact_search_filter_clear':
       return _realUiStateFriends;
     case 'decline':
     case 'custom_message':
@@ -1111,6 +1172,16 @@ String _resultRealUiState(String scenario) {
     case 'login_password_wrong_error':
     case 'login_password_correct_unlocks':
     case 'account_switch_second_account':
+    // Batch 4 — sweep_contacts ends no-friend (case 44 deletes + an end-guard
+    // reset). The add-friend dialog guards (30/31/32) + subtab cycle (34) leave
+    // the no-friend launch untouched. friendprof_delete_friend_confirm (44) is
+    // the standalone delete case, which leaves the pair NO-FRIEND.
+    case 'sweep_contacts':
+    case 'add_friend_dialog_esc_close':
+    case 'add_friend_invalid_id_error':
+    case 'add_friend_self_id_guard':
+    case 'contacts_subtabs_cycle':
+    case 'friendprof_delete_friend_confirm':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');

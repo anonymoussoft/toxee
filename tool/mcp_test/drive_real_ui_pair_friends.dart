@@ -311,8 +311,27 @@ Future<bool> deleteFriendViaProfile(Inst inst, String otherTox) async {
   if (!await areFriends(inst, otherTox)) return false;
   try {
     await openFriendProfile(inst, otherTox);
+    // OPEN the delete-confirm dialog (the opener is a GestureDetector).
     if (!await inst.tryTapKey('user_profile_delete_friend_button')) {
       await inst.tapText('Delete');
+    }
+    // CONFIRM the deletion. The opener only SHOWS the confirm dialog; the actual
+    // deleteFromFriendList fires from the confirm button, which is keyed
+    // (user_profile_delete_friend_confirm_button, with a `handled` one-shot
+    // guard). Earlier versions of this helper stopped at the opener and left the
+    // dialog up (friendship intact) — single-fire the keyed confirm so the
+    // delete actually dispatches. Fall back to the "Confirm" label only if the
+    // keyed button can't be found.
+    if (await inst.waitKey(
+      'user_profile_delete_friend_confirm_button',
+      timeoutSecs: 6,
+    )) {
+      if (!await inst.tapKeyCenter(
+        'user_profile_delete_friend_confirm_button',
+        timeoutSecs: 6,
+      )) {
+        await inst.tapText('Confirm');
+      }
     }
     await Future<void>.delayed(const Duration(milliseconds: 1200));
     return true;
