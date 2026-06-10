@@ -1,0 +1,291 @@
+# Real-UI sweep campaign — 2026-06-10 (RECOVERY ANCHOR)
+
+> **Purpose of this file:** durable state for the "+94 real-app UI cases" campaign so any
+> session (or a fresh Claude session after token exhaustion) can resume exactly where work
+> stopped. Update the per-case Status column and the Batch log as work proceeds. Commit
+> after every batch.
+
+## Mission (user directive, 2026-06-10)
+
+Cover the majority of common UI scenarios with **real UI tests**: launch the REAL app
+(macOS debug bundle) and drive real clicks / scrolls / selections / typing — NOT hermetic
+WidgetTester gates. Add **≥80 new cases** (this plan: 94). Constraints:
+
+- **Reuse app launch + accounts aggressively.** No per-case relaunch, no per-case account
+  registration, no per-case re-friending. Suites chain many cases on ONE launch (the
+  `settings_sweep` precedent) and reuse the `paired_for_e2e` restored fixture state.
+- **Single agent (opus), serial** — one batch at a time, no parallel fan-out.
+- **Write ALL cases first, then run + fix.** Write phase is hermetic (analyze + planner
+  dry-run + hermetic extension-handler tests only; no live app launches).
+- Work directly on `master` (standing master-direct directive).
+- Deep root-cause fixes for anything the run phase surfaces (no surface patches).
+- Codex review mandatory before the campaign is declared done.
+
+## Vehicle
+
+`tool/mcp_test/drive_real_ui_pair.dart` + part files — the real-UI two-process driver
+(flutter_skill service extensions + osascript foreground/keystrokes), planned/launched via
+`tool/mcp_test/fixture_c_unified_runner.dart` campaigns. Read these FIRST:
+
+- `tool/mcp_test/REAL_UI_TWO_PROCESS.md` — harness facts, gotchas (unfocused-window stall,
+  enterText needs focusType-tap, composer needs osascript Return, dialog pop buttons need
+  `tapKeyCenter` single-fire, first-run wizard dismissal).
+- `tool/mcp_test/drive_real_ui_pair_inst.dart` — `Inst` primitives (tapKey/tryTapKey/
+  tapText/focusType/tapAt/osaType/osaReturn/waitKey/waitText/waitState/dumpState/shot/
+  foreground, l3 call plumbing).
+- `tool/mcp_test/drive_real_ui_pair_shell.dart` — ensureHome (register-once-per-launch),
+  recovery, new-entry shell.
+- Existing scenario parts (`_friends`, `_message_call`, `_group`, `_settings`,
+  `_group_profile`, `_group_menu`) — copy their shape.
+- `lib/ui/testing/l3_debug_tools.dart` — l3 tool registration pattern (mcp_toolkit).
+- `lib/ui/testing/ui_keys.dart` — ValueKey catalog.
+
+Existing real-UI scenarios (do NOT duplicate): handshake, handshake_detail, decline,
+custom_message, message, message_burst, group_message, group_burst, group_member_list,
+group_create, settings_sweep (+ copy_id/autologin/notification/export_chooser/password/
+logout_relogin/logout_double_fire), group_profile_open, group_rename, group_search,
+group_add_member_open, group_add_member_picker, group_conversation_menu,
+group_menu_pin_unpin, group_menu_mark_read, group_menu_delete_confirm,
+group_menu_mark_read_unread, group_clear_history, group_clear_preserves_pin,
+conference_message, probe_home_root, call_voice, call_reject, reset_friendship.
+
+## Batch plan (serial, one opus agent per batch)
+
+Per-batch contract (every agent MUST):
+1. Read this file + the harness files above before writing code.
+2. Implement its cases as scenario functions in a NEW part file
+   `drive_real_ui_pair_<domain>2.dart` (or extend the matching existing part if small),
+   register dispatch entries in `drive_real_ui_pair.dart`, add a `sweep_<domain>` scenario
+   that chains the batch's cases on one launch with per-case PASS/FAIL summary lines
+   (`[sweep] <case>: PASS|FAIL|SKIP(<reason>)` + final counts; exit non-zero if any hard
+   case fails), and add campaign entries (`rui-<domain>`) + `_validRealUiScenarios`
+   updates in `fixture_c_unified_runner.dart`.
+3. Keep `flutter analyze lib tool --no-fatal-warnings --no-fatal-infos` clean and
+   `dart run tool/mcp_test/fixture_c_unified_runner.dart --plan-json --class=2proc-ui`
+   parsing (planner regression).
+4. Real-UI first: drive the production widget/gesture; an l3 bypass is only for SEEDING
+   state (e.g. inject inbound history) never for the asserted action itself.
+5. Soft-skip protocol: if a case's surface turns out not to exist / not reachable on
+   desktop, mark it `SKIP(<reason>)` in the sweep AND in this doc — never fake a pass.
+6. Update this file's Status column (TODO → WRITTEN / SKIP+reason) + Batch log, then
+   `git commit` (message: `test(real-ui): batch N — <domain> scenarios (written, unrun)`).
+7. Do NOT launch the app; do NOT run live scenarios. Hermetic checks only.
+
+### Batch 0 — primitives (PREREQUISITE for scroll/right-click cases)
+
+New file `lib/ui/testing/ui_drive_tools.dart` (debug-only, registered like l3 tools but
+UNGATED plumbing — they must work on fresh non-test accounts): service extensions that
+dispatch REAL pointer events through `GestureBinding.instance.handlePointerEvent` so the
+production gesture/scroll pipeline runs:
+- `ui_scroll_at` — PointerScrollEvent (mouse-wheel) at a key's center or raw coords, with
+  dx/dy; loop until a target child key is visible (caller-side loop in Inst helper).
+- `ui_drag` — pointer down → moves → up between two points (touch-drag scrolling, member
+  lists, mobile-style scroll).
+- `ui_secondary_tap` — right-button pointer down/up at key center or coords (desktop
+  message context menu).
+- `ui_hover` — pointer hover event at key center (desktop hover affordances), if needed.
+Each takes `{key?|x,y?}` JSON, returns `{ok, error?}`. Hermetic widget tests in
+`test/ui/testing/ui_drive_tools_test.dart` proving: a real ListView scrolls + triggers its
+scroll callbacks; a GestureDetector.onSecondaryTapDown fires; drag moves a scrollable.
+Inst helpers in `drive_real_ui_pair_inst.dart`: `scrollUntilKey`, `secondaryTapKey`,
+`dragBy`. Also: investigate + document HERE how the desktop chat message context menu is
+actually opened in production (hover-more-button? secondary tap? long-press) — write the
+finding into the Batch log; suites 6 depends on it.
+
+**Batch 0 STATUS: TODO**
+
+### Suites (batches 1–8) — 94 cases
+
+Mode: `1i` = single instance (A only, B idle) · `2p` = two-process · `2p-r` = needs
+restored/established friendship (plan after handshake or restore `paired_for_e2e`).
+
+#### Batch 1 — Settings sweep 2 (12 cases, 1i, one launch)
+
+| # | Case (scenario id) | Mode | Spec | Drives / asserts | Status |
+|---|---|---|---|---|---|
+| 1 | settings_surface_sections | 1i | — | open settings via sidebar; scroll through; all section headers render | TODO |
+| 2 | settings_theme_dark | 1i | S57 | tap theme control → dark applied (widget-tree brightness) + dump persisted | TODO |
+| 3 | settings_theme_light_back | 1i | S57 | revert to light; UI re-renders | TODO |
+| 4 | settings_locale_zh_roundtrip | 1i | S38 | switch language to 中文 → visible label asserted in Chinese → back to English | TODO |
+| 5 | settings_download_limit_edit | 1i | S98 | real field input + save → dump_state threshold | TODO |
+| 6 | settings_bootstrap_mode_cycle | 1i | S99/S85 | segmented auto→manual→lan→auto, dump after each | TODO |
+| 7 | settings_bootstrap_manual_add_node | 1i | S89 | manual node form: host/port/key input → add → row renders | TODO |
+| 8 | settings_bootstrap_manual_remove_node | 1i | S89 | remove the added node → row gone | TODO |
+| 9 | settings_autologin_toggle_hard | 1i | S96 | scrollUntilKey + real tap → dump flips (upgrades documented soft case) | TODO |
+| 10 | settings_notifsound_toggle_hard | 1i | S97 | same for notification-sound switch | TODO |
+| 11 | settings_password_mismatch_error | 1i | S40 | password dialog: mismatched confirm → inline error, dialog stays | TODO |
+| 12 | settings_logout_cancel | 1i | S44 | logout confirm → Cancel → still sessionReady | TODO |
+
+Sweep: `sweep_settings2` · Campaign: `rui-settings2`. **Batch 1 STATUS: TODO**
+
+#### Batch 2 — Self profile (8 cases, 1i, same-launch chain)
+
+| # | Case | Mode | Spec | Drives / asserts | Status |
+|---|---|---|---|---|---|
+| 13 | profile_open_sidebar_avatar | 1i | S104 | tap sidebar avatar → self-profile overlay mounts | TODO |
+| 14 | profile_edit_toggle_roundtrip | 1i | S101 | edit pencil enter/exit edit mode | TODO |
+| 15 | profile_edit_nickname_persists | 1i | S8 | edit nickname via real field (+osascript) → save → dump + sidebar reflect | TODO |
+| 16 | profile_edit_status_persists | 1i | S8 | same for status message | TODO |
+| 17 | profile_copy_toxid_snackbar | 1i | S102 | copy button → snackbar | TODO |
+| 18 | profile_qr_copy | 1i | S103 | QR section copy action → snackbar | TODO |
+| 19 | profile_avatar_picker_opens | 1i | S79 | avatar tap → default-avatar grid/picker surface mounts (native picker untouched) | TODO |
+| 20 | profile_avatar_select_default_applies | 1i | S79 | select a bundled default avatar → avatar updates (faceUrl changes) | TODO |
+
+Sweep: `sweep_profile` · Campaign: `rui-profile`. **Batch 2 STATUS: TODO**
+
+#### Batch 3 — Login / register (9 cases, 1i; password cases mutate then restore state)
+
+| # | Case | Mode | Spec | Drives / asserts | Status |
+|---|---|---|---|---|---|
+| 21 | login_account_card_renders | 1i | S2 | after logout: saved-account card shows nick + tox prefix | TODO |
+| 22 | login_register_open_back | 1i | S4 | Register CTA → RegisterPage → back to login | TODO |
+| 23 | register_empty_nickname_error | 1i | S4 | submit empty nickname → inline validation error | TODO |
+| 24 | register_password_mismatch_error | 1i | S4 | mismatched passwords → inline error | TODO |
+| 25 | register_password_strength_flips | 1i | S4 | typing weak→strong flips the strength label | TODO |
+| 26 | login_restore_entry_opens | 1i | S9/S71 | restore-from-tox card → import/restore surface mounts; cancel back | TODO |
+| 27 | login_password_wrong_error | 1i | S2b | set pw (settings) → logout → card → wrong pw → error, stays on login | TODO |
+| 28 | login_password_correct_unlocks | 1i | S2b | correct pw → HomePage; then REMOVE password (restore no-pw state) | TODO |
+| 29 | account_switch_second_account | 1i | S3/S72 | register a 2nd account (ONCE, end of suite) → switch back via login cards; dump shows switched toxId | TODO |
+
+Sweep: `sweep_login` · Campaign: `rui-login`. **Batch 3 STATUS: TODO** (note: case 29
+registers the ONLY extra account of the campaign; password cases must restore the
+no-password state when done)
+
+#### Batch 4 — Contacts + friend profile (15 cases, 2p; ONE handshake reused; delete/re-add last)
+
+| # | Case | Mode | Spec | Drives / asserts | Status |
+|---|---|---|---|---|---|
+| 30 | add_friend_dialog_esc_close | 1i | S5 | new-entry → Add Contact → ESC closes dialog | TODO |
+| 31 | add_friend_invalid_id_error | 1i | S5 | garbage ID → inline error, no crash | TODO |
+| 32 | add_friend_self_id_guard | 1i | S55 | own tox ID → self-add guard error | TODO |
+| 33 | add_friend_duplicate_guard | 2p-r | S56 | friend's ID again → dedup guard error | TODO |
+| 34 | contacts_subtabs_cycle | 1i | S106 | New Contacts ↔ Blocked Users sub-tab switching renders each list | TODO |
+| 35 | contacts_row_opens_friend_profile | 2p-r | S52 | tap friend row → friend profile sheet mounts | TODO |
+| 36 | friendprof_send_message_tile | 2p-r | S115 | Send-Message tile → chat opens for that friend | TODO |
+| 37 | friendprof_pin_toggle | 2p-r | S84 | pin switch → pinnedConversations flips + row reorders | TODO |
+| 38 | friendprof_block_unblock | 2p-r | S29 | block switch on→off → blockedUsers flips both ways | TODO |
+| 39 | friendprof_mute_toggle_regression | 2p-r | S114/S83 | mute switch ×2 → no crash (ABI regression gate) + recvOpt/dump flip | TODO |
+| 40 | friendprof_remark_edit_persists | 2p-r | S113/S30 | remark dialog real input → Confirm → UI + dump show remark (KNOWN native bug — expect FAIL → root-cause fix in run phase) | TODO |
+| 41 | friendprof_clear_history | 2p-r | S111 | seed a few messages; clear → chat empty + history file cleared | TODO |
+| 42 | blocked_list_unblock_row | 2p-r | S107 | block via profile → Blocked Users tab row → unblock button → row gone | TODO |
+| 43 | contact_search_filter_clear | 2p-r | S49 | contact search: type filter → matches; clear → full list | TODO |
+| 44 | friendprof_delete_friend_confirm | 2p-r | S112/S28 | delete friend → keyed confirm → friend gone both lists (LAST; sweep ends no-friend) | TODO |
+
+Sweep: `sweep_contacts` (handshake once at top) · Campaign: `rui-contacts`. **Batch 4 STATUS: TODO**
+
+#### Batch 5 — Conversation list C2C (10 cases, 2p-r, one launch + one handshake)
+
+| # | Case | Mode | Spec | Drives / asserts | Status |
+|---|---|---|---|---|---|
+| 45 | conv_menu_surface_c2c | 2p-r | S117 | right-click/menu on C2C row → menu items render (pin/read/clear/delete) | TODO |
+| 46 | conv_pin_unpin_reorders | 2p-r | S116 | pin → row to top + pinned style; unpin → restores | TODO |
+| 47 | conv_mark_read_two_proc | 2p-r | S118/S19 | B sends 3 → A unread badge ≥1 → mark-read via row menu → badge gone | TODO |
+| 48 | conv_delete_confirm_c2c | 2p-r | S119/S20 | delete via row menu + confirm → row gone, friendship intact | TODO |
+| 49 | conv_clear_history_c2c | 2p-r | S111 | clear via row menu → history empty, row survives | TODO |
+| 50 | conv_clear_preserves_pin_c2c | 2p-r | — | pin + seed + clear → still pinned (C2C mirror of group gate) | TODO |
+| 51 | conv_unread_badge_bump_clear | 2p-r | S90/S19 | B sends → badge N increments; open chat → 0 | TODO |
+| 52 | conv_preview_updates_on_inbound | 2p-r | — | B sends nonce → row last-message preview shows it | TODO |
+| 53 | conv_presence_dot_flips | 2p-r | S51 | B quits/offline → A presence dot flips; B relaunch → online (uses l3 connection state to detect, real dot asserted) | TODO |
+| 54 | conv_search_filter_clear | 2p-r | S48 | conversation search: filter → match; clear → all | TODO |
+
+Sweep: `sweep_conv` · Campaign: `rui-conv`. **Batch 5 STATUS: TODO**
+
+#### Batch 6 — Chat surface C2C (16 cases, 2p-r)
+
+| # | Case | Mode | Spec | Drives / asserts | Status |
+|---|---|---|---|---|---|
+| 55 | chat_open_from_row | 2p-r | S11 | tap row → chat opens, header shows friend nick | TODO |
+| 56 | chat_multiline_send | 2p-r | S120 | Shift+Enter newline + send → bubble contains both lines; B receives | TODO |
+| 57 | chat_long_text_send | 2p-r | — | 600-char message → renders + delivers | TODO |
+| 58 | chat_emoji_insert_send | 2p-r | S22 | emoji panel → insert → send → emoji bubble; B receives | TODO |
+| 59 | chat_sticker_panel_send | 2p-r | S23 | sticker tab → tap sticker → face message sends; B receives | TODO |
+| 60 | chat_msg_menu_surface | 2p-r | S15 | secondary-tap own bubble → context menu items render | TODO |
+| 61 | chat_copy_message_clipboard | 2p-r | S16 | menu Copy → OS clipboard contains text (pbpaste) | TODO |
+| 62 | chat_reply_quote_roundtrip | 2p-r | S18 | menu Reply → quoted composer → send → quote bubble renders; B sees reply | TODO |
+| 63 | chat_forward_to_other_conv | 2p-r | S17 | menu Forward → picker → forward to group → message appears there | TODO |
+| 64 | chat_delete_message_gone | 2p-r | — | menu Delete → bubble gone; reopen chat → still gone | TODO |
+| 65 | chat_history_scroll_load_more | 2p-r | S14 | seed >1 page (real alternating sends); scroll up → older page loads | TODO |
+| 66 | chat_inbound_while_scrolled_up | 2p-r | — | scrolled up + B sends → no forced jump; affordance/indicator asserted | TODO |
+| 67 | chat_header_opens_profile | 2p-r | S52 | tap chat header avatar/name → friend profile opens | TODO |
+| 68 | chat_offline_pending_then_deliver | 2p-r | S25/S13 | A offline (l3 seed) → send → pending spinner; reconnect → delivered to B | TODO |
+| 69 | chat_image_bubble_open_preview | 2p-r | S88 | B sends image (l3_send_file seeding) → A real image bubble renders → tap opens preview | TODO |
+| 70 | chat_file_bubble_present_open | 2p-r | S21/S24 | B sends small file (l3 seed) → A file bubble (name+size) → tap dispatches open | TODO |
+
+Sweep: `sweep_chat` · Campaign: `rui-chat`. **Batch 6 STATUS: TODO**
+
+#### Batch 7 — Group + conference (14 cases, mixed)
+
+| # | Case | Mode | Spec | Drives / asserts | Status |
+|---|---|---|---|---|---|
+| 71 | group_create_cancel | 1i | S32 | add-group dialog → Cancel → no group created | TODO |
+| 72 | group_create_type_selector_surface | 1i | S32 | dialog type selector renders options; pick private → created | TODO |
+| 73 | group_profile_members_entry | 1i | S121 | group profile → members entry → member list page | TODO |
+| 74 | group_profile_clear_history | 1i | S122 | seed own sends → profile clear-history → chat empty | TODO |
+| 75 | group_leave_via_profile_confirm | 1i | S123/S150 | leave/dissolve button → keyed confirm → conv row gone | TODO |
+| 76 | group_rename_updates_header | 1i | S153 | rename via profile → open chat header shows new name | TODO |
+| 77 | group_add_member_full_join | 2p-r | S124/S81 | add-member picker → invite B → B auto-joins → member list shows 2 | TODO |
+| 78 | group_kick_member_ui | 2p-r | S37 | kick B via member-list UI → B's side reflects removal (mesh bootstrap; destructive, LAST group case) | TODO |
+| 79 | group_member_list_scroll | 2p-r | S36 | member list drag-scrolls (ui_drag) without error | TODO |
+| 80 | group_mute_toggle | 1i | S83 | group profile mute switch → dump flips, no crash | TODO |
+| 81 | group_unread_badge_two_proc | 2p-r | S90 | B group-sends → A row badge bumps; open → clears | TODO |
+| 82 | conf_create_dialog_surface | 1i | S156 | conference type create → conv row appears | TODO |
+| 83 | conf_row_menu_surface | 1i | S161 | conference row menu renders expected items | TODO |
+| 84 | conf_member_list_renders | 1i | — | conference profile member list mounts | TODO |
+
+Sweep: `sweep_group2` · Campaign: `rui-group2`. **Batch 7 STATUS: TODO**
+
+#### Batch 8 — Calls + misc (10 cases, 2p-r; media cases consecutive to reuse call state)
+
+| # | Case | Mode | Spec | Drives / asserts | Status |
+|---|---|---|---|---|---|
+| 85 | call_video_accept_hangup | 2p-r | S66 | video button → B accepts → both inCall → hangup → idle | TODO |
+| 86 | call_mute_toggle_incall | 2p-r | S74 | during voice call: mute → state flips → unmute | TODO |
+| 87 | call_camera_toggle_incall | 2p-r | S75 | during video call: camera off/on via keyed dock button | TODO |
+| 88 | call_missed_record_row | 2p-r | S77 | B calls, B cancels before answer → A missed-call record renders | TODO |
+| 89 | call_callee_hangup | 2p-r | S76 | callee (A) ends the call → both sides idle | TODO |
+| 90 | call_record_bubble_renders | 2p-r | — | after a completed call: call-record bubble in chat history | TODO |
+| 91 | home_tabs_cycle_state_retained | 1i | — | chats→contacts→settings→chats; open chat retained (IndexedStack) | TODO |
+| 92 | theme_switch_chat_open | 2p-r | S57 | with chat open: switch dark/light → chat re-renders, no crash, bubbles intact | TODO |
+| 93 | window_resize_responsive | 1i | S60 | osascript-resize window narrow → mobile layout swap; restore → desktop (SKIP allowed w/ reason) | TODO |
+| 94 | search_chat_history_window_open | 2p-r | S93 | open in-conversation search → type → match highlight surface | TODO |
+
+Sweep: `sweep_calls_misc` · Campaign: `rui-calls-misc`. **Batch 8 STATUS: TODO** (hint:
+chain call cases on ONE friendship — voice block then video block; case 93 may use
+AppleScript System Events window resize, SKIP with reason if refused)
+
+## Batch log (append-only)
+
+- 2026-06-10: campaign doc created; coverage survey done. Existing real-app coverage =
+  ~30 scenarios (list above); everything else is hermetic L1 / l3 data-layer only.
+  flutter_skill is a pub package (^0.9.36) with NO scroll/right-click → Batch 0 builds
+  our own pointer-event service extensions (real production gesture pipeline).
+  App build present at build/macos/Build/Products/Debug/Toxee.app (Jun 9, dylib fresh).
+
+## Run phase (after ALL batches written) — protocol
+
+1. Rebuild app so new service extensions are in the binary: `./build_all.sh --platform
+   macos --mode debug` then **verify the embedded dylib is fresh** (memory: bare
+   `flutter build macos` does NOT re-embed; run_toxee.sh / build_all re-embed — nm-verify).
+2. Launch the pair ONCE per suite-group: `tool/mcp_test/launch_toxee_instance.sh A/B`
+   (or `launch_fixture_c_pair.sh`), restore `paired_for_e2e` where the suite allows
+   (`restore_fixture_c_pair.sh`) to skip re-registration/re-friending.
+3. Run sweeps serially: suites 1–3 share one single-instance launch where state allows;
+   suites 4–8 share the pair launch (reset_friendship between suites that need
+   no-friend start).
+4. Fix failures at the ROOT CAUSE (native/FFI, fork, app — not the harness, unless the
+   harness is provably at fault). Track every fix in the Batch log. Re-run only the
+   affected sweep.
+5. Update Status column → PASS/FAIL+fix/SKIP+reason.
+6. Codex diff review (mandatory): `env -u OTEL_EXPORTER_OTLP_ENDPOINT codex exec -c
+   otel.exporter=none -c otel.log_user_prompt=false ...` review of the full campaign diff.
+7. Final commit + INDEX regen (`dart run tool/mcp_test/gen_scenario_index.dart --check`).
+
+## Resume instructions (for a fresh session)
+
+1. Read this file top to bottom. `git log --oneline -15` to see which batch commits exist.
+2. Find the first batch whose STATUS is not DONE — relaunch the batch agent (opus,
+   serial) with the per-batch contract above.
+3. If all batches DONE but run phase incomplete: follow Run phase protocol; per-case
+   Status shows what already passed.
+4. Memories to load: real_ui_two_process_harness, flutter_skill_double_tap_blank,
+   real_ui_group_message_private_invite, macos_hang_forensics_first.
