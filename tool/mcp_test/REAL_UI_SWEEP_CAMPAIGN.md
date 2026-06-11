@@ -1693,9 +1693,10 @@ rui-group2 → rui-calls-misc. Record per-sweep results + fixes in "Run log".
   - A: nick `RuiAlice`, sessionReady, NO password, autoLogin on, toxId
     `D5122997BC6550FE…ED7B15A4D38555ED`. (Also holds several leftover `RuiSweepB3` saved-account
     cards from sweep_login case-29 reruns — harmless.)
-  - B: nick `RuiBob`, idle (never driven by these single-instance sweeps), toxId starts `28A52EC0…`
-    (NOTE: B's toxId leaked into A's saved-accounts as one of the extra cards — both share the
-    host; this does not affect A's primary login).
+  - B: **UNREGISTERED** (`sessionReady=false`, `nickname=null`) — B is only "launched-but-idle"
+    for these single-instance sweeps and was never driven, so it still sits on its first-run /
+    LoginPage. The next 2-process agent must register B (RuiBob) and establish the friendship
+    itself. (The extra `RuiSweepB3` cards on A are from sweep_login case-29 reruns, NOT from B.)
   - Read live ws/pid from `tool/mcp_test/.multi_instance_runtime/{A,B}/instance.json` (they
     change on every relaunch; do not hard-code). The next run agent (rui-contacts onward) needs
     a 2-process FRIENDED pair — it will have to establish the handshake (or restore
