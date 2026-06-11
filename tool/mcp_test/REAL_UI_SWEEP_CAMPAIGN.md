@@ -143,15 +143,15 @@ Sweep: `sweep_profile` · Campaign: `rui-profile`. **Batch 2 STATUS: DONE** (6/8
 
 | # | Case | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 21 | login_account_card_renders | 1i | S2 | after logout: saved-account card shows nick + tox prefix | WRITTEN |
-| 22 | login_register_open_back | 1i | S4 | Register CTA → RegisterPage → back to login | WRITTEN |
-| 23 | register_empty_nickname_error | 1i | S4 | submit empty nickname → inline validation error | WRITTEN |
-| 24 | register_password_mismatch_error | 1i | S4 | mismatched passwords → inline error | WRITTEN |
-| 25 | register_password_strength_flips | 1i | S4 | typing weak→strong flips the strength caption (Weak→Strong) | WRITTEN (added strength caption, see log) |
+| 21 | login_account_card_renders | 1i | S2 | after logout: saved-account card shows nick + tox prefix | PASS |
+| 22 | login_register_open_back | 1i | S4 | Register CTA → RegisterPage → back to login | PASS |
+| 23 | register_empty_nickname_error | 1i | S4 | submit empty nickname → inline validation error | PASS |
+| 24 | register_password_mismatch_error | 1i | S4 | mismatched passwords → inline error | PASS |
+| 25 | register_password_strength_flips | 1i | S4 | typing weak→strong flips the strength caption (Weak→Strong) | FAIL→FIXED(HARNESS: synthetic enterText didn't reliably REPLACE the field so the strong pw was computed against stale content→never "Strong"; switched both types to focusType real keystrokes) |
 | 26 | login_restore_entry_opens | 1i | S9/S71 | restore-from-tox card → import/restore surface mounts; cancel back | SKIP(native-picker-only — restore card opens NSOpenPanel directly, no in-app surface) |
-| 27 | login_password_wrong_error | 1i | S2b | set pw (settings) → logout → card → wrong pw → error, stays on login | WRITTEN |
-| 28 | login_password_correct_unlocks | 1i | S2b | correct pw → HomePage; then REMOVE password (restore no-pw state) | WRITTEN (production UI clears pw, see log) |
-| 29 | account_switch_second_account | 1i | S3/S72 | register a 2nd account (ONCE, end of suite) → switch back via login cards; dump shows switched toxId | WRITTEN |
+| 27 | login_password_wrong_error | 1i | S2b | set pw (settings) → logout → card → wrong pw → error, stays on login | FAIL→FIXED(card tap: raw tapAt/tapKeyCenter does NOT fire the card InkWell→tryTapKey; PRODUCT _quickLogin re-entrancy guard makes the double-fire safe) |
+| 28 | login_password_correct_unlocks | 1i | S2b | correct pw → HomePage; then REMOVE password (restore no-pw state) | FAIL→FIXED(same card-tap + guard fix as 27; cascade-cleared) |
+| 29 | account_switch_second_account | 1i | S3/S72 | register a 2nd account (ONCE, end of suite) → switch back via login cards; dump shows switched toxId | FAIL→FIXED(switch-back uses the fixed _quickLoginNoPassword card tap; cascade-cleared) |
 
 Sweep: `sweep_login` · Campaign: `rui-login`. **Batch 3 STATUS: DONE** (8/9 WRITTEN+unrun,
 1 SKIP — case 26 native-picker-only; case 29 registers the ONLY extra account of the
@@ -1562,6 +1562,19 @@ Run order (one campaign at a time, serial — osascript foreground is exclusive)
 rui-settings2 → rui-profile → rui-login → rui-contacts → rui-conv → rui-chat →
 rui-group2 → rui-calls-misc. Record per-sweep results + fixes in "Run log".
 
+**RUN PROGRESS (single-instance sweeps DONE):**
+- ✅ rui-settings2 — 12 PASS / 0 FAIL (commit 283132a)
+- ✅ rui-profile — 6 PASS / 0 FAIL / 2 SKIP (commit ed1b1ce)
+- ✅ rui-login — 8 PASS / 0 FAIL / 1 SKIP, endClean (commit this batch)
+- ⏭ rui-contacts onward — NOT yet run (2-process; need a friended pair).
+- **CRITICAL for the next agent:** build ONLY via
+  `MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh` (build_all omits the l3 surface →
+  l3_dump_state "Method not found" → every assertion silently breaks). Two big cross-sweep
+  fixes already landed: (1) `Inst.focusType` types via REAL osascript keystrokes (synthetic
+  `enterText` SIGSEGVs the macOS engine's setEditingState); (2) account-card login taps use
+  `tryTapKey` not raw tapAt (raw tapAt doesn't fire the InkWell) — both will help the later
+  sweeps too.
+
 ### Run log (append-only)
 
 - 2026-06-10: write phase closed; app rebuilt (build_all.sh exit 0).
@@ -1643,6 +1656,52 @@ rui-group2 → rui-calls-misc. Record per-sweep results + fixes in "Run log".
     interactiveStructured) found no bounds. Fix: fall back to `tapKeyAt`, which resolves the
     keyed FilledButton's RenderBox center via ui_drive_tools (ui_key_center) — `candidates:2`
     but the first onstage match is the button. Now `saved=true restored=true`.
+
+- 2026-06-10 **rui-login (sweep_login) LIVE: 8 PASS / 0 FAIL / 1 SKIP, endClean=true** — all
+  password cases (set / wrong / correct / remove, real ~25s PBKDF2) + the account switch
+  (registered RuiSweepB3, switched back) PASS; ends with the PRIMARY (RuiAlice) logged in, NO
+  password, autoLogin intact. Case 26 SKIP as written (restore card = native NSOpenPanel).
+  3 fixes:
+  - **PRODUCT (`lib/ui/login_page.dart`) — `_quickLogin` re-entrancy guard** — the
+    saved-account card InkWell's `onTap` called `_quickLogin` with no guard, so a fast
+    double-tap (or the harness's double-firing `tap`) on a PASSWORD-protected account would
+    stack TWO password prompts. Added a `_quickLoginInProgress` bool (set before the first
+    await, body moved to `_quickLoginInner`, reset in `finally`) so the 2nd call is dropped.
+    Real user-facing robustness win, not just automation. **Codex: "No findings"** (guard
+    correct, body preserved, no single-tap regression, no mobile divergence).
+  - **HARNESS — card tap (`drive_real_ui_pair_login.dart`)** — the root cause of the
+    cascade: `tapKeyCenter`/raw `tapAt` at the card center does NOT fire the card's
+    `InkWell.onTap` (live-proven: a single pointer tap left sessionReady=false; the key
+    `tap` logged in). flutter_skill's key `tap` works because it ALSO invokes the callback
+    via `_tryInvokeCallback`. Switched `_quickLoginNoPassword` + the two password-card taps
+    (cases 27/28) to `tryTapKey`; the double-fire is now harmless thanks to the production
+    re-entrancy guard.
+  - **HARNESS — strength caption (case 25)** — `weak=true strong=false`: the synthetic
+    `osaClear`+`enterText` combo did not reliably REPLACE the field, so "Abcdef1!" was
+    computed against stale content and never reached strength 4 ("Strong"). Switched to
+    `focusType` (clean Cmd+A clear + real keystrokes) — now `strong=true weakGone=true`.
+  - **STATE-POLLUTION NOTE for later run agents:** each full sweep_login run registers a NEW
+    `RuiSweepB3` account (case 29) and does NOT delete it (no in-sweep account-management-menu
+    teardown). After several runs, instance A's LoginPage shows several extra `RuiSweepB3`
+    cards. They are HARMLESS to the sweep (it targets the primary by toxId) but are clutter; a
+    future cleanup could delete them via the card long-press → account-management menu. The
+    primary RuiAlice card + autoLogin are always restored.
+
+### End-of-run instance state (for the NEXT run agent — reuse contract)
+
+- 2026-06-10, after rui-settings2 + rui-profile + rui-login: **instances LEFT RUNNING.**
+  - A: nick `RuiAlice`, sessionReady, NO password, autoLogin on, toxId
+    `D5122997BC6550FE…ED7B15A4D38555ED`. (Also holds several leftover `RuiSweepB3` saved-account
+    cards from sweep_login case-29 reruns — harmless.)
+  - B: nick `RuiBob`, idle (never driven by these single-instance sweeps), toxId starts `28A52EC0…`
+    (NOTE: B's toxId leaked into A's saved-accounts as one of the extra cards — both share the
+    host; this does not affect A's primary login).
+  - Read live ws/pid from `tool/mcp_test/.multi_instance_runtime/{A,B}/instance.json` (they
+    change on every relaunch; do not hard-code). The next run agent (rui-contacts onward) needs
+    a 2-process FRIENDED pair — it will have to establish the handshake (or restore
+    `paired_for_e2e`) itself; these three sweeps left A no-friend.
+  - **BUILD REMINDER:** rebuild ONLY via `MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh`
+    (not build_all) so the l3 surface is compiled in; then RELAUNCH both instances.
 
 ## Run phase (after ALL batches written) — protocol
 

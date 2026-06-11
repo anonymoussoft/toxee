@@ -90,6 +90,11 @@ class _LoginPageState extends State<LoginPage> {
   final _statusMessageController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _busy = false;
+  // Re-entrancy guard for _quickLogin: a fast double-tap (or an automation
+  // double-fire) on a saved-account card would otherwise call _quickLogin twice
+  // and, on a password-protected account, stack TWO password prompts. The second
+  // call returns immediately while the first is still in flight.
+  bool _quickLoginInProgress = false;
   String? _error;
   FfiChatService? _service;
   List<Map<String, String>> _accountList = [];
@@ -310,7 +315,21 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _quickLogin(Map<String, String> account) async {
     final toxId = account['toxId'];
     if (toxId == null || toxId.isEmpty) return;
+    // Drop a re-entrant call (double-tap / double-fire) so we never stack two
+    // password prompts or kick off two concurrent logins.
+    if (_quickLoginInProgress) return;
+    _quickLoginInProgress = true;
+    try {
+      await _quickLoginInner(account, toxId);
+    } finally {
+      _quickLoginInProgress = false;
+    }
+  }
 
+  Future<void> _quickLoginInner(
+    Map<String, String> account,
+    String toxId,
+  ) async {
     final cachedVerifiedPassword = _verifiedPasswordToxId == toxId
         ? _verifiedPassword
         : null;

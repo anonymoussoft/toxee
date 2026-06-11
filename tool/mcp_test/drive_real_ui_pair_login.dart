@@ -101,11 +101,16 @@ Future<bool> _quickLoginNoPassword(Inst inst, String toxId) async {
       return false;
     }
   }
-  // SINGLE-FIRE the card (codex): it is an on-screen InkWell whose onTap runs
-  // `_quickLogin`; flutter_skill's double-firing `tap` would invoke it twice
-  // (the 2nd opening a second password prompt on a protected account / a 2nd
-  // login on a no-password one). tapKeyCenter dispatches exactly one pointer tap.
-  if (!await inst.tapKeyCenter(cardKey, timeoutSecs: 6)) {
+  // Use flutter_skill's key `tap` (NOT tapKeyCenter): a raw `tapAt` at the card
+  // center does NOT reliably fire the card's `InkWell.onTap` (live-verified: the
+  // single pointer tap left sessionReady=false, while the key `tap` logged in),
+  // because `tap` additionally invokes the widget callback directly via
+  // `_tryInvokeCallback`. The original SINGLE-FIRE concern (double-firing
+  // `_quickLogin` opening a 2nd password prompt) does NOT apply here: this is the
+  // NO-PASSWORD account, so the worst case is a 2nd idempotent `_login()` while
+  // the first is already in flight. (The PASSWORD quick-login in case 28 keeps
+  // its own single-fire discipline — it does not go through this helper.)
+  if (!await inst.tryTapKey(cardKey)) {
     print('[pair] quick-login: card $cardKey not tappable');
     return false;
   }
@@ -335,33 +340,17 @@ Future<bool> _registerPasswordStrengthFlips(Inst inst) async {
     print('[pair] register_password_strength: RegisterPage did not open');
     return false;
   }
-  // Weak: a short all-lowercase password -> strength 1 -> caption "Weak".
-  await inst.tapKey('register_page_password_field');
-  await Future<void>.delayed(const Duration(milliseconds: 250));
-  try {
-    await inst.osaClear();
-  } on DriveError {
-    // best-effort
-  }
-  if ((await inst.skill('enterText', {'text': 'abc'}))['success'] != true) {
-    print('[pair] register_password_strength: weak enterText failed');
-    return false;
-  }
+  // Weak: a short all-lowercase password -> strength 1 -> caption "Weak". Type
+  // via focusType (REAL keystrokes; the synthetic enterText path SIGSEGVs the
+  // macOS engine's setEditingState AND its osaClear+enterText combo did not
+  // reliably REPLACE the field, so the strong password was computed against
+  // stale content and never reached "Strong").
+  await inst.focusType('register_page_password_field', 'abc');
   await Future<void>.delayed(const Duration(milliseconds: 400));
   final weakShown = await inst.waitText('Weak', timeoutSecs: 6);
   // Strong: upper + digit + special, >= 8 chars -> strength 4 -> caption
-  // "Strong". Replace the field text (clear then type).
-  await inst.tapKey('register_page_password_field');
-  await Future<void>.delayed(const Duration(milliseconds: 250));
-  try {
-    await inst.osaClear();
-  } on DriveError {
-    // best-effort
-  }
-  if ((await inst.skill('enterText', {'text': 'Abcdef1!'}))['success'] != true) {
-    print('[pair] register_password_strength: strong enterText failed');
-    return false;
-  }
+  // "Strong". focusType clears (Cmd+A, Delete) then types, so it REPLACES.
+  await inst.focusType('register_page_password_field', 'Abcdef1!');
   await Future<void>.delayed(const Duration(milliseconds: 400));
   final strongShown = await inst.waitText('Strong', timeoutSecs: 6);
   // The "Weak" caption must be GONE once the password is strong (proves the
@@ -514,9 +503,13 @@ Future<bool> _loginPasswordWrongError(Inst inst, List<String> outToxId) async {
     ..clear()
     ..add(toxId);
   // 3) Tap the card -> the password prompt opens (the account now has a pw).
-  // SINGLE-FIRE (codex): a double-fire would open the password prompt twice.
+  // Use flutter_skill's key `tap` (a raw tapAt does NOT fire the card InkWell;
+  // see _quickLoginNoPassword). The double-fire that `tap` would normally cause
+  // is now harmless: production `_quickLogin` has a re-entrancy guard
+  // (`_quickLoginInProgress`) so the 2nd invocation is dropped and only ONE
+  // password prompt opens.
   final cardKey = 'login_page_account_card:$toxId';
-  if (!await inst.tapKeyCenter(cardKey, timeoutSecs: 6)) {
+  if (!await inst.tryTapKey(cardKey)) {
     print('[pair] password_wrong: card not tappable');
     return false;
   }
@@ -567,8 +560,10 @@ Future<bool> _loginPasswordCorrectUnlocks(Inst inst, String toxId) async {
     print('[pair] password_correct: card not present pre-tap');
     return false;
   }
-  // SINGLE-FIRE (codex): a double-fire would stack two password prompts.
-  if (!await inst.tapKeyCenter(cardKey, timeoutSecs: 6)) {
+  // Use flutter_skill's key `tap` (a raw tapAt does NOT fire the card InkWell);
+  // the double-fire is harmless thanks to production's _quickLoginInProgress
+  // re-entrancy guard (only one password prompt opens).
+  if (!await inst.tryTapKey(cardKey)) {
     print('[pair] password_correct: card not tappable');
     return false;
   }
