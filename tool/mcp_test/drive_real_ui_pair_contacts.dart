@@ -893,19 +893,12 @@ Future<bool> _contactSearchFilterClear(
   await Future<void>.delayed(const Duration(milliseconds: 1000));
   final rowMatchesFilter = await inst.waitKey(shortKey, timeoutSecs: 4) ||
       await inst.waitKey(fullKey, timeoutSecs: 2);
-  // 2) Non-matching filter -> the row is filtered OUT.
-  await inst.tapKey('contact_search_field');
-  await Future<void>.delayed(const Duration(milliseconds: 200));
-  try {
-    await inst.osaClear();
-  } on DriveError {
-    // best-effort
-  }
-  if ((await inst.skill('enterText', {'text': 'zzzznomatchzzzz'}))['success'] !=
-      true) {
-    print('[pair] contact_search_filter_clear: non-match enterText failed');
-    return false;
-  }
+  // 2) Non-matching filter -> the row is filtered OUT. Type via focusType
+  // (osascript keystrokes), NOT raw synthetic enterText — the latter drives the
+  // macOS engine's -[FlutterTextInputPlugin setEditingState:], which SIGSEGVs
+  // the whole app (root-caused live: A crashed here mid-sweep, killing this case
+  // and case 44). focusType clears + types crash-free.
+  await inst.focusType('contact_search_field', 'zzzznomatchzzzz');
   await Future<void>.delayed(const Duration(milliseconds: 1000));
   final rowFilteredOut = await inst.waitKeyGone(shortKey, timeoutSecs: 4) &&
       await inst.waitKeyGone(fullKey, timeoutSecs: 2);
@@ -1003,6 +996,60 @@ Future<bool> _friendprofDeleteFriendConfirm(
   return clearedBoth && !aHasB && !bHasA;
 }
 
+/// True if [tox] is still a PENDING friend application on [inst] (not yet
+/// accepted/declined). Used by the handshake's accept-retry to avoid re-driving
+/// a consumed application (which would make driveRespondToApplication hang).
+Future<bool> _hasPendingApplication(Inst inst, String tox) async {
+  final s = await inst.dumpState();
+  final apps = (s['friendApplications'] as List?) ?? const [];
+  return apps.any((e) =>
+      e is Map && _pubkey(e['userId']?.toString() ?? '') == _pubkey(tox));
+}
+
+/// Wire a full-mesh LOOPBACK bootstrap between the paired instances so same-host
+/// peers can actually find each other (the public DHT never converges two
+/// instances on one host). The `l3_dht_info` / `l3_add_bootstrap_node` tools are
+/// test-account-gated, so this MARKS both accounts test, wires the bootstrap,
+/// then REVOKES the marker — the bootstrap node is a one-shot Tox call whose
+/// connection survives un-marking, so the sweep body sees the original (non-test)
+/// privilege state. Tolerant: a missing endpoint / failed mark is logged, not
+/// thrown (the downstream handshake assertion is the authoritative gate).
+Future<void> _wireSweepLoopbackBootstrap(Inst a, Inst b) async {
+  var markedA = false;
+  var markedB = false;
+  try {
+    markedA = await a.markAccountTest();
+    markedB = await b.markAccountTest();
+    if (!markedA || !markedB) {
+      print('[sweep] loopback-bootstrap: WARN could not test-mark both accounts '
+          '(A=$markedA B=$markedB) — same-host handshake may not converge');
+      return;
+    }
+    for (final ext in fixtureCBootstrapExtensions) {
+      await a.waitExt(ext);
+      await b.waitExt(ext);
+    }
+    await wireFullMeshBootstrap([
+      BootstrapTarget('A', a.vm, a.iso),
+      BootstrapTarget('B', b.vm, b.iso),
+    ],
+        log: (m) => print('[sweep] $m'),
+        // Same-host DHTs need more than the default 6s to actually CONNECT
+        // before a friend request routes between them (the addBootstrapNode
+        // call returns immediately; the DHT handshake follows). The send loop in
+        // _establishFriendshipForSweep re-submits if it's still not enough.
+        settle: const Duration(seconds: 12));
+  } on DriveError catch (e) {
+    print('[sweep] loopback-bootstrap: best-effort failed: ${e.message}');
+  } finally {
+    // Revoke the marker so the sweep body keeps the original non-test privilege
+    // state — the bootstrap connection persists (it is Tox-network state, not the
+    // Prefs seed marker).
+    if (markedA) await a.unmarkAccountTest();
+    if (markedB) await b.unmarkAccountTest();
+  }
+}
+
 // ===========================================================================
 // Handshake helper for the sweep (establish A<->B friendship via REAL UI).
 // ===========================================================================
@@ -1026,10 +1073,66 @@ Future<bool> _establishFriendshipForSweep(
       label: 'A connected', timeoutSecs: 90);
   await b.waitState((s) => s['isConnected'] == true,
       label: 'B connected', timeoutSecs: 90);
-  await driveAddFriend(b, toxA, message: _defaultFriendRequestWording('contacts'));
-  await driveRespondToApplication(a, toxB, accept: true);
-  final aHasB = await _retryBool(() => areFriends(a, toxB),
-      label: 'A has B (sweep handshake)', attempts: 60);
+  // Same-host toxee instances bootstrap to the PUBLIC DHT but never to EACH
+  // OTHER (root-caused live: A never receives B's friend request within the
+  // window, so the handshake times out). Wire a full-mesh LOOPBACK bootstrap
+  // (the same fix the group drivers use) so the C2C friend request actually
+  // delivers same-host. This is connectivity SEEDING — the asserted action stays
+  // the real add-friend UI; the marker is granted only to call the gated
+  // bootstrap tools and is REVOKED immediately, so the sweep body's privilege
+  // state is unchanged.
+  await _wireSweepLoopbackBootstrap(a, b);
+  // The loopback bootstrap call returns immediately but the two DHTs need time
+  // to actually CONNECT before a friend request can route between them. Send
+  // B's add-friend request, then wait for A to RECEIVE the application; if it
+  // doesn't arrive in time, RE-SUBMIT (same-host delivery is non-deterministic
+  // even with the bootstrap — the request can be dropped before the local DHT
+  // converges). Re-submitting via the real UI keeps the asserted action real.
+  var appArrived = false;
+  for (var sendAttempt = 0; sendAttempt < 3 && !appArrived; sendAttempt++) {
+    if (sendAttempt > 0) {
+      print('[sweep] contacts: A has not received B\'s request yet — '
+          're-submitting the real-UI add-friend (attempt ${sendAttempt + 1}/3)');
+    }
+    if (await _hasPendingApplication(a, toxB) || await areFriends(a, toxB)) {
+      appArrived = true;
+      break;
+    }
+    await driveAddFriend(b, toxA,
+        message: _defaultFriendRequestWording('contacts'));
+    appArrived = await _retryBool(
+        () async =>
+            await _hasPendingApplication(a, toxB) || await areFriends(a, toxB),
+        label: 'A received B request (send attempt ${sendAttempt + 1})',
+        attempts: 40);
+  }
+  if (!appArrived) {
+    print('[sweep] contacts: B request never reached A after 3 sends — '
+        'same-host DHT did not converge');
+    return false;
+  }
+  // Accept on A's REAL UI, then VERIFY the accept took (the friendship forms on
+  // A's side). A real-UI Accept tap can race the application-list refresh and
+  // miss; re-drive the keyed Accept up to 3x until A actually has B. The accept
+  // is the asserted real-UI action each time (the keyed
+  // contact_application_accept_button), not an l3 bypass.
+  var aHasB = await areFriends(a, toxB);
+  for (var attempt = 0; attempt < 3 && !aHasB; attempt++) {
+    if (attempt > 0) {
+      print('[sweep] contacts: A accept did not take yet — re-driving '
+          'real-UI Accept (attempt ${attempt + 1}/3)');
+      // Only re-drive if the application is still pending (a consumed
+      // application without a friendship would make driveRespondToApplication's
+      // waitState hang). If it's gone but no friendship formed, bail out of the
+      // retry — the friendship-poll below is the authoritative gate.
+      final stillPending = await _hasPendingApplication(a, toxB);
+      if (!stillPending) break;
+    }
+    await driveRespondToApplication(a, toxB, accept: true);
+    aHasB = await _retryBool(() => areFriends(a, toxB),
+        label: 'A has B (sweep handshake, attempt ${attempt + 1})',
+        attempts: 20);
+  }
   final bHasA = await _retryBool(() => areFriends(b, toxA),
       label: 'B has A (sweep handshake)', attempts: 60);
   print('[sweep] contacts: handshake aHasB=$aHasB bHasA=$bHasA');

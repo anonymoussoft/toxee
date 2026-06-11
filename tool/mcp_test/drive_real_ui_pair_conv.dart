@@ -596,12 +596,10 @@ Future<bool> _convSearchFilterClear(Inst inst, String toxFriend,
   await Future<void>.delayed(const Duration(milliseconds: 1200));
   final rowGoneOnClear = await inst.waitKeyGone(shortKey, timeoutSecs: 4) &&
       await inst.waitKeyGone(fullKey, timeoutSecs: 2);
-  // 3) Re-type the matching filter → the row returns.
-  if ((await inst.skill('enterText', {'text': matchQuery}))['success'] != true) {
-    print('[pair] conv_search_filter_clear: re-type enterText failed');
-    await _closeGlobalSearch(inst);
-    return false;
-  }
+  // 3) Re-type the matching filter → the row returns. Use focusType (osascript
+  // keystrokes), NOT raw synthetic enterText — the latter drives the macOS
+  // engine's -[FlutterTextInputPlugin setEditingState:] which SIGSEGVs the app.
+  await inst.focusType('message_search_field', matchQuery);
   await Future<void>.delayed(const Duration(milliseconds: 1400));
   final rowBack = await inst.waitKey(shortKey, timeoutSecs: 6) ||
       await inst.waitKey(fullKey, timeoutSecs: 2);

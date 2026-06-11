@@ -3,6 +3,11 @@ part of 'drive_real_ui_pair.dart';
 
 const _skillNs = 'ext.flutter.flutter_skill';
 const _mcpNs = 'ext.mcp.toolkit';
+
+/// `focusType` PASTES (clipboard) instead of keystroking for any text at/above
+/// this length. macOS `System Events keystroke` drops characters on long
+/// strings; the threshold sits below a 76-char Tox ID so ids always paste.
+const _osaPasteThreshold = 32;
 const _sidebarTabX = 50;
 const _sidebarChatsY = 220;
 const _sidebarContactsY = 288;
@@ -380,7 +385,18 @@ class Inst {
     }
     await Future<void>.delayed(const Duration(milliseconds: 300));
     await osaClear();
-    await osaType(text);
+    // macOS `System Events keystroke` DROPS characters on long strings (typed
+    // too fast for the input plugin) — verified live: a 76-char Tox ID came back
+    // as 72 chars, with `1`s and other digits silently dropped. That corrupts
+    // self-add / add-friend ids (the request goes to a malformed id and never
+    // delivers, AND the self-add guard never matches). For anything long enough
+    // to be at risk (Tox ids are 76 chars) PASTE via the clipboard, which is
+    // atomic — no dropped characters. Short text keeps the keystroke path.
+    if (text.length >= _osaPasteThreshold) {
+      await osaPaste(text);
+    } else {
+      await osaType(text);
+    }
     await Future<void>.delayed(const Duration(milliseconds: 150));
   }
 
@@ -603,6 +619,27 @@ class Inst {
     final escaped = text.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
     return _osa(
       'tell application "System Events" to keystroke "$escaped"',
+    );
+  }
+
+  /// Place [text] on the macOS clipboard (via `pbcopy`) and paste it into the
+  /// focused field with Cmd+V. ATOMIC — unlike `keystroke`, paste never drops
+  /// characters, so long strings (Tox ids, 76 chars) land verbatim. Used by
+  /// [focusType] for any text at/above [_osaPasteThreshold].
+  Future<void> osaPaste(String text) async {
+    final proc = await Process.start('pbcopy', const <String>[]);
+    proc.stdin.write(text);
+    await proc.stdin.close();
+    final code = await proc.exitCode;
+    if (code != 0) {
+      // Fall back to keystroke typing rather than aborting the case.
+      await osaType(text);
+      return;
+    }
+    // Brief settle so the pasteboard write is visible to the paste.
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _osa(
+      'tell application "System Events" to keystroke "v" using command down',
     );
   }
   Future<void> osaReturn() =>

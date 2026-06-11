@@ -220,10 +220,20 @@ Future<void> _refreshApplicationList(
   for (var attempt = 0; attempt < 3; attempt++) {
     // The New Contacts detail panel does not live-refresh reliably when the
     // inbound request lands while it is already open. Force a fresh load by
-    // navigating away and back.
-    await a.tapAt(240, 270); // Blocked Users master row
+    // navigating away and back. Drive the KEYED sub-tab rows
+    // (contact_blocked_users_tab / contact_new_contacts_tab) — a coordinate tap
+    // on the master row MISSES the tappable InkWell in this window layout, so
+    // the right-hand detail pane never loads and the keyed Accept button never
+    // mounts (root-caused live: the asymmetric handshake where A keeps the
+    // application pending). The keyed tap fires the InkWell's onTap via
+    // flutter_skill's `_tryInvokeCallback`. Coordinate taps remain as a fallback.
+    if (!await a.tryTapKey('contact_blocked_users_tab', retries: 2)) {
+      await a.tapAt(240, 270); // Blocked Users master row (fallback)
+    }
     await Future<void>.delayed(Duration(milliseconds: detail ? 1200 : 700));
-    await a.tapAt(240, 173); // New Contacts master row (fresh load)
+    if (!await a.tryTapKey('contact_new_contacts_tab', retries: 2)) {
+      await a.tapAt(240, 173); // New Contacts master row (fallback)
+    }
     await Future<void>.delayed(Duration(milliseconds: detail ? 1800 : 1200));
     if (await a.waitKey(probeKey, timeoutSecs: 4)) return;
   }
