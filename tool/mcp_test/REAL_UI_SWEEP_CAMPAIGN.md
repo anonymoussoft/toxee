@@ -128,12 +128,12 @@ hermetic tests 59/59 still green)
 
 | # | Case | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 13 | profile_open_sidebar_avatar | 1i | S104 | tap sidebar avatar → self-profile overlay mounts | WRITTEN |
-| 14 | profile_edit_toggle_roundtrip | 1i | S101 | edit pencil enter/exit edit mode | WRITTEN |
-| 15 | profile_edit_nickname_persists | 1i | S8 | edit nickname via real field (+osascript) → save → dump + sidebar reflect | WRITTEN (restores original nick) |
-| 16 | profile_edit_status_persists | 1i | S8 | same for status message | WRITTEN (restores original status) |
-| 17 | profile_copy_toxid_snackbar | 1i | S102 | copy button → snackbar | WRITTEN |
-| 18 | profile_qr_copy | 1i | S103 | QR section copy action → snackbar | WRITTEN (waits for QR FutureBuilder) |
+| 13 | profile_open_sidebar_avatar | 1i | S104 | tap sidebar avatar → self-profile overlay mounts | PASS |
+| 14 | profile_edit_toggle_roundtrip | 1i | S101 | edit pencil enter/exit edit mode | PASS |
+| 15 | profile_edit_nickname_persists | 1i | S8 | edit nickname via real field (+osascript) → save → dump + sidebar reflect | FAIL→FIXED(HARNESS: synthetic enterText SIGSEGV'd setEditingState→focusType now types via osascript keystrokes; save FilledButton "Save Contact" key not surfaced by interactiveStructured→tapKeyAt RenderBox fallback) |
+| 16 | profile_edit_status_persists | 1i | S8 | same for status message | FAIL→FIXED(same crash+save-tap fixes as case 15) |
+| 17 | profile_copy_toxid_snackbar | 1i | S102 | copy button → snackbar | PASS |
+| 18 | profile_qr_copy | 1i | S103 | QR section copy action → snackbar | PASS |
 | 19 | profile_avatar_picker_opens | 1i | S79 | avatar tap → default-avatar grid/picker surface mounts (native picker untouched) | SKIP(no in-app avatar picker — native NSOpenPanel only; l3 override test-gated) |
 | 20 | profile_avatar_select_default_applies | 1i | S79 | select a bundled default avatar → avatar updates (faceUrl changes) | SKIP(no in-app default-avatar selection surface — same root as 19) |
 
@@ -1615,6 +1615,34 @@ rui-group2 → rui-calls-misc. Record per-sweep results + fixes in "Run log".
     only added flakiness without strengthening it.
   - Instances left RUNNING for the next sweep: see the end-of-run tuples at the bottom of this
     log.
+
+- 2026-06-10 **rui-profile (sweep_profile) LIVE: 6 PASS / 0 FAIL / 2 SKIP** — stable across
+  2 consecutive runs, no crash; nickname/status RESTORED to RuiAlice/"" (poison guard for
+  sweep_login). Cases 19/20 SKIP as written (no in-app avatar surface — native NSOpenPanel
+  only). 2 fixes, both HARNESS, both generalize to the later sweeps:
+  - **setEditingState SIGSEGV (GLOBAL crash-safety fix in `drive_real_ui_pair_inst.dart`)** —
+    the self-profile status/nickname edit fields crashed instance A the SAME way the
+    settings manual-node fields did: a synthetic `flutter_skill.enterText` drives the macOS
+    engine's `-[FlutterTextInputPlugin setEditingState:]`, which INTERMITTENTLY SIGSEGVs the
+    whole app (FATAL backtrace frame 2 == setEditingState; the `[callback_bridge]` line is the
+    FFI signal handler catching it, NOT a native bug). Fix: **`Inst.focusType` now types via
+    REAL OS keystrokes** (foreground + single-fire tapKeyCenter focus + osaClear + osaType)
+    instead of synthetic enterText — the crash-free AppKit key path the composer already uses.
+    `osaType` now escapes `\`+`"` so it's safe as the primary typing path. The old synthetic
+    path is preserved as `focusTypeSynthetic` (no callers). `_editProfileFieldAndSave` was
+    ALSO calling raw `skill('enterText')` directly (bypassing focusType) → switched it to
+    focusType. This protects EVERY enterText-into-a-field case across all later sweeps.
+    (NOTE: a few callers still use raw `skill('enterText')` after a `tapKey` — e.g. the
+    settings download-limit field, whose author comment claims the synthetic tap ESTABLISHES
+    the input connection making enterText safe; it passed live, so left as-is. The login
+    register-field validation cases 23/24 also use raw enterText — watch them in sweep_login.)
+  - **Save button not tappable (`drive_real_ui_pair_profile.dart`)** — after typing, the
+    profile save FilledButton (localized label "Save Contact") could not be tapped:
+    flutter_skill does NOT propagate its ValueKey onto the rendered text leaf, so
+    `interactiveStructured` reports it with key:null and `tapKeyCenter` (key-matched over
+    interactiveStructured) found no bounds. Fix: fall back to `tapKeyAt`, which resolves the
+    keyed FilledButton's RenderBox center via ui_drive_tools (ui_key_center) — `candidates:2`
+    but the first onstage match is the button. Now `saved=true restored=true`.
 
 ## Run phase (after ALL batches written) — protocol
 

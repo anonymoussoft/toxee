@@ -353,9 +353,41 @@ class Inst {
     return false;
   }
 
-  /// Focus a (possibly TextFormField-wrapped) field by key, then type into the
-  /// focused editable.
+  /// Focus a (possibly TextFormField-wrapped) plain field by key, then type into
+  /// it with REAL OS keystrokes (osascript), NOT a synthetic
+  /// `flutter_skill.enterText`.
+  ///
+  /// **Why osascript and not enterText:** the synthetic `enterText` drives the
+  /// macOS Flutter engine's `-[FlutterTextInputPlugin setEditingState:]`, which
+  /// INTERMITTENTLY SIGSEGVs the whole app (observed killing instance A on the
+  /// manual-node host field AND the self-profile nickname field; the
+  /// `[callback_bridge] FATAL: received signal 11` line is just the FFI signal
+  /// handler catching the engine crash, frame 2 ==
+  /// `-[FlutterTextInputPlugin setEditingState:]`). Real keystrokes go through
+  /// AppKit's normal key path — the same crash-free route the desktop composer
+  /// uses — so they don't touch setEditingState at all. All `focusType` callers
+  /// target plain `TextField`/`TextFormField`s (NOT the ExtendedTextField
+  /// composer), where genuine keystrokes land fine.
+  ///
+  /// Focus is a SINGLE-FIRE `tapKeyCenter` (not the double-firing synthetic
+  /// `tap`) to avoid focus thrash; falls back to `tapKey` if the field has no
+  /// resolvable bounds yet. Clears any existing content (Cmd+A, Delete) first so
+  /// re-entry replaces rather than appends.
   Future<void> focusType(String key, String text) async {
+    await foreground();
+    if (!await tapKeyCenter(key)) {
+      await tapKey(key);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await osaClear();
+    await osaType(text);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+  }
+
+  /// Legacy synthetic-enterText focus+type, kept for the rare case a caller
+  /// genuinely needs the platform-channel path (none today). PREFER [focusType],
+  /// which is crash-safe. See the setEditingState SIGSEGV note above.
+  Future<void> focusTypeSynthetic(String key, String text) async {
     await tapKey(key);
     await Future<void>.delayed(const Duration(milliseconds: 300));
     final r = await skill('enterText', {'text': text});
@@ -563,8 +595,16 @@ class Inst {
     }
   }
 
-  Future<void> osaType(String text) =>
-      _osa('tell application "System Events" to keystroke "$text"');
+  Future<void> osaType(String text) {
+    // Escape backslash and double-quote for the AppleScript string literal so
+    // arbitrary field text (now the primary typing path via [focusType]) types
+    // verbatim rather than breaking the script. `!`, `@`, `.`, `-`, digits and
+    // letters need no escaping inside an AppleScript string.
+    final escaped = text.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+    return _osa(
+      'tell application "System Events" to keystroke "$escaped"',
+    );
+  }
   Future<void> osaReturn() =>
       _osa('tell application "System Events" to key code 36');
 

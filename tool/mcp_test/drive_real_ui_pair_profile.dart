@@ -198,25 +198,27 @@ Future<bool> _editProfileFieldAndSave(
   String stateField,
 ) async {
   if (!await inst.waitKey(fieldKey, timeoutSecs: 3)) return false;
-  // Focus the field (tapKey general search) then clear via real OS keys so we
-  // replace, not append, the existing text. The keys sit directly on the
-  // editable TextField, so focusType's tap-then-enterText reaches it.
-  await inst.tapKey(fieldKey);
-  await Future<void>.delayed(const Duration(milliseconds: 300));
-  try {
-    await inst.osaClear();
-  } on DriveError {
-    // best-effort; enterText below replaces typical short content anyway
-  }
-  final typed = await inst.skill('enterText', {'text': value});
-  if (typed['success'] != true) {
-    print('[pair] profile edit: enterText "$value" failed: $typed');
-    return false;
-  }
+  // Type via REAL OS keystrokes (focusType = tapKeyCenter focus + osaClear +
+  // osaType), NOT a synthetic `enterText`. The synthetic path drives the macOS
+  // engine's `-[FlutterTextInputPlugin setEditingState:]`, which INTERMITTENTLY
+  // SIGSEGVs the whole app when typing into these overlay edit TextFields
+  // (observed killing instance A on the self-profile status field — the FATAL
+  // backtrace's frame 2 is setEditingState). focusType replaces the field
+  // content with genuine keystrokes through AppKit's normal key path, which
+  // never touches setEditingState.
+  await inst.focusType(fieldKey, value);
   await Future<void>.delayed(const Duration(milliseconds: 200));
+  // The save FilledButton's label is the localized "Save Contact" text and
+  // flutter_skill does NOT propagate its ValueKey onto the rendered text leaf,
+  // so `interactiveStructured` reports it with key:null and `tapKeyCenter`
+  // (which matches by key over interactiveStructured) can't find its bounds.
+  // Fall back to `tapKeyAt`, which resolves the keyed FilledButton's RenderBox
+  // center via ui_drive_tools (ui_key_center) and taps there.
   if (!await inst.tapKeyCenter('profile_save_button', timeoutSecs: 4)) {
-    print('[pair] profile edit: save button not tappable');
-    return false;
+    if (!await inst.tapKeyAt('profile_save_button')) {
+      print('[pair] profile edit: save button not tappable');
+      return false;
+    }
   }
   return _waitStringState(inst, stateField, value);
 }
