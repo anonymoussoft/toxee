@@ -135,6 +135,89 @@ void main() {
   );
 
   testWidgets(
+    'ui_long_press holds past the long-press timeout: onLongPress fires once, onTap never',
+    (tester) async {
+      var longPressFired = 0;
+      var tapFired = 0;
+      await _pump(
+        tester,
+        Center(
+          child: GestureDetector(
+            key: const ValueKey('lp_target'),
+            onTap: () => tapFired++,
+            onLongPress: () => longPressFired++,
+            child: Container(
+              width: 200,
+              height: 120,
+              color: const Color(0xFF334455),
+            ),
+          ),
+        ),
+      );
+
+      // Start the handler WITHOUT awaiting: it dispatches the pointer-down and
+      // suspends on its hold delay. tester.pump advances fake time, firing both
+      // the LongPressGestureRecognizer's 500 ms deadline (→ onLongPress) and
+      // the handler's hold timer (→ pointer-up, default 800 ms — sized past the
+      // fork's 650 ms conversation-row recognizer), then the future completes.
+      final fut = uiLongPressHandler(key: 'lp_target');
+      await tester.pump(const Duration(milliseconds: 900));
+      final res = await fut;
+      await tester.pumpAndSettle();
+
+      expect(res['ok'], true);
+      expect(longPressFired, 1,
+          reason: 'a >500 ms held press must fire onLongPress exactly once');
+      expect(tapFired, 0,
+          reason: 'the tap recognizer must lose the arena to the long-press');
+    },
+  );
+
+  testWidgets(
+    'ui_long_press with a short hold acts as a tap (negative control)',
+    (tester) async {
+      var longPressFired = 0;
+      var tapFired = 0;
+      await _pump(
+        tester,
+        Center(
+          child: GestureDetector(
+            key: const ValueKey('lp_short_target'),
+            onTap: () => tapFired++,
+            onLongPress: () => longPressFired++,
+            child: Container(
+              width: 200,
+              height: 120,
+              color: const Color(0xFF556677),
+            ),
+          ),
+        ),
+      );
+
+      final fut = uiLongPressHandler(key: 'lp_short_target', holdMs: '100');
+      await tester.pump(const Duration(milliseconds: 150));
+      final res = await fut;
+      await tester.pumpAndSettle();
+
+      expect(res['ok'], true);
+      expect(longPressFired, 0,
+          reason: 'a 100 ms hold must NOT long-press');
+      expect(tapFired, 1,
+          reason: 'a sub-timeout press releases as a plain tap');
+    },
+  );
+
+  testWidgets(
+    'ui_long_press error shapes: absent key reports key_not_found',
+    (tester) async {
+      await _pump(tester, const Center(child: SizedBox(width: 10, height: 10)));
+      final missing = await uiLongPressHandler(key: 'no_such_lp_key');
+      expect(missing['ok'], false);
+      expect((missing['error'] as String?), startsWith('key_not_found'));
+    },
+  );
+
+  testWidgets(
     'offstage filtering: onstage duplicate is chosen over an offstage IndexedStack twin',
     (tester) async {
       // index 0 (onstage) and index 1 (offstage) both carry the same key on a

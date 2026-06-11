@@ -26,6 +26,7 @@
 //   - ui_scroll_at  {key?|x,y?, dx?, dy}     one mouse-wheel PointerScrollEvent
 //   - ui_drag       {key?|fromX,fromY?, dx?, dy, steps?} touch drag (down/moves/up)
 //   - ui_secondary_tap {key?|x,y?}           right-button mouse down/up
+//   - ui_long_press {key?|x,y?, holdMs?}     touch down → hold → up (long-press)
 //
 // Each returns {ok:true} or {ok:false, error:"..."} (+ a "candidates" count when
 // a key resolves to multiple onstage matches, for debuggability).
@@ -255,6 +256,54 @@ Map<String, Object?> uiSecondaryTapHandler({String? key, String? x, String? y}) 
   return {'ok': true, 'candidates': resolved.candidates};
 }
 
+/// Long-press: a touch PointerDown, a held delay, then PointerUp at the same
+/// point. The hold (default 800 ms) sits past BOTH long-press deadlines in the
+/// tree — the framework's `kLongPressTimeout` (500 ms) AND the fork's custom
+/// conversation-row recognizer (`TencentCloudChatGesture`,
+/// `LongPressGestureRecognizer(duration: 650 ms)`) — so the production
+/// `onLongPress` handlers fire instead of falling through as a tap (which on a
+/// conversation row would NAVIGATE). The MOBILE trigger twin of
+/// [uiSecondaryTapHandler] (the message/conversation-row context menus open via
+/// long-press on mobile, right-click on desktop). Same FakeAsync rule as
+/// [uiDragHandler]: the await
+/// only happens for a positive hold; hermetic tests start the future un-awaited
+/// and `tester.pump(hold)` to advance fake time (which fires both the
+/// recognizer's internal deadline timer and this handler's delay).
+@visibleForTesting
+Future<Map<String, Object?>> uiLongPressHandler({
+  String? key,
+  String? x,
+  String? y,
+  String? holdMs,
+  Duration hold = const Duration(milliseconds: 800),
+}) async {
+  final resolved = resolveTarget(key, xParam: x, yParam: y);
+  if (!resolved.ok) return {'ok': false, 'error': resolved.error};
+  final point = resolved.point!;
+  final parsedMs = int.tryParse(holdMs ?? '');
+  final holdFor = parsedMs != null ? Duration(milliseconds: parsedMs) : hold;
+  final pointer = _nextPointerId();
+  final binding = GestureBinding.instance;
+  binding.handlePointerEvent(
+    PointerDownEvent(
+      pointer: pointer,
+      position: point,
+      kind: PointerDeviceKind.touch,
+    ),
+  );
+  if (holdFor > Duration.zero) {
+    await Future<void>.delayed(holdFor);
+  }
+  binding.handlePointerEvent(
+    PointerUpEvent(
+      pointer: pointer,
+      position: point,
+      kind: PointerDeviceKind.touch,
+    ),
+  );
+  return {'ok': true, 'candidates': resolved.candidates};
+}
+
 /// Resolve the on-screen global center (x,y) of a keyed widget — READ-ONLY (no
 /// input dispatched). Lets the harness tell whether a keyed but NON-interactive
 /// scroll anchor (e.g. a SizedBox wrapping a SegmentedButton, whose per-segment
@@ -363,6 +412,37 @@ MCPCallEntry _uiSecondaryTapEntry() => MCPCallEntry.tool(
   ),
 );
 
+MCPCallEntry _uiLongPressEntry() => MCPCallEntry.tool(
+  handler: (request) async => _result(
+    await uiLongPressHandler(
+      key: request['key'],
+      x: request['x'],
+      y: request['y'],
+      holdMs: request['holdMs'],
+    ),
+  ),
+  definition: MCPToolDefinition(
+    name: 'ui_long_press',
+    description:
+        'DEBUG-ONLY (ungated): long-press (touch PointerDown, hold holdMs — '
+        'default 800 ms, past the 500 ms framework timeout AND the fork '
+        'conversation-row recognizer at 650 ms — then PointerUp) at a key '
+        'center (key) or raw coords (x,y). Drives the production onLongPress '
+        'handlers (the mobile context-menu trigger). '
+        'Returns {ok, error?, candidates}.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'key': StringSchema(description: 'ValueKey of the long-press center.'),
+        'x': StringSchema(description: 'Raw global x (when no key).'),
+        'y': StringSchema(description: 'Raw global y (when no key).'),
+        'holdMs': StringSchema(
+          description: 'Hold duration in ms (default 600; >500 long-presses).',
+        ),
+      },
+    ),
+  ),
+);
+
 MCPCallEntry _uiKeyCenterEntry() => MCPCallEntry.tool(
   handler: (request) async => _result(uiKeyCenterHandler(key: request['key'])),
   definition: MCPToolDefinition(
@@ -388,10 +468,11 @@ void registerUiDriveToolsIfDebug() {
   if (!kDebugMode) return;
   AppLogger.info(
     '[ui-drive] Registering pointer-event tools '
-    '(ui_scroll_at, ui_drag, ui_secondary_tap, ui_key_center).',
+    '(ui_scroll_at, ui_drag, ui_secondary_tap, ui_long_press, ui_key_center).',
   );
   addMcpTool(_uiScrollAtEntry());
   addMcpTool(_uiDragEntry());
   addMcpTool(_uiSecondaryTapEntry());
+  addMcpTool(_uiLongPressEntry());
   addMcpTool(_uiKeyCenterEntry());
 }

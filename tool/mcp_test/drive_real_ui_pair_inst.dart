@@ -526,6 +526,21 @@ class Inst {
     }
   }
 
+  /// Long-press (real touch down → hold → up) at [key]'s center — the MOBILE
+  /// trigger twin of [secondaryTapKey] (message / conversation-row context
+  /// menus and the login account-card management menu open via long-press).
+  /// [holdMs] defaults to 800 ms — past BOTH the 500 ms framework timeout AND
+  /// the fork's custom 650 ms conversation-row recognizer
+  /// (`TencentCloudChatGesture` → `LongPressGestureRecognizer(duration: 650)`);
+  /// a shorter hold would release early and fall through as a TAP (which on a
+  /// conversation row navigates).
+  Future<void> longPressKey(String key, {int holdMs = 800}) async {
+    final r = await l3('ui_long_press', {'key': key, 'holdMs': '$holdMs'});
+    if (r['ok'] != true) {
+      throw DriveError('[$name] ui_long_press "$key" failed: $r');
+    }
+  }
+
   /// READ-ONLY on-screen global center (x,y) of a keyed widget, or null when it
   /// can't be resolved (absent / offstage-only). Works for NON-interactive keyed
   /// anchors (e.g. a SizedBox wrapping a SegmentedButton) that flutter_skill's

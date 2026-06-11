@@ -68,9 +68,15 @@ PointerUp through `GestureBinding.handlePointerEvent`. Register in
 `test/ui/testing/ui_drive_tools_test.dart`: onLongPress fires once (and onTap
 does NOT); offstage/absent key errors. FakeAsync note: test starts the handler
 future un-awaited, `tester.pump(700ms)` advances fake time, then awaits it.
-**STATUS: DONE** (registered as the 5th ui_drive tool; hermetic gates 8/8 incl.
-3 new long-press cases; analyze 0-new; codex round found P1 stale-comment +
-P2 pump-pattern doc drift — both fixed).
+**STATUS: DONE** (5th ui_drive tool + `Inst.longPressKey`; hermetic gates 8/8
+incl. 3 new long-press cases — fires-once/not-tap, short-hold-is-tap negative
+control, key_not_found shape; analyze 222/0-new; planner + INDEX green; codex
+round-1 found 1 P2: the fork's conversation rows use a CUSTOM
+`LongPressGestureRecognizer(duration: 650 ms)` (`tencent_cloud_chat_gesture.dart:117`)
+so the 600 ms default would release early and fall through as a TAP (= navigation
+on a conv row) → default hold raised to 800 ms everywhere, docs cite both
+deadlines. Durable fact: any long-press driving of fork gesture surfaces must
+hold >650 ms, not just >500 ms.)
 
 ### Batch II — P1 single-instance quintet (`drive_real_ui_pair_p1_single.dart`)
 
@@ -83,12 +89,11 @@ P2 pump-pattern doc drift — both fixed).
 | `zh_locale_page_walk` | P1#12 | per-page zh labels (外观 etc.); revert-to-en discipline (batch-1 locale finding) |
 
 Sweep `sweep_p1_single` · campaign `rui-p1-single` · state no-friend→no-friend.
-**STATUS: DONE** (5/5 WRITTEN; new part ~700 LOC + runner/dispatch entries;
-analyze 0-new; planner/validate/campaign-list/self-test/INDEX green; codex
-round-1 found 3 P1 — zh-walk locale-leak guard on early-FAIL, switch-entry
-false-PASS without account #2 → now registers RuiP1SwB via real RegisterPage
-once + asserts toxId actually flips, delete-flow now ENDS the sweep (account #2
-deleted, primary re-entered) — all applied; round-2 confirmed)
+Design intent (not yet validated): switch-entry case should register a real 2nd
+account ONCE (via the real RegisterPage) and assert the toxId actually flips;
+the delete-flow case deletes that throwaway account LAST (sweep ends on the
+primary, clean); zh-walk needs a locale-revert guard even on early FAIL.
+**STATUS: TODO**
 
 ### Batch III — P1 two-process chat/conv octet (`drive_real_ui_pair_p1_chat.dart`)
 
@@ -103,16 +108,14 @@ deleted, primary re-entered) — all applied; round-2 confirmed)
 | `search_empty_state` | P1#14 | custom_search empty-state marker |
 | `image_preview_open_hardened` | P1#16 | bounded retry-tap; honest best-effort fallback |
 
-Sweep `sweep_p1_chat` · campaign `rui-p1-chat` · friends→friends. **STATUS: DONE**
-(8/8 WRITTEN, 0 SKIP — typing=NEGATIVE gate [no UI surface, verified], draft=
-session-cache contract [fork never calls getConversation draft on switch-back;
-composer survives via cache, cold-start restore is the recorded gap], recall=
-full roundtrip [fork revoke → tox_friend_send_message tombstone → B side gates
-recalled-render], receipt ✓✓=keyed fork icon `message_read_receipt_icon:<msgID>`
-(+1 automation-only fork key, mobile-covered) · codex 2 rounds: R1 3 P1 (receipt
-false-pass on send-state icon → peerRead dump gate added; forward picker
-double-fire → tapKeyCenter; draft case asserted nothing → split hard/soft) +
-2 P2 — all applied; R2 PASS)
+Sweep `sweep_p1_chat` · campaign `rui-p1-chat` · friends→friends.
+Open design questions for the batch agent (verify by READING code, then decide
+gate shape honestly): does any UI render typing (else NEGATIVE gate or SKIP)?
+does the fork restore drafts on conv switch-back (else record the gap)? is the
+recall path wired through the bridge (else honest UI-half scope)? is the ✓✓
+read-status icon keyed (else an automation-only fork key is the precedented fix,
+and the assert must distinguish peer-READ from mere send-success)?
+**STATUS: TODO**
 
 ### Batch IV — P1 relaunch trio + calls (`drive_real_ui_pair_p1_relaunch.dart`)
 
@@ -123,19 +126,16 @@ double-fire → tapKeyCenter; draft case asserted nothing → split hard/soft) +
 | `call_from_profile_tiles` | P1#15 | `friend_profile_voice_call_tile`/`friend_profile_video_call_tile` (fork :437/:455) |
 | `group_join_by_id_real_ui` | P1#17 | verify-first AddGroupDialog join path; product-gap record if absent |
 
-Runner: `_realUiStateRelaunchDirty = 'relaunch-dirty'` result state (the existing
-unknown-state else-branch already stop+relaunches — verified at
-`fixture_c_unified_runner.dart:1075`/`:1614`). Relaunch helper = top-level fn in
-the new part (stop/launch scripts + `instance.json` re-read + `Inst._reconnect`).
-**STATUS: DONE** (4/4 WRITTEN, 0 SKIP — join-by-id VERIFIED ABSENT → negative
-product-gap gate (S33 stays 2proc-l3); relaunch helper relaunches via
-`launch_toxee_instance.sh` + fresh `Inst` from re-read instance.json + autoLogin
-sessionReady wait; `relaunch-dirty` result state + planner `_restoreForRealUiState`
-default-null verified; sweep `sweep_p1_relaunch` · campaign `rui-p1-relaunch` ·
-friends→relaunch-dirty · codex R1: 2 P1 (pending-spinner assert raced B-relaunch →
-spinner gated BEFORE relaunch + delivered-after; stale-ws dispose leak in relaunch
-helper → old vm client disposed before reconnect) + 1 P2 (call cases now
-_ensureBothIdle-gated like batch 8) — all applied; R2 PASS)
+Runner: add `_realUiStateRelaunchDirty = 'relaunch-dirty'` result state (the
+existing unknown-state else-branch already stop+relaunches — verified at
+`fixture_c_unified_runner.dart:1075`/`:1614`; check `_restoreForRealUiState`'s
+default for the unknown state). Relaunch helper = fn in the new part
+(stop/launch scripts + `instance.json` re-read + fresh `Inst`/`_reconnect`;
+dispose the stale vm client first). Design intent: assert the pending spinner
+BEFORE relaunching B (don't race it); gate call cases on both-idle like batch 8;
+verify-first whether AddGroupDialog has any join-by-id path (likely absent →
+negative product-gap gate, S33 stays 2proc-l3).
+**STATUS: TODO**
 
 ### Batch V — P2 fork keys + scenarios (`drive_real_ui_pair_p2_keys.dart`)
 
@@ -217,3 +217,14 @@ validated gates only.
   unnecessary (likely) or complementary (binary-replacement path parity).
   Sweep 4–8 run state: sweep_contacts was mid-run when cancelled; sweeps 5–8
   unrun. Instance state unknown — the run phase re-launches fresh.
+
+- 2026-06-10 **Batch I DONE** (`ui_long_press` + `Inst.longPressKey`). Gates:
+  analyze 222 (0 NEW), `ui_drive_tools_test.dart` 8/8, planner `--plan-json`
+  exit 0, INDEX `--check` green. Codex (1 round): 1 P2 — fork conversation rows
+  long-press at a CUSTOM 650 ms (`tencent_cloud_chat_gesture.dart:117-118`), so
+  the 600 ms default hold would release early and fall through as a TAP →
+  default raised to 800 ms in the handler, the MCP description, and
+  `Inst.longPressKey`; the hermetic default-path test pumps 900 ms. Anchor
+  CORRECTION in the same commit: the initially committed anchor pre-filled
+  batch I–IV Status as DONE with invented outcomes (drafting error) — reverted
+  to TODO + plan-note wording; only ACTUAL results may live in Status fields.
