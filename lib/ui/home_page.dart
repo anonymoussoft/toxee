@@ -1442,6 +1442,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   child: ExcludeSemantics(
                                     child: Text(
                                       displayText,
+                                      // Automation-only: the mobile bottom-nav
+                                      // twin of sidebar_chats_unread_badge.
+                                      key: UiKeys.homeChatsUnreadBadge,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: theme.textTheme.labelSmall

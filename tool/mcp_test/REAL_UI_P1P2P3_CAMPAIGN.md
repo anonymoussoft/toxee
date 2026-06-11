@@ -137,7 +137,29 @@ does the fork restore drafts on conv switch-back (else record the gap)? is the
 recall path wired through the bridge (else honest UI-half scope)? is the ✓✓
 read-status icon keyed (else an automation-only fork key is the precedented fix,
 and the assert must distinguish peer-READ from mere send-success)?
-**STATUS: TODO**
+**STATUS: DONE (written, unrun)** — 8/8 WRITTEN, 0 SKIP. Five positive gates
+(`chat_recall_message`, `forward_to_group_target`, `unread_badge_total_sidebar`,
+`search_empty_state`, `image_preview_open_hardened`) plus three evidence-backed
+NEGATIVE product-gap pins (`read_receipt_double_tick`, `draft_restore_on_conv_switch`,
+`typing_indicator_render`). Production/fork changes: new part file +
+driver/runner registration (`sweep_p1_chat`, `rui-p1-chat`); desktop sidebar
+and mobile bottom-nav unread-badge Text keys (`sidebar_chats_unread_badge`,
+`home_chats_unread_badge`); fork keys `chat_header_title_text`,
+`message_viewer_root`, and state-suffixed
+`message_send_status:<msgID>:<read|sent|other>`. Verify-first findings are
+recorded at the top of `drive_real_ui_pair_p1_chat.dart`: recall is wired
+through a best-effort `__revoke__:` bridge but B-side live tombstone rendering
+is a fork listener gap; C2C read receipts do not wire from chat-open and cannot
+correlate msgIDs; desktop drafts never save and the platform draft path is not
+usable for this UI route; typing has a data half (`l3_set_typing`) but no
+production sender or UI consumer. Gates: `flutter analyze lib tool
+--no-fatal-warnings --no-fatal-infos` = 222 baseline / 0 new; plan-json,
+validate-only, campaign-list (`rui-p1-chat` present), `--self-test-shell-recovery`,
+and `gen_scenario_index.dart --check` all green; `flutter test test/ui/chat
+test/ui/home test/ui/settings test/ui/testing` = 139/139. Codex review:
+SKIPPED per explicit user directive for this handoff turn. Mobile parity:
+unread badge key lands on the shared mobile bottom-nav host, and fork message
+keys live in shared message widgets.
 
 ### Batch IV — P1 relaunch trio + calls (`drive_real_ui_pair_p1_relaunch.dart`)
 
@@ -264,3 +286,20 @@ validated gates only.
   login cards" would have been a wrong-shape gate; (3) an empty l3 list field
   is ambiguous on read error — gate absence verdicts on a sentinel the list
   must contain (here: the primary toxId).
+
+- 2026-06-11 **Batch III DONE (written, unrun)**. Added
+  `drive_real_ui_pair_p1_chat.dart` and registered `sweep_p1_chat` /
+  `rui-p1-chat`. Wrote all 8 P1 chat/conv cases; `read_receipt_double_tick`,
+  `draft_restore_on_conv_switch`, and `typing_indicator_render` are NEGATIVE
+  product-gap pins with read-code evidence instead of fake positive gates.
+  Added automation-only keys for unread badge rendering (desktop sidebar +
+  mobile bottom nav) and fork chat surfaces (open header title, media viewer
+  root, state-suffixed send-status icon). Gates green: analyze 222/0-new,
+  planner plan-json, validate-only, campaign-list, shell recovery self-test,
+  INDEX check, and touched UI tests 139/139. Codex review deliberately skipped
+  for this batch per the 2026-06-11 handoff instruction ("里面提到的codex审查的要求，
+  先不做审查"). Durable gotchas: (1) `Text` keys must be inserted after the
+  positional text argument, not before it; (2) `dart format` on fork files causes
+  massive unrelated churn, so keep fork key edits surgical; (3) read-receipt
+  assertions must prove the receiver's local unread was nonzero before opening
+  the row, or the negative gate is vacuous.

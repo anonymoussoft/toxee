@@ -238,6 +238,21 @@ const _validRealUiScenarios = {
   'settings_switch_account_entry',
   'account_card_management_menu',
   'account_delete_full_flow',
+  // P1/P2/P3 campaign Batch III — two-process chat/conv octet. sweep_p1_chat
+  // chains all 8 on one launch: required=no-friend (it does its OWN handshake)
+  // and result=friends (no case deletes the friend; the end-guard re-seeds a
+  // row). Three cases are NEGATIVE product-gap pins decided by verify-first
+  // code reading: read_receipt_double_tick, draft_restore_on_conv_switch, and
+  // typing_indicator_render.
+  'sweep_p1_chat',
+  'chat_recall_message',
+  'read_receipt_double_tick',
+  'forward_to_group_target',
+  'draft_restore_on_conv_switch',
+  'typing_indicator_render',
+  'unread_badge_total_sidebar',
+  'search_empty_state',
+  'image_preview_open_hardened',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -277,6 +292,10 @@ const _realUiCampaigns = <String, List<String>>{
   // P1/P2/P3 campaign Batch II — single-instance account/locale/conference
   // chain (one launch; drives only A).
   'rui-p1-single': ['sweep_p1_single'],
+  // P1/P2/P3 campaign Batch III — two-process chat/conv octet (one launch;
+  // one handshake at the top, both accounts marked test for l3 seeding and
+  // revoked at the end; ends friends with a re-seeded row).
+  'rui-p1-chat': ['sweep_p1_chat'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -1198,6 +1217,16 @@ String _requiredRealUiState(String scenario) {
     case 'home_tabs_cycle_state_retained':
     case 'theme_switch_chat_open':
     case 'search_chat_history_window_open':
+    // P1/P2/P3 Batch III — every individual chat/conv case needs friendship;
+    // standalone dispatch restores paired_for_e2e or establishes it first.
+    case 'chat_recall_message':
+    case 'read_receipt_double_tick':
+    case 'forward_to_group_target':
+    case 'draft_restore_on_conv_switch':
+    case 'typing_indicator_render':
+    case 'unread_badge_total_sidebar':
+    case 'search_empty_state':
+    case 'image_preview_open_hardened':
       return _realUiStateFriends;
     case 'handshake':
     case 'handshake_detail':
@@ -1295,6 +1324,9 @@ String _requiredRealUiState(String scenario) {
     case 'settings_switch_account_entry':
     case 'account_card_management_menu':
     case 'account_delete_full_flow':
+    // P1/P2/P3 Batch III — sweep_p1_chat runs its OWN handshake, so it needs a
+    // fresh no-friend pair launch.
+    case 'sweep_p1_chat':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1385,6 +1417,17 @@ String _resultRealUiState(String scenario) {
     case 'home_tabs_cycle_state_retained':
     case 'theme_switch_chat_open':
     case 'search_chat_history_window_open':
+    // P1/P2/P3 Batch III — no case deletes the friend; the sweep end-guard
+    // re-seeds a visible C2C row.
+    case 'sweep_p1_chat':
+    case 'chat_recall_message':
+    case 'read_receipt_double_tick':
+    case 'forward_to_group_target':
+    case 'draft_restore_on_conv_switch':
+    case 'typing_indicator_render':
+    case 'unread_badge_total_sidebar':
+    case 'search_empty_state':
+    case 'image_preview_open_hardened':
       return _realUiStateFriends;
     case 'decline':
     case 'custom_message':

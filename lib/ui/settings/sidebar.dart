@@ -652,6 +652,10 @@ class _SidebarItemState extends State<_SidebarItem> {
                                         child: Center(
                                           child: Text(
                                             displayText,
+                                            // Automation-only: present only
+                                            // while totalUnreadCount > 0; its
+                                            // data is the rendered count.
+                                            key: UiKeys.sidebarChatsUnreadBadge,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: theme.textTheme.labelSmall

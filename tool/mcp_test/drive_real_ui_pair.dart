@@ -118,6 +118,11 @@ import 'fixture_c_bootstrap.dart';
 //                   switch-account entry, login-card management menu (real
 //                   long-press), account delete full flow (destructive, last)
 //                   + the sweep_p1_single chain.
+//   p1_chat       — P1/P2/P3-campaign Batch III (TWO-PROCESS chat/conv octet):
+//                   recall roundtrip, read-receipt NEGATIVE pin, forward to a
+//                   group target, draft NEGATIVE pin, typing DOUBLE-NEGATIVE
+//                   pin, sidebar total-unread badge, search empty state, image
+//                   preview hardened + the sweep_p1_chat chain.
 part 'drive_real_ui_pair_inst.dart';
 part 'drive_real_ui_pair_shell.dart';
 part 'drive_real_ui_pair_friends.dart';
@@ -135,6 +140,7 @@ part 'drive_real_ui_pair_chat.dart';
 part 'drive_real_ui_pair_group2.dart';
 part 'drive_real_ui_pair_calls_misc.dart';
 part 'drive_real_ui_pair_p1_single.dart';
+part 'drive_real_ui_pair_p1_chat.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -688,6 +694,18 @@ Future<int> _main(List<String> args) async {
     }
     if (_isP1SingleCaseScenario(scenario)) {
       return await runP1SingleCase(a, nickA, scenario);
+    }
+    // P1/P2/P3 campaign Batch III — two-process chat/conv octet. sweep_p1_chat
+    // chains all 8 on one launch (the canonical entry; one handshake at the
+    // top, marks both accounts test for l3 seeding, and revokes the marker in
+    // its end-guard). Individual cases need an A<->B friendship; standalone
+    // dispatch gets that from paired_for_e2e or establishes it here.
+    if (scenario == 'sweep_p1_chat') {
+      return await runP1ChatSweep(a, b, nickA, nickB);
+    }
+    if (_isP1ChatCaseScenario(scenario)) {
+      return await runP1ChatCase(a, b, nickA, nickB, scenario,
+          bootRestored: bootRestored);
     }
     if (scenario == 'group_profile_open') {
       return await runGroupProfileOpen(a, nickA);

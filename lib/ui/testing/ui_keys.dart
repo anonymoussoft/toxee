@@ -461,4 +461,14 @@ class UiKeys {
   static const Key groupProfileSendMessageButton = Key(
     'group_profile_send_message_button',
   );
+
+  // Total-unread badge TEXT on the Chats entry — automation-only. The badge
+  // only exists in the tree while totalUnreadCount > 0 (count == 0 renders
+  // SizedBox.shrink), so presence/absence of the key IS the badge state and
+  // the keyed Text's data is the rendered count ("99+" past 99). Two hosts:
+  // the desktop sidebar Chats tab (lib/ui/settings/sidebar.dart) and the
+  // mobile bottom-nav Chats item (lib/ui/home_page.dart) — distinct keys so
+  // an offstage desktop/mobile twin can never false-positive a waitKey.
+  static const Key sidebarChatsUnreadBadge = Key('sidebar_chats_unread_badge');
+  static const Key homeChatsUnreadBadge = Key('home_chats_unread_badge');
 }
