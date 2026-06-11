@@ -265,7 +265,45 @@ Dart surfaces; the new driver remains a desktop two-process write-phase case.
 ### Batch VII — P2 verify-first trio (voice / paste / tray)
 
 Read-code investigations; scenario if surface exists, else evidence-based
-product-gap entry HERE + inventory doc cross-ref. **STATUS: TODO**
+product-gap entry HERE + inventory doc cross-ref. **STATUS: DONE (written,
+unrun)** — 1/3 WRITTEN, 2/3 EVIDENCE-BASED NO-NEW-DRIVER. Fork commit
+`ec3e314` adds the desktop pasted-image confirmation selector
+`desktop_send_image_confirm_button`. Root adds `drive_real_ui_pair_p2_verify.dart`
+plus dispatch/runner registration (`sweep_p2_verify`, `rui-p2-verify`) and a
+source guard for the new selector. `paste_image_into_composer` writes a tiny PNG
+to the macOS image clipboard, focuses the real composer (`chat_input_text_field`),
+drives the production Cmd+V RawKeyEvent path, taps the real keyed image-send
+confirmation, then asserts A has a new self `mediaKind=image` paste message and
+B receives the same image filename. Verify-first evidence: the desktop paste
+handler exists at
+`tencent_cloud_chat_message_input_desktop.dart:499-553`, and the confirmation
+button is keyed at `image_tools.dart:75-77`.
+
+Voice: no new Batch VII driver. Desktop voice exists
+(`tencent_cloud_chat_message_input_desktop.dart:397-416`), but S78 is already
+explicitly L3-pinned because the record dialog gates on a real microphone/TCC
+and end-to-end delivery needs a second live process receiving over DHT
+(`test/mcp/S78_voice_message_record_send.md:6-17`). Existing coverage remains
+`run_fixture_c_voice_msg.sh` plus
+`test/ui/mobile/mobile_voice_record_real_ui_test.dart`; adding a write-phase
+desktop driver would be un-verifiable without the deferred run phase.
+
+Tray: no new Batch VII driver. The tray shell exists
+(`app_tray.dart:24-31`, `app_tray.dart:340-345`), but the actual window close
+path is destroy, not hide-to-tray: the frame close button calls
+`windowManager.close()` (`desktop_window_frame.dart:140-143`) and
+`onWindowClose()` persists bounds then calls `windowManager.destroy()`
+(`desktop_shell_bootstrap.dart:13-29`). Therefore the inventory's
+"close-window -> tray/Dock restore" behavior is a product gap rather than a
+driveable real-UI surface. Codex review: SKIPPED per explicit user directive for
+this handoff turn. Gates: driver/runner/source analyze no issues, fork
+`image_tools.dart` analyze 3 baseline infos/0 fatal, planner plan-json,
+validate-only, campaign-list (`rui-p2-verify` present), corrected campaign
+plan-json under `--class=2proc-ui`, shell recovery self-test, INDEX check,
+`git diff --check`, source guard `dart run`, root `flutter analyze lib tool
+--no-fatal-warnings --no-fatal-infos` = 222 baseline/0 fatal,
+`test/ui/testing` = 19/19, and related tests `test/ui/chat test/ui/testing` =
+53/53.
 
 ### Batch VIII — P3 writable subset
 
@@ -421,3 +459,22 @@ validated gates only.
   INDEX check, `git diff --check`, root analyze 222/0-fatal, and related tests
   54/54. Codex review deliberately skipped per the user instruction for this
   turn.
+
+- 2026-06-11 **Batch VII DONE (written, unrun)**. Verify-first resolved the
+  voice / paste-image / tray trio honestly: fork commit `ec3e314` adds
+  `desktop_send_image_confirm_button`, and root adds
+  `drive_real_ui_pair_p2_verify.dart`, `sweep_p2_verify`, and `rui-p2-verify`.
+  The written hard case is `paste_image_into_composer`: macOS image clipboard
+  seed -> real composer Cmd+V -> real keyed image confirmation -> sender/receiver
+  `mediaKind=image` dump assertions. Voice gets no new write-phase driver
+  because the current evidence pins it to S78's real-mic/TCC + live DHT gate
+  (`run_fixture_c_voice_msg.sh` plus the mobile record widget test). Tray gets
+  no fake close-to-tray driver because the implemented close path destroys the
+  window instead of hiding it to tray; AppTray can show/focus when present, but
+  close-window restore is a product gap. Gates green: driver/runner/source
+  analyze no issues, fork image-tools analyze 3 baseline infos/0 fatal,
+  planner plan-json, validate-only, campaign-list, corrected `rui-p2-verify`
+  plan-json under `--class=2proc-ui`, shell recovery self-test, INDEX check,
+  source guard direct dart run, `git diff --check`, root analyze 222/0-fatal,
+  `test/ui/testing` 19/19, and related tests 53/53. Codex review deliberately
+  skipped per the user instruction for this turn.

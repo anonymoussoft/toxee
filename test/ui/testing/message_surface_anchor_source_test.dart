@@ -23,6 +23,9 @@ void main() {
   final mobileInput = File(
     'third_party/chat-uikit-flutter/tencent_cloud_chat_message/lib/tencent_cloud_chat_message_input/mobile/tencent_cloud_chat_message_input_mobile.dart',
   ).readAsStringSync();
+  final desktopImageTools = File(
+    'third_party/chat-uikit-flutter/tencent_cloud_chat_message/lib/common/for_desktop/image_tools.dart',
+  ).readAsStringSync();
 
   _expectContains(
     uiKeys,
@@ -58,5 +61,10 @@ void main() {
     mobileInput,
     "ValueKey('emoji_panel_button')",
     'mobile emoji panel toggle key',
+  );
+  _expectContains(
+    desktopImageTools,
+    "ValueKey('desktop_send_image_confirm_button')",
+    'desktop pasted-image confirm button key',
   );
 }

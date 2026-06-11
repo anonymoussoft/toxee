@@ -132,6 +132,9 @@ import 'fixture_c_bootstrap.dart';
 //                   presence-dot state flip via relaunch.
 //   p2_reply      — P1/P2/P3-campaign Batch VI (P2 reply seam/key case):
 //                   C2C custom inbound seed + real Reply menu/send metadata.
+//   p2_verify     — P1/P2/P3-campaign Batch VII (P2 verify-first result):
+//                   pasted-image composer flow; voice/tray remain documented
+//                   product gaps / L3-pinned surfaces.
 part 'drive_real_ui_pair_inst.dart';
 part 'drive_real_ui_pair_shell.dart';
 part 'drive_real_ui_pair_friends.dart';
@@ -153,6 +156,7 @@ part 'drive_real_ui_pair_p1_chat.dart';
 part 'drive_real_ui_pair_p1_relaunch.dart';
 part 'drive_real_ui_pair_p2_keys.dart';
 part 'drive_real_ui_pair_p2_reply.dart';
+part 'drive_real_ui_pair_p2_verify.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -805,6 +809,22 @@ Future<int> _main(List<String> args) async {
     }
     if (_isP2ReplyCaseScenario(scenario)) {
       return await runP2ReplyCase(
+        a,
+        b,
+        nickA,
+        nickB,
+        scenario,
+        bootRestored: bootRestored,
+      );
+    }
+    // P1/P2/P3 campaign Batch VII — verify-first P2 trio outcome. Only
+    // pasted-image has a driveable write-phase desktop surface; voice/tray
+    // findings are recorded in the campaign anchor.
+    if (scenario == 'sweep_p2_verify') {
+      return await runP2VerifySweep(a, b, nickA, nickB);
+    }
+    if (_isP2VerifyCaseScenario(scenario)) {
+      return await runP2VerifyCase(
         a,
         b,
         nickA,
