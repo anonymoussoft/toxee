@@ -130,6 +130,8 @@ import 'fixture_c_bootstrap.dart';
 //   p2_keys       — P1/P2/P3-campaign Batch V (P2 selector-backed cases):
 //                   sticker face cell send, new-messages chip tap, and
 //                   presence-dot state flip via relaunch.
+//   p2_reply      — P1/P2/P3-campaign Batch VI (P2 reply seam/key case):
+//                   C2C custom inbound seed + real Reply menu/send metadata.
 part 'drive_real_ui_pair_inst.dart';
 part 'drive_real_ui_pair_shell.dart';
 part 'drive_real_ui_pair_friends.dart';
@@ -150,6 +152,7 @@ part 'drive_real_ui_pair_p1_single.dart';
 part 'drive_real_ui_pair_p1_chat.dart';
 part 'drive_real_ui_pair_p1_relaunch.dart';
 part 'drive_real_ui_pair_p2_keys.dart';
+part 'drive_real_ui_pair_p2_reply.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -787,6 +790,21 @@ Future<int> _main(List<String> args) async {
     }
     if (_isP2KeysCaseScenario(scenario)) {
       return await runP2KeysCase(
+        a,
+        b,
+        nickA,
+        nickB,
+        scenario,
+        bootRestored: bootRestored,
+      );
+    }
+    // P1/P2/P3 campaign Batch VI — P2 reply case made driveable by a C2C
+    // custom-inbound l3 seam plus a keyed quote banner.
+    if (scenario == 'sweep_p2_reply') {
+      return await runP2ReplySweep(a, b, nickA, nickB);
+    }
+    if (_isP2ReplyCaseScenario(scenario)) {
+      return await runP2ReplyCase(
         a,
         b,
         nickA,

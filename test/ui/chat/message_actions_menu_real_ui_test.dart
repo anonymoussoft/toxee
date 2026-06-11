@@ -82,8 +82,10 @@ class _RecordingSdkPlatform extends TencentCloudChatSdkPlatform {
   /// contractually returns).
   final List<V2TimMessage> history;
 
-  final List<({String? id, String receiver, String groupID, String? cloudCustomData})>
-      sendCalls = [];
+  final List<
+    ({String? id, String receiver, String groupID, String? cloudCustomData})
+  >
+  sendCalls = [];
   final List<List<String>> deleteCalls = [];
   final List<String> forwardCreateCalls = [];
 
@@ -109,7 +111,9 @@ class _RecordingSdkPlatform extends TencentCloudChatSdkPlatform {
     int? timePeriod,
   }) async {
     // Initial load (no cursor): the fixture. Pagination: nothing more.
-    final list = lastMsgID == null ? List<V2TimMessage>.of(history) : <V2TimMessage>[];
+    final list = lastMsgID == null
+        ? List<V2TimMessage>.of(history)
+        : <V2TimMessage>[];
     return V2TimValueCallback(
       code: 0,
       desc: 'ok',
@@ -226,7 +230,8 @@ class _RecordingSdkPlatform extends TencentCloudChatSdkPlatform {
       groupID: groupID,
       cloudCustomData: cloudCustomData,
     ));
-    final created = (id == null ? null : _createdById[id]) ??
+    final created =
+        (id == null ? null : _createdById[id]) ??
         V2TimMessage(elemType: MessageElemType.V2TIM_ELEM_TYPE_TEXT);
     final echoed = V2TimMessage(
       msgID: id,
@@ -365,20 +370,23 @@ Future<_RecordingSdkPlatform> _pumpChatPage(WidgetTester tester) async {
   final data = TencentCloudChat.instance.dataInstance;
   data.basic.usedComponents = [TencentCloudChatComponentsEnum.message];
   data.basic.updateCurrentUserInfo(
-      userFullInfo: V2TimUserFullInfo(userID: 'self_user', nickName: 'Me'));
+    userFullInfo: V2TimUserFullInfo(userID: 'self_user', nickName: 'Me'),
+  );
   // Recent-tab fixture for the forward picker: the current chat plus a second
   // conversation to forward into.
   data.conversation.conversationList = [
     V2TimConversation(
-        conversationID: 'c2c_friend1',
-        type: 1,
-        userID: 'friend1',
-        showName: 'Friend One'),
+      conversationID: 'c2c_friend1',
+      type: 1,
+      userID: 'friend1',
+      showName: 'Friend One',
+    ),
     V2TimConversation(
-        conversationID: 'c2c_friend2',
-        type: 1,
-        userID: 'friend2',
-        showName: 'Friend Two'),
+      conversationID: 'c2c_friend2',
+      type: 1,
+      userID: 'friend2',
+      showName: 'Friend Two',
+    ),
   ];
   // Fresh per-test global message store (singleton survives between tests).
   data.messageData.messageListMap = {};
@@ -409,10 +417,16 @@ Future<_RecordingSdkPlatform> _pumpChatPage(WidgetTester tester) async {
   await tester.pumpAndSettle();
 
   // The REAL list must show the fixture bubbles before any gate runs.
-  expect(_rowItem('seed_0'), findsOneWidget,
-      reason: 'fixture received bubble should render in the real list');
-  expect(_rowItem('seed_1'), findsOneWidget,
-      reason: 'fixture self bubble should render in the real list');
+  expect(
+    _rowItem('seed_0'),
+    findsOneWidget,
+    reason: 'fixture received bubble should render in the real list',
+  );
+  expect(
+    _rowItem('seed_1'),
+    findsOneWidget,
+    reason: 'fixture self bubble should render in the real list',
+  );
   return platform;
 }
 
@@ -459,13 +473,14 @@ Future<void> _dismissDesktopMenu(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-Finder _menuItem(String action) => find.byKey(ValueKey('message_menu_item:$action'));
+Finder _menuItem(String action) =>
+    find.byKey(ValueKey('message_menu_item:$action'));
 
 /// All rendered (non-offstage) keyed menu items.
 Finder _allMenuItems() => find.byWidgetPredicate((w) {
-      final key = w.key;
-      return key is ValueKey<String> && key.value.startsWith('message_menu_item:');
-    });
+  final key = w.key;
+  return key is ValueKey<String> && key.value.startsWith('message_menu_item:');
+});
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -498,8 +513,11 @@ void main() {
       expect(_menuItem('delete'), findsOneWidget);
       // Truthful negatives — the fork strips these for TEXT messages
       // (menu container :594-612): no Reply, no Multi-Select, no Translate.
-      expect(_menuItem('reply'), findsNothing,
-          reason: 'fork removes quote/reply from text-message menus');
+      expect(
+        _menuItem('reply'),
+        findsNothing,
+        reason: 'fork removes quote/reply from text-message menus',
+      );
       expect(_menuItem('multiSelect'), findsNothing);
       expect(_menuItem('translate'), findsNothing);
       // Received message: recall is gated on isSelf.
@@ -507,8 +525,11 @@ void main() {
       // Non-media text: no reveal-location; C2C: no read receipt.
       expect(_menuItem('revealFileLocation'), findsNothing);
       expect(_menuItem('readReceipt'), findsNothing);
-      expect(_allMenuItems(), findsNWidgets(3),
-          reason: 'text-message menu must offer exactly copy/forward/delete');
+      expect(
+        _allMenuItems(),
+        findsNWidgets(3),
+        reason: 'text-message menu must offer exactly copy/forward/delete',
+      );
 
       // Dismiss via the overlay shroud: menu gone, no service side effects.
       await _dismissDesktopMenu(tester);
@@ -525,8 +546,11 @@ void main() {
 
       // Fresh self message (now-30s, inside the default recall window).
       await _rightClick(tester, _textBubbleCore('seed_fresh'));
-      expect(_menuItem('recall'), findsOneWidget,
-          reason: 'fresh self message must offer Recall');
+      expect(
+        _menuItem('recall'),
+        findsOneWidget,
+        reason: 'fresh self message must offer Recall',
+      );
       expect(_menuItem('copy'), findsOneWidget);
       expect(_menuItem('forward'), findsOneWidget);
       expect(_menuItem('delete'), findsOneWidget);
@@ -534,8 +558,11 @@ void main() {
 
       // Old self message (now-3500s, outside the recall window).
       await _rightClick(tester, _textBubbleCore('seed_1'));
-      expect(_menuItem('recall'), findsNothing,
-          reason: 'recall must disappear once the recall window has passed');
+      expect(
+        _menuItem('recall'),
+        findsNothing,
+        reason: 'recall must disappear once the recall window has passed',
+      );
       expect(_menuItem('copy'), findsOneWidget);
       await _dismissDesktopMenu(tester);
     },
@@ -547,15 +574,17 @@ void main() {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       String? clipboardText;
-      messenger.setMockMethodCallHandler(SystemChannels.platform,
-          (MethodCall call) async {
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (
+        MethodCall call,
+      ) async {
         if (call.method == 'Clipboard.setData') {
           clipboardText = (call.arguments as Map)['text'] as String?;
         }
         return null;
       });
-      addTearDown(() =>
-          messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
 
       final platform = await _pumpChatPage(tester);
 
@@ -565,8 +594,11 @@ void main() {
       await tester.tap(_menuItem('copy'));
       await tester.pumpAndSettle();
 
-      expect(clipboardText, _receivedText,
-          reason: 'Copy must place the verbatim bubble text on the clipboard');
+      expect(
+        clipboardText,
+        _receivedText,
+        reason: 'Copy must place the verbatim bubble text on the clipboard',
+      );
       // Desktop menu removes itself before running the action.
       expect(_allMenuItems(), findsNothing);
       // Copy is clipboard-only: no service traffic.
@@ -596,11 +628,21 @@ void main() {
       await tester.pumpAndSettle();
 
       // The REAL quote banner is mounted above the composer.
-      expect(find.byType(TencentCloudChatMessageInputReplyContainer),
-          findsOneWidget,
-          reason: 'tapping Reply must mount the composer quote banner');
-      expect(find.text('Friend One'), findsWidgets,
-          reason: 'quote banner shows the quoted sender');
+      expect(
+        find.byType(TencentCloudChatMessageInputReplyContainer),
+        findsOneWidget,
+        reason: 'tapping Reply must mount the composer quote banner',
+      );
+      expect(
+        find.byKey(const ValueKey('message_input_reply_container')),
+        findsOneWidget,
+        reason: 'real-UI automation needs a stable key for the quote banner',
+      );
+      expect(
+        find.text('Friend One'),
+        findsWidgets,
+        reason: 'quote banner shows the quoted sender',
+      );
 
       // Type into the REAL desktop composer and send with Enter.
       final field = find.byType(ExtendedTextField);
@@ -609,8 +651,7 @@ void main() {
       await tester.pump();
       tester.testTextInput.enterText('re: ack');
       await tester.pump();
-      expect(platform.sendCalls, isEmpty,
-          reason: 'typing alone must not send');
+      expect(platform.sendCalls, isEmpty, reason: 'typing alone must not send');
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 200));
@@ -620,10 +661,12 @@ void main() {
       expect(platform.sendCalls, hasLength(1));
       final call = platform.sendCalls.single;
       expect(call.receiver, 'friend1');
-      expect(call.cloudCustomData, isNotNull,
-          reason: 'reply send must carry cloudCustomData');
-      final decoded =
-          jsonDecode(call.cloudCustomData!) as Map<String, dynamic>;
+      expect(
+        call.cloudCustomData,
+        isNotNull,
+        reason: 'reply send must carry cloudCustomData',
+      );
+      final decoded = jsonDecode(call.cloudCustomData!) as Map<String, dynamic>;
       expect(decoded, contains('messageReply'));
       final reply = decoded['messageReply'] as Map<String, dynamic>;
       expect(reply['messageID'], 'seed_custom');
@@ -631,11 +674,16 @@ void main() {
 
       // Banner cleared by the real send path; the new self bubble is in the
       // REAL list.
-      expect(find.byType(TencentCloudChatMessageInputReplyContainer),
-          findsNothing,
-          reason: 'send must clear the quote banner');
-      expect(_rowItem(call.id!), findsOneWidget,
-          reason: 'sent reply must appear in the real message list');
+      expect(
+        find.byType(TencentCloudChatMessageInputReplyContainer),
+        findsNothing,
+        reason: 'send must clear the quote banner',
+      );
+      expect(
+        _rowItem(call.id!),
+        findsOneWidget,
+        reason: 'sent reply must appear in the real message list',
+      );
     },
   );
 
@@ -650,17 +698,26 @@ void main() {
 
       // The REAL desktop forward popup: header + Recent tab listing the
       // seeded target conversation.
-      expect(find.text('Forward Individually'), findsOneWidget,
-          reason: 'forward picker header must mount');
-      expect(find.text('Friend Two'), findsOneWidget,
-          reason: 'Recent tab must list the forward target');
+      expect(
+        find.text('Forward Individually'),
+        findsOneWidget,
+        reason: 'forward picker header must mount',
+      );
+      expect(
+        find.text('Friend Two'),
+        findsOneWidget,
+        reason: 'Recent tab must list the forward target',
+      );
       expect(find.text('No Chat Selected'), findsOneWidget);
 
       // Select the target conversation row.
       await tester.tap(find.text('Friend Two'));
       await tester.pumpAndSettle();
-      expect(find.text('1 Chat'), findsOneWidget,
-          reason: 'selection chip must reflect one selected chat');
+      expect(
+        find.text('1 Chat'),
+        findsOneWidget,
+        reason: 'selection chip must reflect one selected chat',
+      );
 
       await tester.tap(find.text('Send'));
       await tester.pumpAndSettle();
@@ -668,11 +725,17 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pumpAndSettle();
 
-      expect(platform.forwardCreateCalls, ['seed_0'],
-          reason: 'forward must clone the source message');
+      expect(
+        platform.forwardCreateCalls,
+        ['seed_0'],
+        reason: 'forward must clone the source message',
+      );
       expect(platform.sendCalls, hasLength(1));
-      expect(platform.sendCalls.single.receiver, 'friend2',
-          reason: 'forward send must target the picked conversation');
+      expect(
+        platform.sendCalls.single.receiver,
+        'friend2',
+        reason: 'forward send must target the picked conversation',
+      );
       // Picker dismissed after Send.
       expect(find.text('Forward Individually'), findsNothing);
       // Source conversation unchanged: still exactly one source bubble.
@@ -691,19 +754,29 @@ void main() {
 
       // The REAL desktop confirm dialog with the stable primary-button key.
       const confirmKey = ValueKey('confirm_dialog_primary_button');
-      expect(find.byKey(confirmKey), findsOneWidget,
-          reason: 'delete must ask for confirmation first');
-      expect(platform.deleteCalls, isEmpty,
-          reason: 'no deletion before confirm');
+      expect(
+        find.byKey(confirmKey),
+        findsOneWidget,
+        reason: 'delete must ask for confirmation first',
+      );
+      expect(
+        platform.deleteCalls,
+        isEmpty,
+        reason: 'no deletion before confirm',
+      );
 
       await tester.tap(find.byKey(confirmKey));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
 
-      expect(platform.deleteCalls, [
-        ['seed_1']
-      ], reason: 'confirm must invoke the real deletion handler');
+      expect(
+        platform.deleteCalls,
+        [
+          ['seed_1'],
+        ],
+        reason: 'confirm must invoke the real deletion handler',
+      );
 
       // The data layer has dropped seed_1 from the message store (verified via
       // deleteCalls above).  FlutterListView (flutter_list_view) intentionally
@@ -712,8 +785,12 @@ void main() {
       // outside the hit-test tree).  We therefore assert:
       //   (a) the deleted row is not hit-testable (not interactive / visible), and
       //   (b) the remaining row is still present.
-      expect(_rowItem('seed_1').hitTestable(), findsNothing,
-          reason: 'deleted message must no longer be hit-testable in the real list');
+      expect(
+        _rowItem('seed_1').hitTestable(),
+        findsNothing,
+        reason:
+            'deleted message must no longer be hit-testable in the real list',
+      );
       // The rest of the history is untouched.
       expect(_rowItem('seed_0'), findsOneWidget);
     },

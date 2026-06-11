@@ -236,7 +236,31 @@ case set.
 
 l3 C2C custom-elem inbound seed seam (mirror `l3_inject_group_text` →
 `ingestInboundGroupText` seam family) + fork reply-container ValueKey +
-`reply_quote_real`. **STATUS: TODO**
+`reply_quote_real`. **STATUS: DONE (written, unrun)** — 1/1 WRITTEN, 0 SKIP.
+Fork commit `86cade8` adds the shared reply banner selector
+`message_input_reply_container` to
+`TencentCloudChatMessageInputReplyContainer`. tim2tox commit `65562f1` adds a
+Dart-only C2C custom inbound seam (`ingestInboundC2cCustom`), preserves the
+pre-existing native WIP in `ffi/dart_compat_friendship.cpp` untouched, and
+projects `ChatMessage.mediaKind == custom` into a TIM custom elem in the
+platform converter. Root adds the test-account-gated l3 tool
+`l3_inject_c2c_custom`, `drive_real_ui_pair_p2_reply.dart`, dispatch/runner
+registration (`sweep_p2_reply`, `rui-p2-reply`), and explicit state contracts.
+`reply_quote_real` uses l3 only to seed a quotable inbound custom bubble, then
+drives the real message menu Reply action, waits for the keyed quote banner,
+sends through the real composer, verifies sender-side `messageReply`
+cloudCustomData points at the injected message/sender, and asserts B receives
+the reply body. Existing wire behavior still leaves reply metadata sender-side,
+so B-side quote metadata is not asserted. Codex review: SKIPPED per explicit
+user directive for this handoff turn. Gates: focused desktop reply widget test
+6/6, new FFI C2C custom ingest test 1/1, driver/runner/l3 analyze 2 baseline
+infos/0 fatal, planner plan-json, validate-only, campaign-list (`rui-p2-reply`
+present), corrected campaign plan-json under `--class=2proc-ui`, shell recovery
+self-test, INDEX check, `git diff --check`, root `flutter analyze lib tool
+--no-fatal-warnings --no-fatal-infos` = 222 baseline/0 fatal, and related tests
+`test/ui/chat test/ui/testing test/ffi_chat_service_c2c_custom_ingest_test.dart`
+= 54/54. Mobile parity: the reply banner key and custom-ingest bridge are shared
+Dart surfaces; the new driver remains a desktop two-process write-phase case.
 
 ### Batch VII — P2 verify-first trio (voice / paste / tray)
 
@@ -378,3 +402,22 @@ validated gates only.
   validate-only, campaign-list, shell recovery self-test, INDEX check, focused
   widget tests 5/5, and related UI tests 78/78. Codex review deliberately
   skipped per the user instruction for this turn.
+
+- 2026-06-11 **Batch VI DONE (written, unrun)**. Fork commit `86cade8` adds the
+  shared `message_input_reply_container` key. tim2tox commit `65562f1` adds the
+  Dart-only C2C custom inbound seam and custom elem projection, while leaving
+  the pre-existing native `ffi/dart_compat_friendship.cpp` WIP untouched and
+  uncommitted. Root adds `l3_inject_c2c_custom`, the
+  `drive_real_ui_pair_p2_reply.dart` case file, `sweep_p2_reply`, and
+  `rui-p2-reply`. `reply_quote_real` seeds only the inbound custom bubble via
+  l3, then drives real Reply menu selection, verifies the keyed quote banner,
+  sends through the real composer, asserts sender-side `messageReply`
+  cloudCustomData references the seeded message/sender, and checks B receives
+  the reply body. Current bridge behavior does not expose receiver-side reply
+  metadata, so that remains a documented product gap. Gates green: focused
+  widget/service tests 7/7, driver/runner/l3 analyze with 2 baseline infos and
+  0 fatal, planner plan-json, validate-only, campaign-list, corrected
+  `rui-p2-reply` plan-json under `--class=2proc-ui`, shell recovery self-test,
+  INDEX check, `git diff --check`, root analyze 222/0-fatal, and related tests
+  54/54. Codex review deliberately skipped per the user instruction for this
+  turn.

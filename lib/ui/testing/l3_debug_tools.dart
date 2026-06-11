@@ -267,7 +267,7 @@ void registerL3DebugToolsIfEnabled() {
     'l3_accept_friend_request, l3_refuse_friend_request, l3_delete_friend, '
     'l3_set_friend_remark, l3_set_blocked, '
     'l3_set_export_save_path, '
-    'l3_reply_text, l3_forward_message, '
+    'l3_reply_text, l3_forward_message, l3_inject_c2c_custom, '
     'l3_set_setting, l3_set_pinned, l3_set_self_profile, '
     'l3_simulate_notification_tap, l3_set_c2c_recv_opt, l3_send_file, '
     'l3_create_group, l3_join_group, l3_leave_group, l3_send_group_text, '
@@ -285,6 +285,7 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3SendTextEntry());
   addMcpTool(_l3ReplyTextEntry());
   addMcpTool(_l3ForwardMessageEntry());
+  addMcpTool(_l3InjectC2cCustomEntry());
   addMcpTool(_l3DumpStateEntry());
   addMcpTool(_l3ClearHistoryEntry());
   addMcpTool(_l3ClearActiveConversationEntry());
@@ -728,6 +729,92 @@ MCPCallEntry _l3ForwardMessageEntry() => MCPCallEntry.tool(
         'toUserId': StringSchema(
           description: 'Target C2C conv (bare/c2c_); defaults to fromUserId.',
         ),
+      },
+    ),
+  ),
+);
+
+/// Inject one INBOUND C2C custom message via the FfiChatService ingestion seam.
+/// The resulting V2TIM message is a real custom elem, which keeps the UIKit
+/// message-menu Reply option available for real-UI automation.
+MCPCallEntry _l3InjectC2cCustomEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    if (!await _activeAccountIsTest()) {
+      return MCPCallResult(
+        message: 'l3_inject_c2c_custom: refused — non-test account',
+        parameters: {'ok': false, 'error': 'non_test_account'},
+      );
+    }
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_inject_c2c_custom: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+
+    String norm(Object? value) {
+      var id = value?.toString().trim() ?? '';
+      if (id.startsWith('c2c_')) id = id.substring(4);
+      return id;
+    }
+
+    var fromUserId = norm(
+      request['fromUserId'] ?? request['userId'] ?? request['conversationId'],
+    );
+    if (fromUserId.isEmpty) fromUserId = ffi.activePeerId ?? '';
+    final data = (request['data'] ?? request['customData'] ?? '').toString();
+    if (fromUserId.isEmpty || data.isEmpty) {
+      return MCPCallResult(
+        message: 'l3_inject_c2c_custom: need "fromUserId" and "data"',
+        parameters: {'ok': false, 'error': 'bad_args'},
+      );
+    }
+    final groupReject = await _rejectIfGroupTarget(
+      'l3_inject_c2c_custom',
+      fromUserId,
+      ffi.knownGroups,
+      ffi.quitGroups,
+    );
+    if (groupReject != null) return groupReject;
+
+    try {
+      final ingested = ffi.ingestInboundC2cCustom(from: fromUserId, data: data);
+      AppLogger.info(
+        '[L3] l3_inject_c2c_custom: from=$fromUserId '
+        'ingested=$ingested',
+      );
+      return MCPCallResult(
+        message: ingested ? 'c2c custom ingested' : 'skipped (blocked)',
+        parameters: {
+          'ok': true,
+          'ingested': ingested,
+          'fromUserId': fromUserId,
+        },
+      );
+    } catch (e, st) {
+      AppLogger.logError('[L3] l3_inject_c2c_custom failed', e, st);
+      return MCPCallResult(
+        message: 'l3_inject_c2c_custom: failed: $e',
+        parameters: {'ok': false, 'error': 'inject_failed', 'detail': '$e'},
+      );
+    }
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_inject_c2c_custom',
+    description:
+        'L3 TEST ONLY (test/seed account, MUTATING, C2C only): materialize one '
+        'INBOUND custom message via the real FfiChatService C2C ingestion '
+        'pipeline. data becomes customElem.data, so UIKit sees a real custom '
+        'bubble suitable for Reply-menu automation.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'fromUserId': StringSchema(
+          description:
+              'Sender C2C user id (bare or c2c_). Defaults to active chat.',
+        ),
+        'data': StringSchema(description: 'customElem.data payload.'),
+        'customData': StringSchema(description: 'Alias for data.'),
       },
     ),
   ),
@@ -1593,7 +1680,9 @@ MCPCallEntry _l3OpenAddFriendDialogEntry() => MCPCallEntry.tool(
     }
     final opened = await invoker();
     return MCPCallResult(
-      message: opened ? 'add friend dialog opened' : 'add friend dialog unavailable',
+      message: opened
+          ? 'add friend dialog opened'
+          : 'add friend dialog unavailable',
       parameters: {'ok': opened},
     );
   },
@@ -1631,7 +1720,9 @@ MCPCallEntry _l3OpenAddGroupDialogEntry() => MCPCallEntry.tool(
     }
     final opened = await invoker();
     return MCPCallResult(
-      message: opened ? 'add group dialog opened' : 'add group dialog unavailable',
+      message: opened
+          ? 'add group dialog opened'
+          : 'add group dialog unavailable',
       parameters: {'ok': opened},
     );
   },
@@ -1700,7 +1791,8 @@ MCPCallEntry _l3OpenGroupAddMemberEntry() => MCPCallEntry.tool(
     inputSchema: ObjectSchema(
       properties: {
         'groupId': StringSchema(
-          description: 'Local group id (tox_N), with or without the '
+          description:
+              'Local group id (tox_N), with or without the '
               '"group_" conversation prefix.',
         ),
       },
@@ -1765,7 +1857,8 @@ MCPCallEntry _l3OpenGroupMemberListEntry() => MCPCallEntry.tool(
     inputSchema: ObjectSchema(
       properties: {
         'groupId': StringSchema(
-          description: 'Local group id (tox_N), with or without the '
+          description:
+              'Local group id (tox_N), with or without the '
               '"group_" conversation prefix.',
         ),
       },
@@ -1848,11 +1941,13 @@ MCPCallEntry _l3OpenConversationMenuEntry() => MCPCallEntry.tool(
     inputSchema: ObjectSchema(
       properties: {
         'conversationId': StringSchema(
-          description: 'group_<gid> or c2c_<toxId> (exact conversationID from '
+          description:
+              'group_<gid> or c2c_<toxId> (exact conversationID from '
               'l3_dump_state.conversations[]).',
         ),
         'action': StringSchema(
-          description: 'Optional: pin | mark_read | delete. Dispatches the real '
+          description:
+              'Optional: pin | mark_read | delete. Dispatches the real '
               'handler directly instead of showing the visual menu.',
         ),
       },
@@ -2061,7 +2156,8 @@ MCPCallEntry _l3DeleteFriendEntry() => MCPCallEntry.tool(
     inputSchema: ObjectSchema(
       properties: {
         'userId': StringSchema(
-          description: 'Peer Tox ID (64/76 hex) to remove from the friend list.',
+          description:
+              'Peer Tox ID (64/76 hex) to remove from the friend list.',
         ),
       },
       required: ['userId'],
@@ -4023,9 +4119,7 @@ MCPCallEntry _l3SetAutoAcceptGroupInvitesEntry() => MCPCallEntry.tool(
         'current account (Prefs + ffi). Lets a fresh/non-test B auto-join a '
         'PRIVATE group invite. value=true|false.',
     inputSchema: ObjectSchema(
-      properties: {
-        'value': StringSchema(description: 'true|false'),
-      },
+      properties: {'value': StringSchema(description: 'true|false')},
       required: ['value'],
     ),
   ),
@@ -4076,7 +4170,11 @@ MCPCallEntry _l3GroupMemberCountEntry() => MCPCallEntry.tool(
       AppLogger.logError('[L3] l3_group_member_count failed', e, st);
       return MCPCallResult(
         message: 'l3_group_member_count: failed: $e',
-        parameters: {'ok': false, 'error': 'member_list_failed', 'detail': '$e'},
+        parameters: {
+          'ok': false,
+          'error': 'member_list_failed',
+          'detail': '$e',
+        },
       );
     }
   },
@@ -4089,7 +4187,8 @@ MCPCallEntry _l3GroupMemberCountEntry() => MCPCallEntry.tool(
     inputSchema: ObjectSchema(
       properties: {
         'groupId': StringSchema(
-          description: 'Group id (local tox_N or chat-id), with or without the '
+          description:
+              'Group id (local tox_N or chat-id), with or without the '
               '"group_" prefix.',
         ),
       },

@@ -166,11 +166,11 @@ const _validRealUiScenarios = {
   // launch: required=no-friend (it does its OWN handshake) and result=friends
   // (no case deletes the friend; the sweep ends with the C2C conversation alive).
   // All cases are friendship-dependent (B's real sends seed history; l3 seeding
-  // delivers inbound media). Case 62 (reply) is a SKIP — the reply menu item only
-  // exists on quotable custom-elem bubbles and there is no C2C custom-inbound
-  // seed seam. Case 68 (offline-pending) is a SKIP — the pending→deliver flip is
-  // un-seedable on a reused launch (no ungated offline seam; stopping B is
-  // forbidden).
+  // delivers inbound media). Case 62 (reply) stays a legacy SKIP in this +94
+  // sweep; the P1/P2/P3 campaign covers the newly driveable reply flow as
+  // `reply_quote_real`. Case 68 (offline-pending) is a SKIP — the
+  // pending→deliver flip is un-seedable on a reused launch (no ungated offline
+  // seam; stopping B is forbidden).
   'sweep_chat',
   'chat_open_from_row',
   'chat_multiline_send',
@@ -269,6 +269,9 @@ const _validRealUiScenarios = {
   'sticker_face_cell_send',
   'new_messages_chip_tap',
   'presence_dot_relaunch',
+  // P1/P2/P3 campaign Batch VI — C2C custom inbound seed + real Reply.
+  'sweep_p2_reply',
+  'reply_quote_real',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -318,6 +321,8 @@ const _realUiCampaigns = <String, List<String>>{
   'rui-p1-relaunch': ['sweep_p1_relaunch'],
   // P1/P2/P3 campaign Batch V — P2 fork-key-backed real-UI cases.
   'rui-p2-keys': ['sweep_p2_keys'],
+  // P1/P2/P3 campaign Batch VI — C2C custom inbound seed + real Reply.
+  'rui-p2-reply': ['sweep_p2_reply'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -1256,6 +1261,8 @@ String _requiredRealUiState(String scenario) {
     case 'sticker_face_cell_send':
     case 'new_messages_chip_tap':
     case 'presence_dot_relaunch':
+    // P1/P2/P3 Batch VI — individual reply case needs an existing friendship.
+    case 'reply_quote_real':
       return _realUiStateFriends;
     case 'handshake':
     case 'handshake_detail':
@@ -1362,6 +1369,8 @@ String _requiredRealUiState(String scenario) {
     // P1/P2/P3 Batch V — sweep_p2_keys runs its OWN handshake, then restarts B
     // for the presence-dot case.
     case 'sweep_p2_keys':
+    // P1/P2/P3 Batch VI — sweep_p2_reply runs its OWN handshake.
+    case 'sweep_p2_reply':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1470,6 +1479,9 @@ String _resultRealUiState(String scenario) {
     // P1/P2/P3 Batch V — sticker/chip keep the existing friendship.
     case 'sticker_face_cell_send':
     case 'new_messages_chip_tap':
+    // P1/P2/P3 Batch VI — reply flow keeps the existing friendship.
+    case 'sweep_p2_reply':
+    case 'reply_quote_real':
       return _realUiStateFriends;
     case 'sweep_p1_relaunch':
     case 'relaunch_history_autologin':
