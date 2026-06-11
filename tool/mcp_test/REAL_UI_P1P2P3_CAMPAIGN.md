@@ -89,11 +89,33 @@ hold >650 ms, not just >500 ms.)
 | `zh_locale_page_walk` | P1#12 | per-page zh labels (外观 etc.); revert-to-en discipline (batch-1 locale finding) |
 
 Sweep `sweep_p1_single` · campaign `rui-p1-single` · state no-friend→no-friend.
-Design intent (not yet validated): switch-entry case should register a real 2nd
-account ONCE (via the real RegisterPage) and assert the toxId actually flips;
-the delete-flow case deletes that throwaway account LAST (sweep ends on the
-primary, clean); zh-walk needs a locale-revert guard even on early FAIL.
-**STATUS: TODO**
+**STATUS: DONE (written, unrun)** — 5/5 WRITTEN, 0 SKIP (every surface verified
+to exist by reading production code). Part file ~1130 LOC (agent-written, this
+session completed registration + fixes after a session-limit interrupt).
+Production changes: 4 automation-only keys (per-account
+`settings_account_switch_button:<toxId>` on the _AccountCardItem swap
+IconButton; `settings_delete_account_button` opener;
+`settings_delete_account_confirm_input` on BOTH mutually-exclusive dialog
+branches; `settings_delete_account_confirm_button`) + a new read-only
+`savedAccountToxIds` l3_dump_state field (persisted account-list ground truth).
+Verify-first findings: the settings switch entry does a DIRECT in-place switch
+(account_switcher tears down + boots + pushAndRemoveUntil(HomePage), NEVER via
+LoginPage); the login-card management menu opens via onLongPress AND
+onSecondaryTap (login_page.dart:1124/1129) with production-keyed Export/Delete
+options; delete-account uses a RANDOM typed confirm word read from the live
+prompt (extraction failure → production rejects → loud FAIL, never a stray
+deletion). Gates: analyze 222/0-new; plan-json/validate/campaign-list/INDEX/
+self-test green; settings+testing hermetic 78/78. Codex round-1: 2 P1 + 3 P2 —
+P1 standalone-switch leaves throwaway #2 (now real-delete-cleaned + gated),
+P1 endClean ignored by sweep exit (now `failed==0 && endClean`, and
+noLeftover proven against savedAccountToxIds), P2 delete needs persisted
+ground truth (dumpGone added), P2 dialog-opener tapKey fallbacks could
+double-fire (new `_p1OpenDialogViaKey` bounds-gated discipline; also fixed the
+inherited group2 leave-button opener), P2.5 l3_open_add_group_dialog flagged —
+DISAGREED with precedent (batch-7 navigation-stability exception; keyed real
+entry noted as future upgrade). Confirm round: all RESOLVED + 1 new P2
+([] savedAccountToxIds ambiguous on read error → primary-sentinel trust gate,
+applied).
 
 ### Batch III — P1 two-process chat/conv octet (`drive_real_ui_pair_p1_chat.dart`)
 
@@ -228,3 +250,17 @@ validated gates only.
   CORRECTION in the same commit: the initially committed anchor pre-filled
   batch I–IV Status as DONE with invented outcomes (drafting error) — reverted
   to TODO + plan-note wording; only ACTUAL results may live in Status fields.
+
+- 2026-06-11 **Batch II DONE (written, unrun)**. The batch agent hit the session
+  limit after writing the part file + part declaration; this session completed
+  dispatcher routing, runner registration (registry/campaign/both state
+  tables), the 4 production keys the scenarios drive (the agent wrote against
+  planned-but-unadded keys — every driven key then verified to resolve), the
+  `savedAccountToxIds` dump field, gates, and 2 codex rounds (see Batch II
+  Status). Durable gotchas: (1) flutter_skill `getTextContent` only surfaces
+  Text/RichText — a SelectableText payload must be read from a neighboring
+  prompt Text (the delete confirm word case); (2) the settings switch entry
+  never routes through LoginPage (in-place teardown+boot) — asserting "lands on
+  login cards" would have been a wrong-shape gate; (3) an empty l3 list field
+  is ambiguous on read error — gate absence verdicts on a sentinel the list
+  must contain (here: the primary toxId).

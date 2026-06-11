@@ -113,6 +113,11 @@ import 'fixture_c_bootstrap.dart';
 //                   scrolled up, header->profile, image/file bubbles; reply +
 //                   offline SKIP) + the sweep_chat chain (TWO-PROCESS: one
 //                   handshake, marks both accounts test to unblock l3 SEEDING).
+//   p1_single     — P1/P2/P3-campaign Batch II (SINGLE-INSTANCE: drive only A):
+//                   zh locale page walk, conference rename+leave, settings
+//                   switch-account entry, login-card management menu (real
+//                   long-press), account delete full flow (destructive, last)
+//                   + the sweep_p1_single chain.
 part 'drive_real_ui_pair_inst.dart';
 part 'drive_real_ui_pair_shell.dart';
 part 'drive_real_ui_pair_friends.dart';
@@ -129,6 +134,7 @@ part 'drive_real_ui_pair_conv.dart';
 part 'drive_real_ui_pair_chat.dart';
 part 'drive_real_ui_pair_group2.dart';
 part 'drive_real_ui_pair_calls_misc.dart';
+part 'drive_real_ui_pair_p1_single.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -671,6 +677,17 @@ Future<int> _main(List<String> args) async {
     if (_isCallsMiscCaseScenario(scenario)) {
       return await runCallsMiscCase(a, b, nickA, nickB, scenario,
           bootRestored: bootRestored);
+    }
+    // P1/P2/P3 campaign Batch II — single-instance account/locale/conference
+    // cases (drive only A; B idle). sweep_p1_single chains all 5 on one launch
+    // (the canonical entry; ends clean — primary logged in, locale EN, the
+    // throwaway #2 account deleted). The individual cases run their minimal
+    // prelude inside runP1SingleCase.
+    if (scenario == 'sweep_p1_single') {
+      return await runP1SingleSweep(a, nickA);
+    }
+    if (_isP1SingleCaseScenario(scenario)) {
+      return await runP1SingleCase(a, nickA, scenario);
     }
     if (scenario == 'group_profile_open') {
       return await runGroupProfileOpen(a, nickA);

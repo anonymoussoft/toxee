@@ -100,6 +100,9 @@ class _AccountCardItemState extends State<_AccountCardItem> {
             trailing: widget.isCurrentAccount
                 ? widget.currentChip
                 : IconButton(
+                    key: UiKeys.settingsAccountSwitchButton(
+                      widget.account['toxId'] ?? '',
+                    ),
                     icon: const Icon(Icons.swap_horiz),
                     onPressed: widget.onSwitch,
                     tooltip: AppLocalizations.of(context)!.switchToThisAccount,

@@ -1211,6 +1211,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    key: UiKeys.settingsDeleteAccountConfirmInput,
                     controller: inputController,
                     obscureText: true,
                     textAlignVertical: TextAlignVertical.center,
@@ -1243,6 +1244,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    // Same key as the password branch — the two branches are
+                    // mutually exclusive (hasPassword), so exactly one keyed
+                    // input renders.
+                    key: UiKeys.settingsDeleteAccountConfirmInput,
                     controller: inputController,
                     textAlignVertical: TextAlignVertical.center,
                     decoration: InputDecoration(
@@ -1263,6 +1268,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Text(AppLocalizations.of(ctx)!.cancel),
             ),
             TextButton(
+              key: UiKeys.settingsDeleteAccountConfirmButton,
               onPressed: () async {
                 if (hasPassword) {
                   final password = inputController.text;

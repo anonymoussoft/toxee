@@ -660,7 +660,18 @@ Future<bool> _groupLeaveViaProfileConfirm(
   final convId = 'group_$gid';
   await openGroupChat(inst, groupId: gid, groupName: groupName);
   await _openGroupProfile(inst);
-  if (!await inst.tryTapKey('group_profile_leave_button', retries: 3)) {
+  // Single-fire the leave button (it OPENS the adaptive confirm dialog — the
+  // fork's one-shot guard protects the CONFIRM action, not the opener; a
+  // double-firing tryTapKey on the onstage button would stack two dialogs).
+  // The raw tryTapKey fallback is only taken when the button's bounds don't
+  // resolve (offstage — direct invoke fires exactly once). Codex P2 (P1/P2/P3
+  // campaign Batch II review).
+  var leaveTapped =
+      await inst.tapKeyCenter('group_profile_leave_button', timeoutSecs: 8);
+  if (!leaveTapped && await inst.keyCenter('group_profile_leave_button') == null) {
+    leaveTapped = await inst.tryTapKey('group_profile_leave_button', retries: 2);
+  }
+  if (!leaveTapped) {
     print('[pair] group_leave_via_profile_confirm: leave button not tappable');
     return false;
   }

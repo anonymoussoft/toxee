@@ -228,6 +228,16 @@ const _validRealUiScenarios = {
   'theme_switch_chat_open',
   'search_chat_history_window_open',
   'window_resize_responsive',
+  // P1/P2/P3 campaign Batch II — single-instance account/locale/conference
+  // cases (sweep_p1_single chains all 5 on one launch; each is individually
+  // dispatchable; the delete case is DESTRUCTIVE to its own throwaway account
+  // and runs last in the sweep).
+  'sweep_p1_single',
+  'zh_locale_page_walk',
+  'conference_rename_leave',
+  'settings_switch_account_entry',
+  'account_card_management_menu',
+  'account_delete_full_flow',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -264,6 +274,9 @@ const _realUiCampaigns = <String, List<String>>{
   // ends FRIENDS. Case 93 (window-resize) is a SKIP inside the chain when the
   // raw-launched window won't size-script.
   'rui-calls-misc': ['sweep_calls_misc'],
+  // P1/P2/P3 campaign Batch II — single-instance account/locale/conference
+  // chain (one launch; drives only A).
+  'rui-p1-single': ['sweep_p1_single'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
@@ -1273,6 +1286,15 @@ String _requiredRealUiState(String scenario) {
     // only A, no friendship needed).
     case 'sweep_calls_misc':
     case 'window_resize_responsive':
+    // P1/P2/P3 campaign Batch II — single-instance (drive only A, B idle), no
+    // friendship involved at all (locale walk, conference lifecycle, account
+    // switch/menu/delete are all account-local).
+    case 'sweep_p1_single':
+    case 'zh_locale_page_walk':
+    case 'conference_rename_leave':
+    case 'settings_switch_account_entry':
+    case 'account_card_management_menu':
+    case 'account_delete_full_flow':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1437,6 +1459,17 @@ String _resultRealUiState(String scenario) {
     // Batch 8 — window_resize_responsive is single-instance and forms no
     // friendship, so the launch ends NO-FRIEND.
     case 'window_resize_responsive':
+    // P1/P2/P3 campaign Batch II — single-instance, never touches B or any
+    // friendship. The sweep's end-clean guard (and the standalone delete case)
+    // leave the launch on the PRIMARY account, locale EN, no-friend. Cases that
+    // mutate accounts (switch registers a throwaway #2; delete removes it)
+    // stay account-local, so the pair state contract is unchanged.
+    case 'sweep_p1_single':
+    case 'zh_locale_page_walk':
+    case 'conference_rename_leave':
+    case 'settings_switch_account_entry':
+    case 'account_card_management_menu':
+    case 'account_delete_full_flow':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');

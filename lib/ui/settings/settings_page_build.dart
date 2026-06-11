@@ -196,6 +196,7 @@ extension _SettingsPageBuild on _SettingsPageState {
                         onPressed: _logout,
                       ),
                       OutlinedButton.icon(
+                        key: UiKeys.settingsDeleteAccountButton,
                         icon: const Icon(Icons.delete_outline, size: 18),
                         label: Text(
                           AppLocalizations.of(context)!.deleteAccount,

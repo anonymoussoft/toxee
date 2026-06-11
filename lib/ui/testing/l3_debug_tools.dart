@@ -4783,6 +4783,22 @@ Future<bool> _currentAccountHasPassword() async {
   }
 }
 
+/// The persisted saved-account list (Prefs `account_list` toxIds) for
+/// l3_dump_state's `savedAccountToxIds` field. Ground truth for the account
+/// register/switch/delete real-UI gates. No-throw: returns [] on any read
+/// error (the dump must never throw); works logged-out (Prefs is global).
+Future<List<String>> _savedAccountToxIds() async {
+  try {
+    final list = await Prefs.getAccountList();
+    return [
+      for (final account in list)
+        if ((account['toxId'] ?? '').isNotEmpty) account['toxId']!,
+    ];
+  } catch (_) {
+    return <String>[];
+  }
+}
+
 MCPCallEntry _l3DumpStateEntry() => MCPCallEntry.tool(
   handler: (request) async {
     final ffi = FakeUIKit.instance.im?.ffi;
@@ -4837,6 +4853,12 @@ MCPCallEntry _l3DumpStateEntry() => MCPCallEntry.tool(
       // invariant (set/clear-password cases) directly instead of inferring it
       // from a snackbar. Coerced to false when there is no current account.
       'currentAccountHasPassword': await _currentAccountHasPassword(),
+      // The persisted saved-account list (Prefs `account_list` toxIds) —
+      // ground truth for the account register/switch/delete real-UI gates: a
+      // login card's visual absence alone could false-pass on an unloaded
+      // list, and an end-clean guard needs to PROVE a throwaway account is
+      // really gone. Read-only; works logged-out too (Prefs is global).
+      'savedAccountToxIds': await _savedAccountToxIds(),
       ..._l3HarnessEnvironmentSnapshot(Platform.environment),
     };
     final homeShell = _l3HomeShellSnapshotReader?.call();

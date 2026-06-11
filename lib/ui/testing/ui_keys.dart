@@ -222,6 +222,24 @@ class UiKeys {
   static const Key settingsAccountSwitchCancelButton = Key(
     'settings_account_switch_cancel_button',
   );
+  // Per-account swap (switch-to-this-account) IconButton on the Settings
+  // account-list rows (_AccountCardItem trailing) — dynamic per toxId so
+  // automation can target a specific saved account.
+  static Key settingsAccountSwitchButton(String toxId) =>
+      Key('settings_account_switch_button:$toxId');
+  // Delete-account (注销) flow: the opener button in the Settings account
+  // section, the confirm dialog's input (password OR confirm-word — the two
+  // branches are mutually exclusive so they share one key), and the dialog's
+  // destructive confirm. Automation-only; shared Dart → mobile covered.
+  static const Key settingsDeleteAccountButton = Key(
+    'settings_delete_account_button',
+  );
+  static const Key settingsDeleteAccountConfirmInput = Key(
+    'settings_delete_account_confirm_input',
+  );
+  static const Key settingsDeleteAccountConfirmButton = Key(
+    'settings_delete_account_confirm_button',
+  );
 
   // Dynamic conversation/contact/group rows.
   //
