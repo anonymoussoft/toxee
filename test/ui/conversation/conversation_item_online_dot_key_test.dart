@@ -46,8 +46,20 @@ void main() {
       final decoration = dot.decoration as BoxDecoration;
       expect(
         decoration.color,
-        TencentCloudChat.instance.dataInstance.theme.colorTheme
+        TencentCloudChat
+            .instance
+            .dataInstance
+            .theme
+            .colorTheme
             .conversationItemUserStatusBgColor,
+      );
+      expect(
+        find.byKey(
+          Key(
+            'conversation_item_online_dot:${conversation.conversationID}:online',
+          ),
+        ),
+        findsOneWidget,
       );
     },
   );
@@ -75,6 +87,14 @@ void main() {
       final dot = tester.widget<Container>(dotFinder);
       final decoration = dot.decoration as BoxDecoration;
       expect(decoration.color, Colors.transparent);
+      expect(
+        find.byKey(
+          Key(
+            'conversation_item_online_dot:${conversation.conversationID}:offline',
+          ),
+        ),
+        findsOneWidget,
+      );
     },
   );
 }

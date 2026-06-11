@@ -210,7 +210,27 @@ cases.
 sticker per-cell key → `sticker_face_cell_send`; new-messages chip key →
 `new_messages_chip_tap`; presence-dot semantic state → `presence_dot_relaunch`
 (uses relaunch class). Fork commits FIRST (submodule), then toxee SHA bump.
-**STATUS: TODO**
+**STATUS: DONE (written, unrun)** — 3/3 WRITTEN, 0 SKIP. Fork commit
+`9e72f4d` adds shared Dart automation selectors for sticker pack tabs/cells
+(`sticker_face_tab:<pack>`, `sticker_face_cell:<pack>:<cell>`), a RenderObject
+new-message chip wrapper key (`new_messages_chip`), and state-suffixed presence
+dot keys (`conversation_item_online_dot:<convId>:online|offline`) while
+preserving the legacy unsuffixed dot key. Added `drive_real_ui_pair_p2_keys.dart`
+plus dispatch/runner registration (`sweep_p2_keys`, `rui-p2-keys`) and state
+contracts. Positive cases: `sticker_face_cell_send` drives the real sticker
+panel and asserts local FACE elemType 8; B-side receive currently arrives as
+`__face__:` text because tim2tox serializes face metadata over the wire, so rich
+receiver rendering is a later bridge/fork concern, not faked here.
+`new_messages_chip_tap` scrolls A upward, receives a real B message, taps the
+real chip, and asserts the newest row is visible. `presence_dot_relaunch` stops
+and relaunches B while asserting the suffixed online/offline dot keys on A.
+Codex review: SKIPPED per explicit user directive for this handoff turn. Gates:
+analyze 222/0-new; plan-json, validate-only, campaign-list (`rui-p2-keys`
+present), shell recovery self-test, and INDEX all green; focused widget tests
+5/5; related UI tests `test/ui/chat test/ui/conversation test/ui/testing` =
+78/78. Mobile parity: all three fork keys live in shared Dart widgets used by
+desktop/mobile surfaces; the driver remains a desktop two-process write-phase
+case set.
 
 ### Batch VI — P2 reply two-piece (`drive_real_ui_pair_p2_reply.dart`)
 
@@ -343,3 +363,18 @@ validated gates only.
   validate-only, campaign-list, shell recovery self-test, INDEX check, and
   related UI tests 135/135. Codex review deliberately skipped per the user
   instruction for this turn.
+
+- 2026-06-11 **Batch V DONE (written, unrun)**. Fork commit `9e72f4d` adds the
+  P2 selector surfaces required by this batch: sticker tabs/cells, a
+  RenderObject-backed `new_messages_chip`, and state-suffixed presence-dot keys
+  while preserving the legacy presence-dot key. Added
+  `drive_real_ui_pair_p2_keys.dart` and registered `sweep_p2_keys` /
+  `rui-p2-keys`. Wrote all three P2 cases: real sticker-face send, real
+  new-message chip tap after an off-bottom inbound message, and relaunch-driven
+  online/offline presence dot. Verify-first gotcha: sender-side sticker send is
+  a true FACE elemType 8, but the current tim2tox wire projection reaches B as
+  `__face__:` text; do not pretend receiver rich-face rendering exists until the
+  bridge/fork grows it. Gates green: analyze 222/0-new, planner plan-json,
+  validate-only, campaign-list, shell recovery self-test, INDEX check, focused
+  widget tests 5/5, and related UI tests 78/78. Codex review deliberately
+  skipped per the user instruction for this turn.

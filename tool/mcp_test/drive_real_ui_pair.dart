@@ -127,6 +127,9 @@ import 'fixture_c_bootstrap.dart';
 //                   quartet): autologin/history after instance restart,
 //                   offline-pending then relaunch, profile voice/video call
 //                   tiles, join-by-id real AddGroupDialog path.
+//   p2_keys       — P1/P2/P3-campaign Batch V (P2 selector-backed cases):
+//                   sticker face cell send, new-messages chip tap, and
+//                   presence-dot state flip via relaunch.
 part 'drive_real_ui_pair_inst.dart';
 part 'drive_real_ui_pair_shell.dart';
 part 'drive_real_ui_pair_friends.dart';
@@ -146,6 +149,7 @@ part 'drive_real_ui_pair_calls_misc.dart';
 part 'drive_real_ui_pair_p1_single.dart';
 part 'drive_real_ui_pair_p1_chat.dart';
 part 'drive_real_ui_pair_p1_relaunch.dart';
+part 'drive_real_ui_pair_p2_keys.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -359,7 +363,8 @@ Future<int> _main(List<String> args) async {
     }
     if (scenario == 'login_account_card_renders') {
       await ensureHome(a, nickA);
-      final tox = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+      final tox =
+          (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
       final nk = (await a.dumpState())['nickname']?.toString() ?? nickA;
       if ((await _logoutToLoginPage(a)).isEmpty) return 1;
       return await _loginAccountCardRenders(a, tox, nk) ? 0 : 1;
@@ -400,7 +405,8 @@ Future<int> _main(List<String> args) async {
     }
     if (scenario == 'account_switch_second_account') {
       await ensureHome(a, nickA);
-      final tox = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+      final tox =
+          (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
       return await _accountSwitchSecondAccount(a, tox) ? 0 : 1;
     }
     // Batch 4 — contacts / friend profile (TWO-PROCESS). sweep_contacts chains
@@ -416,7 +422,8 @@ Future<int> _main(List<String> args) async {
         scenario == 'add_friend_invalid_id_error' ||
         scenario == 'add_friend_self_id_guard') {
       await ensureHome(a, nickA);
-      final tox = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
+      final tox =
+          (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
       switch (scenario) {
         case 'add_friend_dialog_esc_close':
           return await _addFriendDialogEscClose(a) ? 0 : 1;
@@ -456,7 +463,13 @@ Future<int> _main(List<String> args) async {
         throw DriveError('missing tox ids for $scenario: A=$tox2A B=$tox2B');
       }
       if (!await _establishFriendshipForSweep(
-          a, b, tox2A, tox2B, nickA, nickB)) {
+        a,
+        b,
+        tox2A,
+        tox2B,
+        nickA,
+        nickB,
+      )) {
         print('[pair] $scenario: could not establish friendship');
         return 1;
       }
@@ -517,7 +530,13 @@ Future<int> _main(List<String> args) async {
         throw DriveError('missing tox ids for $scenario: A=$cTox2A B=$cTox2B');
       }
       if (!await _establishFriendshipForSweep(
-          a, b, cTox2A, cTox2B, nickA, nickB)) {
+        a,
+        b,
+        cTox2A,
+        cTox2B,
+        nickA,
+        nickB,
+      )) {
         print('[pair] $scenario: could not establish friendship');
         return 1;
       }
@@ -582,10 +601,18 @@ Future<int> _main(List<String> args) async {
       final chTox2B =
           (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
       if (chTox2A.isEmpty || chTox2B.isEmpty) {
-        throw DriveError('missing tox ids for $scenario: A=$chTox2A B=$chTox2B');
+        throw DriveError(
+          'missing tox ids for $scenario: A=$chTox2A B=$chTox2B',
+        );
       }
       if (!await _establishFriendshipForSweep(
-          a, b, chTox2A, chTox2B, nickA, nickB)) {
+        a,
+        b,
+        chTox2A,
+        chTox2B,
+        nickA,
+        nickB,
+      )) {
         print('[pair] $scenario: could not establish friendship');
         return 1;
       }
@@ -593,7 +620,8 @@ Future<int> _main(List<String> args) async {
       // The marker grants the WHOLE gated surface, so REVOKE it in a `finally`
       // so the individual dispatch doesn't leave a privileged account behind
       // (codex P1 — mirrors the sweep's end-guard).
-      final needsMarker = scenario == 'chat_image_bubble_open_preview' ||
+      final needsMarker =
+          scenario == 'chat_image_bubble_open_preview' ||
           scenario == 'chat_file_bubble_present_open';
       if (needsMarker) {
         await a.markAccountTest();
@@ -627,18 +655,28 @@ Future<int> _main(List<String> args) async {
           case 'chat_history_scroll_load_more':
             {
               final seeded = await _seedChatHistory(a, b, chTox2A, chTox2B);
-              return await _chatHistoryScrollLoadMore(a, b, chTox2A, chTox2B,
-                      earliestText: seeded?.earliestText ?? '',
-                      earliestId: seeded?.earliestId ?? '')
+              return await _chatHistoryScrollLoadMore(
+                    a,
+                    b,
+                    chTox2A,
+                    chTox2B,
+                    earliestText: seeded?.earliestText ?? '',
+                    earliestId: seeded?.earliestId ?? '',
+                  )
                   ? 0
                   : 1;
             }
           case 'chat_inbound_while_scrolled_up':
             {
               final seeded = await _seedChatHistory(a, b, chTox2A, chTox2B);
-              return await _chatInboundWhileScrolledUp(a, b, chTox2A, chTox2B,
-                      earliestText: seeded?.earliestText ?? '',
-                      earliestId: seeded?.earliestId ?? '')
+              return await _chatInboundWhileScrolledUp(
+                    a,
+                    b,
+                    chTox2A,
+                    chTox2B,
+                    earliestText: seeded?.earliestText ?? '',
+                    earliestId: seeded?.earliestId ?? '',
+                  )
                   ? 0
                   : 1;
             }
@@ -686,8 +724,14 @@ Future<int> _main(List<String> args) async {
       return await runCallsMiscSweep(a, b, nickA, nickB);
     }
     if (_isCallsMiscCaseScenario(scenario)) {
-      return await runCallsMiscCase(a, b, nickA, nickB, scenario,
-          bootRestored: bootRestored);
+      return await runCallsMiscCase(
+        a,
+        b,
+        nickA,
+        nickB,
+        scenario,
+        bootRestored: bootRestored,
+      );
     }
     // P1/P2/P3 campaign Batch II — single-instance account/locale/conference
     // cases (drive only A; B idle). sweep_p1_single chains all 5 on one launch
@@ -709,8 +753,14 @@ Future<int> _main(List<String> args) async {
       return await runP1ChatSweep(a, b, nickA, nickB);
     }
     if (_isP1ChatCaseScenario(scenario)) {
-      return await runP1ChatCase(a, b, nickA, nickB, scenario,
-          bootRestored: bootRestored);
+      return await runP1ChatCase(
+        a,
+        b,
+        nickA,
+        nickB,
+        scenario,
+        bootRestored: bootRestored,
+      );
     }
     // P1/P2/P3 campaign Batch IV — relaunch-capable scenarios. The sweep starts
     // from a fresh no-friend pair and does its own handshake; individual cases
@@ -720,8 +770,30 @@ Future<int> _main(List<String> args) async {
       return await runP1RelaunchSweep(a, b, nickA, nickB);
     }
     if (_isP1RelaunchCaseScenario(scenario)) {
-      return await runP1RelaunchCase(a, b, nickA, nickB, scenario,
-          bootRestored: bootRestored);
+      return await runP1RelaunchCase(
+        a,
+        b,
+        nickA,
+        nickB,
+        scenario,
+        bootRestored: bootRestored,
+      );
+    }
+    // P1/P2/P3 campaign Batch V — P2 cases made driveable by fork keys. The
+    // sweep starts from no-friend and does its own handshake; presence restart
+    // returns relaunch-dirty so the runner relaunches before later work.
+    if (scenario == 'sweep_p2_keys') {
+      return await runP2KeysSweep(a, b, nickA, nickB);
+    }
+    if (_isP2KeysCaseScenario(scenario)) {
+      return await runP2KeysCase(
+        a,
+        b,
+        nickA,
+        nickB,
+        scenario,
+        bootRestored: bootRestored,
+      );
     }
     if (scenario == 'group_profile_open') {
       return await runGroupProfileOpen(a, nickA);

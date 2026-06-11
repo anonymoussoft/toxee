@@ -63,12 +63,73 @@ const String _kFaceName = '[gcs00]';
 // A minimal 1x1 transparent PNG so AssetImage resolution in the grid cells
 // succeeds instead of logging a missing-asset FlutterError under the binding.
 final Uint8List _kTransparentPng = Uint8List.fromList(<int>[
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-  0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-  0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0A,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0D,
+  0x0A,
+  0x2D,
+  0xB4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
 ]);
 
 // An asset bundle that answers any sticker `.png` key with the 1x1 PNG above
@@ -167,9 +228,11 @@ MessageInputBuilderMethods _stubMethods({
     sendTextMessage: ({required String text, List<String>? mentionedUsers}) {
       sentSink?.add(text);
     },
-    sendImageMessage: ({String? imagePath, String? imageName, dynamic inputElement}) {},
+    sendImageMessage:
+        ({String? imagePath, String? imageName, dynamic inputElement}) {},
     sendVideoMessage: ({String? videoPath, dynamic inputElement}) {},
-    sendFileMessage: ({String? filePath, String? fileName, dynamic inputElement}) {},
+    sendFileMessage:
+        ({String? filePath, String? fileName, dynamic inputElement}) {},
     sendVoiceMessage: ({required String voicePath, required int duration}) {},
     onChooseGroupMembers: () async => <V2TimGroupMemberFullInfo>[],
     controller: Object(),
@@ -254,7 +317,9 @@ void _seedStickerInitData() {
 
 // Reads the live composer text out of the real ExtendedTextField controller.
 String _composerText(WidgetTester tester) {
-  final field = tester.widget<ExtendedTextField>(find.byType(ExtendedTextField));
+  final field = tester.widget<ExtendedTextField>(
+    find.byType(ExtendedTextField),
+  );
   return field.controller?.text ?? '';
 }
 
@@ -264,10 +329,12 @@ String _composerText(WidgetTester tester) {
 // unambiguous).
 Finder _cellForAsset(String assetName) {
   return find.ancestor(
-    of: find.byWidgetPredicate((w) =>
-        w is Image &&
-        w.image is AssetImage &&
-        (w.image as AssetImage).assetName == assetName),
+    of: find.byWidgetPredicate(
+      (w) =>
+          w is Image &&
+          w.image is AssetImage &&
+          (w.image as AssetImage).assetName == assetName,
+    ),
     matching: find.byType(GestureDetector),
   );
 }
@@ -295,13 +362,12 @@ Future<void> _pumpPanelAndComposer(
           children: [
             TencentCloudChatMessageInputDesktop(
               inputData: _data(),
-              inputMethods:
-                  _stubMethods(sentSink: sentSink, onCloseSticker: onCloseSticker),
+              inputMethods: _stubMethods(
+                sentSink: sentSink,
+                onCloseSticker: onCloseSticker,
+              ),
             ),
-            const SizedBox(
-              height: 320,
-              child: TencentCloudChatStickerPanel(),
-            ),
+            const SizedBox(height: 320, child: TencentCloudChatStickerPanel()),
           ],
         ),
       ),
@@ -347,8 +413,11 @@ void main() {
       expect(_composerText(tester), '');
 
       final emojiCell = _cellForAsset('assets/stickers/emoji_0.png');
-      expect(emojiCell, findsOneWidget,
-          reason: 'the default-emoji grid cell should render on the active tab');
+      expect(
+        emojiCell,
+        findsOneWidget,
+        reason: 'the default-emoji grid cell should render on the active tab',
+      );
 
       // REAL tap -> real sendStickerMessage -> real emitUIKitListener -> the
       // composer's real type==0 uikitListener inserts the token.
@@ -356,11 +425,18 @@ void main() {
       await tester.pumpAndSettle();
 
       // A4: the empty-field branch fires the leading space -> " [TUIEmoji_Smile]".
-      expect(_composerText(tester), ' $_kEmojiName',
-          reason:
-              'type-0 stickClick must insert "<space>$_kEmojiName" into the composer');
+      expect(
+        _composerText(tester),
+        ' $_kEmojiName',
+        reason:
+            'type-0 stickClick must insert "<space>$_kEmojiName" into the composer',
+      );
       // Emoji insertion must NOT send a text message (it only edits the field).
-      expect(sent, isEmpty, reason: 'inserting an emoji must not send a message');
+      expect(
+        sent,
+        isEmpty,
+        reason: 'inserting an emoji must not send a message',
+      );
     },
   );
 
@@ -381,7 +457,8 @@ void main() {
           TencentCloudChatSdkPlatform.instance as _FakeStickerSdkPlatform;
       platform.addUIKitListener(
         listener: V2TimUIKitListener(
-          onUiKitEventEmit: (data) => emitted.add(Map<String, dynamic>.from(data)),
+          onUiKitEventEmit: (data) =>
+              emitted.add(Map<String, dynamic>.from(data)),
         ),
       );
 
@@ -399,14 +476,32 @@ void main() {
       // The panel opens on the first (emoji) tab; switch to the custom-face tab
       // via a REAL tab tap so its grid renders (real handleTabClick setState).
       final faceTab = _cellForAsset('assets/stickers/_tab_face.png');
-      expect(faceTab, findsOneWidget, reason: 'the custom-face tab should render');
+      expect(
+        faceTab,
+        findsOneWidget,
+        reason: 'the custom-face tab should render',
+      );
+      expect(
+        find.byKey(const ValueKey('sticker_face_tab:1')),
+        findsOneWidget,
+        reason: 'the face sticker pack tab needs a stable real-UI selector',
+      );
       await tester.tap(faceTab);
       await tester.pumpAndSettle();
 
-      final faceCell =
-          _cellForAsset('assets/custom_face_resource/4352/gcs00@2x.png');
-      expect(faceCell, findsOneWidget,
-          reason: 'the custom-face grid cell should render on the face tab');
+      final faceCell = _cellForAsset(
+        'assets/custom_face_resource/4352/gcs00@2x.png',
+      );
+      expect(
+        faceCell,
+        findsOneWidget,
+        reason: 'the custom-face grid cell should render on the face tab',
+      );
+      expect(
+        find.byKey(const ValueKey('sticker_face_cell:1:0')),
+        findsOneWidget,
+        reason: 'the first custom-face sticker cell needs a stable selector',
+      );
 
       // REAL tap on the custom-face cell.
       await tester.tap(faceCell);
@@ -414,14 +509,20 @@ void main() {
 
       // A8 (defining invariant): the composer text is UNCHANGED — a custom face
       // must NOT be inserted as text (this is what distinguishes S23 from S22).
-      expect(_composerText(tester), '',
-          reason: 'a custom-face tap must not touch the composer text');
+      expect(
+        _composerText(tester),
+        '',
+        reason: 'a custom-face tap must not touch the composer text',
+      );
       // And it must not have gone out as a plain text message either.
       expect(sent, isEmpty);
 
       // A6: the desktop input's real type==1 branch requested the panel close.
-      expect(closeStickerCalls, greaterThan(0),
-          reason: 'the desktop input closes the sticker panel on a type-1 tap');
+      expect(
+        closeStickerCalls,
+        greaterThan(0),
+        reason: 'the desktop input closes the sticker panel on a type-1 tap',
+      );
 
       // A9 (send contract): the panel emitted exactly the `stickClick{type:1}`
       // event carrying the face name + sticker index that
@@ -437,13 +538,22 @@ void main() {
       final faceEvents = emitted
           .where((e) => e['eventType'] == 'stickClick' && e['type'] == 1)
           .toList();
-      expect(faceEvents, isNotEmpty,
-          reason: 'the custom-face tap must emit a type-1 stickClick event');
-      expect(faceEvents.single['name'], kExpectedFaceWireName,
-          reason:
-              'the emitted face event carries the bracket-stripped face name (production transform)');
-      expect(faceEvents.single['stickerIndex'], 1,
-          reason: 'the emitted face event carries the pack sticker index');
+      expect(
+        faceEvents,
+        isNotEmpty,
+        reason: 'the custom-face tap must emit a type-1 stickClick event',
+      );
+      expect(
+        faceEvents.single['name'],
+        kExpectedFaceWireName,
+        reason:
+            'the emitted face event carries the bracket-stripped face name (production transform)',
+      );
+      expect(
+        faceEvents.single['stickerIndex'],
+        1,
+        reason: 'the emitted face event carries the pack sticker index',
+      );
 
       // Negative: no type-0 (emoji insertion) event was emitted by a face tap.
       expect(

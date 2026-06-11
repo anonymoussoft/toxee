@@ -47,6 +47,7 @@ const _defaultRealUiNickB = 'RealUiBob';
 const _validTiers = {'non-media', 'media', 'all'};
 const _validClasses = {'2proc-l3', '2proc-ui'};
 const _validBases = {'paired_for_e2e', 'fresh', 'real-ui'};
+
 /// Exit code a real-UI driver returns when a scenario is a SKIP (its surface
 /// genuinely does not exist on this platform — e.g. the Batch-2 avatar cases,
 /// whose self-profile avatar tap opens a native NSOpenPanel with no in-app
@@ -261,6 +262,13 @@ const _validRealUiScenarios = {
   'offline_pending_relaunch',
   'call_from_profile_tiles',
   'group_join_by_id_real_ui',
+  // P1/P2/P3 campaign Batch V — P2 selector-backed cases. The sweep chains all
+  // three and restarts B for presence; individual sticker/chip cases keep the
+  // friendship, presence reports relaunch-dirty.
+  'sweep_p2_keys',
+  'sticker_face_cell_send',
+  'new_messages_chip_tap',
+  'presence_dot_relaunch',
 };
 const _realUiCampaigns = <String, List<String>>{
   // Batch 1 — settings sweep 2 (the whole 12-case chain on one launch).
@@ -308,16 +316,15 @@ const _realUiCampaigns = <String, List<String>>{
   // restarts one peer inside the driver, then reports relaunch-dirty so the
   // next campaign starts from a clean pair launch.
   'rui-p1-relaunch': ['sweep_p1_relaunch'],
+  // P1/P2/P3 campaign Batch V — P2 fork-key-backed real-UI cases.
+  'rui-p2-keys': ['sweep_p2_keys'],
   'all-current': ['handshake', 'message', 'handshake_detail', 'decline'],
   'accepted-friend-inline': ['handshake', 'message'],
   'accepted-friend-detail': ['handshake_detail', 'message'],
   'accepted-friend-inline-burst': ['handshake', 'message_burst'],
   'accepted-friend-detail-burst': ['handshake_detail', 'message_burst'],
   'accepted-friend-inline-group-message': ['handshake', 'group_message'],
-  'accepted-friend-detail-group-message': [
-    'handshake_detail',
-    'group_message',
-  ],
+  'accepted-friend-detail-group-message': ['handshake_detail', 'group_message'],
   // Single-instance group create/open/composer surface (no friendship needed).
   'group-create': ['group_create'],
   'group-profile-open': ['group_profile_open'],
@@ -364,10 +371,7 @@ const _realUiCampaigns = <String, List<String>>{
   //  - mark-read-unread (S118/S133): B seeds unread, A marks read → unread→0.
   //  - clear-history (S122): B seeds history, A clears → messageCount→0, row stays.
   //  - clear-preserves-pin (S154): A pins + B seeds, A clears → still pinned.
-  'group-menu-mark-read-unread': [
-    'handshake',
-    'group_menu_mark_read_unread',
-  ],
+  'group-menu-mark-read-unread': ['handshake', 'group_menu_mark_read_unread'],
   'group-clear-history': ['handshake', 'group_clear_history'],
   'group-clear-preserves-pin': ['handshake', 'group_clear_preserves_pin'],
   // Legacy Tox conference, same two-process invite+delivery shape as group.
@@ -1247,6 +1251,11 @@ String _requiredRealUiState(String scenario) {
     case 'offline_pending_relaunch':
     case 'call_from_profile_tiles':
     case 'group_join_by_id_real_ui':
+    // P1/P2/P3 Batch V — individual P2 key cases need an existing friendship.
+    // presence_dot_relaunch restarts B internally but still starts from friends.
+    case 'sticker_face_cell_send':
+    case 'new_messages_chip_tap':
+    case 'presence_dot_relaunch':
       return _realUiStateFriends;
     case 'handshake':
     case 'handshake_detail':
@@ -1350,6 +1359,9 @@ String _requiredRealUiState(String scenario) {
     // P1/P2/P3 Batch IV — sweep_p1_relaunch runs its OWN handshake and then
     // restarts instances internally.
     case 'sweep_p1_relaunch':
+    // P1/P2/P3 Batch V — sweep_p2_keys runs its OWN handshake, then restarts B
+    // for the presence-dot case.
+    case 'sweep_p2_keys':
       return _realUiStateNoFriend;
   }
   throw ArgumentError('unsupported real-UI scenario: $scenario');
@@ -1455,10 +1467,15 @@ String _resultRealUiState(String scenario) {
     // not restart peers. Relaunch cases are marked below as relaunch-dirty.
     case 'call_from_profile_tiles':
     case 'group_join_by_id_real_ui':
+    // P1/P2/P3 Batch V — sticker/chip keep the existing friendship.
+    case 'sticker_face_cell_send':
+    case 'new_messages_chip_tap':
       return _realUiStateFriends;
     case 'sweep_p1_relaunch':
     case 'relaunch_history_autologin':
     case 'offline_pending_relaunch':
+    case 'sweep_p2_keys':
+    case 'presence_dot_relaunch':
       return _realUiStateRelaunchDirty;
     case 'decline':
     case 'custom_message':
@@ -1756,7 +1773,9 @@ Future<int> _executeRealUiEntry(_PlannedEntry planned) async {
       // on without updating pairState (the scenario did nothing). Without this,
       // a SKIP returning 0 would be tallied upstream as a PASS.
       if (rc == _realUiSkipExitCode) {
-        stdout.writeln('[unified] SKIP real-ui scenario "$scenario" (surface n/a)');
+        stdout.writeln(
+          '[unified] SKIP real-ui scenario "$scenario" (surface n/a)',
+        );
         continue;
       }
       if (rc != 0 && resetApplied) {
