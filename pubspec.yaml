@@ -102,6 +102,7 @@ flutter:
   generate: true
   assets:
     - assets/
+    - assets/avatars/
 flutter_launcher_icons:
   image_path: "assets/app_icon.png"
   android: true

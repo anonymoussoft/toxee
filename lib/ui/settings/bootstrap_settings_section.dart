@@ -1148,29 +1148,31 @@ class _BootstrapSettingsSectionState extends State<BootstrapSettingsSection> {
             value: 'auto',
             groupValue: _bootstrapNodeMode,
             title: Text(l10n.autoMode),
-            subtitle: GestureDetector(
-              onTap: () async {
-                final url = Uri.parse('https://nodes.tox.chat/');
-                if (await canLaunchUrl(url)) {
-                  await launchUrl(url, mode: LaunchMode.externalApplication);
-                }
-              },
-              child: RichText(
-                text: TextSpan(
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelSmall?.copyWith(color: secondaryTextColor),
-                  children: [
-                    TextSpan(text: l10n.autoModeDescPrefix),
-                    TextSpan(
-                      text: 'https://nodes.tox.chat/',
-                      style: TextStyle(
-                        color: primaryColor,
-                        decoration: TextDecoration.underline,
-                      ),
+            // The subtitle is a NON-interactive RichText: it merely DISPLAYS the
+            // nodes.tox.chat source URL (styled as a link). It deliberately has no
+            // tap recognizer / GestureDetector. Two reasons: (1) Flutter forbids
+            // an interactive RichText inside a RadioListTile — the tile uses
+            // MergeSemantics while a recognizer-bearing RichText needs its own
+            // semantics node, which asserts in debug (see RadioListTile docs);
+            // (2) a full-subtitle launch handler swallowed taps on the tile's
+            // center, so selecting the 'auto' radio by tapping the tile silently
+            // opened a browser instead. With a plain subtitle, ANY tap on the
+            // tile (including its center) fires onChanged and selects 'auto'.
+            subtitle: RichText(
+              text: TextSpan(
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: secondaryTextColor),
+                children: [
+                  TextSpan(text: l10n.autoModeDescPrefix),
+                  TextSpan(
+                    text: 'https://nodes.tox.chat/',
+                    style: TextStyle(
+                      color: primaryColor,
+                      decoration: TextDecoration.underline,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             onChanged: (v) {

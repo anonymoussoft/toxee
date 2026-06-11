@@ -480,6 +480,38 @@ class Inst {
     }
   }
 
+  /// READ-ONLY on-screen global center (x,y) of a keyed widget, or null when it
+  /// can't be resolved (absent / offstage-only). Works for NON-interactive keyed
+  /// anchors (e.g. a SizedBox wrapping a SegmentedButton) that flutter_skill's
+  /// interactiveStructured doesn't surface — used to check whether a scroll anchor
+  /// is within the visible viewport before tapping a child of it.
+  Future<({double x, double y})?> keyCenter(String key) async {
+    try {
+      final r = await l3('ui_key_center', {'key': key});
+      if (r['ok'] != true) return null;
+      final x = (r['x'] as num?)?.toDouble();
+      final y = (r['y'] as num?)?.toDouble();
+      if (x == null || y == null) return null;
+      return (x: x, y: y);
+    } on DriveError {
+      return null;
+    }
+  }
+
+  /// Single-fire tap at a keyed widget's resolved center via `ui_key_center`
+  /// (resolveKeyCenter) + `tapAt`. Unlike [tapKeyCenter] (which reads
+  /// flutter_skill's `interactiveStructured` and therefore only finds INTERACTIVE
+  /// widgets), this resolves the center of ANY onstage keyed widget — including a
+  /// keyed NON-interactive wrapper (a Material/SizedBox around an InkWell /
+  /// SegmentedButton). Returns false (no throw) when the key can't be resolved to
+  /// an onstage center.
+  Future<bool> tapKeyAt(String key) async {
+    final c = await keyCenter(key);
+    if (c == null) return false;
+    await tapAt(c.x, c.y);
+    return true;
+  }
+
   /// Scroll [scrollableKey] by [dyPerStep] (negative = wheel up to reveal
   /// earlier content; positive = down) until [targetKey] appears, up to
   /// [maxSteps] wheel ticks. Foregrounds first (like other UI phases). Returns

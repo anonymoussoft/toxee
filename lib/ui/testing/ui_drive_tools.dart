@@ -255,6 +255,22 @@ Map<String, Object?> uiSecondaryTapHandler({String? key, String? x, String? y}) 
   return {'ok': true, 'candidates': resolved.candidates};
 }
 
+/// Resolve the on-screen global center (x,y) of a keyed widget — READ-ONLY (no
+/// input dispatched). Lets the harness tell whether a keyed but NON-interactive
+/// scroll anchor (e.g. a SizedBox wrapping a SegmentedButton, whose per-segment
+/// labels aren't surfaced by flutter_skill's interactiveStructured) is within the
+/// visible viewport before tapping a child of it. Returns {ok, x?, y?, error?}.
+@visibleForTesting
+Map<String, Object?> uiKeyCenterHandler({String? key}) {
+  if (key == null || key.trim().isEmpty) {
+    return {'ok': false, 'error': 'need_key'};
+  }
+  final resolved = resolveKeyCenter(key.trim());
+  if (!resolved.ok) return {'ok': false, 'error': resolved.error};
+  final p = resolved.point!;
+  return {'ok': true, 'x': p.dx, 'y': p.dy, 'candidates': resolved.candidates};
+}
+
 MCPCallResult _result(Map<String, Object?> r) => MCPCallResult(
   message: r['ok'] == true ? 'ok' : 'error: ${r['error']}',
   parameters: r,
@@ -347,6 +363,23 @@ MCPCallEntry _uiSecondaryTapEntry() => MCPCallEntry.tool(
   ),
 );
 
+MCPCallEntry _uiKeyCenterEntry() => MCPCallEntry.tool(
+  handler: (request) async => _result(uiKeyCenterHandler(key: request['key'])),
+  definition: MCPToolDefinition(
+    name: 'ui_key_center',
+    description:
+        'DEBUG-ONLY (ungated): READ-ONLY — resolve the on-screen global center '
+        '(x,y) of a keyed widget without dispatching any input. Returns '
+        '{ok, x?, y?, error?, candidates?}. Lets the harness check whether a '
+        'keyed (possibly non-interactive) scroll anchor is within the viewport.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'key': StringSchema(description: 'ValueKey to resolve the center of.'),
+      },
+    ),
+  ),
+);
+
 /// Register the UI-drive pointer tools. No-op outside [kDebugMode]
 /// (tree-shaken from profile/release). Call after
 /// `MCPToolkitBinding.instance.initialize()` in `main()`. UNGATED — these are
@@ -355,9 +388,10 @@ void registerUiDriveToolsIfDebug() {
   if (!kDebugMode) return;
   AppLogger.info(
     '[ui-drive] Registering pointer-event tools '
-    '(ui_scroll_at, ui_drag, ui_secondary_tap).',
+    '(ui_scroll_at, ui_drag, ui_secondary_tap, ui_key_center).',
   );
   addMcpTool(_uiScrollAtEntry());
   addMcpTool(_uiDragEntry());
   addMcpTool(_uiSecondaryTapEntry());
+  addMcpTool(_uiKeyCenterEntry());
 }

@@ -1,23 +1,66 @@
 // ignore_for_file: avoid_print
 part of 'drive_real_ui_pair.dart';
 
-/// Open the Settings tab and wait for a settings landmark. Robust against a
-/// transient post-dialog re-render or a backgrounded window: re-foreground and
-/// re-tap the sidebar tab a few rounds before giving up.
+/// True when the Settings tab is the ACTIVE (onstage) home-shell tab.
+///
+/// Why this is not just `waitKey('settings_copy_tox_id_button')`: HomePage hosts
+/// the Chats/Contacts/Settings panes in an `IndexedStack` with maintainState, so
+/// every tab's widgets — including `settings_copy_tox_id_button` — stay MOUNTED
+/// in the tree even while OFFSTAGE. flutter_skill's whole-tree `waitForElement`
+/// therefore reports the settings copy button as "present" on the Chats tab too.
+/// The only authoritative onstage signal is the dump `homeShellTab` field (the
+/// live `_index`). Below-fold settings widgets driven by `tapKey` (whole-tree)
+/// still worked offstage, but `ui_scroll_at` (onstage-filtered) does not — hence
+/// the campaign's settings-scroll cases were silently scrolling the wrong (still
+/// Chats) onstage tab and failing `key_offstage_only:settings_scroll_view`.
+Future<bool> _settingsTabActive(Inst inst) async {
+  final tab = (await inst.dumpState())['homeShellTab']?.toString();
+  return tab == 'settings';
+}
+
+/// Open the Settings tab and wait for it to become the ACTIVE onstage tab.
+/// Robust against a transient post-dialog re-render or a backgrounded window:
+/// re-foreground and re-tap the sidebar tab a few rounds before giving up.
+///
+/// Gates on `homeShellTab == 'settings'` (the live IndexedStack index), NOT on a
+/// whole-tree key match — the settings pane stays mounted offstage, so a key
+/// match alone would short-circuit without ever switching the active tab and
+/// leave onstage-filtered scrolls (`ui_scroll_at`) operating on the wrong tab.
 Future<void> _openSettings(Inst inst) async {
-  for (var round = 0; round < 5; round++) {
+  for (var round = 0; round < 6; round++) {
     await inst.foreground();
-    if (await inst.waitKey('settings_copy_tox_id_button', timeoutSecs: 2)) {
+    // `homeShellTab == 'settings'` is the AUTHORITATIVE active-tab signal. Do NOT
+    // additionally require `settings_copy_tox_id_button` to be found: that key is
+    // at the TOP of the settings ListView, so when a prior case left the list
+    // scrolled DOWN it's off-screen (and out of flutter_skill's cacheExtent
+    // reach), which would falsely loop here. Once settings is the active tab we
+    // scroll the list back to the TOP so callers start from a known position.
+    if (await _settingsTabActive(inst)) {
+      await inst.scrollAt(_settingsScrollKey, dy: -6000);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       return;
     }
-    await inst.tryTapKey('sidebar_settings_tab');
-    if (await inst.waitKey('settings_copy_tox_id_button', timeoutSecs: 5)) {
-      return;
+    // The sidebar settings tab is a plain IndexedStack `_index` setState; a
+    // single real tap switches it (flutter_skill's double-fire is harmless on a
+    // tab selector — it just re-selects the same index). Use tapKeyCenter for a
+    // deterministic single pointer tap, falling back to the synthetic tap.
+    if (!await inst.tapKeyCenter('sidebar_settings_tab')) {
+      await inst.tryTapKey('sidebar_settings_tab');
+    }
+    // Poll the active-tab signal (the switch is a setState that lands within a
+    // frame or two).
+    for (var i = 0; i < 6; i++) {
+      if (await _settingsTabActive(inst)) {
+        await inst.scrollAt(_settingsScrollKey, dy: -6000);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
     }
     await Future<void>.delayed(const Duration(milliseconds: 800));
   }
   await inst.shot('/tmp/ui_settings_noopen_${inst.name}.png');
-  throw DriveError('[${inst.name}] settings did not open from sidebar tab');
+  throw DriveError('[${inst.name}] settings did not become the active tab');
 }
 
 /// Poll l3_dump_state until a top-level bool field equals [want] (no throw).

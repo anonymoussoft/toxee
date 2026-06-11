@@ -217,6 +217,10 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                   valueListenable: AppTheme.mode,
                   builder: (context, mode, _) {
                     return SizedBox(
+                      // Scroll anchor for real-UI automation (the segment labels
+                      // aren't individually surfaced; the harness scrolls this
+                      // keyed box into the viewport before tapping a segment).
+                      key: UiKeys.settingsThemeSegment,
                       width: double.infinity,
                       child: SegmentedButton<ThemeMode>(
                         // Three segments: System / Light / Dark.
@@ -349,6 +353,10 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Material(
+                          // Scroll anchor for real-UI automation (the collapsed
+                          // selector row; the harness scrolls this keyed box into
+                          // the viewport before tapping to expand the list).
+                          key: UiKeys.settingsLanguageSelector,
                           color: Colors.transparent,
                           child: InkWell(
                             onTap: () => setState(
@@ -396,7 +404,18 @@ class _GlobalSettingsSectionState extends State<GlobalSettingsSection> {
                               selectedLocale!,
                               lang.locale,
                             );
+                            // Stable per-option key for real-UI automation:
+                            // 'settings_language_option_<code>' where <code> is
+                            // the persisted `${languageCode}[_${scriptCode}]`
+                            // form (matches Prefs._localeToString) — e.g.
+                            // settings_language_option_en / ..._zh_Hans. The
+                            // option label Text isn't surfaced by flutter_skill's
+                            // interactiveStructured, so the harness taps this key.
+                            final optionCode = lang.locale.scriptCode != null
+                                ? '${lang.locale.languageCode}_${lang.locale.scriptCode}'
+                                : lang.locale.languageCode;
                             return Material(
+                              key: Key('settings_language_option_$optionCode'),
                               color: Colors.transparent,
                               child: InkWell(
                                 onTap: () => selectLocale(lang.locale),

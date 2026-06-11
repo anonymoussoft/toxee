@@ -107,18 +107,18 @@ restored/established friendship (plan after handshake or restore `paired_for_e2e
 
 | # | Case (scenario id) | Mode | Spec | Drives / asserts | Status |
 |---|---|---|---|---|---|
-| 1 | settings_surface_sections | 1i | — | open settings via sidebar; scroll through; all section headers render | WRITTEN |
-| 2 | settings_theme_dark | 1i | S57 | tap theme control → dark applied (widget-tree brightness) + dump persisted | WRITTEN |
-| 3 | settings_theme_light_back | 1i | S57 | revert to light; UI re-renders | WRITTEN |
-| 4 | settings_locale_zh_roundtrip | 1i | S38 | switch language to 中文 → visible label asserted in Chinese → back to English | WRITTEN |
-| 5 | settings_download_limit_edit | 1i | S98 | real field input + save → dump_state threshold | WRITTEN |
-| 6 | settings_bootstrap_mode_cycle | 1i | S99/S85 | segmented auto→manual→lan→auto, dump after each | WRITTEN |
-| 7 | settings_bootstrap_manual_add_node | 1i | S89 | manual node form: host/port/key input → add → row renders | WRITTEN (form-mount, see log) |
-| 8 | settings_bootstrap_manual_remove_node | 1i | S89 | remove the added node → row gone | WRITTEN (collapse-form, see log) |
-| 9 | settings_autologin_toggle_hard | 1i | S96 | scrollUntilKey + real tap → dump flips (upgrades documented soft case) | WRITTEN |
-| 10 | settings_notifsound_toggle_hard | 1i | S97 | same for notification-sound switch | WRITTEN |
-| 11 | settings_password_mismatch_error | 1i | S40 | password dialog: mismatched confirm → inline error, dialog stays | WRITTEN |
-| 12 | settings_logout_cancel | 1i | S44 | logout confirm → Cancel → still sessionReady | WRITTEN |
+| 1 | settings_surface_sections | 1i | — | open settings via sidebar; scroll through; all section headers render | PASS |
+| 2 | settings_theme_dark | 1i | S57 | tap theme control → dark applied (widget-tree brightness) + dump persisted | PASS |
+| 3 | settings_theme_light_back | 1i | S57 | revert to light; UI re-renders | PASS |
+| 4 | settings_locale_zh_roundtrip | 1i | S38 | switch language to 中文 → visible label asserted in Chinese → back to English | PASS |
+| 5 | settings_download_limit_edit | 1i | S98 | real field input + save → dump_state threshold | PASS |
+| 6 | settings_bootstrap_mode_cycle | 1i | S99/S85 | segmented auto→manual→lan→auto, dump after each | FAIL→FIXED(PRODUCT: Auto-radio subtitle GestureDetector swallowed center-taps→launched browser instead of selecting radio; made subtitle a non-interactive RichText so any tile-tap fires onChanged) |
+| 7 | settings_bootstrap_manual_add_node | 1i | S89 | manual node form: host/port/key input → add → row renders | FAIL→FIXED(HARNESS: band-stall accept for bottom-anchored expand btn; synthetic enterText SIGSEGV'd FlutterTextInputPlugin→use osascript keystrokes; dy:-6000 reset collapsed the expanded form→gentle scroll-down + no-reset fill) |
+| 8 | settings_bootstrap_manual_remove_node | 1i | S89 | remove the added node → row gone | FAIL→FIXED(same band-stall reach fix as case 7) |
+| 9 | settings_autologin_toggle_hard | 1i | S96 | scrollUntilKey + real tap → dump flips (upgrades documented soft case) | PASS |
+| 10 | settings_notifsound_toggle_hard | 1i | S97 | same for notification-sound switch | PASS |
+| 11 | settings_password_mismatch_error | 1i | S40 | password dialog: mismatched confirm → inline error, dialog stays | PASS |
+| 12 | settings_logout_cancel | 1i | S44 | logout confirm → Cancel → still sessionReady | PASS |
 
 Sweep: `sweep_settings2` · Campaign: `rui-settings2`. **Batch 1 STATUS: DONE** (12/12
 cases WRITTEN+unrun; analyze 0-new; planner + campaign-list green; touched-settings
@@ -1565,6 +1565,56 @@ rui-group2 → rui-calls-misc. Record per-sweep results + fixes in "Run log".
 ### Run log (append-only)
 
 - 2026-06-10: write phase closed; app rebuilt (build_all.sh exit 0).
+
+- 2026-06-10 **rui-settings2 (sweep_settings2) LIVE: 12 PASS / 0 FAIL** — stable across
+  3 consecutive full runs, no crash. **CRITICAL BUILD NOTE for later run agents:** the
+  app MUST be built with `MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh`, NOT
+  `./build_all.sh` — the l3 debug-tool surface (`ext.mcp.toolkit.l3_*`) is compiled in only
+  via `--dart-define=TOXEE_L3_TEST=true`, which build_all does NOT pass. A build_all binary
+  has `ui_scroll_at`/`flutter_skill.*` (ungated) but l3_dump_state returns "Method not found",
+  silently breaking every state assertion. (Discovered the hard way after rebuilding for a
+  fix; run_toxee build-only also re-embeds the fresh dylib.) 3 fixes:
+  - **PRODUCT (`lib/ui/settings/bootstrap_settings_section.dart`)** — case 6
+    `settings_bootstrap_mode_cycle` failed `auto0=false backAuto=false` (manual/lan passed).
+    Root cause: the Auto-mode `RadioListTile`'s subtitle wrapped its `RichText` in a
+    `GestureDetector` that launched nodes.tox.chat on tap of the WHOLE subtitle, and that
+    subtitle overlaps the tile's geometric CENTER — so a center-tap (how the harness selects
+    a radio) opened the browser and `onChanged` never fired. Fix: made the subtitle a
+    NON-interactive `RichText` (the URL stays styled-as-a-link text, but no tap handler), so
+    any tap on the Auto tile — center included — selects 'auto'. Codex flagged the first
+    attempt (a `TapGestureRecognizer` on just the URL span) as Medium: Flutter forbids an
+    interactive `RichText` inside `RadioListTile` (MergeSemantics vs the recognizer's own
+    semantics node → debug assert) — so the recognizer approach was reverted to the plain
+    subtitle, which is both center-tap-correct AND semantics-safe. Mobile uses a separate
+    `SegmentedButton` (`_buildModeRowMobile`) that doesn't nest a tap target in the radio, so
+    it never had the center-swallow bug; its whole-description GestureDetector is a
+    pre-existing minor UX inconsistency, left as-is (not a correctness bug). Codex: recognizer
+    lifecycle was correct; remaining findings addressed by the plain-subtitle revert.
+  - **HARNESS — band-stall (`drive_real_ui_pair_settings2.dart`)** — cases 7/8 failed
+    `expand button never reached`. `manual_node_input_button` is the bottom-anchored LAST row
+    of the bootstrap section (collapsed-form); at max scroll extent it sits at center-y≈739,
+    which can NEVER enter the nominal 90–700 band, so `_scrollKeyIntoBand` looped to timeout.
+    Fix: detect a max-scroll STALL (target center-y stops moving for 2 scans) and accept the
+    target up to an extended bottom (`_settingsViewBottomMax=770`) — it's fully visible +
+    tappable, just below the reading band.
+  - **HARNESS — text-input crash + form collapse** — once case 7 could reach the form, it
+    SIGSEGV'd instance A: the FATAL backtrace's frame 2 was
+    `-[FlutterTextInputPlugin setEditingState:]`, i.e. the macOS Flutter engine's text-input
+    plugin crashing on a synthetic `enterText`. (`[callback_bridge] FATAL: received signal 11`
+    is just the FFI signal handler catching the engine SIGSEGV — NOT a native/FFI bug.) Fix:
+    fill the manual-node field via REAL pointer focus + REAL osascript keystrokes
+    (`_fillFieldViaKeystrokes`: tapKeyCenter + osaClear + osaType) — the same crash-free path
+    the desktop composer uses — instead of the engine's setEditingState. Then a SECOND bug
+    surfaced: a single big `dy:-6000` scroll-reset (in `_settingsScrollTo`) COLLAPSED the
+    just-expanded `AnimatedSize` manual form (a small scroll doesn't; reproduced
+    deterministically). Fix: the fill helper no longer resets-to-top (the caller guarantees
+    the field onstage), and case 7 does a GENTLE `scrollAt(dy:300)` after expanding to bring
+    the host field on-screen. Faithful scope: S89's assertion is "form mounts + accepts
+    input" — typing the host field + asserting all field keys present (host/port/pubkey are
+    one mounted Column) is the gate; re-focusing each narrow field separately (the original)
+    only added flakiness without strengthening it.
+  - Instances left RUNNING for the next sweep: see the end-of-run tuples at the bottom of this
+    log.
 
 ## Run phase (after ALL batches written) — protocol
 

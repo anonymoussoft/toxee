@@ -558,8 +558,21 @@ class AccountService {
 
       final svc = service!;
       final tid = toxId!;
-      final defaultAvatarPath =
-          await DefaultAvatarInstaller.installDefaultUserAvatar(toxId: tid);
+      // Installing the bundled default avatar must never block registration:
+      // a missing/corrupt asset (e.g. assets/avatars not bundled) should
+      // degrade to "no avatar" rather than abort account creation entirely.
+      String? defaultAvatarPath;
+      try {
+        defaultAvatarPath = await DefaultAvatarInstaller.installDefaultUserAvatar(
+          toxId: tid,
+        );
+      } catch (e) {
+        AppLogger.warn(
+          '[AccountService] Register: default avatar install failed '
+          '(continuing without one): $e',
+        );
+        defaultAvatarPath = null;
+      }
 
       // 5. Update profile
       await svc.updateSelfProfile(

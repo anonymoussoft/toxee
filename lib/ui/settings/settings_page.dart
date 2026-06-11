@@ -1088,6 +1088,7 @@ class _SettingsPageState extends State<SettingsPage> {
         content: Text(AppLocalizations.of(context)!.logOutConfirm),
         actions: [
           TextButton(
+            key: UiKeys.settingsLogoutCancelButton,
             onPressed: () => popDialogIfCurrent(context, false),
             child: Text(AppLocalizations.of(context)!.cancel),
           ),

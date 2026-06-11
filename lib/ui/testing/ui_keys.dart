@@ -179,10 +179,22 @@ class UiKeys {
   static const Key settingsLogoutConfirmButton = Key(
     'settings_logout_confirm_button',
   );
+  static const Key settingsLogoutCancelButton = Key(
+    'settings_logout_cancel_button',
+  );
   static const Key settingsAutoLoginSwitch = Key('settings_auto_login_switch');
   static const Key settingsNotificationSoundSwitch = Key(
     'settings_notification_sound_switch',
   );
+  // Scroll anchors for the Appearance theme SegmentedButton and the Language
+  // selector. Their per-segment / per-option labels are NOT surfaced as
+  // interactive elements (SegmentedButton internals / a collapsing InkWell), so a
+  // text tap computed off-screen misses; real-UI automation scrolls THESE keyed
+  // wrapper boxes into the viewport first (resolveKeyCenter finds any keyed sized
+  // RenderBox), then taps the visible segment/option. Automation-only, no
+  // semantic content; shared Dart so mobile is covered.
+  static const Key settingsThemeSegment = Key('settings_theme_segment');
+  static const Key settingsLanguageSelector = Key('settings_language_selector');
   static const Key settingsDownloadLimitField = Key(
     'settings_download_limit_field',
   );

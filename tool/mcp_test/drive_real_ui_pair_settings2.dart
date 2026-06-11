@@ -92,15 +92,144 @@ Future<bool> _tapTextCenter(Inst inst, String text, {int timeoutSecs = 6}) async
   return false;
 }
 
-/// Bring a below-fold settings widget onstage by wheel-scrolling the keyed
-/// settings ListView, then return whether it became visible. Foregrounds first.
+// The live macOS window is 1280x800. A settings widget is "usefully visible"
+// (tappable by tapKeyCenter / interactiveStructured bounds) only when its CENTER
+// lands within this band — clear of the 64pt app bar at the top and the bottom
+// edge. A ListView keeps OFF-screen children MOUNTED (cacheExtent), so a plain
+// `waitKey` is true even when the target is scrolled OUT of the viewport (negative
+// or >800 y) — which is exactly why the auto-login switch (center y ~ -334 after
+// a prior case scrolled the list down) was "found" yet untappable. We verify the
+// real on-screen y via interactiveStructured instead.
+const double _settingsViewTop = 90;
+const double _settingsViewBottom = 700;
+// A bottom-anchored LAST element (e.g. the manual-node expand button, which is
+// the final row of the BootstrapSettingsSection when the form is collapsed) can
+// never enter the [_settingsViewTop].._settingsViewBottom band: once the
+// ListView is at max scroll extent it sits near the window bottom (~y740 in the
+// ~792px-tall content viewport) and there is nothing below it to scroll up. So
+// when downward scrolling STALLS (the target's center-y stops moving), accept
+// the target if it is onstage anywhere up to this extended bottom — it is fully
+// visible and tappable, just below the nominal reading band.
+const double _settingsViewBottomMax = 770;
+
+/// The on-screen center-y of the keyed widget. First tries flutter_skill's
+/// `interactiveStructured` bounds (exact for interactive widgets — switches,
+/// fields, buttons, radios); falls back to the READ-ONLY `ui_key_center`
+/// primitive (resolveKeyCenter) for NON-interactive keyed anchors (e.g. the
+/// `settings_theme_segment` SizedBox), whose bounds interactiveStructured does
+/// not surface. Returns null only when the key resolves nowhere onstage.
+Future<double?> _keyedCenterY(Inst inst, String key) async {
+  final r = await inst.skill('interactiveStructured', const {});
+  final data = r['data'];
+  final elements = data is Map ? data['elements'] : null;
+  if (elements is List) {
+    for (final e in elements) {
+      if (e is! Map || e['key'] != key) continue;
+      final b = e['bounds'];
+      if (b is! Map) continue;
+      final y = (b['y'] as num?) ?? 0;
+      final h = (b['h'] as num?) ?? 0;
+      if (h <= 0) continue;
+      return y + h / 2;
+    }
+  }
+  // Non-interactive keyed anchor: resolve its center via the read-only primitive.
+  final c = await inst.keyCenter(key);
+  return c?.y;
+}
+
+/// Fill a keyed plain TextField via a REAL pointer focus + REAL OS keystrokes,
+/// avoiding the synthetic `enterText` → `FlutterTextInputPlugin setEditingState:`
+/// path that intermittently SIGSEGVs the macOS Flutter engine (observed crashing
+/// instance A on the manual-node host field — frame 2 of the FATAL backtrace was
+/// `-[FlutterTextInputPlugin setEditingState:]`). A single-fire `tapKeyCenter`
+/// focuses the field (no focus-thrash from flutter_skill's double-firing `tap`),
+/// then `osaClear` + `osaType` drive genuine keyboard events through AppKit —
+/// the same crash-free path the desktop composer uses. Best-effort: the
+/// manual-node cases assert field PRESENCE (waitKey), not the typed value, so a
+/// type that doesn't fully land still leaves a valid gate.
+Future<void> _fillFieldViaKeystrokes(
+  Inst inst,
+  String key,
+  String text,
+) async {
+  // Focus the field via a single real pointer tap at its CURRENT on-screen
+  // center, then drive real keystrokes. Deliberately does NOT reset the scroll
+  // to the top first: a single large `dy:-6000` wheel reset on the settings
+  // ListView was observed to COLLAPSE the just-expanded manual-node form
+  // (`_manualInputExpanded` flips closed under a big overscroll), tearing down
+  // the very fields we're about to fill. The caller guarantees the field is
+  // already onstage (the expand toggle scrolls the form into view); we tap it
+  // where it sits.
+  if (!await inst.tapKeyCenter(key)) {
+    await inst.tapKeyAt(key);
+  }
+  await Future<void>.delayed(const Duration(milliseconds: 250));
+  await inst.osaClear();
+  await inst.osaType(text);
+  await Future<void>.delayed(const Duration(milliseconds: 150));
+}
+
+/// Bring a below-fold (or above-fold) settings widget into the VISIBLE viewport
+/// by wheel-scrolling the keyed settings ListView, returning whether it landed in
+/// the on-screen band. Resets to the TOP first (so a target scrolled off the top
+/// by a prior case is reachable by scrolling DOWN), then scrolls down step by step
+/// checking the REAL on-screen y via `_keyedCenterY` (NOT `waitKey`, which is true
+/// for off-screen mounted children). For interactive targets (switches, fields,
+/// buttons) this is exact; for targets whose bounds aren't surfaced it falls back
+/// to the in-tree `waitKey` signal after the same downward sweep.
 Future<bool> _settingsScrollTo(Inst inst, String targetKey) async {
-  return inst.scrollUntilKey(
-    _settingsScrollKey,
+  return _scrollKeyIntoBand(
+    inst,
     targetKey,
-    dyPerStep: 320,
-    maxSteps: 12,
+    topBand: _settingsViewTop,
+    bottomBand: _settingsViewBottom,
   );
+}
+
+/// Scroll the settings ListView so the keyed [targetKey]'s on-screen center-y
+/// lands within [topBand]..[bottomBand]. Resets to the TOP first (so a target
+/// above the current offset is reachable downward), then scrolls down checking
+/// the REAL on-screen y via `_keyedCenterY` (interactive bounds, or the
+/// `ui_key_center` fallback for non-interactive anchors). NOT `waitKey` — a
+/// ListView keeps off-screen children mounted, so `waitKey` is true off-screen.
+Future<bool> _scrollKeyIntoBand(
+  Inst inst,
+  String targetKey, {
+  double topBand = _settingsViewTop,
+  double bottomBand = _settingsViewBottom,
+}) async {
+  await inst.foreground();
+  await inst.scrollAt(_settingsScrollKey, dy: -6000);
+  await Future<void>.delayed(const Duration(milliseconds: 250));
+  // Smaller steps (160px) than the band height so a target can't jump from below
+  // the band straight to above it between checks (the "never reached" overshoot).
+  double? prevCy;
+  var stalledScans = 0;
+  for (var step = 0; step < 30; step++) {
+    final cy = await _keyedCenterY(inst, targetKey);
+    if (cy != null && cy >= topBand && cy <= bottomBand) return true;
+    // Detect a max-scroll-extent STALL: a bottom-anchored last element stops
+    // moving once the ListView can't scroll further. After two consecutive scans
+    // with no downward progress, accept the target if it's onstage up to the
+    // extended bottom (it's fully visible + tappable, just below the band).
+    if (cy != null && prevCy != null && (cy - prevCy).abs() < 4) {
+      stalledScans++;
+      if (stalledScans >= 2 &&
+          cy >= topBand &&
+          cy <= _settingsViewBottomMax) {
+        return true;
+      }
+    } else {
+      stalledScans = 0;
+    }
+    prevCy = cy;
+    await inst.scrollAt(_settingsScrollKey, dy: 160);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+  final cy = await _keyedCenterY(inst, targetKey);
+  // Final acceptance also honours the extended bottom for a bottom-anchored row.
+  return cy != null && cy >= topBand && cy <= _settingsViewBottomMax;
 }
 
 /// case 1 — settings_surface_sections: open Settings, scroll the whole page,
@@ -144,13 +273,20 @@ Future<bool> _settingsSurfaceSections(Inst inst) async {
   return accountInfo && appearance && language && downloadLimit && bootstrap;
 }
 
-/// Wheel-scroll the settings list down a few ticks polling for [text] (no
-/// keyed target available — SectionHeader Text has no key). Best-effort.
-Future<bool> _scrollToText(Inst inst, String text, {int maxSteps = 12}) async {
+/// Wheel-scroll the settings list so [text] becomes visible. NOTE: a ListView
+/// keeps OFF-screen children MOUNTED (cacheExtent), so `waitText` is true for a
+/// SectionHeader that's still below/above the fold — which makes a follow-up tap
+/// (computed at the off-screen y) miss. This is best-effort for NON-tappable
+/// section headers (used only as a "the section exists" probe in case 1); for a
+/// tappable target use `_scrollTappableTextIntoView` (verifies the on-screen y).
+/// Resets to the top first so a header scrolled above the fold is reachable.
+Future<bool> _scrollToText(Inst inst, String text, {int maxSteps = 16}) async {
   await inst.foreground();
+  await inst.scrollAt(_settingsScrollKey, dy: -6000);
+  await Future<void>.delayed(const Duration(milliseconds: 250));
   if (await inst.waitText(text, timeoutSecs: 1)) return true;
   for (var step = 0; step < maxSteps; step++) {
-    await inst.scrollAt(_settingsScrollKey, dy: 320);
+    await inst.scrollAt(_settingsScrollKey, dy: 280);
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (await inst.waitText(text, timeoutSecs: 1)) return true;
   }
@@ -162,12 +298,31 @@ Future<bool> _scrollToText(Inst inst, String text, {int maxSteps = 12}) async {
 /// ButtonSegment takes none), so we drive by the localized visible label after
 /// bringing the Appearance card onstage.
 Future<bool> _tapThemeSegment(Inst inst, String label) async {
-  await _scrollToText(inst, 'Appearance');
-  // Single-fire the segment (a double-fire just re-selects the same value —
-  // harmless — but the single tap avoids a press-animation race and matches the
-  // toggle controls' convention). The segment label has no key, so _tapTextCenter
-  // (text-matched single tapAt) is the right primitive.
-  return _tapTextCenter(inst, label);
+  // A SegmentedButton ButtonSegment's label `Text` ("System"/"Light"/"Dark") is
+  // NOT surfaced as an interactive element by flutter_skill's
+  // `interactiveStructured`. flutter_skill's `tap{text}` finder DOES match it —
+  // BUT it computes the tap from the widget's tree position, which for a child
+  // mounted OFF-SCREEN in the ListView cacheExtent is an OFF-screen y (e.g. 942 on
+  // an 800px window when the list is at the top) → the tap silently misses. So the
+  // segment must be in the VISIBLE viewport first. The keyed wrapper box
+  // `settings_theme_segment` (a production automation key) IS scroll-resolvable
+  // via ui_scroll_at's resolveKeyCenter, so scroll IT into the viewport band, then
+  // tap the now-visible segment label. A double-fire on a segment just re-selects
+  // the same value (idempotent — harmless).
+  if (!await _settingsScrollTo(inst, 'settings_theme_segment')) {
+    print('[pair] theme: could not bring the theme segment into view');
+  }
+  for (var attempt = 0; attempt < 4; attempt++) {
+    await inst.foreground();
+    try {
+      await inst.tapText(label, retries: 1);
+      return true;
+    } on DriveError {
+      await _settingsScrollTo(inst, 'settings_theme_segment');
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
+  }
+  return false;
 }
 
 /// case 2 — settings_theme_dark (S57): tap the real "Dark" theme segment →
@@ -204,24 +359,31 @@ Future<bool> _settingsThemeLightBack(Inst inst) async {
 }
 
 /// case 4 — settings_locale_zh_roundtrip (S38): expand the Language selector,
-/// pick 简体中文 → dump languageCode == 'zh-Hans' AND a known Chinese label
+/// pick 简体中文 → dump languageCode == 'zh_Hans' AND a known Chinese label
 /// (外观, the Appearance section header) is visible; then revert to English via
 /// KEYS-free native labels (English label is unchanged across locales). Reverts
 /// BEFORE any later text-based English assertions so it can't poison them.
 Future<bool> _settingsLocaleZhRoundtrip(Inst inst) async {
   await _openSettings(inst);
-  // The Language card is in the GlobalSettingsSection; bring it onstage. The
-  // collapsed selector shows the CURRENT selection ("English" while in en).
-  await _scrollToText(inst, 'Language');
-  // Expand by tapping the selected-language label, then choose 简体中文.
-  // SINGLE-FIRE: the selector InkWell toggles `_languageExpanded =
-  // !_languageExpanded`, so flutter_skill's double-firing `tap` would open AND
-  // immediately re-close it (net no-op). _tapTextCenter dispatches exactly one
-  // pointer tap. After tapping, the 简体中文 option must appear (proves it
-  // opened); if it didn't, retry the expand (an even/odd toggle correction).
+  // The Language card is in the GlobalSettingsSection; bring the keyed
+  // collapsed-selector row (`settings_language_selector`) into the UPPER viewport
+  // band so that (a) the row itself is tappable, AND (b) the dropdown OPTIONS that
+  // render BELOW it on expand are within the visible viewport (the
+  // "option not tappable" failure was the expanded 简体中文 row sitting below the
+  // fold). A prior case can leave the list scrolled, so this resets + re-anchors.
+  await _scrollKeyIntoBand(inst, 'settings_language_selector',
+      topBand: 110, bottomBand: 300);
+  // Expand by tapping the selector row, then choose 简体中文. SINGLE-FIRE: the
+  // selector InkWell toggles `_languageExpanded`, so a double-fire would open AND
+  // re-close it (net no-op). The keyed row IS tappable via tapKeyCenter (a single
+  // pointer tap at its resolved center). After tapping, 简体中文 must appear.
   var expanded = false;
-  for (var attempt = 0; attempt < 3 && !expanded; attempt++) {
-    if (!await _tapTextCenter(inst, 'English')) break;
+  for (var attempt = 0; attempt < 4 && !expanded; attempt++) {
+    if (!await inst.tapKeyAt('settings_language_selector')) {
+      await _scrollKeyIntoBand(inst, 'settings_language_selector',
+          topBand: 110, bottomBand: 300);
+      if (!await inst.tapKeyAt('settings_language_selector')) break;
+    }
     await Future<void>.delayed(const Duration(milliseconds: 500));
     expanded = await inst.waitText('简体中文', timeoutSecs: 2);
   }
@@ -229,11 +391,22 @@ Future<bool> _settingsLocaleZhRoundtrip(Inst inst) async {
     print('[pair] settings_locale_zh: could not expand language selector');
     return false;
   }
-  if (!await _tapTextCenter(inst, '简体中文')) {
+  // Tap the keyed 简体中文 option (settings_language_option_zh_Hans). The option
+  // InkWell's label Text isn't surfaced by interactiveStructured, so use the
+  // production option key via tapKeyAt (resolveKeyCenter + tapAt — works for the
+  // keyed non-interactive Material wrapper). Re-anchor + retry once if needed.
+  var zhTapped = await inst.tapKeyAt('settings_language_option_zh_Hans');
+  if (!zhTapped) {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    zhTapped = await inst.tapKeyAt('settings_language_option_zh_Hans');
+  }
+  if (!zhTapped) {
     print('[pair] settings_locale_zh: 简体中文 option not tappable');
     return false;
   }
-  final zhPersisted = await _waitStringState(inst, 'languageCode', 'zh-Hans');
+  // Prefs persists the locale as `${languageCode}_${scriptCode}` (underscore),
+  // so the dump reports 'zh_Hans' — NOT the BCP-47 'zh-Hans' hyphen form.
+  final zhPersisted = await _waitStringState(inst, 'languageCode', 'zh_Hans');
   // Chinese label assertion: the Appearance header now reads "外观".
   await inst.foreground();
   final zhLabelVisible =
@@ -245,19 +418,28 @@ Future<bool> _settingsLocaleZhRoundtrip(Inst inst) async {
   );
   // Revert to English. The language option labels are NATIVE names (literal
   // 'English' / '简体中文'), unchanged by locale, so tapping "English" works
-  // while in Chinese. The collapsed selector now shows "简体中文" — tap it to
-  // expand, then tap "English".
-  await _scrollToText(inst, '语言'); // zh "Language" header
+  // while in Chinese. The collapsed selector now shows "简体中文" — anchor the
+  // KEYED selector row in the upper band (so its options below are visible), tap
+  // it to expand, then tap the "English" option.
+  await _scrollKeyIntoBand(inst, 'settings_language_selector',
+      topBand: 110, bottomBand: 300);
   var reverted = false;
-  for (var attempt = 0; attempt < 3 && !reverted; attempt++) {
+  for (var attempt = 0; attempt < 4 && !reverted; attempt++) {
     // Expand (single-fire) the now-Chinese-labelled selector, then pick English.
-    if (await _tapTextCenter(inst, '简体中文')) {
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-      // Only proceed if the option list actually opened (English option shows).
-      if (await inst.waitText('English', timeoutSecs: 2) &&
-          await _tapTextCenter(inst, 'English')) {
-        reverted = await _waitStringState(inst, 'languageCode', 'en');
+    if (!await inst.tapKeyAt('settings_language_selector')) {
+      await _scrollKeyIntoBand(inst, 'settings_language_selector',
+          topBand: 110, bottomBand: 300);
+      if (!await inst.tapKeyAt('settings_language_selector')) {
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        continue;
       }
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    // Only proceed if the option list actually opened (English option shows),
+    // then tap the keyed English option (settings_language_option_en).
+    if (await inst.waitText('English', timeoutSecs: 2) &&
+        await inst.tapKeyAt('settings_language_option_en')) {
+      reverted = await _waitStringState(inst, 'languageCode', 'en');
     }
     if (!reverted) await Future<void>.delayed(const Duration(milliseconds: 600));
   }
@@ -287,9 +469,10 @@ Future<bool> _settingsDownloadLimitEdit(Inst inst) async {
   // A distinct in-range value (1..10000 per _saveAutoDownloadSizeLimit) that
   // differs from `before` so the change is observable.
   final target = before == 42 ? 37 : 42;
-  // Focus the field, select-all + delete via real OS keys (the field is keyed
-  // but its inner editable is reached via focusType's tap-then-enterText; clear
-  // first so we don't append to the existing text).
+  // Focus the field via flutter_skill's tap{key} (which ESTABLISHES the text
+  // input connection — a raw coordinate tapAt/tapKeyCenter does NOT, and a
+  // subsequent enterText with no input connection SIGSEGVs the macOS engine's
+  // FlutterTextInputPlugin setEditingState). Clear first so we don't append.
   await inst.tapKey('settings_download_limit_field');
   await Future<void>.delayed(const Duration(milliseconds: 300));
   try {
@@ -302,7 +485,8 @@ Future<bool> _settingsDownloadLimitEdit(Inst inst) async {
     print('[pair] settings_download_limit: enterText failed: $typed');
     return false;
   }
-  await inst.tapKey('settings_download_limit_save_button');
+  // The Save button is a FilledButton (no text input) — tapKeyCenter is safe.
+  await inst.tapKeyCenter('settings_download_limit_save_button');
   final saved = await _waitFieldWhere(
     inst,
     'autoDownloadSizeLimit',
@@ -321,7 +505,7 @@ Future<bool> _settingsDownloadLimitEdit(Inst inst) async {
       // best-effort
     }
     await inst.skill('enterText', {'text': '$before'});
-    await inst.tapKey('settings_download_limit_save_button');
+    await inst.tapKeyCenter('settings_download_limit_save_button');
     restored = await _waitFieldWhere(
       inst,
       'autoDownloadSizeLimit',
@@ -340,12 +524,26 @@ Future<bool> _settingsDownloadLimitEdit(Inst inst) async {
 /// bootstrapNodeMode to reflect it. The radios are below the fold; bring the
 /// keyed tile onstage first.
 Future<bool> _setBootstrapMode(Inst inst, String key, String mode) async {
-  if (!await _settingsScrollTo(inst, key)) {
-    print('[pair] bootstrap mode: tile "$key" never reached');
-    return false;
+  // Retry the whole scroll+tap a few times: the radios sit low in the page and a
+  // single tap can land a frame late / on a neighbouring row after a scroll, so a
+  // mode flip can silently miss (the observed `backAuto=false` flake).
+  for (var attempt = 0; attempt < 3; attempt++) {
+    if (!await _settingsScrollTo(inst, key)) {
+      print('[pair] bootstrap mode: tile "$key" never reached (attempt $attempt)');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      continue;
+    }
+    // tapKeyCenter re-resolves the live on-screen bounds and taps the exact
+    // center; tapKeyAt (resolveKeyCenter) is the fallback for a tile whose bounds
+    // interactiveStructured doesn't surface.
+    if (!await inst.tapKeyCenter(key)) {
+      await inst.tapKeyAt(key);
+    }
+    if (await _waitStringState(inst, 'bootstrapNodeMode', mode, timeoutSecs: 6)) {
+      return true;
+    }
   }
-  await inst.tapKey(key);
-  return _waitStringState(inst, 'bootstrapNodeMode', mode);
+  return _waitStringState(inst, 'bootstrapNodeMode', mode, timeoutSecs: 4);
 }
 
 /// case 6 — settings_bootstrap_mode_cycle (S99/S85): cycle the bootstrap mode
@@ -418,10 +616,21 @@ Future<bool> _settingsBootstrapManualAddNode(Inst inst) async {
     print('[pair] bootstrap_manual_add: host field did not appear');
     return false;
   }
-  // Fill the form via the keyed fields (focusType: tap then enterText).
-  await inst.focusType('manual_node_host_field', 'tox.example.org');
-  await inst.focusType('manual_node_port_field', '33445');
-  await inst.focusType('manual_node_pubkey_field', 'A' * 64);
+  // The expanded form renders BELOW the (bottom-anchored) expand toggle, so the
+  // host field can be just under the fold. Nudge the list DOWN a little (a small
+  // delta, NOT a `_settingsScrollTo` reset — the big top-reset collapses the
+  // form) so the host field's real bounds are on-screen for the pointer focus.
+  await inst.scrollAt(_settingsScrollKey, dy: 300);
+  await Future<void>.delayed(const Duration(milliseconds: 250));
+  // Prove the form ACCEPTS INPUT by typing into the host field via REAL focus +
+  // REAL keystrokes (NOT synthetic enterText, which SIGSEGVs
+  // FlutterTextInputPlugin.setEditingState on macOS — see
+  // _fillFieldViaKeystrokes). Once the form is expanded ALL of its fields (host,
+  // port, pubkey) live in the SAME mounted Column (host+port share one Row), so
+  // typing one field + asserting every field key is present is the faithful
+  // "form mounts + accepts input" gate for S89; re-focusing each narrow field
+  // separately only added flakiness without strengthening the assertion.
+  await _fillFieldViaKeystrokes(inst, 'manual_node_host_field', 'tox.example.org');
   final portShown = await inst.waitKey('manual_node_port_field', timeoutSecs: 4);
   final pubkeyShown = await inst.waitKey(
     'manual_node_pubkey_field',
@@ -623,18 +832,28 @@ Future<bool> _settingsLogoutCancel(Inst inst) async {
   if (!await _settingsScrollTo(inst, 'settings_logout_button')) {
     print('[pair] logout_cancel: logout button below fold (ok)');
   }
-  await inst.tapKey('settings_logout_button');
+  // The logout button is now scrolled into view; tapKeyCenter (live bounds +
+  // exact-center tapAt) is robust, with a tapKey fallback (its direct callback
+  // fires even slightly off-screen).
+  if (!await inst.tapKeyCenter('settings_logout_button')) {
+    await inst.tapKey('settings_logout_button');
+  }
   if (!await inst.waitKey('settings_logout_confirm_button', timeoutSecs: 8)) {
     print('[pair] logout_cancel: confirm dialog did not open');
     return false;
   }
-  // The logout dialog's Cancel button has NO key (only the confirm button is
-  // keyed) — tap the "Cancel" label. It calls popDialogIfCurrent(context,false)
-  // which only pops the dialog (no page-pop), so the double-fire `tapText` is
-  // safe here.
-  if (!await _tryTapText(inst, 'Cancel')) {
-    print('[pair] logout_cancel: Cancel label not tappable');
-    return false;
+  // The logout dialog's Cancel button is now KEYED
+  // (settings_logout_cancel_button) — single-fire tapKeyCenter (a dialog pop
+  // button must not double-fire: the first pop closes the dialog, a second fired
+  // mid-dismiss would pop the page underneath; see flutter_skill_double_tap_blank).
+  // It calls popDialogIfCurrent(context,false) — pops only the dialog (no
+  // page-pop), and ModalRoute.isCurrent guards re-entrancy. Fall back to the
+  // "Cancel" label only if the keyed button can't be resolved.
+  if (!await inst.tapKeyCenter('settings_logout_cancel_button')) {
+    if (!await _tryTapText(inst, 'Cancel')) {
+      print('[pair] logout_cancel: Cancel button not tappable');
+      return false;
+    }
   }
   // Dialog gone (confirm button no longer in the tree) AND session intact.
   final dialogClosed = await inst.waitKeyGone(
