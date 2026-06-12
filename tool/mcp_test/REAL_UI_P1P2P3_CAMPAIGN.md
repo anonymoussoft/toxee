@@ -17,6 +17,9 @@ Implement, serially on master:
 - **P3**: the writable subset (perf burst variant, ar/RTL verify-first,
   platform run plan); platform RUNS (iOS/Android/Win11) are run-phase tasks.
 
+Write-phase status: **CLOSED 2026-06-11** (batches I-VIII committed on the
+root branch; deferred live execution is handed off in the Run phase section).
+
 ## HARD CONSTRAINTS (this campaign)
 
 1. **WRITE-PHASE FIRST.** Write all batches with hermetic verification only;
@@ -386,10 +389,17 @@ Platform run plan for the run-phase owner:
 
 ## Run phase (DEFERRED — owned by a later session)
 
-After sweeps 4–8 finish AND this campaign's write phase closes: rebuild via
-`MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh`, run `rui-p1-*`/`rui-p2-*`
-campaigns serially, root-cause fixes, then update S*.md headers + INDEX for
-validated gates only.
+The write phase is closed; the remaining live work is run-phase execution.
+
+1. Rebuild via `MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh`.
+2. Run the write-phase campaigns serially: `rui-p1-single`, `rui-p1-chat`,
+   `rui-p1-relaunch`, `rui-p2-keys`, `rui-p2-reply`, `rui-p2-verify`, and
+   `rui-p3-writable`.
+3. Root-cause any live failures and keep validated results honest (only update
+   `test/mcp/S*.md` headers + INDEX for scenarios that are actually live-run).
+4. Treat the older +94 sweeps 4–8 (`rui-contacts`, `rui-conv`, `rui-chat`,
+   `rui-group2`, `rui-calls-misc`) as a separate deferred stream; they remain
+   outside this campaign's write-phase closeout.
 
 ## Batch log (append-only)
 
@@ -533,3 +543,21 @@ validated gates only.
   self-test, INDEX check, `git diff --check`, root analyze 222/0-fatal, and
   `test/ui/settings test/ui/testing` 79/79. Codex review deliberately skipped
   per the user instruction for this turn.
+
+- 2026-06-11 **Write phase CLOSED**. This closeout pass confirmed that the repo
+  state already contains the committed Batch III–VIII work (`cee4fc5` through
+  `e2006aa`) on top of Batch I/II, then reran the campaign-wide finish gates on
+  the final write-phase HEAD: `flutter analyze lib tool --no-fatal-warnings
+  --no-fatal-infos` exited 0 with the known 222-issue baseline; planner
+  `--plan-json --class=2proc-ui`, `--validate-only`, `--list-real-ui-campaigns`
+  (76 campaigns including `rui-p1-chat`, `rui-p1-relaunch`, `rui-p2-keys`,
+  `rui-p2-reply`, `rui-p2-verify`, `rui-p3-writable`), shell recovery
+  self-test, and `gen_scenario_index.dart --check` all passed; consolidated
+  touched-surface tests
+  (`test/ffi_chat_service_c2c_custom_ingest_test.dart`,
+  `test/ui/add_group_dialog_test.dart`, `test/ui/call`, `test/ui/chat`,
+  `test/ui/conference`, `test/ui/contact`, `test/ui/conversation`,
+  `test/ui/home`, `test/ui/settings`, `test/ui/testing`) passed 250/250.
+  Campaign handoff is now purely run-phase. Codex per-batch/diff review remains
+  intentionally deferred per the explicit 2026-06-11 user instruction for this
+  handoff turn.
