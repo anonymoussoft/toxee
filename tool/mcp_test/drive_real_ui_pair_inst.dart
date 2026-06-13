@@ -3,6 +3,20 @@ part of 'drive_real_ui_pair.dart';
 
 const _skillNs = 'ext.flutter.flutter_skill';
 const _mcpNs = 'ext.mcp.toolkit';
+
+/// Run osascript with a hard timeout so a hung System Events call (an
+/// unresponsive window / stuck modal — System Events is effectively serial, so
+/// one wedged call can stall every later one) can't wedge the driver. On
+/// timeout returns a failed ProcessResult (exit 124); callers already treat a
+/// non-zero exit as a non-fatal osascript failure.
+Future<ProcessResult> _osaRun(List<String> args, {int timeoutSecs = 20}) async {
+  try {
+    return await Process.run('osascript', args)
+        .timeout(Duration(seconds: timeoutSecs));
+  } on TimeoutException {
+    return ProcessResult(0, 124, '', 'osascript timed out after ${timeoutSecs}s');
+  }
+}
 const _sidebarTabX = 50;
 const _sidebarChatsY = 220;
 const _sidebarContactsY = 288;
@@ -175,11 +189,23 @@ class Inst {
         e.key: e.value is String ? e.value as String : jsonEncode(e.value),
     };
     Future<Map<String, dynamic>> once() async {
-      final resp = await vm.callServiceExtension(
-        method,
-        isolateId: iso,
-        args: strArgs,
-      );
+      // Hard per-call timeout: a service-extension RPC that the app isolate
+      // never answers (a stuck UI thread, a wedged platform-channel call) would
+      // otherwise hang this await forever — and EVERY skill/l3/dump/tap goes
+      // through here, so the bounded retry loops in the case drivers can't
+      // protect against it. Throw a DriveError so best-effort callers (e.g.
+      // `_normalizeBetweenCases`) recover and the campaign keeps moving.
+      final resp = await vm
+          .callServiceExtension(
+            method,
+            isolateId: iso,
+            args: strArgs,
+          )
+          .timeout(
+            const Duration(seconds: 20),
+            onTimeout: () => throw DriveError(
+                '$name: $method timed out after 20s (app isolate unresponsive)'),
+          );
       return (resp.json ?? const <String, dynamic>{}).cast<String, dynamic>();
     }
 
@@ -204,7 +230,7 @@ class Inst {
 
   /// macOS-foreground this instance's window. Required before any UI phase.
   Future<void> foreground() async {
-    final r = await Process.run('osascript', [
+    final r = await _osaRun([
       '-e',
       'tell application "System Events" to set frontmost of '
           '(first process whose unix id is $pid) to true',
@@ -224,7 +250,7 @@ class Inst {
   /// the 720pt bottom-nav breakpoint, then restore).
   Future<bool> resizeWindow(num width, num height) async {
     await foreground();
-    final r = await Process.run('osascript', [
+    final r = await _osaRun([
       '-e',
       'tell application "System Events" to tell '
           '(first process whose unix id is $pid) to set size of window 1 '
@@ -243,7 +269,7 @@ class Inst {
   /// OS actually applied the new bounds (so a refused/clamped resize is detected
   /// rather than silently treated as applied).
   Future<({num w, num h})?> windowSize() async {
-    final r = await Process.run('osascript', [
+    final r = await _osaRun([
       '-e',
       'tell application "System Events" to tell '
           '(first process whose unix id is $pid) to get size of window 1',
@@ -658,7 +684,7 @@ class Inst {
   // enterText, and Enter-to-send rides the legacy FocusNode.onKey RawKeyEvent
   // path — both need genuine OS events. ---
   Future<void> _osa(String script) async {
-    final r = await Process.run('osascript', ['-e', script]);
+    final r = await _osaRun(['-e', script]);
     if (r.exitCode != 0) {
       final stderrText = '${r.stderr}'.trim();
       final suffix = stderrText.contains('not allowed to send keystrokes')
