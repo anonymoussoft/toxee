@@ -676,7 +676,9 @@ const _nativeBoundaryGuardCases = {
 
 const _nativeBoundaryFriendshipCases = {
   'attachment_entry_buttons_render',
-  'notification_tap_routes_to_c2c',
+  // notification_tap_routes_to_c2c is now an unconditional SKIP — it must NOT
+  // require friendship setup first (a friendship failure would false-FAIL a
+  // case that does no real driving anyway; codex-review catch).
 };
 
 bool _isNativeBoundaryGuardCaseScenario(String scenario) =>
