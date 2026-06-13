@@ -184,6 +184,7 @@ part 'drive_real_ui_pair_p2_keys.dart';
 part 'drive_real_ui_pair_p2_reply.dart';
 part 'drive_real_ui_pair_p2_verify.dart';
 part 'drive_real_ui_pair_p3.dart';
+part 'drive_real_ui_pair_app_entry_extra.dart';
 
 Future<void> main(List<String> args) async {
   exitCode = await HttpOverrides.runWithHttpOverrides(
@@ -833,6 +834,14 @@ Future<int> _main(List<String> args) async {
     }
     if (_isP1ExtraCaseScenario(scenario)) {
       return await runP1ExtraCase(a, nickA, scenario);
+    }
+    // App-entry extra — single-instance (drive only A). §7.5.1 high-frequency,
+    // low-cost real-control cases.
+    if (scenario == 'sweep_app_entry_extra') {
+      return await runAppEntryExtraSweep(a, nickA);
+    }
+    if (_isAppEntryExtraCaseScenario(scenario)) {
+      return await runAppEntryExtraCase(a, nickA, scenario);
     }
     // Focused account-management + conference expansion sweep. Single-instance
     // by design; B stays idle.

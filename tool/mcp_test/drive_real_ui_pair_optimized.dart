@@ -54,6 +54,10 @@ Future<int> runSingleAppOptimizedSweep(Inst a, String nickA) {
     _OptimizedStep('sweep_p1_single', () => runP1SingleSweep(a, nickA)),
     _OptimizedStep('sweep_p1_extra', () => runP1ExtraSweep(a, nickA)),
     _OptimizedStep(
+      'sweep_app_entry_extra',
+      () => runAppEntryExtraSweep(a, nickA),
+    ),
+    _OptimizedStep(
       'sweep_account_conf_extra',
       () => runAccountConfExtraSweep(a, nickA),
     ),

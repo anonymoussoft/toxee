@@ -342,7 +342,17 @@ class _RegisterPageState extends State<RegisterPage> {
                       suffixIcon: IconButton(
                         // Stable test key for the password visibility toggle.
                         key: const Key('register_password_visibility_toggle'),
-                        icon: Icon(_passwordObscure ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          // State-suffixed key so a real-UI driver can OBSERVE the
+                          // obscure flip (the IconButton key above stays stable for
+                          // tapping). Same "encode state in the key" pattern as the
+                          // conversation online-dot. Shared Dart → covers mobile too.
+                          key: Key(
+                            'register_password_visibility_icon_'
+                            '${_passwordObscure ? 'obscured' : 'visible'}',
+                          ),
+                          _passwordObscure ? Icons.visibility_off : Icons.visibility,
+                        ),
                         onPressed: () => setState(() => _passwordObscure = !_passwordObscure),
                         tooltip: AppLocalizations.of(context)!.passwordVisibility,
                       ),

@@ -281,6 +281,16 @@ const _validRealUiScenarios = {
   'sweep_p1_extra',
   'ar_rtl_page_walk',
   'keyboard_global_search_shortcut',
+  // App-entry extra — §7.5.1 high-frequency single-instance real-control cases
+  // (drive only A): new-entry popup, add-friend paste, two desktop shortcuts,
+  // register password-visibility toggle, login Import entry render-gate.
+  'sweep_app_entry_extra',
+  'new_entry_menu_surface',
+  'add_friend_paste_clipboard',
+  'keyboard_new_conversation_shortcut',
+  'keyboard_open_settings_shortcut',
+  'register_password_visibility_toggle',
+  'login_import_account_card_open',
   // Account/conference focused expansion — single-instance, real controls,
   // non-destructive assertions with cleanup-gated state.
   'sweep_account_conf_extra',
@@ -391,6 +401,8 @@ const _realUiCampaigns = <String, List<String>>{
   // P1 extra — single-instance Arabic real-app locale walk + keyboard global
   // search shortcut flow.
   'rui-p1-extra': ['sweep_p1_extra'],
+  // §7.5.1 app-entry extra — high-frequency single-instance real-control cases.
+  'rui-app-entry-extra': ['sweep_app_entry_extra'],
   // Focused account-management + conference expansion.
   'rui-account-conf-extra': ['sweep_account_conf_extra'],
   // Focused group/conference member role/remove expansion.
@@ -1503,6 +1515,14 @@ String _requiredRealUiState(String scenario) {
     case 'sweep_p1_extra':
     case 'ar_rtl_page_walk':
     case 'keyboard_global_search_shortcut':
+    // App-entry extra — single-instance (drive only A), no friendship involved.
+    case 'sweep_app_entry_extra':
+    case 'new_entry_menu_surface':
+    case 'add_friend_paste_clipboard':
+    case 'keyboard_new_conversation_shortcut':
+    case 'keyboard_open_settings_shortcut':
+    case 'register_password_visibility_toggle':
+    case 'login_import_account_card_open':
     // Account/conference focused expansion — runs on A only, creates any
     // temporary account/conference internally, and cleans them before exit.
     case 'sweep_account_conf_extra':
@@ -1775,6 +1795,15 @@ String _resultRealUiState(String scenario) {
     case 'sweep_p1_extra':
     case 'ar_rtl_page_walk':
     case 'keyboard_global_search_shortcut':
+    // App-entry extra — the driver end-clean dismisses dialogs/popups and (for
+    // the LoginPage cases) relogins; no friendship/account mutation.
+    case 'sweep_app_entry_extra':
+    case 'new_entry_menu_surface':
+    case 'add_friend_paste_clipboard':
+    case 'keyboard_new_conversation_shortcut':
+    case 'keyboard_open_settings_shortcut':
+    case 'register_password_visibility_toggle':
+    case 'login_import_account_card_open':
     // Account/conference focused expansion — all cases clean their temporary
     // account/conference artifacts and never form a friendship.
     case 'sweep_account_conf_extra':
