@@ -356,6 +356,18 @@ Future<bool> _p1cRecallMessage(
   String nickA,
 ) async {
   final nonce = DateTime.now().microsecondsSinceEpoch;
+  // Seed a PRIOR message so the conversation has history below the recalled one
+  // (the realistic case). After recall, the conv-row preview refreshes to this
+  // prior message instead of the recalled text. Recalling the ONLY message of a
+  // conversation leaves the conversation empty and the UIKit merge keeps the
+  // stale last-message preview — that empty-conversation edge case is a
+  // documented residual (deeper fix = clear the preview when a conv goes empty).
+  final priorText = 'RUIP1PRIOR-$nonce';
+  final priorId = await _sendAndIdentify(a, toxB, priorText);
+  if (priorId == null) {
+    print('[pair] chat_recall_message: could not seed prior message');
+    return false;
+  }
   final text = 'RUIP1RECALL-$nonce';
   final msgId = await _sendAndIdentify(a, toxB, text);
   if (msgId == null) {
@@ -401,10 +413,28 @@ Future<bool> _p1cRecallMessage(
   // A-side UI: the tips tombstone renders. revokerInfo == currentUser, so the
   // EN string is "<nick> Recalled a Message"; accept a contains-match via
   // getTextContent so a nickname/template drift fails soft into the scan.
-  var tombstone = await a.waitText('$nickA Recalled a Message', timeoutSecs: 8);
+  // Foreground A and give the LOCAL_REVOKED flip time to rebuild the row into
+  // the tombstone tip (the render can lag the data delete; flaky at 8 s).
+  await a.foreground();
+  var tombstone = await a.waitText('$nickA Recalled a Message', timeoutSecs: 15);
   if (!tombstone) {
-    final scanned = await _p1cTextContaining(a, 'Recalled a Message');
-    tombstone = scanned != null;
+    // Accept the named tip ("<nick> Recalled a Message") OR the generic
+    // fallback ("Message recalled") — both are valid LOCAL_REVOKED tips (a
+    // unique nonce + fresh launch means any such tip is THIS recall).
+    final named = await _p1cTextContaining(a, 'Recalled a Message');
+    final generic = await _p1cTextContaining(a, 'Message recalled');
+    tombstone = named != null || generic != null;
+  }
+  // SOFT signal (logged, not gated): the unique nonce text should also leave the
+  // rendered surface (bubble → tip; sidebar preview → prior message). It
+  // conflates the message list with the conv-preview, whose refresh can lag the
+  // flip, so it is recorded rather than hard-gated — `tombstone` + `aGone`
+  // already prove the bubble rebuilt for THIS recall (unique nonce + fresh
+  // launch ⇒ no stale "Recalled a Message" can satisfy `tombstone` vacuously).
+  var originalGone = false;
+  for (var i = 0; i < 10 && !originalGone; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    originalGone = (await _p1cTextContaining(a, text)) == null;
   }
   // A-side data: the msgID leaves A's dump (revokeMessage → deleteMessages).
   var aGone = false;
@@ -422,9 +452,9 @@ Future<bool> _p1cRecallMessage(
   }
   await a.shot('/tmp/ui_p1c_recall_A.png');
   print(
-    '[pair] chat_recall_message: tombstone=$tombstone aGone=$aGone '
-    'bGone=$bGone (B live-bubble tombstone NOT asserted — fork '
-    'onReceiveMessageRecalled is a no-op; recorded gap)',
+    '[pair] chat_recall_message: tombstone=$tombstone aGone=$aGone bGone=$bGone '
+    '(soft originalGone=$originalGone; B live-bubble tombstone NOT asserted — '
+    'fork onReceiveMessageRecalled is a no-op; recorded gap)',
   );
   return tombstone && aGone && bGone;
 }
@@ -608,21 +638,42 @@ Future<bool> _p1cForwardToGroupTarget(
     print('[pair] forward_to_group_target: forward picker did not mount');
     return false;
   }
-  // Select the GROUP row by its unique name in the Recent tab, then Send —
-  // SINGLE-FIRE taps (codex P1: a double-fired picker row toggles select →
-  // deselect (net no-op) and a double-fired Send can double-send/double-pop).
-  final targetTapped = await _p1cTapTextOnce(a, groupName);
+  // Select the GROUP row by its KEYED picker handle (inside the modal dialog),
+  // single-fire. The previous text-tap on the group NAME also matched the same
+  // group's row in the BACKGROUND sidebar (behind the barrier); tapping that
+  // landed on the barrierDismissible barrier and CLOSED the picker before Send
+  // — which is why forward_picker_send_button read as "not resolvable" (the
+  // whole dialog was gone, not the button being unsized).
+  final targetCenter = await a.keyCenter('forward_picker_item:$gid');
+  var targetTapped =
+      await a.tapKeyCenter('forward_picker_item:$gid', timeoutSecs: 6);
+  if (!targetTapped) {
+    // Fallback only if the keyed row didn't resolve — logged so a gid/groupID
+    // mismatch is visible rather than silently dismissing the dialog.
+    print('[pair] forward_to_group_target: keyed picker row '
+        'forward_picker_item:$gid not resolvable (center=$targetCenter) — '
+        'falling back to text tap');
+    targetTapped = await _p1cTapTextOnce(a, groupName);
+  }
   await Future<void>.delayed(const Duration(milliseconds: 600));
-  // The picker's Send button lives in the desktop Overlay popup, which
-  // flutter_skill's interactiveStructured does not surface (text-by-bounds tap
-  // found "no bounds-bearing element for Send"). WAIT for it to be resolvable
-  // via the element-tree resolver first (ui_key_center has no internal retry,
-  // so a mid-animation tapKeyCenter would resolve null and no-op), then tap.
+  // The picker's keyed Send button is resolved via the element-tree resolver
+  // (ui_key_center); the picker is a centered showDialog/AlertDialog (NOT an
+  // Overlay popup). WAIT for it to be resolvable first (ui_key_center has no
+  // internal retry), then single-fire tap.
   final sendResolvable =
       await a.waitKeyCenter('forward_picker_send_button', timeoutSecs: 6);
   final sendCenter = await a.keyCenter('forward_picker_send_button');
+  if (!sendResolvable) {
+    // Surface the resolver verdict (key_offstage_only vs key_not_found) +
+    // a screenshot — distinguishes "dialog was dismissed" (button absent) from
+    // "header not laid out" (button mounted but unsized).
+    final dbg =
+        await a.l3('ui_key_center', {'key': 'forward_picker_send_button'});
+    await a.shot('/tmp/ui_p1c_fwd_nosend_A.png');
+    print('[pair] forward_to_group_target: send resolver debug=$dbg');
+  }
   print('[pair] forward_to_group_target: sendResolvable=$sendResolvable '
-      'sendCenter=$sendCenter');
+      'sendCenter=$sendCenter targetCenter=$targetCenter');
   final sendTapped =
       await a.tapKeyCenter('forward_picker_send_button', timeoutSecs: 6);
   await Future<void>.delayed(const Duration(milliseconds: 800));

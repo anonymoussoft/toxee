@@ -1019,3 +1019,53 @@ move on. The harness + build + the 3 P1 fixes are validated working live.
   message-menu duplicate-key (desktop+mobile fork), desktop menu detection via
   waitKeyCenter (overlay-aware), search Escape-to-close + keyed X, group-unread
   double-count (FfiChatService.groupUnreadHandledExternally).
+
+- 2026-06-13 (session 3) **rui-p1-chat 8/8 — the 2 DEEP-REMAINING CASES FIXED +
+  LIVE-VALIDATED.** Drove `rui-p1-chat` from 6/8 to **8 PASS / 0 FAIL** by
+  root-causing recall + forward across the native/fork/tim2tox/harness layers (6
+  live runs, multiple codex rounds; all P1/P2 applied).
+  - **forward_to_group_target — FIXED.** Root cause (codex-confirmed): the
+    forward picker is a centered `showDialog`/`AlertDialog`
+    (`showPopupWindow` no-offset → `isUseMaterialAlert`), NOT an overlay popup.
+    The harness selected the target group by TEXT (`_p1cTapTextOnce`), which also
+    matched the SAME group's row in the BACKGROUND sidebar behind the
+    `barrierDismissible` barrier → the tap landed on the barrier → DISMISSED the
+    dialog before Send (so `forward_picker_send_button` read "not resolvable" —
+    the dialog was gone). FIX: fork keyed picker row
+    `forward_picker_item:<groupID|userID>` on `_chatItem`; harness taps the keyed
+    row INSIDE the dialog + surfaces the `ui_key_center` resolver verdict on Send
+    failure. LIVE: `sendResolvable=true targetTapped=true sendTapped=true
+    inGroup=true`.
+  - **chat_recall_message — FIXED (4 layers).** The original ask: A-side UIKit
+    list doesn't update + `__revoke__:` leaks into the conv preview.
+    (1) RENDERED TOMBSTONE: `recallMessage` (fork separate_data) flipped the
+    in-memory copy to LOCAL_REVOKED but `updateMessageList(disableNotify:true)`
+    never notified (tim2tox fires the LEGACY onRecvMessageRevoked into the fork's
+    no-op handler; the real onRecvMessageRevokedWithInfo is never called +
+    would fail post-hard-delete). FIX: `disableNotify:false` + ALSO set
+    `messageData.messageNeedUpdate = target` (the rendered item re-reads a single
+    message's status off THAT identity signal; the list notify alone did not
+    re-evaluate the existing item). Capture the target+list BEFORE revoke (a
+    mid-revoke preview refresh races a reload that would drop the row). PLUS the
+    `item_container` LOCAL_REVOKED tip guard was relaxed to accept revoker
+    nickName OR userID (toxee currentUser has a display nick but an empty
+    placeholder userID → the named tip was dropped). identity = same object for
+    the published list + messageNeedUpdate (a re-fetched copy silently fails to
+    re-render — codex P2; documented self-healing concurrent-message caveat).
+    (2) PREVIEW LEAK: `revokeMessage` sent `__revoke__:` via `sendText` which
+    persists it + sets `_lastByPeer` → the JSON stranded as the sidebar preview.
+    FIX: new `FfiChatService.sendControlSignal` (raw wire send, NO
+    history/_lastByPeer/_messages, always-send — no stale-online-flag drop) +
+    `_refreshConversationPreviewC2C` (FULL-conversation re-notify; a sparse
+    notify is merge-dropped by the UIKit, keeping the stale lastMessage).
+    (3) RECEIVER DELETE (bGone): the sender-send-time vs receiver-receive-time
+    timestamp-window match drifts on a marginal DHT. FIX: CONTENT key (text
+    prefix byte-budgeted under 1372 + full length) in the payload; receiver
+    matches by content (latency-independent), NO timestamp fallback when the
+    content key is present, ambiguous→no-delete (codex P1).
+  Build/run: `MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh
+  --skip-bootstrap` (preserves uncommitted fork/tim2tox edits) → run with file
+  redirect + a generous `timeout` (the same-host DHT handshake flakes 1-3
+  attempts; the runner's `_maxRealUiAttempts=2` retries on ANY failure — read the
+  first complete attempt's RESULTS, don't wait for the wasteful retry). Gates:
+  analyze 217/0-new, validate-only 0, INDEX 178 playbooks.
