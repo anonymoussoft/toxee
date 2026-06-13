@@ -204,6 +204,13 @@ class SessionRuntimeCoordinator {
         FakeUIKit.instance.im?.refreshConversations();
         FakeUIKit.instance.im?.refreshUnreadTotal();
       };
+      // The platform listener above now OWNS group-unread accrual: every group
+      // message (native OR Dart poll / l3-inject) re-enters
+      // `ffiService.messages.listen` and bumps via incrementGroupUnread. Tell
+      // FfiChatService so its `ingestInboundGroupText` does NOT also bump
+      // directly — otherwise Dart-path group messages count twice (observed
+      // live: a single group inject inflated the sidebar unread to 2).
+      service.groupUnreadHandledExternally = true;
       // After a conversation is marked read via the "mark as read" menu item
       // (cleanConversationUnreadMessageCount → markConversationRead), refresh
       // the conversation list + unread badge so the cleared count surfaces in

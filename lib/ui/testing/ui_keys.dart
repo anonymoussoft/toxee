@@ -255,6 +255,11 @@ class UiKeys {
 
   // Search surfaces (lib/ui/search/*.dart).
   static const Key messageSearchField = Key('message_search_field');
+  // Close (X) button in the global search overlay's app bar. Keyed so UI
+  // automation can deterministically dismiss the pushed search route (it is a
+  // route, so a home-shell tab switch does not pop it, and the field-focused
+  // Escape needs an explicit binding — both addressed alongside this key).
+  static const Key messageSearchCloseButton = Key('message_search_close_button');
   static Key searchResultMessage(String conversationId) =>
       Key('search_result_message_$conversationId');
   // Conversation/group result ROWS in the global search (custom_search.dart) —

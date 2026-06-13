@@ -198,7 +198,12 @@ Future<bool> _p1cTypeIntoComposerNoSend(Inst inst, String text) async {
   await Future<void>.delayed(const Duration(milliseconds: 450));
   await inst.osaClear();
   await Future<void>.delayed(const Duration(milliseconds: 250));
-  await inst.osaType(text);
+  // ATOMIC paste (not osaType keystrokes, which drop/mangle chars — see
+  // sendComposerMessage). Entering the text still fires the composer's
+  // onChanged, so the "does typing leak a typing signal" probe stays valid,
+  // and the later exact-match proof (Return-send → B's own message == text)
+  // no longer fails on a mangled keystroke string.
+  await inst.osaPaste(text);
   await Future<void>.delayed(const Duration(milliseconds: 600));
   return true;
 }
@@ -370,7 +375,7 @@ Future<bool> _p1cRecallMessage(
     print('[pair] chat_recall_message: real message menu did not open');
     return false;
   }
-  if (!await a.waitKey('message_menu_item:recall', timeoutSecs: 4)) {
+  if (!await a.waitKeyCenter('message_menu_item:recall', timeoutSecs: 4)) {
     await _dismissMessageMenu(a);
     print(
       '[pair] chat_recall_message: recall item not present on fresh self '
@@ -384,7 +389,7 @@ Future<bool> _p1cRecallMessage(
     return false;
   }
   // The keyed desktop confirm dialog (same key as the delete confirm).
-  if (!await a.waitKey('confirm_dialog_primary_button', timeoutSecs: 8)) {
+  if (!await a.waitKeyCenter('confirm_dialog_primary_button', timeoutSecs: 8)) {
     await a.shot('/tmp/ui_p1c_recall_noconfirm_A.png');
     print('[pair] chat_recall_message: recall confirm dialog did not open');
     return false;
@@ -587,7 +592,7 @@ Future<bool> _p1cForwardToGroupTarget(
     print('[pair] forward_to_group_target: real message menu did not open');
     return false;
   }
-  if (!await a.waitKey('message_menu_item:forward', timeoutSecs: 4)) {
+  if (!await a.waitKeyCenter('message_menu_item:forward', timeoutSecs: 4)) {
     await _dismissMessageMenu(a);
     print('[pair] forward_to_group_target: forward item not present');
     return false;
@@ -608,7 +613,18 @@ Future<bool> _p1cForwardToGroupTarget(
   // deselect (net no-op) and a double-fired Send can double-send/double-pop).
   final targetTapped = await _p1cTapTextOnce(a, groupName);
   await Future<void>.delayed(const Duration(milliseconds: 600));
-  final sendTapped = await _p1cTapTextOnce(a, 'Send');
+  // The picker's Send button lives in the desktop Overlay popup, which
+  // flutter_skill's interactiveStructured does not surface (text-by-bounds tap
+  // found "no bounds-bearing element for Send"). WAIT for it to be resolvable
+  // via the element-tree resolver first (ui_key_center has no internal retry,
+  // so a mid-animation tapKeyCenter would resolve null and no-op), then tap.
+  final sendResolvable =
+      await a.waitKeyCenter('forward_picker_send_button', timeoutSecs: 6);
+  final sendCenter = await a.keyCenter('forward_picker_send_button');
+  print('[pair] forward_to_group_target: sendResolvable=$sendResolvable '
+      'sendCenter=$sendCenter');
+  final sendTapped =
+      await a.tapKeyCenter('forward_picker_send_button', timeoutSecs: 6);
   await Future<void>.delayed(const Duration(milliseconds: 800));
   final pickerGone = await a.waitTextGone(
     'Forward Individually',
@@ -848,6 +864,22 @@ Future<bool> _p1cTypingIndicatorRender(
 // ===========================================================================
 // case p1c-6 — unread_badge_total_sidebar (P1#13)
 // ===========================================================================
+/// Per-conversation unread map (conversationID -> unreadCount) from
+/// l3_dump_state. Used to drain to a VERIFIED per-conversation 0 baseline and
+/// to surface a per-conversation breakdown when the aggregate total is wrong
+/// (distinguishes a real double-count from a drain race).
+Future<Map<String, int>> _p1cConvUnreads(Inst inst) async {
+  final s = await inst.dumpState();
+  final out = <String, int>{};
+  for (final c in (s['conversations'] as List? ?? const [])) {
+    if (c is! Map) continue;
+    final id = c['conversationID']?.toString() ?? '';
+    if (id.isEmpty) continue;
+    out[id] = (c['unreadCount'] as num?)?.toInt() ?? 0;
+  }
+  return out;
+}
+
 /// Drain A's unread to a true 0 baseline (open both conversations, park on the
 /// chats home, clear the active conversation), then B REAL-composer-sends N=2
 /// into the C2C and M=1 group inbound is SEEDED via l3_inject_group_text (the
@@ -870,24 +902,50 @@ Future<bool> _p1cUnreadBadgeTotalSidebar(
     );
     return false;
   }
-  // Drain to a true 0 baseline.
-  await openChat(a, toxB);
-  await openGroupChat(a, groupId: gid, groupName: groupName);
-  await returnToChatsHome(a, rounds: 4);
-  try {
-    await a.clearActiveConversation();
-  } on DriveError catch (e) {
-    if (!_isNonTestAccountError(e)) rethrow;
+  // Drain to a true 0 baseline. Loop opening BOTH conversations until EVERY
+  // per-conversation unreadCount is 0 AND the aggregate total is 0 — a single
+  // open pass can leave a conversation dirty (a late inbound during the pass,
+  // or an open that didn't mark-read), and the old total-only check could pass
+  // on a transient 0 while a conversation still carried unread, inflating the
+  // post-seed total by that residue. Logs the per-conversation map so a real
+  // double-count (vs a drain race) is visible in the run output.
+  var drained = false;
+  var baseline = -1;
+  Map<String, int> baselinePerConv = const {};
+  for (var pass = 0; pass < 4 && !drained; pass++) {
+    await openChat(a, toxB);
+    await openGroupChat(a, groupId: gid, groupName: groupName);
+    await returnToChatsHome(a, rounds: 4);
+    try {
+      await a.clearActiveConversation();
+    } on DriveError catch (e) {
+      if (!_isNonTestAccountError(e)) rethrow;
+    }
+    final (totalZero, total) = await _p1cWaitTotalUnread(
+      a,
+      (u) => u == 0,
+      timeoutSecs: 15,
+    );
+    baseline = total;
+    baselinePerConv = await _p1cConvUnreads(a);
+    // Require the two conversations under test to be PRESENT (a missing/empty
+    // map must not pass `every` vacuously) AND every conversation's unread 0.
+    final c2cId = _c2cConvId(toxB);
+    final groupConvId = 'group_$gid';
+    final tracked = baselinePerConv.containsKey(c2cId) &&
+        baselinePerConv.containsKey(groupConvId);
+    final allConvZero = baselinePerConv.values.every((u) => u == 0);
+    print(
+      '[pair] unread_badge_total_sidebar: baseline pass $pass '
+      'total=$total tracked=$tracked perConv=$baselinePerConv',
+    );
+    drained = totalZero && tracked && allConvZero;
   }
-  final (drained, baseline) = await _p1cWaitTotalUnread(
-    a,
-    (u) => u == 0,
-    timeoutSecs: 20,
-  );
   if (!drained) {
     print(
-      '[pair] unread_badge_total_sidebar: baseline did not drain to 0 '
-      '(stuck at $baseline) — refusing a fuzzy-baseline assert',
+      '[pair] unread_badge_total_sidebar: baseline did not drain to a clean 0 '
+      '(total=$baseline perConv=$baselinePerConv) — refusing a fuzzy-baseline '
+      'assert',
     );
     return false;
   }
@@ -935,9 +993,11 @@ Future<bool> _p1cUnreadBadgeTotalSidebar(
   final renderedCount = await _p1cTextContaining(a, '3'); // breadcrumb only
   await a.shot('/tmp/ui_p1c_badge_up_A.png');
   if (!bumped || !badgeShown) {
+    final upPerConv = await _p1cConvUnreads(a);
     print(
       '[pair] unread_badge_total_sidebar: badge/up-phase failed '
-      '(totalUnreadCount=$total want 3, badgeShown=$badgeShown)',
+      '(totalUnreadCount=$total want 3, badgeShown=$badgeShown '
+      'perConv=$upPerConv)',
     );
     return false;
   }
@@ -983,15 +1043,30 @@ Future<bool> _p1cUnreadBadgeTotalSidebar(
 /// sequence (ESC → normalizer fallback) is the HARD close signal.
 Future<bool> _p1cSearchEmptyState(Inst a) async {
   await returnToChatsHome(a, rounds: 4);
-  await a.foreground();
-  try {
-    await a.osaSearchShortcut();
-  } on DriveError catch (e) {
-    print('[pair] search_empty_state: search shortcut blocked: ${e.message}');
-    return false;
+  // The global-search Cmd+Ctrl+F is dispatched by the home `Shortcuts` widget,
+  // which only receives the chord when a descendant of THAT subtree holds focus.
+  // After the prior case's clear-active there may be NO focused node, so the
+  // chord goes to the root scope ABOVE the home Shortcuts and is dropped
+  // (observed: overlay did not open even with retries). Plant focus inside the
+  // home subtree (tap the sidebar conversation-filter field) before each chord.
+  var opened = false;
+  for (var attempt = 0; attempt < 3 && !opened; attempt++) {
+    await a.foreground();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await a.tapAt(240, 75); // sidebar conversation search filter → home focus
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    try {
+      await a.osaSearchShortcut();
+    } on DriveError catch (e) {
+      print('[pair] search_empty_state: search shortcut blocked: ${e.message}');
+      return false;
+    }
+    opened = await a.waitKey('message_search_field', timeoutSecs: 6);
   }
-  if (!await a.waitKey('message_search_field', timeoutSecs: 10)) {
-    print('[pair] search_empty_state: search overlay did not open');
+  if (!opened) {
+    await a.shot('/tmp/ui_p1c_search_noopen_A.png');
+    print('[pair] search_empty_state: search overlay did not open '
+        '(shot=/tmp/ui_p1c_search_noopen_A.png)');
     return false;
   }
   final nonce = 'zqnohit${DateTime.now().microsecondsSinceEpoch}';
@@ -1010,7 +1085,11 @@ Future<bool> _p1cSearchEmptyState(Inst a) async {
     await returnToChatsHome(a, rounds: 4);
     return false;
   }
-  // Close: ESC first (efficacy logged), then the shared normalizer.
+  // Close the pushed search route. forceHomeRoot only switches the home tab —
+  // it CANNOT pop a route — so the real dismissals are ESC (now bound on the
+  // overlay) and the keyed close (X) button. Try ESC first, then the X button
+  // (SINGLE-FIRE tapKeyCenter — the button pops the route, and a flutter_skill
+  // double-fire would pop the page underneath), then the home normalizer.
   var escClosed = false;
   try {
     await a.osaEscape();
@@ -1018,14 +1097,19 @@ Future<bool> _p1cSearchEmptyState(Inst a) async {
   } on DriveError {
     // best-effort
   }
+  var xClosed = false;
   if (!escClosed) {
-    await returnToChatsHome(a, rounds: 4);
+    await a.tapKeyCenter('message_search_close_button', timeoutSecs: 4);
+    xClosed = await a.waitKeyGone('message_search_field', timeoutSecs: 4);
   }
-  final closed = await a.waitKeyGone('message_search_field', timeoutSecs: 6);
+  var closed = escClosed || xClosed;
+  if (!closed) {
+    await returnToChatsHome(a, rounds: 4);
+    closed = await a.waitKeyGone('message_search_field', timeoutSecs: 4);
+  }
   print(
     '[pair] search_empty_state: emptyShown=$emptyShown '
-    'escClosed=$escClosed closed=$closed (ESC efficacy is run-phase data '
-    'for the route\'s missing Escape binding)',
+    'escClosed=$escClosed xClosed=$xClosed closed=$closed',
   );
   return emptyShown && closed;
 }

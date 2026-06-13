@@ -141,7 +141,7 @@ Future<bool> _p2rReplyQuoteReal(
     print('[pair] reply_quote_real: custom bubble menu did not open');
     return false;
   }
-  final replyItem = await a.waitKey('message_menu_item:reply', timeoutSecs: 4);
+  final replyItem = await a.waitKeyCenter('message_menu_item:reply', timeoutSecs: 4);
   if (!replyItem) {
     await _dismissMessageMenu(a);
     print('[pair] reply_quote_real: Reply item absent on custom bubble');

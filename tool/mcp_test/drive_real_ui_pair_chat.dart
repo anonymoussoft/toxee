@@ -170,18 +170,48 @@ Future<bool> _openMessageMenuReal(Inst inst, String msgId) async {
     print('[pair] _openMessageMenuReal: row $rowKey not present');
     return false;
   }
-  for (var attempt = 0; attempt < 3; attempt++) {
+  // A SELF message bubble is right-aligned, so the row's geometric CENTER can
+  // land on empty space left of the bubble — a secondary-tap there misses the
+  // bubble's `Listener.onPointerDown` and no menu opens. Right-click the bubble
+  // itself: prefer a keyed bubble anchor, else bias the tap toward the right
+  // (self) / left (peer) third of the row.
+  final rowCenter = await inst.keyCenter(rowKey);
+  for (var attempt = 0; attempt < 4; attempt++) {
+    var tapped = false;
+    // Attempts 0/2: the row key center (works for peer/full-width rows).
+    // Attempts 1/3: bias toward the bubble side using the row's resolved Y and
+    // an x near the right edge (self messages dominate these cases).
     try {
-      await inst.secondaryTapKey(rowKey);
+      if (attempt.isOdd && rowCenter != null) {
+        await inst.secondaryTapAt(950, rowCenter.y);
+      } else {
+        await inst.secondaryTapKey(rowKey);
+      }
+      tapped = true;
     } on DriveError catch (e) {
       print('[pair] _openMessageMenuReal: secondaryTap warn: ${e.message}');
     }
+    if (!tapped) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      continue;
+    }
     await Future<void>.delayed(const Duration(milliseconds: 700));
-    if (await inst.waitKey('message_menu_item:copy', timeoutSecs: 3) ||
-        await inst.waitKey('message_menu_item:delete', timeoutSecs: 2)) {
+    // The desktop context menu renders in an `Overlay.insert` entry that
+    // flutter_skill's waitForElement/interactiveStructured does NOT traverse
+    // (it only ever matched the now-keyless OFFSTAGE measurement copy). Detect
+    // it via the ELEMENT-TREE resolver (`waitKeyCenter` → resolveKeyCenter),
+    // which walks the full tree including overlays. Taps still go through
+    // tapKeyCenter, which falls back to the same resolver.
+    if (await inst.waitKeyCenter('message_menu_item:copy', timeoutSecs: 3) ||
+        await inst.waitKeyCenter('message_menu_item:delete', timeoutSecs: 2)) {
       return true;
     }
   }
+  await inst.shot('/tmp/ui_open_msg_menu_fail_${inst.name}.png');
+  print(
+    '[pair] _openMessageMenuReal: menu did not open for $rowKey '
+    '(rowCenter=$rowCenter) shot=/tmp/ui_open_msg_menu_fail_${inst.name}.png',
+  );
   return false;
 }
 
@@ -440,9 +470,9 @@ Future<bool> _chatMsgMenuSurface(Inst a, String toxB) async {
     print('[pair] chat_msg_menu_surface: real message menu did not open');
     return false;
   }
-  final hasCopy = await a.waitKey('message_menu_item:copy', timeoutSecs: 4);
-  final hasForward = await a.waitKey('message_menu_item:forward', timeoutSecs: 4);
-  final hasDelete = await a.waitKey('message_menu_item:delete', timeoutSecs: 4);
+  final hasCopy = await a.waitKeyCenter('message_menu_item:copy', timeoutSecs: 4);
+  final hasForward = await a.waitKeyCenter('message_menu_item:forward', timeoutSecs: 4);
+  final hasDelete = await a.waitKeyCenter('message_menu_item:delete', timeoutSecs: 4);
   await a.shot('/tmp/ui_chat_menu_surface_A.png');
   await _dismissMessageMenu(a);
   print('[pair] chat_msg_menu_surface: copy=$hasCopy forward=$hasForward '
@@ -469,7 +499,7 @@ Future<bool> _chatCopyMessageClipboard(Inst a, String toxB) async {
     print('[pair] chat_copy_message_clipboard: real message menu did not open');
     return false;
   }
-  if (!await a.waitKey('message_menu_item:copy', timeoutSecs: 4)) {
+  if (!await a.waitKeyCenter('message_menu_item:copy', timeoutSecs: 4)) {
     await _dismissMessageMenu(a);
     print('[pair] chat_copy_message_clipboard: copy item not present');
     return false;
@@ -538,7 +568,7 @@ Future<bool?> _chatReplyQuoteRoundtrip(Inst a, String toxB) async {
       var replyAbsentOnText = true;
       if (msgId != null && await _openMessageMenuReal(a, msgId)) {
         replyAbsentOnText =
-            !await a.waitKey('message_menu_item:reply', timeoutSecs: 2);
+            !await a.waitKeyCenter('message_menu_item:reply', timeoutSecs: 2);
         await _dismissMessageMenu(a);
       }
       print('[pair] chat_reply_quote_roundtrip: SKIP — reply only on quotable '
@@ -575,7 +605,7 @@ Future<bool> _chatForwardToOtherConv(Inst a, String toxB, String nickB) async {
     print('[pair] chat_forward_to_other_conv: real message menu did not open');
     return false;
   }
-  if (!await a.waitKey('message_menu_item:forward', timeoutSecs: 4)) {
+  if (!await a.waitKeyCenter('message_menu_item:forward', timeoutSecs: 4)) {
     await _dismissMessageMenu(a);
     print('[pair] chat_forward_to_other_conv: forward item not present');
     return false;
@@ -641,7 +671,7 @@ Future<bool> _chatDeleteMessageGone(Inst a, String toxB) async {
     print('[pair] chat_delete_message_gone: real message menu did not open');
     return false;
   }
-  if (!await a.waitKey('message_menu_item:delete', timeoutSecs: 4)) {
+  if (!await a.waitKeyCenter('message_menu_item:delete', timeoutSecs: 4)) {
     await _dismissMessageMenu(a);
     print('[pair] chat_delete_message_gone: delete item not present');
     return false;
@@ -652,7 +682,7 @@ Future<bool> _chatDeleteMessageGone(Inst a, String toxB) async {
     return false;
   }
   // The REAL desktop confirm dialog with the stable primary-button key.
-  if (!await a.waitKey('confirm_dialog_primary_button', timeoutSecs: 8)) {
+  if (!await a.waitKeyCenter('confirm_dialog_primary_button', timeoutSecs: 8)) {
     await a.shot('/tmp/ui_chat_del_noconfirm_A.png');
     print('[pair] chat_delete_message_gone: confirm dialog did not open');
     return false;

@@ -4,6 +4,7 @@ import 'dart:async' show Timer;
 import '../widgets/safe_dialog_pop.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import '../../util/app_spacing.dart';
 import '../../util/app_theme_config.dart';
 import 'package:toxee/i18n/app_localizations.dart';
@@ -559,27 +560,52 @@ class _CustomSearchState extends State<CustomSearch> {
     }
   }
 
+  /// Dismiss the search overlay: prefer the injected [CustomSearch.closeFunc]
+  /// (the Cmd/Ctrl+F route passes a `Navigator.pop`), else pop the current
+  /// route. Used by both the app-bar close (X) button and the Escape shortcut.
+  void _closeSearch() {
+    // Idempotent: only act while this route is still the current (top) route,
+    // so a key-repeat / rapid double Escape during dismissal can't pop the page
+    // underneath. (Embedded usage has no own route → ModalRoute is the parent,
+    // still current, and closeFunc handles the embedded close.)
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+    final close = widget.closeFunc;
+    if (close != null) {
+      close();
+    } else {
+      popDialogIfCurrent(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Scaffold(
+    // Escape dismisses the search overlay (a desktop convention the pushed
+    // route was missing — Escape on the autofocused field had no binding, so
+    // users/automation were stuck on it). The autofocused TextField does not
+    // consume Escape, so it propagates to this CallbackShortcuts. Mobile keeps
+    // using the system back gesture / the keyed close button.
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        // includeRepeats:false — one close per physical press; the route guard
+        // in _closeSearch is the belt-and-suspenders backstop.
+        const SingleActivator(
+          LogicalKeyboardKey.escape,
+          includeRepeats: false,
+        ): _closeSearch,
+      },
+      child: Scaffold(
       appBar: _isEmbeddedWithParentSearchBar
           ? AppBar(
               title: Text(l10n.searchResults),
               automaticallyImplyLeading: false,
               actions: [
-                if (widget.closeFunc != null)
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: l10n.close,
-                    onPressed: widget.closeFunc,
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: l10n.close,
-                    onPressed: () => popDialogIfCurrent(context),
-                  ),
+                IconButton(
+                  key: UiKeys.messageSearchCloseButton,
+                  icon: const Icon(Icons.close),
+                  tooltip: l10n.close,
+                  onPressed: _closeSearch,
+                ),
                 SizedBox(
                   width: ResponsiveLayout.responsiveHorizontalPadding(context),
                 ),
@@ -650,24 +676,19 @@ class _CustomSearchState extends State<CustomSearch> {
                 ),
               ),
               actions: [
-                if (widget.closeFunc != null)
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: l10n.close,
-                    onPressed: widget.closeFunc,
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: l10n.close,
-                    onPressed: () => popDialogIfCurrent(context),
-                  ),
+                IconButton(
+                  key: UiKeys.messageSearchCloseButton,
+                  icon: const Icon(Icons.close),
+                  tooltip: l10n.close,
+                  onPressed: _closeSearch,
+                ),
                 SizedBox(
                   width: ResponsiveLayout.responsiveHorizontalPadding(context),
                 ),
               ],
             ),
       body: SafeArea(child: _buildBody(l10n)),
+      ),
     );
   }
 

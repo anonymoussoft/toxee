@@ -909,3 +909,112 @@ move on. The harness + build + the 3 P1 fixes are validated working live.
   (178 playbooks)/self-test green, touched hermetic tests pass. Fork must be
   PUSHED before the toxee commits are pushed (pre-push hook; GitHub SSH 443
   fallback). **The campaign is still write-phase: nothing is live-run.**
+
+- 2026-06-13 **RUN PHASE — rui-p1-chat first-chat-open UNBLOCKED + 5 root-cause
+  fixes (0/8 → 4/8 live, more pending re-validation).** The session's mandate
+  (fix `ensureContactsShell`/`openChat` first-chat-open, then drive the campaign
+  to green) progressed through THREE live runs, each surfacing the next
+  downstream blocker once the prior was fixed. Fixes (codex-reviewed each round;
+  no P1/P2 outstanding):
+  1. **First-chat-open (the explicit ask) — FIXED + LIVE-VALIDATED.** Two layers:
+     (a) STALE LATCH: `Inst.navToolsUnavailable` latches true when
+     `l3_force_home_root` returns `non_test_account` DURING the handshake (run on
+     a still-non-test account), then the sweep's `markAccountTest()` made the
+     accounts test but never reset the latch → `_forceHomeRootAndWait` kept
+     skipping the deterministic recovery in `ensureContactsShell` → the flaky
+     2-process UI-landmark recovery was the only path left → "failed to recover
+     to Contacts shell". FIX: reset `navToolsUnavailable=false` on
+     `markAccountTest()` success (`drive_real_ui_pair_inst.dart`). Live run-1
+     proved it: `forceHomeRoot(chats/contacts) … ready=true` now fires.
+     (b) DETERMINISTIC SEAM: new UNGATED `l3_open_chat` nav-stability hook
+     (`{userId|groupId}`) driving the production `_openChat(peerId:/groupId:)`
+     path (flips to Chats + binds the master-detail right pane; synthesizes the
+     conversation when no row exists). Registered invoker in
+     `home_page_bootstrap.dart` (guarded to master-detail layout — mobile keeps
+     the route push). `openChat` now: conv-row tap → real contacts→profile→Send
+     (made NON-throwing) → `l3_open_chat` last resort → throw+screenshot.
+  2. **Composer send MANGLING — FIXED.** `sendComposerMessage` (and
+     `_p1cTypeIntoComposerNoSend`) used `osaType` keystrokes, which drop/mangle
+     chars (the same reason `focusType` uses paste). Live-proven: the C2C row was
+     created but its text never matched the expected nonce. FIX: `osaPaste`
+     (atomic Cmd+V; codex confirmed the desktop composer's Cmd+V hook returns
+     `ignored` → real paste path; Enter-to-send unchanged). ALSO replaced the
+     unfiltered `_lastMessage` verify with `_anyConversationLastMessageIs`
+     (unique-nonce, conversation-agnostic — the old one verified the FIRST conv,
+     wrong once a group existed). Run-2: read_receipt/draft/typing flipped to
+     PASS (4/8).
+  3. **Desktop+mobile message-menu OFFSTAGE DUPLICATE KEY — FIXED (fork).** The
+     message context menu is built twice (visible overlay + an `Offstage`
+     measurement copy); both carried the same `message_menu_item:<action>`
+     automation keys. flutter_skill matches offstage subtrees, so
+     `tapKeyCenter('message_menu_item:recall')` tapped the stale offstage copy →
+     hit the dismiss barrier → recall/forward action never fired (menu just
+     closed; message intact). FIX: `keyed` flag on `_buildDesktopMenu` /
+     `_buildMobileMenuItems`+`_buildMobileMenuWidget`; the offstage measurement
+     copies pass `keyed:false` (fork
+     `tencent_cloud_chat_message_item_with_menu.dart`). Benefits ALL desktop+mobile
+     menu-action campaigns (recall/forward/copy/reply/delete/...). Mobile twin
+     fixed per codex P2 (mobile-parity mandate).
+  4. **Search overlay couldn't be dismissed — FIXED.** The Cmd+Ctrl+F global
+     search is a pushed route; `forceHomeRoot` only swaps the tab (can't pop it)
+     and ESC had no binding + the X button was unkeyed. FIX (fork
+     `custom_search.dart`): `CallbackShortcuts({Escape: _closeSearch})`
+     (includeRepeats:false + idempotent route guard) + a keyed
+     `UiKeys.messageSearchCloseButton` (consolidated the closeFunc/pop branches).
+     Harness now closes via ESC → keyed X → home; also retries the flaky
+     Cmd+Ctrl+F open up to 3×.
+  5. **unread_badge off-by-one (group=2 want 1) — INSTRUMENTED + drain
+     hardened.** Live: C2C unread correct (2), GROUP showed 2 for a single
+     `l3_inject_group_text`. `ingestInboundGroupText` is verified +1, so the
+     extra is a baseline-drain race or a hybrid double-feed. FIX-so-far
+     (harness): bulletproof baseline drain (loop opening BOTH convs until every
+     per-conversation `conversations[].unreadCount` AND the aggregate are 0, with
+     `_p1cConvUnreads` evidence logging + required-conv-id presence). If the
+     group still inflates after a clean per-conv-0 baseline, that's a real
+     inject-seam/UIKit double-count to fix next (evidence now logged per run).
+  RUN PROGRESSION (7 live runs): run-1 0/8→ first-chat-open fixed (image PASS);
+  run-2 4/8 (read_receipt/draft/typing/image PASS); run-4/5/6 6/8 (badge +
+  search FIXED + validated; recall/forward remained); run-7 5/8 (read_receipt
+  FLAKED — it's a NEGATIVE pin whose precondition timing is flaky: PASS in
+  runs 4/5/6, FAIL in run-7; treat as flaky-passing, not a regression).
+  **VALIDATED-PASS (live): draft_restore, typing_indicator, unread_badge,
+  search_empty_state, image_preview; read_receipt (flaky-pass).**
+  All fixes codex-reviewed (5 rounds; the badge dedup-branch P1 + 4 P3s applied).
+
+  TWO DEEP-REMAINING CASES (precise root causes, need a follow-up session):
+  - **chat_recall_message**: the DATA recall WORKS live (`aGone=true bGone=true`
+    — both A's and B's copies deleted; confirm-button key fix landed so the
+    "Message Recall" confirm fires). But the A-SIDE UIKit message list does NOT
+    update — the original bubble lingers (no tombstone, not removed) even though
+    FfiChatService deleted it (a hybrid-path gap: the platform-path delete +
+    `separate_data.recallMessage` LOCAL_REVOKED flip don't reach the rendered
+    UIKit list). PLUS a real user-facing bug: the `__revoke__:` control signal
+    LEAKS into A's own conversation PREVIEW (`lastMessageText` shows
+    `__revoke__:{json}`) — the swallow-delete in `tim2tox_sdk_platform.dart:769`
+    doesn't refresh the conv preview (`_lastByPeer`). Deep fix = wire recall to
+    update the UIKit rendered list + refresh the conv preview after the
+    swallow-delete (conversationId derivation for the self-echo is the snag).
+  - **forward_to_group_target**: reaches the picker fully (`pickerShown=true
+    targetTapped=true`), only the final Send tap fails (`sendResolvable=false
+    sendCenter=null`). The forward picker's keyed Send button
+    (`forward_picker_send_button`, added in `_renderHeader` which desktopBuilder
+    DOES call) is invisible to BOTH flutter_skill interactiveStructured AND
+    `resolveKeyCenter` — yet the message-menu items and the recall confirm
+    button (same build) resolve fine. The picker's group ROW resolved via
+    flutter_skill bounds, but the header Send button did not. Needs LIVE element-
+    tree introspection to learn why `showPopupWindow`'s deep child header isn't
+    reached (candidate: a nested-overlay / view boundary the resolver misses).
+
+  **COMMITTED LOCALLY (NOT pushed):** fork v2 `33f7141`, tim2tox master
+  `641f403`, toxee master `1e5c81b` (toxee pins both). ⚠️ Until the fork is
+  PUSHED to origin/v2, a plain `run_toxee.sh` (bootstrap) will FORCE-RESET the
+  fork to origin/v2 (2812dd9) and ABANDON `33f7141` — so builds MUST use
+  `MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh --skip-bootstrap` until
+  the push lands. Push order (pre-push hook): fork → tim2tox → toxee
+  (GitHub SSH 443 fallback for the fork).
+  HIGH-LEVERAGE CROSS-CUTTING FIXES (benefit ALL chat campaigns, validated):
+  first-chat-open (latch reset + l3_open_chat), composer paste
+  (sendComposerMessage osaType→osaPaste + conv-agnostic verify), offstage
+  message-menu duplicate-key (desktop+mobile fork), desktop menu detection via
+  waitKeyCenter (overlay-aware), search Escape-to-close + keyed X, group-unread
+  double-count (FfiChatService.groupUnreadHandledExternally).

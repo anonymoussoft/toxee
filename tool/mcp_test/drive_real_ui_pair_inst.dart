@@ -296,6 +296,25 @@ class Inst {
     return r['ok'] == true;
   }
 
+  /// Deterministically open the C2C ([userId] = friend pubkey) or group
+  /// ([groupId]) chat by driving the SAME production `_openChat` path the
+  /// conversation row / profile "Send Message" tile uses (flips to the Chats
+  /// tab + binds the desktop master-detail right pane; the production handler
+  /// SYNTHESIZES the conversation when no row exists yet, so this works for the
+  /// FIRST message). UNGATED (like l3_open_add_friend_dialog / _add_group) so it
+  /// works on fresh non-test accounts. NAVIGATION-STABILITY ONLY — every
+  /// asserted action (send/recall/search/…) stays a real widget gesture; this
+  /// just gets the harness into the chat surface when the multi-tap
+  /// contacts→profile→Send-Message dance is unreliable under 2-process
+  /// foreground contention. Returns whether the seam reported success.
+  Future<bool> openChatViaL3({String? userId, String? groupId}) async {
+    final r = await l3('l3_open_chat', {
+      if (userId != null) 'userId': userId,
+      if (groupId != null) 'groupId': groupId,
+    });
+    return r['ok'] == true;
+  }
+
   /// Grant the CURRENT (real-UI-registered, non-test) account the L3
   /// seed-account marker so the test-account-gated tools (`l3_send_file`,
   /// `l3_clear_history`, …) act on it. NOTE: the marker authorizes the WHOLE
@@ -305,7 +324,17 @@ class Inst {
   /// widget/gesture). Returns whether the account is a test account afterwards.
   Future<bool> markAccountTest() async {
     final r = await l3('l3_mark_current_account_test');
-    return r['ok'] == true && r['isTestAccount'] == true;
+    final ok = r['ok'] == true && r['isTestAccount'] == true;
+    // Clear the stale `non_test_account` latch: the account IS a test account
+    // now, so the gated nav tools (l3_force_home_root, …) are available again.
+    // Without this, a latch set earlier — e.g. during the handshake, which runs
+    // on the still-NON-test account and trips forceHomeRoot's non_test_account
+    // branch — would wrongly keep `_forceHomeRootAndWait` skipping the
+    // deterministic recovery for the WHOLE marked window, leaving only the
+    // flaky 2-process UI-landmark recovery (the root cause of "failed to recover
+    // to Contacts shell" gating the first-chat-open in every chat sweep).
+    if (ok) navToolsUnavailable = false;
+    return ok;
   }
 
   /// Revoke the seed-account marker granted by [markAccountTest] so the launch
@@ -534,6 +563,17 @@ class Inst {
     final r = await l3('ui_secondary_tap', {'key': key});
     if (r['ok'] != true) {
       throw DriveError('[$name] ui_secondary_tap "$key" failed: $r');
+    }
+  }
+
+  /// Right-click (secondary tap) at raw global coords — use when the keyed row's
+  /// geometric center is empty space (e.g. a right-aligned self message bubble,
+  /// where the row center is left of the bubble and a center right-click misses
+  /// the bubble's Listener).
+  Future<void> secondaryTapAt(num x, num y) async {
+    final r = await l3('ui_secondary_tap', {'x': '$x', 'y': '$y'});
+    if (r['ok'] != true) {
+      throw DriveError('[$name] ui_secondary_tap ($x,$y) failed: $r');
     }
   }
 

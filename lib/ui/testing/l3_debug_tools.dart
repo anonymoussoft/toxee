@@ -100,6 +100,9 @@ typedef L3OpenAddFriendDialogInvoker = Future<bool> Function();
 L3OpenAddFriendDialogInvoker? _l3OpenAddFriendDialogInvoker;
 typedef L3OpenAddGroupDialogInvoker = Future<bool> Function();
 L3OpenAddGroupDialogInvoker? _l3OpenAddGroupDialogInvoker;
+typedef L3OpenChatInvoker =
+    Future<bool> Function({String? userId, String? groupId});
+L3OpenChatInvoker? _l3OpenChatInvoker;
 typedef L3OpenGroupAddMemberInvoker = Future<bool> Function(String groupId);
 L3OpenGroupAddMemberInvoker? _l3OpenGroupAddMemberInvoker;
 typedef L3OpenGroupMemberListInvoker = Future<bool> Function(String groupId);
@@ -151,6 +154,10 @@ void registerL3OpenAddFriendDialogInvoker(L3OpenAddFriendDialogInvoker? fn) {
 
 void registerL3OpenAddGroupDialogInvoker(L3OpenAddGroupDialogInvoker? fn) {
   if (kL3TestSurfaceEnabled) _l3OpenAddGroupDialogInvoker = fn;
+}
+
+void registerL3OpenChatInvoker(L3OpenChatInvoker? fn) {
+  if (kL3TestSurfaceEnabled) _l3OpenChatInvoker = fn;
 }
 
 void registerL3OpenGroupAddMemberInvoker(L3OpenGroupAddMemberInvoker? fn) {
@@ -309,7 +316,7 @@ void registerL3DebugToolsIfEnabled() {
     'l3_start_call, l3_call_action, '
     'l3_clear_history, l3_clear_active_conversation, '
     'l3_force_home_root, '
-    'l3_open_add_friend_dialog, '
+    'l3_open_add_friend_dialog, l3_open_chat, '
     'l3_invoke_message_action, l3_mark_read, '
     'l3_accept_friend_request, l3_refuse_friend_request, l3_delete_friend, '
     'l3_set_friend_remark, l3_set_blocked, '
@@ -340,6 +347,7 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3ForceHomeRootEntry());
   addMcpTool(_l3OpenAddFriendDialogEntry());
   addMcpTool(_l3OpenAddGroupDialogEntry());
+  addMcpTool(_l3OpenChatEntry());
   addMcpTool(_l3OpenGroupAddMemberEntry());
   addMcpTool(_l3OpenGroupMemberListEntry());
   addMcpTool(_l3OpenConversationMenuEntry());
@@ -1744,6 +1752,83 @@ MCPCallEntry _l3OpenAddFriendDialogEntry() => MCPCallEntry.tool(
         'as a navigation-stability harness hook; the dialog itself is still '
         'filled and submitted through real UI.',
     inputSchema: ObjectSchema(properties: {}),
+  ),
+);
+
+/// Open a C2C (`userId`) or group (`groupId`) chat by driving the SAME
+/// production `_openChat` path the conversation row / contact-profile
+/// "Send Message" tile uses (switches to the Chats tab and binds the desktop
+/// master-detail right pane; the production `_selectConversation` synthesizes a
+/// conversation when none is listed yet, so this opens the FIRST chat with no
+/// row). UNGATED — a navigation-stability hook (like l3_open_add_friend_dialog /
+/// l3_open_add_group_dialog), NOT the asserted action: the message send / menu /
+/// recall the case verifies is still a real widget gesture. Exists because the
+/// multi-tap contacts→profile→Send-Message dance is unreliable under 2-process
+/// foreground contention, which gated the first-chat-open of every chat sweep.
+MCPCallEntry _l3OpenChatEntry() => MCPCallEntry.tool(
+  handler: (request) async {
+    final ffi = FakeUIKit.instance.im?.ffi;
+    if (ffi == null) {
+      return MCPCallResult(
+        message: 'l3_open_chat: session not ready',
+        parameters: {'ok': false, 'error': 'session_not_ready'},
+      );
+    }
+    final rawUser = request['userId']?.toString().trim() ?? '';
+    final rawGroup = request['groupId']?.toString().trim() ?? '';
+    final hasUser = rawUser.isNotEmpty;
+    final hasGroup = rawGroup.isNotEmpty;
+    if (hasUser == hasGroup) {
+      return MCPCallResult(
+        message: 'l3_open_chat: exactly one of userId / groupId is required',
+        parameters: {'ok': false, 'error': 'bad_args'},
+      );
+    }
+    final invoker = _l3OpenChatInvoker;
+    if (invoker == null) {
+      return MCPCallResult(
+        message: 'l3_open_chat: invoker not registered',
+        parameters: {'ok': false, 'error': 'invoker_not_registered'},
+      );
+    }
+    final opened = await invoker(
+      userId: hasUser ? rawUser : null,
+      groupId: hasGroup ? rawGroup : null,
+    );
+    final conversationId = hasGroup ? 'group_$rawGroup' : 'c2c_$rawUser';
+    AppLogger.info(
+      '[L3] l3_open_chat: ${opened ? 'opened' : 'FAILED to open'} '
+      '$conversationId',
+    );
+    return MCPCallResult(
+      message: opened ? 'opened chat $conversationId' : 'l3_open_chat failed',
+      parameters: {'ok': opened, 'conversationId': conversationId},
+    );
+  },
+  definition: MCPToolDefinition(
+    name: 'l3_open_chat',
+    description:
+        'Navigation-stability hook: open the C2C (userId = friend pubkey) or '
+        'group (groupId) chat through the production _openChat path the '
+        'conversation row / profile Send-Message tile uses (flips to the Chats '
+        'tab + binds the desktop master-detail right pane). Works for a FIRST '
+        'chat with no conversation row yet. NOT the asserted action — the send '
+        '/ menu / recall stays a real widget gesture. Exactly one of userId / '
+        'groupId is required.',
+    inputSchema: ObjectSchema(
+      properties: {
+        'userId': StringSchema(
+          description:
+              'C2C peer public key / userID (the c2c_<userId> conversation). '
+              'Mutually exclusive with groupId.',
+        ),
+        'groupId': StringSchema(
+          description:
+              'Group ID (the group_<groupId> conversation). Mutually '
+              'exclusive with userId.',
+        ),
+      },
+    ),
   ),
 );
 

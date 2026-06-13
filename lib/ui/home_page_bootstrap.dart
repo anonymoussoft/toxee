@@ -1049,6 +1049,28 @@ extension _HomePageBootstrap on _HomePageState {
       return true;
     });
     _bag.add(() => registerL3OpenAddGroupDialogInvoker(null));
+    registerL3OpenChatInvoker(({String? userId, String? groupId}) async {
+      if (!mounted) return false;
+      // _openChat binds the master-detail RIGHT PANE via currentConversation.
+      // On a bottom-nav (mobile/narrow) layout that does NOT surface the chat
+      // detail (UIKit pushes its own message route there), so the seam would
+      // mislead with ok:true and no composer. Restrict the hook to the
+      // master-detail layout the desktop real-UI harness uses; a future mobile
+      // harness must drive the real conversation/profile tap (which pushes the
+      // route) instead. Only an EXPLICIT mobile layout is rejected — a null
+      // (pre-first-build) value still proceeds, since the harness only calls
+      // this well after the desktop HomePage has rendered.
+      if (_lastShouldShowMasterDetail == false) return false;
+      // Drive the SAME production open-chat path the conversation row /
+      // profile Send-Message tile + notification routing use: flip to the
+      // Chats tab and bind the master-detail right pane. _selectConversation
+      // synthesizes a conversation when none is listed, so a FIRST chat opens
+      // even before any row exists. Navigation-stability only — the asserted
+      // action stays a real gesture.
+      _openChat(peerId: userId, groupId: groupId);
+      return true;
+    });
+    _bag.add(() => registerL3OpenChatInvoker(null));
     registerL3OpenGroupAddMemberInvoker((groupId) async {
       if (!mounted) return false;
       // Same fire-and-forget contract as the dialog invokers above: PUSH the
