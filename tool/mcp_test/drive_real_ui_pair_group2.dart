@@ -668,22 +668,27 @@ Future<bool> _groupLeaveViaProfileConfirm(
   final convId = 'group_$gid';
   await openGroupChat(inst, groupId: gid, groupName: groupName);
   await _openGroupProfile(inst);
-  // Single-fire the leave button (it OPENS the adaptive confirm dialog — the
-  // fork's one-shot guard protects the CONFIRM action, not the opener; a
-  // double-firing tryTapKey on the onstage button would stack two dialogs).
-  // The raw tryTapKey fallback is only taken when the button's bounds don't
-  // resolve (offstage — direct invoke fires exactly once). Codex P2 (P1/P2/P3
-  // campaign Batch II review).
-  var leaveTapped =
-      await inst.tapKeyCenter('group_profile_leave_button', timeoutSecs: 8);
-  if (!leaveTapped && await inst.keyCenter('group_profile_leave_button') == null) {
-    leaveTapped = await inst.tryTapKey('group_profile_leave_button', retries: 2);
+  // The leave/disband button is at the BOTTOM of the profile, BELOW the fold
+  // (screenshot-confirmed). An off-screen tap (tryTapKey's direct invoke) does
+  // NOT reliably fire its onTap, so the confirm dialog never opened. SCROLL the
+  // profile body down until the leave button is onstage (keyCenter resolves
+  // only onstage sized RenderBoxes), THEN single-fire it for a real visible tap
+  // that opens the adaptive confirm dialog.
+  for (var i = 0; i < 8 && await inst.keyCenter('group_profile_leave_button') == null; i++) {
+    await inst.scrollAtCoords(640, 420, dy: 500);
+    await Future<void>.delayed(const Duration(milliseconds: 250));
   }
-  if (!leaveTapped) {
+  if (await inst.keyCenter('group_profile_leave_button') == null) {
+    print('[pair] group_leave_via_profile_confirm: leave button never reached '
+        '(below fold, scroll did not surface it)');
+    return false;
+  }
+  if (!await inst.tapKeyCenter('group_profile_leave_button', timeoutSecs: 8)) {
     print('[pair] group_leave_via_profile_confirm: leave button not tappable');
     return false;
   }
   await Future<void>.delayed(const Duration(milliseconds: 600));
+  await inst.shot('/tmp/ui_g2_leave_dialog_${inst.name}.png');
   // The leave/quit adaptive confirm dialog's primary button label varies by
   // role/type: a group member sees "Leave"/"Confirm"; an AVChatRoom (conference)
   // / non-Work OWNER sees "Disband Group"/"Disband"/"Dissolve" (no keyed confirm
