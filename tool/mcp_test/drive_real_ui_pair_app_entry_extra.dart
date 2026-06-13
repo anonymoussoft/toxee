@@ -152,22 +152,28 @@ Future<bool> _aeeNormalize(Inst inst, String nickA) async {
 /// Add-Contact + Create-Group items render. The Join-IRC item is conditional
 /// (only when the IRC plugin wired `onJoinIrcChannel`) — recorded, not required.
 Future<bool> _aeeNewEntryMenuSurface(Inst inst) async {
-  await returnToChatsHome(inst, rounds: 4);
+  // Use the SAME proven recipe as _openAddFriendDialog (which passes live):
+  // ensureNewEntryShell brings new_entry_menu_button on-stage, and flutter_skill
+  // `tap` (tryTapKey) directly invokes its InkWell onTap -> showButtonMenu.
+  // (A coordinate tapKeyCenter does NOT trigger showButtonMenu — root cause of
+  // the first live FAIL "popup did not open".)
+  await ensureNewEntryShell(inst);
   await inst.foreground();
 
-  // Menu items are PopupMenuItems; resolve them via the element-tree walk
-  // (ui_key_center) rather than flutter_skill's interactive-only waitForElement.
-  Future<bool> itemPresent(String key) => inst.waitKeyCenter(key, timeoutSecs: 4);
+  // Menu items are PopupMenuItems; check flutter_skill first (the proven recipe
+  // taps them via tryTapKey, so they ARE surfaced) then the element-tree walk.
+  Future<bool> itemPresent(String key) async =>
+      await inst.waitKey(key, timeoutSecs: 3) ||
+      await inst.waitKeyCenter(key, timeoutSecs: 2);
 
   var opened = false;
   for (var attempt = 0; attempt < 3 && !opened; attempt++) {
-    if (!await inst.tapKeyCenter('new_entry_menu_button')) {
-      if (!await inst.tapKeyAt('new_entry_menu_button')) {
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        continue;
-      }
+    if (!await inst.tryTapKey('new_entry_menu_button', retries: 2)) {
+      await _tryTapText(inst, 'New Chat');
     }
+    await Future<void>.delayed(const Duration(milliseconds: 600));
     opened = await itemPresent('new_entry_add_contact_item');
+    if (!opened) await ensureNewEntryShell(inst);
   }
   if (!opened) {
     print('[pair] new_entry_menu_surface: popup did not open');
@@ -179,13 +185,16 @@ Future<bool> _aeeNewEntryMenuSurface(Inst inst) async {
   final ircItem = await inst.keyCenter('new_entry_join_irc_item') != null;
   await inst.shot('/tmp/ui_app_entry_new_entry_menu_${inst.name}.png');
 
-  // Dismiss the popup so the next case starts clean.
+  // Dismiss the popup (Esc; loop in case flutter_skill's double-fire stacked two
+  // menu routes) so the next case starts clean.
   var closed = false;
-  try {
-    await inst.osaEscape();
-    closed = await inst.waitKeyGone('new_entry_add_contact_item', timeoutSecs: 4);
-  } on DriveError {
-    // fall through to coordinate tap-away
+  for (var i = 0; i < 3 && !closed; i++) {
+    try {
+      await inst.osaEscape();
+    } on DriveError {
+      break;
+    }
+    closed = await inst.waitKeyGone('new_entry_add_contact_item', timeoutSecs: 3);
   }
   if (!closed) {
     await inst.tapAt(_sidebarTabX, _sidebarChatsY);
