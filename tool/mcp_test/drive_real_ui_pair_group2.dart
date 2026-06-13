@@ -134,6 +134,13 @@ Future<bool> _waitChatHeaderTitle(
   final deadline = DateTime.now().add(Duration(seconds: timeoutSecs));
   while (DateTime.now().isBefore(deadline)) {
     if (await _keyedText(inst, 'chat_header_title_text') == expected) return true;
+    // `chat_header_title_text` is a plain Text whose KEY flutter_skill's
+    // interactiveStructured does NOT surface (so `_keyedText` returns null even
+    // when the header IS rendered). Fall back to a TEXT match for the expected
+    // header name in the open chat — the rename already updated the
+    // conversation-row showName, so seeing the new name in the open chat
+    // surface confirms it propagated to the header.
+    if (await inst.waitText(expected, timeoutSecs: 1)) return true;
     await Future<void>.delayed(const Duration(milliseconds: 400));
   }
   return false;
@@ -294,8 +301,9 @@ Future<bool> _groupProfileMembersEntry(
 ) async {
   await openGroupChat(inst, groupId: gid, groupName: groupName);
   await _openGroupProfile(inst);
+  // KeyedSubtree — invisible to flutter_skill; use the element-tree resolver.
   final entryShown =
-      await inst.waitKey('group_profile_members_entry', timeoutSecs: 6);
+      await inst.waitKeyCenter('group_profile_members_entry', timeoutSecs: 6);
   if (!entryShown) {
     print('[pair] group_profile_members_entry: members entry not shown');
     return false;
@@ -676,8 +684,27 @@ Future<bool> _groupLeaveViaProfileConfirm(
     return false;
   }
   await Future<void>.delayed(const Duration(milliseconds: 600));
-  if (!await _tryTapText(inst, 'Confirm')) {
-    print('[pair] group_leave_via_profile_confirm: Confirm label not tappable');
+  // The leave/quit adaptive confirm dialog's primary button label varies by
+  // role/type: a group member sees "Leave"/"Confirm"; an AVChatRoom (conference)
+  // / non-Work OWNER sees "Disband Group"/"Disband"/"Dissolve" (no keyed confirm
+  // — tapped by localized label). Try the candidates in order so both the group
+  // and conference leave paths resolve.
+  var confirmed = false;
+  for (final label in const [
+    'Confirm',
+    'Disband Group',
+    'Disband',
+    'Dissolve',
+    'Leave',
+    'OK',
+  ]) {
+    if (await _tryTapText(inst, label)) {
+      confirmed = true;
+      break;
+    }
+  }
+  if (!confirmed) {
+    print('[pair] group_leave_via_profile_confirm: no confirm label tappable');
     return false;
   }
   // The quit path deletes the conversation (Prefs.addQuitGroup +
@@ -779,8 +806,9 @@ Future<bool> _confMemberListRenders(
 ) async {
   await openGroupChat(inst, groupId: gid, groupName: groupName);
   await _openGroupProfile(inst);
+  // KeyedSubtree — invisible to flutter_skill; use the element-tree resolver.
   final entryShown =
-      await inst.waitKey('group_profile_members_entry', timeoutSecs: 6);
+      await inst.waitKeyCenter('group_profile_members_entry', timeoutSecs: 6);
   if (!await _openGroupMemberListPage(inst, gid)) {
     print('[pair] conf_member_list_renders: member-list page did not open');
     return false;

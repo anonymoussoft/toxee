@@ -560,6 +560,27 @@ unified runner:
   (state-machine order + end-clean guard), `drive_real_ui_pair_group2.dart`
   (2p group prereqs + l3 nav-stability opens).
 
+## ⚠️ CRITICAL OPS FINDING — bootstrap WIPES local fork commits (2026-06-12)
+
+`tool/bootstrap_deps.dart:63` runs `git -C third_party/chat-uikit-flutter
+checkout -B <branch> FETCH_HEAD` — it FETCHES the fork remote and FORCE-RESETS
+the local fork branch to `origin/<branch>` (currently `origin/v2 == fd954fa`).
+`run_toxee.sh` runs bootstrap by default, so **every non-`--skip-bootstrap`
+rebuild RESETS the fork to origin/v2, destroying ALL local fork commits** — the
+whole campaign's fork keys (`9a878d2`..`f47e020`: sticker/chip/member-row/
+attachment/reply/pasted-image keys) AND the group-profile override fix. They live
+ONLY as local commits / the toxee-pinned SHA, never pushed to origin/v2.
+**Consequences + the rule until the fork is pushed:**
+- Build the run-phase app with `MCP_BINDING=skill TOXEE_BUILD_ONLY=1
+  ./run_toxee.sh --skip-bootstrap` (preserves the checked-out fork). A plain
+  `./run_toxee.sh` silently reverts the fork to fd954fa and builds keyless.
+- The campaign fork SHA must be PUSHED to `origin/v2` (GitHub SSH 443 fallback)
+  so bootstrap's FETCH_HEAD carries the keys. Until then the fork is fragile.
+- After ANY rebuild, verify `git -C third_party/chat-uikit-flutter rev-parse HEAD`
+  matches the toxee pin before running.
+Current correct fork SHA = `545499e` (= f47e020 campaign+member keys + the
+group-profile override fix); toxee pins it.
+
 ## Run phase (STARTED 2026-06-12 — build green + first live smoke done)
 
 The write phase is closed; the remaining live work is run-phase execution.
@@ -597,24 +618,39 @@ move on. The harness + build + the 3 P1 fixes are validated working live.
 
 **Root-cause analysis + fixes for the rui-p1-single trio (2026-06-12):**
 - **F2 conference_rename_leave (the load-bearing one, shared `_openGroupProfile`):
-  ROOT CAUSE = ui_key_center could not resolve COMPOSITE keyed widgets.** The
-  group profile DID open (screenshot-confirmed: edit pencil + "Group ID: tox_1"
-  rendered), but BOTH flutter_skill's `waitForElement` AND `ui_key_center`
-  reported the `group_profile_edit_name_button` (FloatingActionButton) /
-  `group_profile_id_text` (SelectableText) / `group_profile_members_entry`
-  (KeyedSubtree) keys ABSENT. `resolveKeyCenter`'s onstage walk
-  (`debugVisitOnstageChildren`) does not reach the desktop group-profile route
-  (master-detail nested Navigator), so the keys never matched. FIX
-  (`lib/ui/testing/ui_drive_tools.dart`): `resolveKeyCenter` now FALLS BACK to a
-  full `visitChildren` walk guarded by `_ancestorsPaint` (excludes
-  Offstage/Visibility-hidden + non-selected IndexedStack children so the
-  offstage invariant holds — hermetic 8/8) + `tapKeyCenter`
-  (`drive_real_ui_pair_inst.dart`) now falls back to `tapKeyAt` (ui_key_center)
-  when flutter_skill can't resolve a key, and `_openGroupProfile`
-  (`drive_real_ui_pair_group_profile.dart`) detects via `keyCenter` not
-  `waitKey`. This unblocks the WHOLE group-profile family (group2 rename/members/
-  clear/leave + the conference cases) — they were all written against keys no
-  resolver could see live. **App rebuild required** (ui_drive_tools is in the app).
+  TRUE ROOT CAUSE (codex-found, my first hypothesis was WRONG) = the pushed
+  group-profile route WIPED toxee's builder override, so it rendered the
+  UPSTREAM keyless body.** My initial "ui_key_center can't resolve composite
+  widgets / painted-but-unreachable" hypothesis was disproven by codex: the group
+  profile body the screenshot showed was the UPSTREAM default (which visually
+  resembles the override — name + edit FAB + "Group ID: …" — but carries NONE of
+  toxee's keys). `TencentCloudChatGroupProfile._updateGlobalData`
+  (`tencent_cloud_chat_group_profile.dart`) UNCONDITIONALLY reset the global
+  group-profile builder to a fresh empty one when the route was pushed without
+  per-widget `builders` (the normal `navigateToGroupProfile` path), erasing
+  toxee's startup-installed override. **This is a real USER-FACING regression**
+  (the customized Tox group/conference profile vanished on open) — not just a
+  test problem. **FIX (fork commit 27b8637):** null-guard the reset (only install
+  a default when none exists — matching the contact component's pattern), so the
+  route keeps the override. Now the keyed override body renders live. The harness
+  improvements made along the way are kept (they're still correct + general):
+  `resolveKeyCenter` full-`visitChildren` fallback guarded by `_ancestorsPaint`
+  (hermetic 8/8); `tapKeyCenter` falls back to `tapKeyAt` (ui_key_center) for
+  flutter_skill-invisible keys; new `Inst.waitKeyCenter` for non-interactive body
+  keys (SelectableText/KeyedSubtree); `_openGroupProfile` detects via `keyCenter`.
+  This unblocks the WHOLE group-profile family (group2 rename/members/clear/leave
+  + conference cases). **App rebuild required** (fork + ui_drive_tools are in the app).
+- **F2 VALIDATED LIVE (2026-06-12) after the fork override fix + `--skip-bootstrap`
+  rebuild:** `conference_rename_leave` now `created=tox_1 renamed=TRUE
+  headerOk=TRUE` — the override body opens, the keyed edit-name button is tapped,
+  the rename persists to the conversation row AND the open-chat header (the
+  `chat_header_title_text` read fell back to `waitText` since flutter_skill can't
+  see a Text key). RESIDUAL: `left=false` — the AVChatRoom (conference, A=owner)
+  leave/disband adaptive-confirm dialog's primary button label is none of
+  {Confirm, Disband Group, Disband, Dissolve, Leave, OK} that `_tryTapText`
+  tries; needs a live look at the conference disband dialog's exact button text
+  (or a keyed confirm). Small single-sub-assertion residual; the core F2 root
+  cause is fixed.
 - **F3 settings_switch_account_entry: CASCADE from F2.** Screenshot proved the
   app was STUCK on the conference profile page (left by F2's throw) when F3
   started, so the sidebar settings tab was unreachable. Fixing F2 (so the

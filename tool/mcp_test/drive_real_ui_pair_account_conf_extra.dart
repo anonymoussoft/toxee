@@ -334,8 +334,12 @@ Future<bool> _aceConferenceProfileIdSurface(Inst inst) async {
   try {
     await openGroupChat(inst, groupId: gid, groupName: name);
     await _openGroupProfile(inst);
-    final hasId = await inst.waitKey('group_profile_id_text', timeoutSecs: 8);
-    final hasMembers = await inst.waitKey(
+    // group_profile_id_text (SelectableText) + group_profile_members_entry
+    // (KeyedSubtree) are invisible to flutter_skill — use the element-tree
+    // resolver (ui_key_center).
+    final hasId =
+        await inst.waitKeyCenter('group_profile_id_text', timeoutSecs: 8);
+    final hasMembers = await inst.waitKeyCenter(
       'group_profile_members_entry',
       timeoutSecs: 4,
     );

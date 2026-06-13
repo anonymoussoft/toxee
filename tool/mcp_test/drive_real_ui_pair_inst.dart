@@ -687,6 +687,40 @@ class Inst {
         'tell application "System Events" to keystroke "f" using '
         '{command down, control down}',
       );
+
+  /// Send Cmd+Ctrl+N — the "new conversation" shortcut (`_NewConversationIntent`
+  /// in home_page.dart) which opens the Add-Friend dialog. Genuine OS chord so the
+  /// production `Shortcuts`/`Actions` path runs (mirrors [osaSearchShortcut]).
+  Future<void> osaNewConversationShortcut() => _osa(
+        'tell application "System Events" to keystroke "n" using '
+        '{command down, control down}',
+      );
+
+  /// Send Cmd+Ctrl+, — the "open settings" shortcut (`_OpenSettingsIntent` in
+  /// home_page.dart) which switches the home shell to the Settings tab
+  /// (`setState(() => _index = 3)`).
+  Future<void> osaOpenSettingsShortcut() => _osa(
+        'tell application "System Events" to keystroke "," using '
+        '{command down, control down}',
+      );
+
+  /// Place [text] on the macOS clipboard via `pbcopy` WITHOUT pasting — for cases
+  /// that then exercise an in-app "Paste" control (e.g. the add-friend paste
+  /// button's `_pasteFromClipboard`) which reads the clipboard itself. Unlike
+  /// [osaPaste] this does NOT send Cmd+V, so the asserted action stays the real
+  /// in-app button.
+  Future<void> setClipboard(String text) async {
+    final proc = await Process.start('pbcopy', const <String>[]);
+    proc.stdin.write(text);
+    await proc.stdin.close();
+    final code = await proc.exitCode;
+    if (code != 0) {
+      throw DriveError('[$name] pbcopy failed (exit $code)');
+    }
+    // Brief settle so the pasteboard write is visible to the in-app reader.
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+  }
+
   Future<void> osaClear() async {
     await _osa(
       'tell application "System Events" to keystroke "a" using command down',
@@ -706,6 +740,21 @@ class Inst {
       'timeout': '${timeoutSecs * 1000}',
     });
     return r['found'] == true;
+  }
+
+  /// Poll until a keyed widget is resolvable via `ui_key_center` (the
+  /// ELEMENT-TREE walk), not flutter_skill's `waitForElement`. Use this for
+  /// keys on NON-interactive / composite widgets that flutter_skill's
+  /// interactiveStructured does NOT surface — a `SelectableText`
+  /// (`group_profile_id_text`), a `KeyedSubtree` (`group_profile_members_entry`),
+  /// a `FloatingActionButton`. Returns true once resolvable, false on timeout.
+  Future<bool> waitKeyCenter(String key, {int timeoutSecs = 10}) async {
+    final deadline = DateTime.now().add(Duration(seconds: timeoutSecs));
+    while (DateTime.now().isBefore(deadline)) {
+      if (await keyCenter(key) != null) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
+    return false;
   }
 
   Future<bool> waitText(String text, {int timeoutSecs = 25}) async {

@@ -35,26 +35,26 @@ Future<void> _openGroupProfile(Inst inst) async {
     if (await anyKey()) return;
     await Future<void>.delayed(const Duration(milliseconds: 400));
   }
-  // ROOT-CAUSED LIVE LIMITATION (2026-06-12): the desktop full-route group
-  // profile DOES open (screenshot-confirmed: the override body renders the
-  // edit pencil + "Group ID: tox_1"), and its AppBar TITLE "Group Chat Details"
-  // IS reachable via flutter_skill text match — but the override BODY
-  // (`group_profile_*` keys AND their visible text, e.g. the "Group ID:"
-  // SelectableText) is NOT reachable from `WidgetsBinding.instance.rootElement`
-  // `visitChildren`, the SAME walk BOTH flutter_skill AND ui_key_center use.
-  // So the body is PAINTED-BUT-UNREACHABLE (a desktop group-profile rendering /
-  // separate-view subtlety in the UIKit fork). The probe below logs the split
-  // (title reachable, body keys key_not_found) so a future fix can be verified;
-  // these full-route BODY cases have hermetic L1 coverage (the chat_core /
-  // REAL_UI_GATES group-profile gates drive the override widgets directly).
+  // If we reach here the keyed override body did not appear. ROOT CAUSE
+  // (codex-found 2026-06-12, FIXED in the fork): the pushed
+  // `TencentCloudChatGroupProfile` route ran `_updateGlobalData` with
+  // `widget.builders == null` and UNCONDITIONALLY reset the global
+  // group-profile builder to a fresh empty one — WIPING toxee's installed
+  // override, so the route rendered the UPSTREAM keyless body (which visually
+  // resembles the override: name + edit FAB + "Group ID: …", but carries none
+  // of toxee's keys). Fixed by null-guarding that reset
+  // (tencent_cloud_chat_group_profile.dart `_updateGlobalData`) so the route
+  // keeps the override. A failure here after that fork fix means the override
+  // genuinely isn't installed / the route didn't open — the probe logs the
+  // open-by-title vs body split to tell them apart.
   final titleText = await inst.waitText('Group Chat Details', timeoutSecs: 2);
   final idText = await inst.waitText('Group ID', timeoutSecs: 2);
   await inst.shot('/tmp/ui_group_profile_noopen_${inst.name}.png');
   throw DriveError(
-    '[${inst.name}] group profile BODY unreachable from the live element walk '
+    '[${inst.name}] group profile override body did not render '
     '(open-by-title=$titleText body-text(GroupID)=$idText, none of $sigKeys '
-    'resolvable) — painted-but-unreachable desktop full-route limitation; '
-    'these surfaces are covered by the hermetic L1 group-profile gates',
+    'resolvable) — expected the toxee override after the _updateGlobalData '
+    'null-guard fix; check the override is installed + the route opened',
   );
 }
 
@@ -94,7 +94,9 @@ Future<int> runGroupProfileOpen(Inst inst, String nick) async {
   final created = await _createGroupViaUI(inst, name, groupType: 'private');
   await openGroupChat(inst, groupId: created.groupId, groupName: name);
   await _openGroupProfile(inst);
-  final hasId = await inst.waitKey('group_profile_id_text', timeoutSecs: 5);
+  // group_profile_id_text is a non-interactive SelectableText — flutter_skill's
+  // waitForElement can't see it; use the element-tree resolver.
+  final hasId = await inst.waitKeyCenter('group_profile_id_text', timeoutSecs: 5);
   final hasMembers = await inst.waitKey(
     'group_profile_members_entry',
     timeoutSecs: 5,
