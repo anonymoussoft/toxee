@@ -431,37 +431,48 @@ class Inst {
   /// flutter_skill_double_tap_blank harness hazard. Returns false (no throw)
   /// when the key is absent or has no usable bounds.
   Future<bool> tapKeyCenter(String key, {int timeoutSecs = 8}) async {
-    if (!await waitKey(key, timeoutSecs: timeoutSecs)) return false;
-    // `waitKey` proves the element is in the tree, but not that it has been
-    // LAID OUT: in the one-frame window after a dialog appears the RenderBox can
-    // still be absent, so interactiveStructured reports {x:0,y:0,w:0,h:0}.
-    // Re-query a few times so a not-yet-measured button isn't mistaken for
-    // "not tappable" (a silent hard-gate failure). The happy path taps on the
-    // first attempt, unchanged.
-    for (var attempt = 0; attempt < 5; attempt++) {
-      final r = await skill('interactiveStructured', const {});
-      final data = r['data'];
-      final elements = data is Map ? data['elements'] : null;
-      if (elements is List) {
-        // Scan ALL same-key matches and tap the first with positive bounds — a
-        // stale/offstage earlier match (e.g. a stacked dialog or an IndexedStack
-        // branch) must not mask a later visible copy.
-        for (final e in elements) {
-          if (e is! Map || e['key'] != key) continue;
-          final b = e['bounds'];
-          if (b is! Map) continue;
-          final x = (b['x'] as num?) ?? 0;
-          final y = (b['y'] as num?) ?? 0;
-          final w = (b['w'] as num?) ?? 0;
-          final h = (b['h'] as num?) ?? 0;
-          if (w <= 0 || h <= 0) continue; // unsized/off-screen — try next match
-          await tapAt(x + w / 2, y + h / 2);
-          return true;
+    if (await waitKey(key, timeoutSecs: timeoutSecs)) {
+      // `waitKey` proves the element is in the tree, but not that it has been
+      // LAID OUT: in the one-frame window after a dialog appears the RenderBox can
+      // still be absent, so interactiveStructured reports {x:0,y:0,w:0,h:0}.
+      // Re-query a few times so a not-yet-measured button isn't mistaken for
+      // "not tappable" (a silent hard-gate failure). The happy path taps on the
+      // first attempt, unchanged.
+      for (var attempt = 0; attempt < 5; attempt++) {
+        final r = await skill('interactiveStructured', const {});
+        final data = r['data'];
+        final elements = data is Map ? data['elements'] : null;
+        if (elements is List) {
+          // Scan ALL same-key matches and tap the first with positive bounds — a
+          // stale/offstage earlier match (e.g. a stacked dialog or an IndexedStack
+          // branch) must not mask a later visible copy.
+          for (final e in elements) {
+            if (e is! Map || e['key'] != key) continue;
+            final b = e['bounds'];
+            if (b is! Map) continue;
+            final x = (b['x'] as num?) ?? 0;
+            final y = (b['y'] as num?) ?? 0;
+            final w = (b['w'] as num?) ?? 0;
+            final h = (b['h'] as num?) ?? 0;
+            if (w <= 0 || h <= 0) continue; // unsized/off-screen — try next match
+            await tapAt(x + w / 2, y + h / 2);
+            return true;
+          }
         }
+        await Future<void>.delayed(const Duration(milliseconds: 200));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 200));
     }
-    return false;
+    // flutter_skill (waitForElement / interactiveStructured) could NOT see the
+    // key OR found no usable bounds. Many real, ONSCREEN keyed widgets are
+    // invisible to flutter_skill because their ValueKey is not propagated to the
+    // element it reports — e.g. a FloatingActionButton, a non-interactive
+    // SelectableText, or a KeyedSubtree wrapper (the group-profile
+    // edit-name/id/members keys, the profile save button). Fall back to the
+    // ELEMENT-TREE resolver (ui_key_center), which finds ANY onstage sized keyed
+    // RenderBox and taps its center. It resolves ONLY onstage widgets, so the
+    // coordinate tap stays valid (it never blind-taps a below-fold opener — that
+    // returns null here, same as before).
+    return tapKeyAt(key);
   }
 
   // --- Pointer-event primitives (Batch-0 ui_drive_tools). flutter_skill has no

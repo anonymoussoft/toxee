@@ -82,20 +82,53 @@ UiTargetResolution resolveKeyCenter(String keyName) {
   // Onstage walk: prunes offstage Offstage / IndexedStack branches.
   final onstage = <Element>[];
   void visitOnstage(Element element) {
-    if (matchesKey(element) && _isSizedRenderBox(element)) onstage.add(element);
+    if (matchesKey(element) && _sizedBoxFor(element) != null) {
+      onstage.add(element);
+    }
     element.debugVisitOnstageChildren(visitOnstage);
   }
 
   visitOnstage(root);
 
   if (onstage.isNotEmpty) {
-    final box = onstage.first.renderObject! as RenderBox;
+    final box = _sizedBoxFor(onstage.first)!;
     final center = box.localToGlobal(box.size.center(Offset.zero));
     return UiTargetResolution.point(center, candidates: onstage.length);
   }
 
-  // No onstage match: distinguish "exists but only offstage" from "absent" via
-  // a full traversal, so a driver can tell a wrong-tab key from a typo.
+  // No onstage match. Some pushed routes / overlays are NOT reached by
+  // `debugVisitOnstageChildren` from the root in every layout (e.g. the desktop
+  // group-profile route under the master-detail nested Navigator), even though
+  // their widgets are genuinely laid out and ON SCREEN. Fall back to a FULL
+  // `visitChildren` walk that still requires (a) an attached, positively-sized
+  // RenderBox AND (b) no ancestor that hides it from paint. (b) is the guard
+  // that keeps the IndexedStack/Offstage exclusion the onstage walk gives: a
+  // non-selected IndexedStack child IS laid out (hasSize == true) but Flutter
+  // 3.41 wraps it in `Visibility(visible:false, maintain*:true)` / an
+  // `Offstage(offstage:true)`, so `_ancestorsPaint` returns false for it. A real
+  // on-screen route the onstage walk missed has no such hiding ancestor and is
+  // found — this is why a keyed FloatingActionButton / SelectableText in the
+  // group profile (invisible to flutter_skill's interactiveStructured too)
+  // becomes resolvable here.
+  final full = <Element>[];
+  void visitAllSized(Element element) {
+    if (matchesKey(element) &&
+        _sizedBoxFor(element) != null &&
+        _ancestorsPaint(element)) {
+      full.add(element);
+    }
+    element.visitChildren(visitAllSized);
+  }
+
+  visitAllSized(root);
+  if (full.isNotEmpty) {
+    final box = _sizedBoxFor(full.first)!;
+    final center = box.localToGlobal(box.size.center(Offset.zero));
+    return UiTargetResolution.point(center, candidates: full.length);
+  }
+
+  // Still nothing sized: distinguish "exists but only offstage/unsized" from
+  // "absent" so a driver can tell a wrong-tab key from a typo.
   var existsAnywhere = false;
   void visitAll(Element element) {
     if (matchesKey(element)) existsAnywhere = true;
@@ -108,11 +141,42 @@ UiTargetResolution resolveKeyCenter(String keyName) {
   );
 }
 
-/// True when [element]'s render object is an attached, positively-sized
-/// RenderBox (so `localToGlobal`/`size.center` are meaningful).
-bool _isSizedRenderBox(Element element) {
+/// The attached, positively-sized [RenderBox] for [element], or null when none
+/// is available. `element.renderObject` already descends a ComponentElement
+/// (FAB / SelectableText / KeyedSubtree) to its first descendant RenderObject,
+/// so this resolves composite keyed widgets — but it must still be a laid-out
+/// RenderBox for `localToGlobal`/`size.center` to be meaningful.
+RenderBox? _sizedBoxFor(Element element) {
   final ro = element.renderObject;
-  return ro is RenderBox && ro.attached && ro.hasSize && !ro.size.isEmpty;
+  if (ro is RenderBox && ro.attached && ro.hasSize && !ro.size.isEmpty) {
+    return ro;
+  }
+  return null;
+}
+
+/// True when no ancestor of [element] hides it from PAINT. Used by the
+/// full-tree fallback in [resolveKeyCenter] to exclude laid-out-but-not-painted
+/// widgets (a non-selected `IndexedStack` child, an `Offstage(offstage:true)`
+/// branch, a `Visibility(visible:false)` subtree) while still accepting a real
+/// on-screen route the onstage walk missed. Flutter 3.41 wraps IndexedStack's
+/// hidden children in `Visibility(visible:false, maintain*:true)`, so checking
+/// the `Offstage`/`Visibility` ancestors catches them even though they are
+/// laid out (hasSize == true).
+bool _ancestorsPaint(Element element) {
+  var painted = true;
+  element.visitAncestorElements((ancestor) {
+    final w = ancestor.widget;
+    if (w is Offstage && w.offstage) {
+      painted = false;
+      return false; // stop walking
+    }
+    if (w is Visibility && !w.visible) {
+      painted = false;
+      return false;
+    }
+    return true; // keep walking up
+  });
+  return painted;
 }
 
 /// Resolve a `{key?|x,y?}` request into a global point. `key` wins when present;

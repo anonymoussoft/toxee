@@ -12,9 +12,18 @@ Future<void> _openGroupProfile(Inst inst) async {
     'group_profile_edit_name_button',
     'group_profile_id_text',
   ];
+  // Resolve via the ELEMENT-TREE walk (ui_key_center), NOT flutter_skill's
+  // waitForElement: the live group-profile keys are a FloatingActionButton
+  // (`group_profile_edit_name_button`) and a non-interactive SelectableText
+  // (`group_profile_id_text`) + a KeyedSubtree (`group_profile_members_entry`)
+  // — flutter_skill's interactiveStructured does NOT surface those keys (proven
+  // live: the profile route IS open, the widgets ARE rendered, yet waitForElement
+  // reports none of them — the same "ValueKey not propagated to the rendered
+  // leaf" class as the Batch-2 profile save button). ui_key_center walks the
+  // real render tree and finds any onstage sized keyed RenderBox.
   Future<bool> anyKey() async {
     for (final k in sigKeys) {
-      if (await inst.waitKey(k, timeoutSecs: 1)) return true;
+      if (await inst.keyCenter(k) != null) return true;
     }
     return false;
   }
@@ -26,28 +35,26 @@ Future<void> _openGroupProfile(Inst inst) async {
     if (await anyKey()) return;
     await Future<void>.delayed(const Duration(milliseconds: 400));
   }
-  // Diagnostic: dump which keys flutter_skill's interactiveStructured + the raw
-  // tree actually see, so a failure distinguishes "override not rendered" from
-  // "route not flutter_skill-reachable" from "key not matchable".
-  try {
-    final inter = await inst.skill('interactiveStructured', const {});
-    final si = inter.toString();
-    final ik = RegExp(r'group_profile[a-z_]*|message_header_profile_avatar')
-        .allMatches(si)
-        .map((m) => m.group(0))
-        .toSet();
-    print(
-      '[${inst.name}] DIAG interactiveStructured len=${si.length} '
-      'profile-keys=$ik; raw sample: '
-      '${si.substring(0, si.length < 400 ? si.length : 400)}',
-    );
-  } catch (e) {
-    print('[${inst.name}] DIAG interactiveStructured failed: $e');
-  }
+  // ROOT-CAUSED LIVE LIMITATION (2026-06-12): the desktop full-route group
+  // profile DOES open (screenshot-confirmed: the override body renders the
+  // edit pencil + "Group ID: tox_1"), and its AppBar TITLE "Group Chat Details"
+  // IS reachable via flutter_skill text match — but the override BODY
+  // (`group_profile_*` keys AND their visible text, e.g. the "Group ID:"
+  // SelectableText) is NOT reachable from `WidgetsBinding.instance.rootElement`
+  // `visitChildren`, the SAME walk BOTH flutter_skill AND ui_key_center use.
+  // So the body is PAINTED-BUT-UNREACHABLE (a desktop group-profile rendering /
+  // separate-view subtlety in the UIKit fork). The probe below logs the split
+  // (title reachable, body keys key_not_found) so a future fix can be verified;
+  // these full-route BODY cases have hermetic L1 coverage (the chat_core /
+  // REAL_UI_GATES group-profile gates drive the override widgets directly).
+  final titleText = await inst.waitText('Group Chat Details', timeoutSecs: 2);
+  final idText = await inst.waitText('Group ID', timeoutSecs: 2);
   await inst.shot('/tmp/ui_group_profile_noopen_${inst.name}.png');
   throw DriveError(
-    '[${inst.name}] group profile did not open from the chat header '
-    '(none of $sigKeys present)',
+    '[${inst.name}] group profile BODY unreachable from the live element walk '
+    '(open-by-title=$titleText body-text(GroupID)=$idText, none of $sigKeys '
+    'resolvable) — painted-but-unreachable desktop full-route limitation; '
+    'these surfaces are covered by the hermetic L1 group-profile gates',
   );
 }
 
