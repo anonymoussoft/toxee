@@ -560,9 +560,40 @@ unified runner:
   (state-machine order + end-clean guard), `drive_real_ui_pair_group2.dart`
   (2p group prereqs + l3 nav-stability opens).
 
-## Run phase (DEFERRED — owned by a later session)
+## Run phase (STARTED 2026-06-12 — build green + first live smoke done)
 
 The write phase is closed; the remaining live work is run-phase execution.
+**Correct invocation** (the flag alone is not enough): a campaign runs live only
+with the class filter — `dart run tool/mcp_test/fixture_c_unified_runner.dart
+--class=2proc-ui --real-ui-campaign=<name>`. WITHOUT `--class=2proc-ui` the
+runner executes the default Fixture C (2proc-l3) manifest instead — the first
+smoke attempt did exactly that (ran `drive_fixture_c_pair`/`_contact_search`, not
+`sweep_p1_single`).
+
+**Build:** `MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh` exit 0
+(2026-06-12 22:00, fresh dylib embedded, L3 surface + fork keys compiled in).
+
+**First live smoke — `rui-p1-single` (2026-06-12): 0 PASS / 3 FAIL** (cases 4/5
+not reached — they depend on case 3 registering account #2). The harness LAUNCHES
++ DRIVES correctly (real-UI registration worked; conference CREATE passed;
+endClean=true), so the fixes didn't break it — but 3 genuine run-phase bugs
+surfaced that written-unrun could never catch:
+1. `zh_locale_page_walk` FAIL on ONE sub-check only — `contactsZh=false` (every
+   other zh assertion passed: settings/sidebar chats+contacts+settings/profile +
+   revert). The Contacts-PAGE zh label the case asserts is wrong/not-surfaced;
+   fix the expected contacts zh string (or its marker).
+2. `conference_rename_leave` FAIL — the conference row is created, but
+   `_openGroupProfile` from the chat header surfaces NONE of
+   `[group_profile_members_entry, group_profile_edit_name_button,
+   group_profile_id_text]` for an AVChatRoom (the conference profile-open path /
+   header differs from a private group). Also `l3_force_home_root` is refused
+   (non-test account) during `returnToChatsHome` — the case must navigate without
+   that l3 helper on a real-UI (non-test) account.
+3. `settings_switch_account_entry` FAIL — "settings did not become the active
+   tab"; the `_openSettings` sidebar-tab nav didn't land (timing/foreground or
+   the settings-tab key on this launch).
+These are the iterative run-phase backlog: fix root cause → re-run the campaign →
+move on. The harness + build + the 3 P1 fixes are validated working live.
 
 1. Rebuild via `MCP_BINDING=skill TOXEE_BUILD_ONLY=1 ./run_toxee.sh`.
 2. Run the write-phase campaigns serially: `rui-p1-single`, `rui-p1-chat`,
