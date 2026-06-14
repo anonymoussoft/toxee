@@ -473,26 +473,33 @@ Future<bool> _settingsDownloadLimitEdit(Inst inst) async {
   // input connection — a raw coordinate tapAt/tapKeyCenter does NOT, and a
   // subsequent enterText with no input connection SIGSEGVs the macOS engine's
   // FlutterTextInputPlugin setEditingState). Clear first so we don't append.
-  await inst.tapKey('settings_download_limit_field');
-  await Future<void>.delayed(const Duration(milliseconds: 300));
-  try {
-    await inst.osaClear();
-  } on DriveError {
-    // best-effort; enterText below replaces typical short content anyway
+  // RETRY the focus→clear→type→save→verify cycle: under 2-process foreground
+  // contention the enterText or the save tap intermittently doesn't land, so a
+  // single attempt flakes run-to-run (documented). Re-driving the real controls
+  // until the persisted state reflects the typed value keeps it an honest gate.
+  var saved = false;
+  for (var attempt = 0; attempt < 3 && !saved; attempt++) {
+    await inst.tapKey('settings_download_limit_field');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    try {
+      await inst.osaClear();
+    } on DriveError {
+      // best-effort; enterText below replaces typical short content anyway
+    }
+    final typed = await inst.skill('enterText', {'text': '$target'});
+    if (typed['success'] != true) {
+      print('[pair] settings_download_limit: enterText failed: $typed');
+      continue;
+    }
+    // The Save button is a FilledButton (no text input) — tapKeyCenter is safe.
+    await inst.tapKeyCenter('settings_download_limit_save_button');
+    saved = await _waitFieldWhere(
+      inst,
+      'autoDownloadSizeLimit',
+      (v) => _stateInt(v) == target,
+      timeoutSecs: 10,
+    );
   }
-  final typed = await inst.skill('enterText', {'text': '$target'});
-  if (typed['success'] != true) {
-    print('[pair] settings_download_limit: enterText failed: $typed');
-    return false;
-  }
-  // The Save button is a FilledButton (no text input) — tapKeyCenter is safe.
-  await inst.tapKeyCenter('settings_download_limit_save_button');
-  final saved = await _waitFieldWhere(
-    inst,
-    'autoDownloadSizeLimit',
-    (v) => _stateInt(v) == target,
-    timeoutSecs: 12,
-  );
   // Restore the prior value so later cases / reruns see the original cap, and
   // ENFORCE the restore (an un-restored value would poison reruns).
   var restored = true;
