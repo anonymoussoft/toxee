@@ -176,6 +176,15 @@ void registerL3HomeShellSnapshotReader(L3HomeShellSnapshotReader? fn) {
   if (kL3TestSurfaceEnabled) _l3HomeShellSnapshotReader = fn;
 }
 
+/// The currently-registered home-shell snapshot reader, exposed so a HomePage's
+/// dispose can identity-guard its unregister: a switch-back
+/// (`pushAndRemoveUntil(HomePage)`) mounts the NEW HomePage (which re-registers)
+/// BEFORE the old one disposes, so an unconditional `register…(null)` on dispose
+/// would clobber the new instance's reader and leave the dump's `homeShellTab`
+/// null after every switch (breaking `_settingsTabActive`/settings nav).
+L3HomeShellSnapshotReader? get currentL3HomeShellSnapshotReader =>
+    _l3HomeShellSnapshotReader;
+
 /// S79: avatar-pick override path (mirrors the export-save override). When set,
 /// the avatar image picker is bypassed and this fixed path is returned, so the
 /// native NSOpenPanel never blocks a headless L3 run.

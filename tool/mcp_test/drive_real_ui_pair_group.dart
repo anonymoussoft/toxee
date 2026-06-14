@@ -100,14 +100,32 @@ Future<void> openGroupChat(
   }
   await returnToChatsHome(inst, rounds: 4);
   final conversationKey = 'conversation_list_item:group_$groupId';
-  if (!await inst.tryTapKey(conversationKey, retries: 2) &&
-      !await inst.tryTapKey('group_list_tile:$groupId', retries: 2)) {
-    if (!await _tryTapText(inst, groupName)) {
-      throw DriveError(
-        '[${inst.name}] failed to open group chat '
-        '(groupId=${_shortId(groupId)} name="$groupName")',
-      );
+  var rowOpened = await inst.tryTapKey(conversationKey, retries: 1) ||
+      await inst.tryTapKey('group_list_tile:$groupId', retries: 1);
+  if (!rowOpened) {
+    // A FRESHLY-created group/conference has no messages → its sort key is
+    // `lastMessage.timestamp ?? 0` == 0 → it sorts to the BOTTOM of the
+    // conversation list, BELOW the fold, where the `ListView.builder` has not
+    // built its row yet. Neither flutter_skill (whole-tree, needs the built
+    // element) nor a coordinate tap can reach an unbuilt row — so scroll the
+    // conversation list down until the row is built + onstage, then tap its
+    // resolved center. (This is why these cases only fail LATE in a shared
+    // launch, once the list has accumulated other rows above the new group.)
+    for (var i = 0;
+        i < 12 && await inst.keyCenter(conversationKey) == null;
+        i++) {
+      await inst.scrollAtCoords(240, 400, dy: 600);
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
+    if (await inst.keyCenter(conversationKey) != null) {
+      rowOpened = await inst.tapKeyCenter(conversationKey, timeoutSecs: 6);
+    }
+  }
+  if (!rowOpened && !await _tryTapText(inst, groupName)) {
+    throw DriveError(
+      '[${inst.name}] failed to open group chat '
+      '(groupId=${_shortId(groupId)} name="$groupName")',
+    );
   }
   await Future<void>.delayed(const Duration(milliseconds: 1200));
   if (!await _chatSurfaceReadyForAnyGroup(

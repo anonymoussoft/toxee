@@ -195,6 +195,17 @@ class Inst {
       // through here, so the bounded retry loops in the case drivers can't
       // protect against it. Throw a DriveError so best-effort callers (e.g.
       // `_normalizeBetweenCases`) recover and the campaign keeps moving.
+      // Derive the per-call timeout. `waitForElement`-style RPCs intentionally
+      // BLOCK on the app side for the wait's OWN timeout (passed as the `timeout`
+      // ms arg, up to 120s in some cases), so a fixed short timeout would fire
+      // mid-wait and mask the real result. Use (the wait's timeout + a 25s
+      // margin) for those; a fixed 45s for fast calls (tap/dump/scroll) — long
+      // enough to absorb a transiently-busy isolate (e.g. an account-switch
+      // teardown+boot) while still catching a genuine multi-minute hang.
+      final timeoutArgMs = int.tryParse('${strArgs['timeout'] ?? ''}');
+      final callTimeout = timeoutArgMs != null
+          ? Duration(milliseconds: timeoutArgMs + 25000)
+          : const Duration(seconds: 45);
       final resp = await vm
           .callServiceExtension(
             method,
@@ -202,9 +213,10 @@ class Inst {
             args: strArgs,
           )
           .timeout(
-            const Duration(seconds: 20),
+            callTimeout,
             onTimeout: () => throw DriveError(
-                '$name: $method timed out after 20s (app isolate unresponsive)'),
+                '$name: $method timed out after ${callTimeout.inSeconds}s '
+                '(app isolate unresponsive)'),
           );
       return (resp.json ?? const <String, dynamic>{}).cast<String, dynamic>();
     }

@@ -551,7 +551,28 @@ Future<bool> _p1SettingsSwitchAccountEntry(
   // the teardown lands).
   final flippedBack = await _p1WaitAccountReady(inst, primaryToxId);
   await inst.foreground();
-  final homeReady = await inst.waitKey('new_entry_menu_button', timeoutSecs: 25);
+  // Home-ready = session back on the PRIMARY + the HomePage shell mounted
+  // (homeShellTab set). waitKey('new_entry_menu_button') was a poor proxy: right
+  // after a switch-back teardown+boot the button is sometimes not in the
+  // (offstage) tree even though the chats home is fully rendered, so the case
+  // false-failed despite a correct switch.
+  var homeReady = false;
+  for (var i = 0; i < 40 && !homeReady; i++) {
+    final s = await inst.dumpState();
+    final sessionOk = s['sessionReady'] == true &&
+        s['currentAccountToxId']?.toString() == primaryToxId;
+    // `homeShellTab` is sourced from a HomePage-registered snapshot reader that
+    // does not reliably re-register after a switch-back teardown+boot (and
+    // `new_entry_menu_button` is likewise sometimes absent then), so accept
+    // EITHER the dump tab OR the persistent sidebar avatar key as proof the
+    // HomePage shell is mounted + usable.
+    homeReady = sessionOk &&
+        (s['homeShellTab'] != null ||
+            await inst.waitKey('sidebar_user_avatar', timeoutSecs: 1));
+    if (!homeReady) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+  }
   await inst.shot('/tmp/ui_p1_switch_${inst.name}.png');
   print(
     '[pair] settings_switch_account_entry: flippedAway=$flippedAway '

@@ -674,26 +674,57 @@ Future<bool> _groupLeaveViaProfileConfirm(
   // profile body down until the leave button is onstage (keyCenter resolves
   // only onstage sized RenderBoxes), THEN single-fire it for a real visible tap
   // that opens the adaptive confirm dialog.
-  for (var i = 0; i < 8 && await inst.keyCenter('group_profile_leave_button') == null; i++) {
-    await inst.scrollAtCoords(640, 420, dy: 500);
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+  // Scroll until the leave button is in the VISIBLE viewport, not merely
+  // RESOLVABLE: a row in the ListView's cache extent (just below the fold) is
+  // built + sized, so keyCenter RESOLVES it, but its center is OFF-SCREEN — a
+  // center tap then lands off the window and the GestureDetector.onTap never
+  // fires (the confirm dialog "never opened"). Require the resolved center-y to
+  // be inside the visible band (extended to the window bottom for this
+  // bottom-anchored row) before tapping.
+  ({double x, double y})? leaveCenter;
+  ({double x, double y})? lastProbe;
+  for (var i = 0; i < 16; i++) {
+    final c = await inst.keyCenter('group_profile_leave_button');
+    if (c != null) lastProbe = c;
+    if (c != null && c.y >= 80 && c.y <= 795) {
+      leaveCenter = c;
+      break;
+    }
+    // Scroll at the LIST area (y=600, below the non-scrolling "Send a message"
+    // tile at ~420) so the wheel event reliably hits the profile's scrollable.
+    await inst.scrollAtCoords(640, 600, dy: 500);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
   }
-  if (await inst.keyCenter('group_profile_leave_button') == null) {
+  if (leaveCenter == null) {
     print('[pair] group_leave_via_profile_confirm: leave button never reached '
-        '(below fold, scroll did not surface it)');
+        '(below fold; last resolved center=$lastProbe)');
     return false;
   }
-  if (!await inst.tapKeyCenter('group_profile_leave_button', timeoutSecs: 8)) {
-    print('[pair] group_leave_via_profile_confirm: leave button not tappable');
-    return false;
+  // The leave-button tap can MISS: right after the scroll, tapKeyCenter
+  // re-resolves a center while the ListView is still settling, so the coordinate
+  // lands on empty space and the GestureDetector.onTap never fires (it returns
+  // true regardless). Settle, tap, and VERIFY the confirm dialog actually opened
+  // ("Leave the group?" title); retry with the direct-invoke tapKey (fires onTap
+  // even when the re-resolved bounds are stale).
+  var dialogUp = false;
+  for (var attempt = 0; attempt < 3 && !dialogUp; attempt++) {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (attempt == 0) {
+      await inst.tapKeyCenter('group_profile_leave_button', timeoutSecs: 8);
+    } else {
+      await inst.tryTapKey('group_profile_leave_button', retries: 2);
+    }
+    dialogUp = await inst.waitText('Leave the group', timeoutSecs: 3) ||
+        await inst.waitText('Confirm', timeoutSecs: 1);
   }
-  await Future<void>.delayed(const Duration(milliseconds: 600));
   await inst.shot('/tmp/ui_g2_leave_dialog_${inst.name}.png');
-  // The leave/quit adaptive confirm dialog's primary button label varies by
-  // role/type: a group member sees "Leave"/"Confirm"; an AVChatRoom (conference)
-  // / non-Work OWNER sees "Disband Group"/"Disband"/"Dissolve" (no keyed confirm
-  // — tapped by localized label). Try the candidates in order so both the group
-  // and conference leave paths resolve.
+  if (!dialogUp) {
+    print('[pair] group_leave_via_profile_confirm: leave confirm dialog never opened');
+    return false;
+  }
+  // The toxee override `_showQuitGroupDialog` primary action is "Confirm" (tried
+  // first); the label still varies for legacy paths, so try the candidates in
+  // order so both the group and conference leave paths resolve.
   var confirmed = false;
   for (final label in const [
     'Confirm',
@@ -709,6 +740,13 @@ Future<bool> _groupLeaveViaProfileConfirm(
     }
   }
   if (!confirmed) {
+    // Dismiss the (unmatched) modal so it can't stay up and block the next
+    // case's navigation (the "settings did not become the active tab" cascade).
+    try {
+      await inst.osaEscape();
+    } on DriveError {
+      // best-effort
+    }
     print('[pair] group_leave_via_profile_confirm: no confirm label tappable');
     return false;
   }

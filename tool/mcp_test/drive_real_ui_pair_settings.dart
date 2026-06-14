@@ -29,6 +29,25 @@ Future<bool> _settingsTabActive(Inst inst) async {
 Future<void> _openSettings(Inst inst) async {
   for (var round = 0; round < 6; round++) {
     await inst.foreground();
+    // RECOVERY (round > 0): a prior case may have left the app on a PUSHED route
+    // (e.g. a group/conference profile page whose leave/confirm wasn't matched)
+    // or a MODAL dialog — both sit over the sidebar and swallow the settings-tab
+    // tap, so the tab never activates and every later settings-nav case cascades
+    // into "settings did not become the active tab". On the FIRST retry run the
+    // comprehensive home reset (escapes pushed routes / overlays); on every retry
+    // press Escape (dismisses an AlertDialog / barrier-dismissible modal). Skipped
+    // on round 0 so a normal open isn't perturbed.
+    if (round == 1) {
+      await returnToChatsHome(inst, rounds: 3);
+    }
+    if (round > 0) {
+      try {
+        await inst.osaEscape();
+      } on DriveError {
+        // best-effort
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
     // `homeShellTab == 'settings'` is the AUTHORITATIVE active-tab signal. Do NOT
     // additionally require `settings_copy_tox_id_button` to be found: that key is
     // at the TOP of the settings ListView, so when a prior case left the list

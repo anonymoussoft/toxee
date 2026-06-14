@@ -1014,7 +1014,7 @@ extension _HomePageBootstrap on _HomePageState {
       }
     });
     _bag.add(() => registerL3HomeShellApplier(null));
-    registerL3HomeShellSnapshotReader(() {
+    final L3HomeShellSnapshotReader homeShellSnapshotReader = () {
       final tab = switch (_index) {
         1 => 'contacts',
         2 => 'applications',
@@ -1027,8 +1027,17 @@ extension _HomePageBootstrap on _HomePageState {
         'currentConversationId': _currentConversationID,
         'inContactProfileContext': _inContactProfileContext,
       };
+    };
+    registerL3HomeShellSnapshotReader(homeShellSnapshotReader);
+    // Identity-guard the unregister: a switch-back mounts the NEW HomePage
+    // (re-registering its reader) BEFORE this (old) instance disposes, so an
+    // unconditional null here would clobber the new reader and leave the dump's
+    // homeShellTab null after every account switch.
+    _bag.add(() {
+      if (identical(currentL3HomeShellSnapshotReader, homeShellSnapshotReader)) {
+        registerL3HomeShellSnapshotReader(null);
+      }
     });
-    _bag.add(() => registerL3HomeShellSnapshotReader(null));
     registerL3OpenAddFriendDialogInvoker(() async {
       if (!mounted) return false;
       // Fire-and-forget: PUSH the dialog and return immediately. Awaiting
