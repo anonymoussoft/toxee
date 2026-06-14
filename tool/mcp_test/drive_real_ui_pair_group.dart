@@ -98,47 +98,65 @@ Future<void> openGroupChat(
   )) {
     return;
   }
-  await returnToChatsHome(inst, rounds: 4);
   final conversationKey = 'conversation_list_item:group_$groupId';
-  var rowOpened = await inst.tryTapKey(conversationKey, retries: 1) ||
-      await inst.tryTapKey('group_list_tile:$groupId', retries: 1);
-  if (!rowOpened) {
-    // A FRESHLY-created group/conference has no messages → its sort key is
-    // `lastMessage.timestamp ?? 0` == 0 → it sorts to the BOTTOM of the
-    // conversation list, BELOW the fold, where the `ListView.builder` has not
-    // built its row yet. Neither flutter_skill (whole-tree, needs the built
-    // element) nor a coordinate tap can reach an unbuilt row — so scroll the
-    // conversation list down until the row is built + onstage, then tap its
-    // resolved center. (This is why these cases only fail LATE in a shared
-    // launch, once the list has accumulated other rows above the new group.)
-    for (var i = 0;
-        i < 12 && await inst.keyCenter(conversationKey) == null;
-        i++) {
-      await inst.scrollAtCoords(240, 400, dy: 600);
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+  DriveError? lastError;
+  // Retry the whole row-tap + readiness: a FRESHLY-created conference can be
+  // briefly not-yet-connected (group_connected=0), so the chat surface does not
+  // always become ready on the first tap. Re-tap from the conversation list and
+  // wait again, giving it a moment to connect between attempts.
+  for (var attempt = 0; attempt < 3; attempt++) {
+    await returnToChatsHome(inst, rounds: 4);
+    var rowOpened = await inst.tryTapKey(conversationKey, retries: 1) ||
+        await inst.tryTapKey('group_list_tile:$groupId', retries: 1);
+    if (!rowOpened) {
+      // A FRESHLY-created group/conference has no messages → its sort key is
+      // `lastMessage.timestamp ?? 0` == 0 → it sorts to the BOTTOM of the conv
+      // list, BELOW the fold, where the `ListView.builder` has not built its row
+      // yet. Neither flutter_skill (whole-tree, needs the built element) nor a
+      // coordinate tap can reach an unbuilt row — so scroll the conv list down
+      // until the row is built + onstage, then tap its resolved center. (This is
+      // why these cases only fail LATE in a shared launch, once the list has
+      // accumulated other rows above the new group.)
+      for (var i = 0;
+          i < 12 && await inst.keyCenter(conversationKey) == null;
+          i++) {
+        await inst.scrollAtCoords(240, 400, dy: 600);
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+      if (await inst.keyCenter(conversationKey) != null) {
+        rowOpened = await inst.tapKeyCenter(conversationKey, timeoutSecs: 6);
+      }
     }
-    if (await inst.keyCenter(conversationKey) != null) {
-      rowOpened = await inst.tapKeyCenter(conversationKey, timeoutSecs: 6);
+    if (!rowOpened) {
+      rowOpened = await _tryTapText(inst, groupName);
     }
-  }
-  if (!rowOpened && !await _tryTapText(inst, groupName)) {
-    throw DriveError(
-      '[${inst.name}] failed to open group chat '
-      '(groupId=${_shortId(groupId)} name="$groupName")',
-    );
-  }
-  await Future<void>.delayed(const Duration(milliseconds: 1200));
-  if (!await _chatSurfaceReadyForAnyGroup(
-    inst,
-    timeoutSecs: 8,
-    requireGroupId: groupId,
-  )) {
-    throw DriveError(
+    if (!rowOpened) {
+      lastError = DriveError(
+        '[${inst.name}] failed to open group chat '
+        '(groupId=${_shortId(groupId)} name="$groupName")',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      continue;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (await _chatSurfaceReadyForAnyGroup(
+      inst,
+      timeoutSecs: 8,
+      requireGroupId: groupId,
+    )) {
+      return;
+    }
+    lastError = DriveError(
       '[${inst.name}] group chat did not become ready '
       '(groupId=${_shortId(groupId)} name="$groupName" '
       'currentConversation=${await _currentConversationId(inst)})',
     );
+    // Settle + retry (give the conference a moment to connect).
+    await Future<void>.delayed(const Duration(milliseconds: 800));
   }
+  throw lastError ??
+      DriveError('[${inst.name}] failed to open group chat '
+          '(groupId=${_shortId(groupId)} name="$groupName")');
 }
 
 class _CreatedGroup {

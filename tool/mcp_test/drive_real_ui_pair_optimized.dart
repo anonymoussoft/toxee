@@ -51,7 +51,6 @@ Future<int> runSingleAppOptimizedSweep(Inst a, String nickA) {
     _OptimizedStep('sweep_settings2', () => runSettingsSweep2(a, nickA)),
     _OptimizedStep('sweep_profile', () => runProfileSweep(a, nickA)),
     _OptimizedStep('sweep_login', () => runLoginSweep(a, nickA)),
-    _OptimizedStep('sweep_p1_single', () => runP1SingleSweep(a, nickA)),
     _OptimizedStep('sweep_p1_extra', () => runP1ExtraSweep(a, nickA)),
     _OptimizedStep(
       'sweep_app_entry_extra',
@@ -65,6 +64,13 @@ Future<int> runSingleAppOptimizedSweep(Inst a, String nickA) {
       'sweep_account_deep_extra',
       () => runAccountDeepExtraSweep(a, nickA),
     ),
+    // p1_single runs LAST: its `account_delete_full_flow` is DESTRUCTIVE (it
+    // deletes accounts across multiple logout/login cycles) and poisons the
+    // shared-launch state for any sweep that runs after it (the inter-sweep
+    // recovery then fails with "did not recover to HomePage" / a register-flow
+    // mismatch and cascades every later sweep). Per the campaign's reuse-startup
+    // policy, destructive cases run last so nothing downstream is poisoned.
+    _OptimizedStep('sweep_p1_single', () => runP1SingleSweep(a, nickA)),
   ]);
 }
 

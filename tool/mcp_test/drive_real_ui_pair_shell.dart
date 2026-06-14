@@ -861,6 +861,17 @@ int _runShellRecoverySelfTest() {
 Future<bool> _chatsHomeReady(Inst inst, {int timeoutSecs = 1}) async {
   final st = await inst.dumpState();
   if (st['sessionReady'] != true) return false;
+  // Robust early-accept: after a switch-back / account-delete boot (which mounts
+  // a fresh HomePage), `new_entry_menu_button` and the other landmark keys can
+  // lag the dump even though the home shell is fully up — the persistent SIDEBAR
+  // AVATAR (and the dump homeShellTab) survive that boot. If the session is ready
+  // AND the home shell is observable by either, the chats home IS usable. Without
+  // this, the inter-sweep recovery throws "did not recover to HomePage" after a
+  // destructive account flow and cascades every later sweep.
+  if (st['homeShellTab'] != null ||
+      await inst.waitKey('sidebar_user_avatar', timeoutSecs: timeoutSecs)) {
+    return true;
+  }
   final hasBack = await inst.waitText('Back', timeoutSecs: timeoutSecs);
   final hasChatsSidebar = await inst.waitKey(
     'sidebar_chats_tab',
