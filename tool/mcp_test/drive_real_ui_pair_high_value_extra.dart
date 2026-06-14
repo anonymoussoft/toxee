@@ -289,7 +289,12 @@ Future<bool> _hveAccountMultiAccountStateIsolation(
     );
     primaryGroupId = created.groupId;
     final primaryConvId = 'group_$primaryGroupId';
-    await openGroupChat(inst, groupId: primaryGroupId, groupName: groupName);
+    await openGroupChat(
+      inst,
+      groupId: primaryGroupId,
+      groupName: groupName,
+      viaL3Seam: true,
+    );
     final primaryListedBefore = await _waitConversationListed(
       inst,
       primaryConvId,

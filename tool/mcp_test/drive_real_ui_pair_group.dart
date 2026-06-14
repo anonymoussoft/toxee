@@ -86,6 +86,7 @@ Future<void> openGroupChat(
   Inst inst, {
   required String groupId,
   required String groupName,
+  bool viaL3Seam = false,
 }) async {
   await inst.foreground();
   // Require THIS group to be the open one — an early-return on "any group open"
@@ -96,6 +97,28 @@ Future<void> openGroupChat(
     timeoutSecs: 2,
     requireGroupId: groupId,
   )) {
+    return;
+  }
+  // Opt-in reliable open via the production `_openChat` path (the ungated
+  // l3_open_chat nav-stability seam the chat sweeps use for first-chat-open).
+  // A FRESHLY-created conference/group opened AFTER the conversation list has
+  // accumulated other rows (e.g. the account/conference sweeps) sorts to the
+  // list BOTTOM (no message → ts 0), where the row is clipped at the viewport
+  // edge and a synthetic CENTER tap does not reliably fire its onTap, leaving
+  // currentConversation null. Driving the production handler deterministically
+  // is MORE faithful than a flaky coordinate tap and is NOT the asserted action
+  // (the profile/search surface stays a real gesture). DEFAULT stays the real
+  // row tap so cases that ASSERT "open from the chat list" (e.g. S129
+  // runGroupCreate, where the fresh group is the sole/top row of an empty list)
+  // keep exercising — and can still regression-fail on — the keyed row onTap
+  // rather than masking it through L3 (codex).
+  if (viaL3Seam &&
+      await inst.openChatViaL3(groupId: groupId) &&
+      await _chatSurfaceReadyForAnyGroup(
+        inst,
+        timeoutSecs: 8,
+        requireGroupId: groupId,
+      )) {
     return;
   }
   final conversationKey = 'conversation_list_item:group_$groupId';

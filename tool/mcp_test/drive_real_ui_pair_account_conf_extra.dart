@@ -332,7 +332,7 @@ Future<bool> _aceConferenceProfileIdSurface(Inst inst) async {
   if (gid.isEmpty) return false;
   var cleanupOk = false;
   try {
-    await openGroupChat(inst, groupId: gid, groupName: name);
+    await openGroupChat(inst, groupId: gid, groupName: name, viaL3Seam: true);
     await _openGroupProfile(inst);
     // group_profile_id_text (SelectableText) + group_profile_members_entry
     // (KeyedSubtree) are invisible to flutter_skill — use the element-tree
@@ -361,7 +361,7 @@ Future<bool> _aceConferenceProfileSendMessageTile(Inst inst) async {
   if (gid.isEmpty) return false;
   var cleanupOk = false;
   try {
-    await openGroupChat(inst, groupId: gid, groupName: name);
+    await openGroupChat(inst, groupId: gid, groupName: name, viaL3Seam: true);
     await _openGroupProfile(inst);
     final buttonShown = await inst.waitKey(
       'group_profile_send_message_button',
@@ -419,12 +419,22 @@ Future<bool> _aceConferenceSearchResultOpens(Inst inst) async {
       await inst.shot('/tmp/ui_ace_conf_search_norow_${inst.name}.png');
       return false;
     }
-    await inst.tapKey(rowKey);
-    final opened = await _chatSurfaceReadyForAnyGroup(
-      inst,
-      timeoutSecs: 12,
-      requireGroupId: gid,
-    );
+    // The search result is a ListTile whose onTap drives _navigateToMessage →
+    // (desktop) binds the chat in the master-detail right pane. A single tapKey
+    // on a freshly-created conference's result row is flaky (the synthetic tap
+    // does not always fire ListTile.onTap), so retry with a resolved center tap
+    // until the chat surface binds.
+    var opened = false;
+    for (var attempt = 0; attempt < 3 && !opened; attempt++) {
+      if (!await inst.tapKeyCenter(rowKey, timeoutSecs: 6)) {
+        await inst.tryTapKey(rowKey, retries: 1);
+      }
+      opened = await _chatSurfaceReadyForAnyGroup(
+        inst,
+        timeoutSecs: 8,
+        requireGroupId: gid,
+      );
+    }
     final headerOk = await _waitChatHeaderTitle(inst, name, timeoutSecs: 8);
     await inst.shot('/tmp/ui_ace_conf_search_${inst.name}.png');
     cleanupOk = await _groupLeaveViaProfileConfirm(inst, gid, name);
