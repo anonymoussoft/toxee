@@ -76,15 +76,6 @@ Future<int> runC2cExtraSweep(Inst a, Inst b, String nickA, String nickB) async {
     return 1;
   }
 
-  // Mark BOTH accounts as L3 seed accounts so the test-gated nav/clear tools
-  // (l3_force_home_root for the contacts shell + sendComposerMessage's recovery,
-  // l3_clear_history) work on these fresh non-test real-UI accounts — mirrors
-  // sweep_conv / sweep_chat, which already mark. Revoked after the cases.
-  final aMarked = await a.markAccountTest();
-  final bMarked = await b.markAccountTest();
-  print('[sweep] sweep_c2c_extra: marked test accounts aMarked=$aMarked '
-      'bMarked=$bMarked');
-
   var passed = 0;
   var failed = 0;
 
@@ -108,38 +99,54 @@ Future<int> runC2cExtraSweep(Inst a, Inst b, String nickA, String nickB) async {
     print('[sweep] sweep_c2c_extra ${ok ? 'PASS' : 'FAIL'}: $name');
   }
 
-  await hard(
-    'c2c_global_search_contact_opens_chat',
-    () => _c2ceGlobalSearchContactOpensChat(a, toxB, nickB),
-  );
-  await hard('c2c_conv_delete_cancel', () => _c2ceConvDeleteCancel(a, toxB));
-  await hard(
-    'c2c_profile_clear_history_cancel',
-    () => _c2ceProfileClearHistoryCancel(a, toxB),
-  );
-  await hard(
-    'c2c_delete_friend_cancel',
-    () => _c2ceDeleteFriendCancel(a, toxB),
-  );
-  await hard(
-    'c2c_header_profile_send_back',
-    () => _c2ceHeaderProfileSendBack(a, toxB),
-  );
-
-  await _seedConvRow(
-    a,
-    toxB,
-    text: 'RuiC2CEnd-${DateTime.now().microsecondsSinceEpoch}',
-  );
-  // Revoke the seed-account marker so the launch ends in the original non-test
-  // state (the reseed above ran while still marked).
+  var endFriends = false;
   try {
-    await a.unmarkAccountTest();
-    await b.unmarkAccountTest();
-  } on DriveError {
-    // best-effort
+    // Mark BOTH accounts as L3 seed accounts so the test-gated nav/clear tools
+    // (l3_force_home_root for the contacts shell + sendComposerMessage's
+    // recovery, l3_clear_history) work on these fresh non-test real-UI accounts
+    // — mirrors sweep_conv / sweep_chat. The WHOLE marked window (both marks,
+    // cases, end-seed) is wrapped so the finally ALWAYS revokes: a thrown
+    // end-seed (outside hard()) or a partial mark must not leak test-account
+    // state into the next bundle step (codex).
+    final aMarked = await a.markAccountTest();
+    final bMarked = await b.markAccountTest();
+    print('[sweep] sweep_c2c_extra: marked test accounts aMarked=$aMarked '
+        'bMarked=$bMarked');
+
+    await hard(
+      'c2c_global_search_contact_opens_chat',
+      () => _c2ceGlobalSearchContactOpensChat(a, toxB, nickB),
+    );
+    await hard('c2c_conv_delete_cancel', () => _c2ceConvDeleteCancel(a, toxB));
+    await hard(
+      'c2c_profile_clear_history_cancel',
+      () => _c2ceProfileClearHistoryCancel(a, toxB),
+    );
+    await hard(
+      'c2c_delete_friend_cancel',
+      () => _c2ceDeleteFriendCancel(a, toxB),
+    );
+    await hard(
+      'c2c_header_profile_send_back',
+      () => _c2ceHeaderProfileSendBack(a, toxB),
+    );
+
+    await _seedConvRow(
+      a,
+      toxB,
+      text: 'RuiC2CEnd-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    endFriends = await areFriends(a, toxB) && await areFriends(b, toxA);
+  } finally {
+    // Always revoke the seed-account marker (best-effort) so the launch ends in
+    // the original non-test state.
+    try {
+      await a.unmarkAccountTest();
+      await b.unmarkAccountTest();
+    } on DriveError {
+      // best-effort
+    }
   }
-  final endFriends = await areFriends(a, toxB) && await areFriends(b, toxA);
   print(
     '[sweep] sweep_c2c_extra summary: passed=$passed failed=$failed '
     'endFriends=$endFriends',
