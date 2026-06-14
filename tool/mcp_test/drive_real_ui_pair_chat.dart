@@ -649,7 +649,14 @@ Future<bool> _chatForwardToOtherConv(Inst a, String toxB, String nickB) async {
   final targetTapped = await _tryTapText(a, nickB) ||
       await _tryTapText(a, _shortId(toxB));
   await Future<void>.delayed(const Duration(milliseconds: 600));
-  final sendTapped = await _tryTapText(a, 'Send');
+  // The picker's Send button carries a stable key (forward_picker_send_button) —
+  // tap THAT deterministically instead of the locale-dependent "Send" text,
+  // which resolveKeyCenter couldn't reliably hit (sendTapped=false even though
+  // the picker was up). Keep the text tap as a last-resort fallback.
+  final sendTapped =
+      await a.tapKeyCenter('forward_picker_send_button', timeoutSecs: 6) ||
+          await a.tryTapKey('forward_picker_send_button') ||
+          await _tryTapText(a, 'Send');
   await Future<void>.delayed(const Duration(milliseconds: 800));
   // sendForwardIndividuallyMessage defers the send ~100ms; the picker dismisses.
   final pickerGone =
