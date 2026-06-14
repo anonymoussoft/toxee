@@ -266,16 +266,23 @@ Future<bool> _aeeAddFriendPasteClipboard(Inst inst) async {
 /// then dismiss. No mouse path is used for the trigger.
 Future<bool> _aeeKeyboardNewConversationShortcut(Inst inst) async {
   await returnToChatsHome(inst, rounds: 4);
-  await inst.foreground();
-  try {
-    await inst.osaNewConversationShortcut();
-  } on DriveError catch (e) {
-    print(
-      '[pair] keyboard_new_conversation_shortcut: shortcut blocked: ${e.message}',
-    );
-    return false;
+  // Retry the chord: an osascript keystroke intermittently doesn't reach the
+  // app under 2-process foreground contention (the window isn't frontmost the
+  // instant the chord fires), so a single send flakes with "dialog did not
+  // open". Re-foreground + re-send until the Add-Friend dialog appears.
+  var opened = false;
+  for (var attempt = 0; attempt < 3 && !opened; attempt++) {
+    await inst.foreground();
+    try {
+      await inst.osaNewConversationShortcut();
+    } on DriveError catch (e) {
+      print(
+        '[pair] keyboard_new_conversation_shortcut: shortcut blocked: ${e.message}',
+      );
+      return false;
+    }
+    opened = await inst.waitKey('add_friend_id_input', timeoutSecs: 6);
   }
-  final opened = await inst.waitKey('add_friend_id_input', timeoutSecs: 10);
   await inst.shot('/tmp/ui_app_entry_kbd_newconv_${inst.name}.png');
   if (!opened) {
     print('[pair] keyboard_new_conversation_shortcut: dialog did not open');
