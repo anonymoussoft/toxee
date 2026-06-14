@@ -73,7 +73,18 @@ Future<String> _logoutToLoginPage(Inst inst) async {
     return '';
   }
   await _openSettings(inst);
-  await inst.tapKey('settings_logout_button'); // below-fold opener (fires once)
+  // The logout opener is BELOW the fold of the settings ListView (_openSettings
+  // leaves the list scrolled to the TOP). A bare tapKey is flaky: when the
+  // button sits beyond flutter_skill's cacheExtent it isn't built, so the tap
+  // lands on nothing and the confirm dialog never opens ("logout: confirm
+  // dialog did not open"). Scroll it into the visible band first, then
+  // center-tap its resolved position (tryTapKey fallback).
+  if (!await _settingsScrollTo(inst, 'settings_logout_button')) {
+    print('[pair] logout: logout button not in band');
+  }
+  if (!await inst.tapKeyCenter('settings_logout_button', timeoutSecs: 6)) {
+    await inst.tryTapKey('settings_logout_button');
+  }
   if (!await inst.waitKey('settings_logout_confirm_button', timeoutSecs: 8)) {
     print('[pair] logout: confirm dialog did not open');
     return '';
