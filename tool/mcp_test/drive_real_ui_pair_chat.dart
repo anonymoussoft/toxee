@@ -133,6 +133,96 @@ Future<bool> _waitFriendOnline(
   return false;
 }
 
+/// Gate a two-process GROUP round on the FRIEND CONNECTION, not merely on
+/// friend-list membership. `areFriends` proves the list entry only; right after
+/// `reset_friendship` the relayed friend link is still rebuilding, and a
+/// private-NGC invite RIDES that link — C++ `InviteUserToGroup` →
+/// `tox_group_invite_friend` fails for an offline friend, the invite is lost,
+/// and the round burned 3 × 45 s waiting for an auto-join that could not come
+/// (iOS TCP-relay-only pair, 2026-09-05). Waits for the entry, then for BOTH
+/// directions to report `online == true` (the gate the file/C2C cases use).
+Future<bool> _waitPairFriendLinkOnline(
+  Inst a,
+  Inst b,
+  String toxA,
+  String toxB, {
+  required String label,
+  int timeoutSecs = 90,
+}) async {
+  final friendsReady = await _retryBool(
+    () async => await areFriends(a, toxB) && await areFriends(b, toxA),
+    label: '$label friendship ready',
+    attempts: 20,
+    intervalMs: 1000,
+  );
+  if (!friendsReady) {
+    print('[pair] $label requires an existing friendship');
+    return false;
+  }
+  final aSeesB = await _waitFriendOnline(a, toxB, timeoutSecs: timeoutSecs);
+  final bSeesA = await _waitFriendOnline(b, toxA, timeoutSecs: timeoutSecs);
+  if (aSeesB && bSeesA) return true;
+  print(
+    '[pair] $label: friend link not online after ${timeoutSecs}s '
+    '(A sees B online=$aSeesB, B sees A online=$bSeesA) — a private-group '
+    'invite rides the friend connection, so not inviting',
+  );
+  return false;
+}
+
+/// Poll `l3_composer_send {probe}` until the MOUNTED composer reports it is
+/// bound to [groupId]. On a phone `_openChat` binds `currentConversation`
+/// BEFORE it pushes the message route, so `_chatSurfaceReadyForAnyGroup`
+/// (conversation id + an onstage input) is satisfiable by the PREVIOUS chat's
+/// still-mounted composer, and the process-global send seam then delivers into
+/// that chat — `msgmenu_read_receipt_group_gating` died exactly so on the iOS
+/// pair (the C2C chat with B was the last one open). Shell-agnostic: the
+/// desktop composer reports the same `boundGroupID`. Null on timeout (logged).
+Future<Map<String, dynamic>?> _waitComposerBoundToGroup(
+  Inst inst,
+  String groupId, {
+  required String label,
+  int timeoutSecs = 15,
+}) async {
+  final deadline = DateTime.now().add(Duration(seconds: timeoutSecs));
+  Map<String, dynamic> last = const {};
+  while (DateTime.now().isBefore(deadline)) {
+    last = await inst.l3('l3_composer_send', {'probe': 'true'});
+    if (last['boundGroupID'] == groupId) return last;
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
+  print(
+    '[pair] $label: composer never bound to group_${_shortId(groupId)} within '
+    '${timeoutSecs}s (seam=${last['seam']} boundUserID=${last['boundUserID']} '
+    'boundGroupID=${last['boundGroupID']})',
+  );
+  return null;
+}
+
+/// Send [text] (or the field as-is when null — the @-mention cases) through
+/// the production composer seam INTO [groupId]: wait for the composer to be
+/// bound to it, then assert the seam's OWN result and binding. Replaces bare
+/// `l3_composer_send` at every GROUP send site, where the ignored result let a
+/// mis-bound send pass as "sent" until the history wait timed out.
+Future<bool> _composerSendInGroup(
+  Inst inst,
+  String groupId, {
+  String? text,
+  required String label,
+}) async {
+  if (await _waitComposerBoundToGroup(inst, groupId, label: label) == null) {
+    return false;
+  }
+  final res = await inst.l3('l3_composer_send', {
+    if (text != null) 'text': text,
+  });
+  if (res['ok'] != true || res['boundGroupID'] != groupId) {
+    print('[pair] $label: composer send refused or mis-bound: $res');
+    return false;
+  }
+  return true;
+}
+
 /// Reliably bind the master-detail chat for [peerTox] via the production
 /// `_openChat` (l3_open_chat) and VERIFY currentConversation took, retrying a few
 /// times. A single openChatViaL3 is flaky post-restyle (the app sits on the
@@ -260,109 +350,6 @@ Future<bool> _waitC2cMessageText(
     }
     await Future<void>.delayed(Duration(milliseconds: intervalMs));
   }
-  return false;
-}
-
-/// Open the REAL message context menu for the OWN message [msgId] with the
-/// shell's own trigger — a genuine secondary-tap (desktop
-/// `_openDesktopMessageMenu`) or a genuine long-press (mobile
-/// `_onLongPressMessageOnMobile`). No gated tool either way. Returns whether at
-/// least one keyed `message_menu_item:*` rendered. Foregrounds first + retries.
-///
-/// WHY THE BRANCH: a mobile shell has no secondary-button pointer, so
-/// `ui_secondary_tap` dispatches a kSecondaryMouseButton PointerDown the
-/// bubble's Listener never treats as a menu open — every menu-driven chat case
-/// hard-failed on iOS/Android. The mobile twin is a real touch down→hold→up at
-/// 800 ms (past the 500 ms framework deadline AND the fork's 650 ms
-/// recognizer), the trigger `mobile_message_long_press_menu` already proves out
-/// in drive_real_ui_pair_mobile_shell.dart. Desktop behaviour is unchanged.
-Future<bool> _openMessageMenuReal(Inst inst, String msgId) async {
-  await inst.foreground();
-  // Pop the friend's contact profile if it covers the chat — the row is then
-  // offstage behind it and the trigger hits the profile ("menu did not open").
-  await _dismissFriendProfileToUnderlying(inst);
-  final rowKey = 'message_list_item:$msgId';
-  if (!await inst.waitKey(rowKey, timeoutSecs: 8)) {
-    // WHERE is the app? "row not present" cannot tell a missing bubble from a
-    // chat surface that left the stack (narrow shell: a dismiss tap that popped
-    // the pushed route) — the ambiguity that cost a shift on kg3's receipt case.
-    print(
-      '[pair] _openMessageMenuReal: row $rowKey not present — '
-      '${await _convShellDiag(inst)}',
-    );
-    return false;
-  }
-  // The BUBBLE is alignment-offset inside its full-width row (self right,
-  // peer left): the row's centre is empty space where long-press misses the
-  // Listener. Aim at FRACTIONS OF THE ROW'S OWN WIDTH — row-RELATIVE, not
-  // centre-scaled (2026-08-16): scaling absolute x assumes the row starts at
-  // is flush left. On the iPad master-detail shell the pane starts after the
-  // sidebar + conversation list (live: rowCentre.x = 683 for a ~532..834 pane),
-  // so the "right third" landed at 847/902 (OFF the 834pt screen) and the "left
-  // third" at 410/341, inside the CONVERSATION LIST.
-  // Fractions: 0.72/0.85 sit on a right-aligned self bubble (0.72 reproduces
-  // the live-probed desktop hit at x≈1030 of a 382..1280 pane), 0.15/0.28 on a
-  // left-aligned peer bubble (incl. the narrow inbound `[Custom]` placeholder),
-  // 0.5 is the plain row centre. The mobile list is shorter (800 ms per hold).
-  final rowBox = await _keyBox(inst, rowKey);
-  final rowCenter = rowBox == null ? null : (x: rowBox.x, y: rowBox.y);
-  const bubbleFraction = <double>[0.72, 0.15, 0.85, 0.28, 0.6, 0.4, 0.5];
-  const mobileBubbleFraction = <double>[0.72, 0.15, 0.85, 0.5, 0.28];
-  final factors = inst.isMobileShell ? mobileBubbleFraction : bubbleFraction;
-  for (var attempt = 0; attempt < factors.length; attempt++) {
-    var tapped = false;
-    try {
-      final f = factors[attempt];
-      final usable = rowBox != null && rowBox.w > 0;
-      final x = usable ? rowBox.x - rowBox.w / 2 + f * rowBox.w : 0.0;
-      if (inst.isMobileShell) {
-        if (usable && f != 0.5) {
-          final r = await inst.l3('ui_long_press', {
-            'x': '$x',
-            'y': '${rowBox.y}',
-            'holdMs': '800',
-          });
-          if (r['ok'] != true) {
-            print('[pair] _openMessageMenuReal: ui_long_press warn: $r');
-          }
-        } else {
-          await inst.longPressKey(rowKey);
-        }
-      } else if (usable && f != 0.5) {
-        await inst.secondaryTapAt(x, rowBox.y);
-      } else {
-        await inst.secondaryTapKey(rowKey);
-      }
-      tapped = true;
-    } on DriveError catch (e) {
-      print('[pair] _openMessageMenuReal: menu trigger warn: ${e.message}');
-    }
-    if (!tapped) {
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      continue;
-    }
-    // The mobile menu animates in after the hold releases — give it the same
-    // 900 ms `mobile_message_long_press_menu` settled on.
-    await Future<void>.delayed(
-      Duration(milliseconds: inst.isMobileShell ? 900 : 700),
-    );
-    // The desktop context menu renders in an `Overlay.insert` entry that
-    // flutter_skill's waitForElement/interactiveStructured does NOT traverse
-    // (it only ever matched the now-keyless OFFSTAGE measurement copy). Detect
-    // it via the ELEMENT-TREE resolver (`waitKeyCenter` → resolveKeyCenter),
-    // which walks the full tree including overlays. Taps still go through
-    // tapKeyCenter, which falls back to the same resolver.
-    if (await inst.waitKeyCenter('message_menu_item:copy', timeoutSecs: 3) ||
-        await inst.waitKeyCenter('message_menu_item:delete', timeoutSecs: 2)) {
-      return true;
-    }
-  }
-  await inst.shot('/tmp/ui_open_msg_menu_fail_${inst.name}.png');
-  print(
-    '[pair] _openMessageMenuReal: menu did not open for $rowKey '
-    '(rowCenter=$rowCenter rowW=${rowBox?.w}) '
-    'shot=/tmp/ui_open_msg_menu_fail_${inst.name}.png',
-  );
   return false;
 }
 
@@ -1163,7 +1150,7 @@ Future<bool?> _chatReplyQuoteRoundtrip(Inst a, String toxB) async {
     }
     // Open the REAL message menu on the custom bubble → the Reply item IS present
     // here (quotable), unlike a text bubble.
-    if (!await _openMessageMenuReal(a, customMsgId)) {
+    if (!await _openMessageMenuReal(a, customMsgId, isSelf: false)) {
       print('[pair] chat_reply_quote_roundtrip: message menu did not open');
       return false;
     }
@@ -1735,14 +1722,14 @@ Future<bool> _chatImageBubbleOpenPreview(
     // best-effort — the preview surface mounts after an async image load.
   }
   await a.shot('/tmp/ui_chat_image_A.png');
+  final preview = await _closeImagePreviewIfOpen(a);
   await returnToChatsHome(a, rounds: 4);
   print(
     '[pair] chat_image_bubble_open_preview: imageMsgId=$imageMsgId '
-    'rowRendered=$rowRendered (preview-open is best-effort, not gated)',
+    'rowRendered=$rowRendered previewOpened=${preview.opened} '
+    'closed=${preview.closed}',
   );
-  // HARD: the inbound image message exists (mediaKind image) AND its bubble row
-  // renders in the real list.
-  return rowRendered;
+  return rowRendered && preview.closed; // HARD: row + an opened preview closed
 }
 
 // ===========================================================================
@@ -1752,8 +1739,8 @@ Future<bool> _chatImageBubbleOpenPreview(
 /// tapping it dispatches the real `_openFile()` path. The file is seeded via
 /// `l3_send_file` with `contentB64` + a `.bin` name FROM B to A. Asserts A's
 /// dump shows an inbound `mediaKind == 'file'` message with the fileName AND its
-/// bubble row renders; the tap is dispatched (best-effort — the open routes to
-/// the OS, not assertable headless).
+/// bubble row renders; the tap runs `_openFile()` — on iOS the native preview
+/// it presents must be dismissed (`coverOk`); desktop hand-off is best-effort.
 Future<bool> _chatFileBubblePresentOpen(
   Inst a,
   Inst b,
@@ -1797,6 +1784,14 @@ Future<bool> _chatFileBubblePresentOpen(
     );
     return false;
   }
+  // Tap opens only once the transfer landed (`filePath`): before, download variant.
+  var localReady = false;
+  for (var i = 0; i < 40 && !localReady; i++) {
+    localReady = (await _c2cMessages(a, toxB)).any((m) =>
+        m['msgID']?.toString() == fileMsgId &&
+        (m['filePath']?.toString() ?? '').isNotEmpty);
+    if (!localReady) await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
   await _ensureChatOpen(a, toxB);
   final rowRendered = await a.waitKey(
     'message_list_item:$fileMsgId',
@@ -1813,21 +1808,26 @@ Future<bool> _chatFileBubblePresentOpen(
     renderedName = '${renderedName.substring(0, 8)}...';
   }
   final nameShown = await a.waitText(renderedName, timeoutSecs: 6);
-  // Best-effort tap to dispatch the real _openFile() (routes to the OS).
+  // Tap runs the real _openFile(); iOS then shows a NATIVE preview (frames
+  // pause) that the case must close — see Inst.dismissIosDocumentPreview.
+  // Aim at the BUBBLE (left-aligned inbound), not the row centre: on the wide
+  // iPad pane the centre is empty space and the preview never opened.
   try {
-    await a.tapKeyCenter('message_list_item:$fileMsgId', timeoutSecs: 4);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (!await _tapInboundBubble(a, 'message_list_item:$fileMsgId')) {
+      await a.tapKeyCenter('message_list_item:$fileMsgId', timeoutSecs: 4);
+    }
   } on DriveError {
-    // best-effort
+    // desktop: best-effort hand-off; iOS: a missed tap fails via coverOk
   }
+  final coverOk = !a.isIos || await a.dismissIosDocumentPreview();
   await a.shot('/tmp/ui_chat_file_A.png');
   await returnToChatsHome(a, rounds: 4);
   print(
     '[pair] chat_file_bubble_present_open: fileMsgId=$fileMsgId '
-    'rowRendered=$rowRendered nameShown=$nameShown (tap-open best-effort)',
+    'rowRendered=$rowRendered nameShown=$nameShown localReady=$localReady '
+    'coverOk=$coverOk',
   );
-  // HARD: the inbound file bubble renders with its filename.
-  return rowRendered && nameShown;
+  return rowRendered && nameShown && localReady && coverOk;
 }
 
 // ===========================================================================

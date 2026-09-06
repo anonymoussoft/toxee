@@ -416,3 +416,78 @@ Future<bool?> _kgIrcAppUninstallReinstallCard(Inst inst) async {
     await _kgIrcCleanup(inst, label);
   }
 }
+
+// ===========================================================================
+// irc_join_channel_loopback_live: real-UI IRC config helper (sweep_app_entry_extra)
+// ===========================================================================
+/// Point the app at the loopback [server] through the REAL Applications-page
+/// config form and PROVE the save landed before the caller opens the
+/// Add-Channel dialog: Applications tab → Install (when offered) → server/port
+/// fields → Save → `l3_dump_state.ircServer/ircPort` == the loopback endpoint.
+///
+/// WHY THE PROOF STEP EXISTS (iPhone 2026-09-06, `rui-ios-app-entry-extra`):
+/// the two `focusType`s leave the SOFT KEYBOARD up. On a phone the config card
+/// sits BELOW the app card in the page's CustomScrollView, so the Save button
+/// resolves at coordinates the IME covers (or below the IME-resized viewport)
+/// and the coordinate tap lands on the keyboard — no error anywhere, nothing
+/// saved. The app then connected to what `l3_irc_set_state reset` left behind
+/// (`.invalid:6667`), the loopback server never saw a JOIN and the case died in
+/// the 10 s wait as an uncaught TimeoutException with no diagnostic. The iPad
+/// passed minutes earlier: `ResponsiveLayout.isDesktop` is true there and the
+/// viewport has room — the same split `settings_prelogin_bootstrap_node_test`
+/// hit. Hide the keyboard first (`_prepareDialogSubmit`, a desktop no-op), tap,
+/// then ASSERT the pref; one element-resolved `tapKey` retry (immune to
+/// coordinates) precedes giving up with the app-held server/port in the message.
+Future<bool> _aeeIrcConfigureLoopbackViaUi(
+  Inst inst,
+  String label,
+  LocalIrcServer server,
+) async {
+  await ensureHome(inst, '');
+  if (!await inst.tapKeyCenter('sidebar_applications_tab', timeoutSecs: 4) &&
+      !await inst.tapKeyCenter('bottom_nav_applications_tab', timeoutSecs: 4)) {
+    print('[pair] $label: applications tab missing');
+    return false;
+  }
+  if (await inst.waitKey('applications_irc_install_button', timeoutSecs: 4)) {
+    if (!await inst.tapKeyCenter('applications_irc_install_button')) {
+      await inst.tapKey('applications_irc_install_button');
+    }
+  }
+  if (!await inst.waitKey('applications_irc_server_field', timeoutSecs: 12)) {
+    print('[pair] $label: config fields missing');
+    return false;
+  }
+  await inst.focusType('applications_irc_server_field', server.host);
+  await inst.focusType('applications_irc_port_field', '${server.port}');
+  for (var attempt = 0; attempt < 2; attempt++) {
+    await _prepareDialogSubmit(inst, 'applications_irc_save_config_button');
+    if (attempt > 0 ||
+        !await inst.tapKeyCenter('applications_irc_save_config_button')) {
+      await inst.tapKey('applications_irc_save_config_button');
+    }
+    if (await _aeeIrcConfigSaved(inst, server)) return true;
+    print('[pair] $label: save tap ${attempt + 1} did not persist the config');
+  }
+  final held = await inst.dumpState();
+  await inst.shot('/tmp/ui_app_entry_irc_live_config_${inst.name}.png');
+  print(
+    '[pair] $label: IRC config NOT saved through the UI — app holds '
+    'ircServer=${held['ircServer']} ircPort=${held['ircPort']}, wanted '
+    '${server.host}:${server.port}; the live JOIN cannot be attempted',
+  );
+  return false;
+}
+
+/// Poll `l3_dump_state` (~3 s) until the persisted IRC endpoint is [server]'s.
+Future<bool> _aeeIrcConfigSaved(Inst inst, LocalIrcServer server) async {
+  for (var i = 0; i < 10; i++) {
+    final state = await inst.dumpState();
+    if (state['ircServer'] == server.host &&
+        (state['ircPort'] as num?)?.toInt() == server.port) {
+      return true;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
+  return false;
+}

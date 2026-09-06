@@ -378,6 +378,22 @@ Future<bool?> _mselForwardSurface(Inst a, String toxB) async {
       );
       return false;
     }
+    // The options sheet SLIDES UP (showModalBottomSheet's route transition)
+    // and `waitKeyCenter` sees its ListTile from the FIRST frame of that
+    // slide, so a centre read right after it is a centre the tile has already
+    // left: the pointer lands beneath it, on the sheet's padding or on the
+    // barrier (which dismisses the sheet), and `onMessagesForward` never runs
+    // — "the forward target picker did not mount" (live iPhone 2026-09-05,
+    // sweep_msg_select attempt 1, green on the retry). Same class as the
+    // toolbar slide-in race `_mselEnterSelectMode` documents; same remedy.
+    if (await a.waitKeyCenterSettled(
+          'message_select_forward_individually_item',
+          timeoutSecs: 6,
+        ) ==
+        null) {
+      print('[pair] $label: the sheet forward-individually row never settled');
+      return false;
+    }
     if (!await a.tapKeyCenter(
       'message_select_forward_individually_item',
       timeoutSecs: 6,

@@ -271,7 +271,12 @@ Future<void> _inviteToGroup(Inst inst, String groupId, String userId) async {
     return;
   }
   if (res['ok'] != true) {
-    throw DriveError('[${inst.name}] l3_invite_to_group failed: $res');
+    // Includes a per-member FAIL (tox_group_invite_friend refused — typically
+    // the friend link is not online yet), which used to pass as `ok`.
+    throw DriveError(
+      '[${inst.name}] l3_invite_to_group failed (error=${res['error']} '
+      'members=${res['members']}): $res',
+    );
   }
 }
 
@@ -740,14 +745,8 @@ Future<int> runGroupMessage(
   await ensureHome(b, nickB);
   final toxB = (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
   final toxA = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
-  final friendsReady = await _retryBool(
-    () async => await areFriends(a, toxB) && await areFriends(b, toxA),
-    label: '$label friendship ready',
-    attempts: 20,
-    intervalMs: 1000,
-  );
-  if (!friendsReady) {
-    print('[pair] $label requires an existing friendship');
+  // Friend list AND friend connection: the invite below rides the friend link.
+  if (!await _waitPairFriendLinkOnline(a, b, toxA, toxB, label: label)) {
     return 1;
   }
 

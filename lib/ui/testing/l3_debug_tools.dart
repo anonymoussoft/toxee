@@ -49,13 +49,15 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Locale, Size, ThemeMode;
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, MethodChannel;
 import 'package:mcp_toolkit/mcp_toolkit.dart';
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_input/desktop/tencent_cloud_chat_message_input_desktop.dart'
     show
         debugRealUiDesktopComposerSend,
         debugRealUiDesktopComposerSetText,
         debugRealUiDesktopComposerMentionSend,
+        debugRealUiDesktopComposerBinding,
         debugRealUiDesktopPasteImagePath;
 import 'package:tencent_cloud_chat_common/tencent_cloud_chat.dart';
 import 'package:tencent_cloud_chat_common/data/contact/tencent_cloud_chat_contact_data.dart';
@@ -63,7 +65,8 @@ import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_input/mobi
     show
         debugRealUiMobileComposerSetText,
         debugRealUiMobileComposerSendText,
-        debugRealUiMobileComposerSend;
+        debugRealUiMobileComposerSend,
+        debugRealUiMobileComposerBinding;
 import 'package:tencent_cloud_chat_message/tencent_cloud_chat_message_input/desktop/tencent_cloud_chat_message_input_desktop.dart'
     show debugRealUiDesktopComposerSendText;
 import 'package:tim2tox_dart/service/tuicallkit_adapter.dart';
@@ -89,6 +92,9 @@ import '../../util/prefs.dart';
 import '../../util/tox_utils.dart';
 
 part 'l3_invoker_registry.dart';
+part 'l3_irc_tools.dart';
+part 'l3_native_cover_tools.dart';
+part 'l3_composer_invite_tools.dart';
 
 /// True only on the canonical L3 launch (`run_toxee.sh` with an `MCP_BINDING`
 /// injects `--dart-define=TOXEE_L3_TEST=true`). Combined with [kDebugMode] this
@@ -336,7 +342,7 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3CallActionEntry());
   addMcpTool(_l3SendTextEntry());
   addMcpTool(_l3ComposerSetTextEntry());
-  addMcpTool(_l3ComposerSendEntry());
+  _registerL3ComposerInviteTools();
   addMcpTool(_l3MentionSendEntry());
   addMcpTool(_l3PasteImageEntry());
   addMcpTool(_l3SetClipboardEntry());
@@ -390,14 +396,12 @@ void registerL3DebugToolsIfEnabled() {
   addMcpTool(_l3SetConnectionEntry());
   registerL3PresentationTools(isTestAccount: _activeAccountIsTest);
   registerL3GroupReceiptTools(isTestAccount: _activeAccountIsTest);
-  addMcpTool(_l3InviteToGroupEntry());
   addMcpTool(_l3KickGroupMemberEntry());
   addMcpTool(_l3GroupMemberListEntry());
   addMcpTool(_l3DhtInfoEntry());
   addMcpTool(_l3AddBootstrapNodeEntry());
-  addMcpTool(_l3IrcSetStateEntry());
-  addMcpTool(_l3IrcAddChannelLocalEntry());
-  addMcpTool(_l3IrcRemoveChannelLocalEntry());
+  _registerL3IrcTools();
+  _registerL3NativeCoverTools();
   addMcpTool(_l3ContactSearchEntry());
   // UNGATED group-campaign plumbing hooks (work on fresh/non-test accounts).
   // These mirror the test-gated set_setting(autoAcceptGroupInvites) /
@@ -1409,74 +1413,6 @@ MCPCallEntry _l3SendTextEntry() => MCPCallEntry.tool(
         ),
       },
       required: ['text'],
-    ),
-  ),
-);
-
-MCPCallEntry _l3ComposerSendEntry() => MCPCallEntry.tool(
-  handler: (request) async {
-    final text = request['text']?.toString();
-    // Mixed macOS<->iOS / mobile: prefer the combined set-text-and-send seam so a
-    // macOS peer can send over the VM service while a Simulator peer holds the
-    // foreground (no osascript keystrokes), and the mobile composer (which
-    // ignores synthetic enterText) sends via the production path.
-    if (text != null) {
-      final combined =
-          debugRealUiDesktopComposerSendText ??
-          debugRealUiMobileComposerSendText;
-      if (combined != null) {
-        combined(text);
-        return MCPCallResult(
-          message: 'composer text sent',
-          parameters: {'ok': true, 'length': text.length},
-        );
-      }
-    }
-    // Desktop / Windows: set the field DIRECTLY (flutter_skill enterText can't
-    // reach this composer's controller headless on Windows), then invoke the REAL
-    // Enter-send (the exact inputMethods.sendTextMessage path).
-    //
-    // The MOBILE composer falls back to its own send-only seam. Without it, a
-    // no-`text` call on any phone/tablet shell answered `no_active_composer` and
-    // silently sent nothing — which is what made both `mobile_mention_picker_*`
-    // cases fail: the text they must send is written by the app's own
-    // `_submitAtMemberList`, so they cannot supply it as an argument.
-    final hook =
-        debugRealUiDesktopComposerSend ?? debugRealUiMobileComposerSend;
-    if (hook == null) {
-      return MCPCallResult(
-        message: 'l3_composer_send: no composer mounted',
-        parameters: {'ok': false, 'error': 'no_active_composer'},
-      );
-    }
-    if (text != null) {
-      final setText = debugRealUiDesktopComposerSetText;
-      if (setText != null) {
-        setText(text);
-        // Let the field rebuild with the new text before the send reads it.
-        await Future<void>.delayed(const Duration(milliseconds: 60));
-      }
-    }
-    hook();
-    return MCPCallResult(
-      message: 'composer send invoked',
-      parameters: {'ok': true},
-    );
-  },
-  definition: MCPToolDefinition(
-    name: 'l3_composer_send',
-    description:
-        'L3 TEST ONLY: send the open chat composer text via the production '
-        'inputMethods.sendTextMessage path (the Enter-key / send-button code). '
-        'With "text" set the field first (deterministic); routes to the mobile / '
-        'mixed-run combined seam when mounted, else the desktop set-text+Enter '
-        'path. Returns {ok, error?}.',
-    inputSchema: ObjectSchema(
-      properties: {
-        'text': StringSchema(
-          description: 'Optional text to set in the composer before sending.',
-        ),
-      },
     ),
   ),
 );
@@ -4913,289 +4849,6 @@ MCPCallEntry _l3GroupChatIdEntry() => MCPCallEntry.tool(
   ),
 );
 
-MCPCallEntry _l3IrcSetStateEntry() => MCPCallEntry.tool(
-  handler: (request) async {
-    if (!await _activeAccountIsTest()) {
-      return MCPCallResult(
-        message: 'l3_irc_set_state: refused — non-test account',
-        parameters: {'ok': false, 'error': 'non_test_account'},
-      );
-    }
-    final reset = _parseOptionalBool(request['reset']) ?? false;
-    if (request.containsKey('reset') &&
-        _parseOptionalBool(request['reset']) == null) {
-      return MCPCallResult(
-        message: 'l3_irc_set_state: reset must be true|false',
-        parameters: {'ok': false, 'error': 'bad_reset'},
-      );
-    }
-    final installed = _parseOptionalBool(request['installed']);
-    final useSasl = _parseOptionalBool(request['useSasl']);
-    final localAddOverride = _parseOptionalBool(request['localAddOverride']);
-    if (request.containsKey('installed') && installed == null) {
-      return MCPCallResult(
-        message: 'l3_irc_set_state: installed must be true|false',
-        parameters: {'ok': false, 'error': 'bad_installed'},
-      );
-    }
-    if (request.containsKey('useSasl') && useSasl == null) {
-      return MCPCallResult(
-        message: 'l3_irc_set_state: useSasl must be true|false',
-        parameters: {'ok': false, 'error': 'bad_use_sasl'},
-      );
-    }
-    if (request.containsKey('localAddOverride') && localAddOverride == null) {
-      return MCPCallResult(
-        message: 'l3_irc_set_state: localAddOverride must be true|false',
-        parameters: {'ok': false, 'error': 'bad_local_add_override'},
-      );
-    }
-    final portRaw = request['port'];
-    final port = portRaw == null
-        ? null
-        : int.tryParse(portRaw.toString().trim());
-    if (portRaw != null && (port == null || port <= 0)) {
-      return MCPCallResult(
-        message: 'l3_irc_set_state: port must be a positive integer',
-        parameters: {'ok': false, 'error': 'bad_port'},
-      );
-    }
-    try {
-      if (reset) {
-        await Prefs.setIrcAppInstalled(false);
-        await Prefs.setIrcChannels(const <String>[]);
-        await Prefs.setIrcServer('.invalid');
-        await Prefs.setIrcPort(6667);
-        await Prefs.setIrcUseSasl(false);
-        _ircLocalAddOverrideEnabled = false;
-      }
-      if (installed != null) await Prefs.setIrcAppInstalled(installed);
-      final server = (request['server'] as Object?)?.toString().trim();
-      if (server != null) await Prefs.setIrcServer(server);
-      if (port != null) await Prefs.setIrcPort(port);
-      if (useSasl != null) await Prefs.setIrcUseSasl(useSasl);
-      if (localAddOverride != null) {
-        _ircLocalAddOverrideEnabled = localAddOverride;
-      }
-      final channels = _parseOptionalStringList(request['channels']);
-      if (channels != null) {
-        await Prefs.setIrcChannels([
-          for (final channel in channels) _normalizeIrcChannelName(channel),
-        ]);
-      }
-      // Sync the IN-MEMORY IrcAppManager from the prefs we just wrote. The
-      // Applications page surfaces the Add-Channel button from
-      // `IrcAppManager().isInstalled` (in-memory) + lists `IrcAppManager().channels`,
-      // NOT from Prefs directly — so without this re-init the page never reflects
-      // an l3-set `installed:true` (the add button stays hidden, and an
-      // l3-seeded channel list stays empty) even though dump_state (which reads
-      // Prefs) shows the new values. `init()` re-reads installed + channels from
-      // Prefs WITHOUT loading the native libirc_client (the localAddOverride path
-      // needs no native lib). Surfaced live on Windows by irc_join_channel_real_controls.
-      await IrcAppManager().init();
-      // Tell the (already-built, IndexedStack-cached) Applications page to reload
-      // its install-state + channel list so this mutation surfaces in the UI.
-      debugApplicationsIrcReloadSignal.value =
-          debugApplicationsIrcReloadSignal.value + 1;
-      final params = projectIrcState(
-        installed: await Prefs.getIrcAppInstalled(),
-        channels: await Prefs.getIrcChannels(),
-        server: await Prefs.getIrcServer(),
-        port: await Prefs.getIrcPort(),
-        useSasl: await Prefs.getIrcUseSasl(),
-        channelGroups: await _readIrcChannelGroups(),
-      );
-      AppLogger.info('[L3] l3_irc_set_state MUTATED $params');
-      return MCPCallResult(
-        message: 'IRC local state updated',
-        parameters: {
-          'ok': true,
-          ...params,
-          'ircLocalAddOverride': _ircLocalAddOverrideEnabled,
-        },
-      );
-    } catch (e, st) {
-      AppLogger.logError('[L3] l3_irc_set_state failed', e, st);
-      return MCPCallResult(
-        message: 'l3_irc_set_state: failed: $e',
-        parameters: {'ok': false, 'error': 'set_failed', 'detail': '$e'},
-      );
-    }
-  },
-  definition: MCPToolDefinition(
-    name: 'l3_irc_set_state',
-    description:
-        'L3 TEST ONLY (test/seed account, MUTATING): set deterministic local IRC '
-        'Prefs without loading libirc_client or contacting an IRC server. '
-        'Optional fields: installed=true|false, server, port, useSasl=true|false, '
-        'channels as JSON array/List/comma-separated string, '
-        'localAddOverride=true|false for real-control no-network add.',
-    inputSchema: ObjectSchema(
-      properties: {
-        'reset': StringSchema(
-          description: 'true | false; reset local IRC prefs to .invalid/empty.',
-        ),
-        'installed': StringSchema(description: 'true | false'),
-        'server': StringSchema(description: 'IRC server string to persist.'),
-        'port': StringSchema(description: 'Positive integer port.'),
-        'useSasl': StringSchema(description: 'true | false'),
-        'channels': StringSchema(
-          description: 'JSON array, List, or comma-separated IRC channels.',
-        ),
-        'localAddOverride': StringSchema(
-          description:
-              'true | false; route Applications add-channel through local prefs.',
-        ),
-      },
-    ),
-  ),
-);
-
-MCPCallEntry _l3IrcAddChannelLocalEntry() => MCPCallEntry.tool(
-  handler: (request) async {
-    if (!await _activeAccountIsTest()) {
-      return MCPCallResult(
-        message: 'l3_irc_add_channel_local: refused — non-test account',
-        parameters: {'ok': false, 'error': 'non_test_account'},
-      );
-    }
-    final channel = _normalizeIrcChannelName(
-      (request['channel'] as Object?)?.toString() ?? '',
-    );
-    if (channel.isEmpty) {
-      return MCPCallResult(
-        message: 'l3_irc_add_channel_local: need "channel"',
-        parameters: {'ok': false, 'error': 'missing_channel'},
-      );
-    }
-    final groupId =
-        ((request['groupId'] as Object?)?.toString().trim().isNotEmpty ?? false)
-        ? (request['groupId'] as Object).toString().trim()
-        : _defaultL3IrcGroupId(channel);
-    try {
-      await Prefs.addIrcChannel(channel);
-      await Prefs.setGroupName(groupId, 'IRC: $channel');
-      final groups = await Prefs.getGroups();
-      if (groups.add(groupId)) await Prefs.setGroups(groups);
-      await Prefs.removeQuitGroup(groupId);
-      final ffi = FakeUIKit.instance.im?.ffi;
-      var liveStateUpdated = false;
-      if (ffi != null) {
-        await ffi.registerJoinedGroupState(groupId);
-        liveStateUpdated = true;
-      }
-      final channelGroups = await _readIrcChannelGroups();
-      AppLogger.info(
-        '[L3] l3_irc_add_channel_local MUTATED channel=$channel group=$groupId',
-      );
-      return MCPCallResult(
-        message: 'IRC channel mapped locally',
-        parameters: {
-          'ok': true,
-          'channel': channel,
-          'groupId': groupId,
-          'liveStateUpdated': liveStateUpdated,
-          'ircChannels': await Prefs.getIrcChannels(),
-          'ircChannelGroups': channelGroups,
-        },
-      );
-    } catch (e, st) {
-      AppLogger.logError('[L3] l3_irc_add_channel_local failed', e, st);
-      return MCPCallResult(
-        message: 'l3_irc_add_channel_local: failed: $e',
-        parameters: {'ok': false, 'error': 'add_failed', 'detail': '$e'},
-      );
-    }
-  },
-  definition: MCPToolDefinition(
-    name: 'l3_irc_add_channel_local',
-    description:
-        'L3 TEST ONLY (test/seed account, MUTATING): create a deterministic local '
-        'IRC channel-to-group mapping without IrcAppManager.addChannel, '
-        'libirc_client, or connectIrcChannel. Persists irc_channels, group name '
-        '"IRC: <channel>", and live joined-group state when a session exists.',
-    inputSchema: ObjectSchema(
-      properties: {
-        'channel': StringSchema(description: 'IRC channel, e.g. #toxee-l3.'),
-        'groupId': StringSchema(
-          description:
-              'Optional deterministic local group id. Defaults from channel.',
-        ),
-      },
-      required: ['channel'],
-    ),
-  ),
-);
-
-MCPCallEntry _l3IrcRemoveChannelLocalEntry() => MCPCallEntry.tool(
-  handler: (request) async {
-    if (!await _activeAccountIsTest()) {
-      return MCPCallResult(
-        message: 'l3_irc_remove_channel_local: refused — non-test account',
-        parameters: {'ok': false, 'error': 'non_test_account'},
-      );
-    }
-    final channel = _normalizeIrcChannelName(
-      (request['channel'] as Object?)?.toString() ?? '',
-    );
-    if (channel.isEmpty) {
-      return MCPCallResult(
-        message: 'l3_irc_remove_channel_local: need "channel"',
-        parameters: {'ok': false, 'error': 'missing_channel'},
-      );
-    }
-    try {
-      final beforeGroups = await _readIrcChannelGroups();
-      final groupId =
-          (request['groupId'] as Object?)?.toString().trim().isNotEmpty == true
-          ? (request['groupId'] as Object).toString().trim()
-          : beforeGroups[channel];
-      await Prefs.removeIrcChannel(channel);
-      if (groupId != null && groupId.isNotEmpty) {
-        await _removeLocalIrcGroupMapping(groupId);
-        await FakeUIKit.instance.im?.ffi.cleanupGroupState(groupId);
-      }
-      final channelGroups = await _readIrcChannelGroups();
-      AppLogger.info(
-        '[L3] l3_irc_remove_channel_local MUTATED channel=$channel group=$groupId',
-      );
-      return MCPCallResult(
-        message: 'IRC channel removed locally',
-        parameters: {
-          'ok': true,
-          'channel': channel,
-          'groupId': groupId,
-          'ircChannels': await Prefs.getIrcChannels(),
-          'ircChannelGroups': channelGroups,
-        },
-      );
-    } catch (e, st) {
-      AppLogger.logError('[L3] l3_irc_remove_channel_local failed', e, st);
-      return MCPCallResult(
-        message: 'l3_irc_remove_channel_local: failed: $e',
-        parameters: {'ok': false, 'error': 'remove_failed', 'detail': '$e'},
-      );
-    }
-  },
-  definition: MCPToolDefinition(
-    name: 'l3_irc_remove_channel_local',
-    description:
-        'L3 TEST ONLY (test/seed account, MUTATING): remove deterministic local '
-        'IRC channel state from prefs/group mapping without disconnecting IRC or '
-        'quitting a live group. Optional groupId clears a specific local mapping.',
-    inputSchema: ObjectSchema(
-      properties: {
-        'channel': StringSchema(description: 'IRC channel, e.g. #toxee-l3.'),
-        'groupId': StringSchema(
-          description:
-              'Optional local group id whose IRC display mapping is cleared.',
-        ),
-      },
-      required: ['channel'],
-    ),
-  ),
-);
-
 /// Inject one INBOUND group text through the REAL ingestion seam
 /// (`FfiChatService.ingestInboundGroupText` — the same dedup → history →
 /// unread → stream pipeline the native type==10 event drives), so a
@@ -5460,74 +5113,6 @@ MCPCallEntry _l3SendGroupTextEntry() => MCPCallEntry.tool(
         'text': StringSchema(description: 'Message text.'),
       },
       required: ['groupId', 'text'],
-    ),
-  ),
-);
-
-/// S47/S81: invite a friend to an NGC group via the SDK group manager
-/// (`getGroupManager().inviteUserToGroup` → native_im adapter →
-/// `DartInviteUserToGroup` → C++ `tox_group_invite_friend`), the SAME path the
-/// UIKit add-member flow uses. With the invitee's `autoAcceptGroupInvites=true`
-/// (l3_set_setting), the C++ pipeline auto-joins via `tox_group_invite_accept`.
-/// MUTATING, test/seed account.
-MCPCallEntry _l3InviteToGroupEntry() => MCPCallEntry.tool(
-  handler: (request) async {
-    if (!await _activeAccountIsTest()) {
-      return MCPCallResult(
-        message: 'l3_invite_to_group: refused — non-test account',
-        parameters: {'ok': false, 'error': 'non_test_account'},
-      );
-    }
-    var groupId = (request['groupId'] as Object?)?.toString().trim() ?? '';
-    if (groupId.startsWith('group_')) groupId = groupId.substring(6);
-    final userId = (request['userId'] as Object?)?.toString().trim() ?? '';
-    if (groupId.isEmpty || userId.isEmpty) {
-      return MCPCallResult(
-        message: 'l3_invite_to_group: need "groupId" and "userId"',
-        parameters: {'ok': false, 'error': 'missing_args'},
-      );
-    }
-    try {
-      final res = await TencentImSDKPlugin.v2TIMManager
-          .getGroupManager()
-          .inviteUserToGroup(groupID: groupId, userList: [userId]);
-      final ok = res.code == 0;
-      AppLogger.info(
-        '[L3] l3_invite_to_group: group=$groupId user=$userId '
-        'code=${res.code} desc=${res.desc}',
-      );
-      return MCPCallResult(
-        message: ok ? 'invite sent' : 'invite failed (code=${res.code})',
-        parameters: {
-          'ok': ok,
-          'code': res.code,
-          'desc': res.desc,
-          'groupId': groupId,
-          'userId': userId,
-        },
-      );
-    } catch (e, st) {
-      AppLogger.logError('[L3] l3_invite_to_group failed', e, st);
-      return MCPCallResult(
-        message: 'l3_invite_to_group: failed: $e',
-        parameters: {'ok': false, 'error': 'invite_failed', 'detail': '$e'},
-      );
-    }
-  },
-  definition: MCPToolDefinition(
-    name: 'l3_invite_to_group',
-    description:
-        'L3 TEST ONLY (test/seed account, MUTATING): invite a friend to an NGC '
-        'group via the SDK group manager (reaches C++ tox_group_invite_friend). '
-        'With the invitee autoAcceptGroupInvites=true, they auto-join.',
-    inputSchema: ObjectSchema(
-      properties: {
-        'groupId': StringSchema(
-          description: 'Group id (local tox_N or chat-id).',
-        ),
-        'userId': StringSchema(description: 'Friend Tox ID to invite.'),
-      },
-      required: ['groupId', 'userId'],
     ),
   ),
 );

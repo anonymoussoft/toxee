@@ -273,3 +273,142 @@ Future<bool?> _p1eKeyboardGlobalSearchShortcut(Inst inst) async {
   );
   return opened && emptyShown && closed;
 }
+
+// ===========================================================================
+// conference_rename_leave (P1#11) — the OPEN-chat header assertion
+// ===========================================================================
+/// The `data` of the keyed `Text` widget [key] as it currently sits in the
+/// element tree (`ext.flutter.debugDumpApp` renders a Text element as
+/// `Text-[<'key'>]("data", …)`), or null when no such element exists. Reads
+/// the widget ITSELF: `waitText` matches ANY Text in the whole tree (routes
+/// buried under the top one included) and `interactiveStructured` never
+/// surfaces a plain Text's key, so neither can say what one specific header
+/// renders. The LAST occurrence wins: `debugDumpApp` walks Navigator routes
+/// bottom-up, so a duplicate in a buried route comes first.
+Future<String?> _keyedTextData(Inst inst, String key) async {
+  final tree = await _appTreeText(inst);
+  final at = tree.lastIndexOf("[<'$key'>]");
+  if (at < 0) return null;
+  var end = tree.indexOf('\n', at);
+  if (end < 0) end = tree.length;
+  return RegExp(
+    r'\("((?:[^"\\]|\\.)*)"',
+  ).firstMatch(tree.substring(at, end))?.group(1);
+}
+
+/// conference_rename_leave: leave the group profile the way the shell does,
+/// then assert the OPEN chat's header title renders [newName]; takes the
+/// case's `ui_p1_conf_rename` shot either way.
+///
+/// Replaces the blind `tapAt(28, 52)` + `_waitChatHeaderTitle` pair
+/// (2026-09-05, iPhone + iPad first-launch reds). That pair never measured the
+/// header on either iOS shell: (28, 52) is the profile back-chevron centre on
+/// an iPad (24 pt status bar + 56 pt app bar) / desktop, but on an iPhone 16
+/// Pro the chevron sits at y≈90 under the 62 pt top inset, so the tap landed
+/// on app-bar padding and the profile STAYED; and `_waitChatHeaderTitle`
+/// falls back to `waitText`, a tree-wide `Text.data` match that the profile's
+/// own title, the sidebar row, or the buried conversation list satisfy just
+/// as well as the header. A green therefore proved nothing about the header,
+/// and a red (no Text anywhere carrying the new name for 12 s while the data
+/// layer already had it) could not be attributed. This helper:
+///  1. pops the profile via flutter_skill `goBack` (Navigator.pop on the root
+///     navigator, which is where `TencentCloudChatRouter.navigateTo` pushes
+///     the profile on every shell) — only while the keyed header is NOT
+///     onstage and a profile FAB still resolves, so it can never pop the chat;
+///  2. requires the keyed header (`chat_header_title_text`) to be ONSTAGE (the
+///     chat, not a cover, is what is on screen);
+///  3. reads THAT widget's `data` from `debugDumpApp` and polls for [newName];
+///  4. on a miss, prints the exact state (profile up? header onstage? header
+///     text? row showName? shell layout? frame liveness via the shot's
+///     endOfFrame wait) and saves the tree, so the next red names its culprit
+///     instead of a bare `headerOk=false`.
+Future<bool> _p1ConfHeaderShowsName(
+  Inst inst,
+  String gid,
+  String newName,
+) async {
+  const fab = 'group_profile_edit_name_button';
+  const header = 'chat_header_title_text';
+  for (var i = 0; i < 3; i++) {
+    if (await _keyOnstage(inst, header)) break;
+    if (await inst.keyCenter(fab) == null) break;
+    final r = await inst.skill('goBack');
+    if (r['success'] != true) break;
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+  }
+  final deadline = DateTime.now().add(const Duration(seconds: 12));
+  String? text;
+  var onstage = false;
+  while (DateTime.now().isBefore(deadline)) {
+    onstage = await _keyOnstage(inst, header);
+    text = await _keyedTextData(inst, header);
+    if (onstage && text == newName) break;
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  }
+  final ok = onstage && text == newName;
+  // flutter_skill's screenshot awaits endOfFrame, so a stalled platform thread
+  // (no vsync → no builds, while the Dart isolate still answers RPCs) shows up
+  // as a slow shot — the one first-launch hypothesis the tree alone can't tell.
+  final t0 = DateTime.now();
+  await inst.shot('/tmp/ui_p1_conf_rename_${inst.name}.png');
+  if (!ok) {
+    final s = await inst.dumpState();
+    String? row;
+    for (final c in (s['conversations'] as List?) ?? const []) {
+      if (c is Map && c['conversationID'] == 'group_$gid') {
+        row = c['showName']?.toString();
+      }
+    }
+    print(
+      '[pair] conference_rename_leave: header miss — '
+      'profileUp=${await inst.keyCenter(fab) != null} headerOnstage=$onstage '
+      'headerText="$text" rowShowName="$row" '
+      'masterDetail=${s['homeShellShouldShowMasterDetail']} '
+      'shotMs=${DateTime.now().difference(t0).inMilliseconds} '
+      'errorBox="${await _errorWidgetMessage(inst)}"',
+    );
+    await _dumpWidgetTree(inst, 'p1_conf_hdr', 'conference_rename_leave');
+    await _dumpFlutterErrors(inst, 'p1_conf_hdr', 'conference_rename_leave');
+  }
+  return ok;
+}
+
+/// The message of an `ErrorWidget` in the current element tree, or '' when
+/// there is none. iPad `conference_rename_leave` (2026-09-05, verify2): after
+/// the profile pop the Navigator's Overlay child was an ErrorWidget
+/// (`framework.dart:6268 '_dependents.isEmpty'`) — the WHOLE route stack
+/// gone, no header, no row, no profile — which every key/text probe reports
+/// only as "absent". Name the red box so a miss is not misread as staleness.
+Future<String> _errorWidgetMessage(Inst inst) async {
+  final tree = await _appTreeText(inst);
+  final m = RegExp(
+    r"ErrorWidget-\[[^\]]*\]\(message: '([^']*)'",
+  ).firstMatch(tree);
+  return m?.group(1) ?? '';
+}
+
+/// Save flutter_skill's captured FlutterErrors (exception + stack; the
+/// binding records them and `main()` chains its handler) next to the tree
+/// dump, and print the newest one's first lines. '' / no-op when none.
+Future<void> _dumpFlutterErrors(Inst inst, String tag, String label) async {
+  List<dynamic> errors;
+  try {
+    errors = (await inst.skill('getErrors'))['errors'] as List<dynamic>? ?? [];
+  } on DriveError {
+    return;
+  }
+  if (errors.isEmpty) {
+    print('[pair] $label: no captured FlutterErrors');
+    return;
+  }
+  final path = _portableTmp('/tmp/ui_${tag}_errors_${inst.name}.txt');
+  await File(path).writeAsString(
+    errors.map((e) => '${e['timestamp']} ${e['error']}\n${e['stack']}').join('\n\n'),
+  );
+  final last = errors.last as Map;
+  final head = '${last['stack']}'.split('\n').take(12).join(' | ');
+  print(
+    '[pair] $label: ${errors.length} FlutterError(s) -> $path; last: '
+    '${last['error']} @ $head',
+  );
+}

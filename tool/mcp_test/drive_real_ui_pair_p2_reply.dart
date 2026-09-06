@@ -138,7 +138,7 @@ Future<bool> _p2rReplyQuoteReal(
     print('[pair] reply_quote_real: custom row did not render id=$customId');
     return false;
   }
-  if (!await _openMessageMenuReal(a, customId)) {
+  if (!await _openMessageMenuReal(a, customId, isSelf: false)) {
     print('[pair] reply_quote_real: custom bubble menu did not open');
     return false;
   }

@@ -336,7 +336,7 @@ Future<void> ensureNewEntryShell(Inst inst, {int rounds = 4}) async {
     if (await _dismissProfileQrOverlay(inst)) {
       continue;
     }
-    if (await _recoverAndroidNativeCover(inst)) {
+    if (await _recoverNativeCover(inst)) {
       continue;
     }
     if (await _selectContactsTab(inst)) {

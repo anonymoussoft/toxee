@@ -115,6 +115,48 @@ import UIKit
           }
         }
       }
+
+      #if DEBUG
+      // L3 test seam, DEBUG builds only (release Dart must not be able to pop
+      // arbitrary presented UIKit flows; the Dart side additionally gates on
+      // kDebugMode + TOXEE_L3_TEST): report / dismiss a natively PRESENTED
+      // view controller covering the FlutterViewController — the file bubble's
+      // document preview, a share sheet, an alert. Flutter frames pause
+      // underneath it, so the real-UI harness can neither see it nor tap its
+      // Done button; `dismiss` does exactly what Done does (pop the presented
+      // chain from the root).
+      let nativeCoverChannel = FlutterMethodChannel(
+        name: "toxee/native_cover",
+        binaryMessenger: controller.binaryMessenger)
+      nativeCoverChannel.setMethodCallHandler { [weak controller] (call, result) in
+        guard let root = controller else {
+          let gone: [String: Any] = ["presented": false, "controller": "", "dismissed": false]
+          result(gone)
+          return
+        }
+        var top: UIViewController = root
+        while let next = top.presentedViewController { top = next }
+        let presented = top !== root
+        let name = String(describing: type(of: top))
+        switch call.method {
+        case "probe":
+          let payload: [String: Any] = ["presented": presented, "controller": name]
+          result(payload)
+        case "dismiss":
+          guard presented else {
+            let payload: [String: Any] = ["presented": false, "controller": name, "dismissed": false]
+            result(payload)
+            return
+          }
+          root.dismiss(animated: false) {
+            let payload: [String: Any] = ["presented": true, "controller": name, "dismissed": true]
+            result(payload)
+          }
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+      #endif
     }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

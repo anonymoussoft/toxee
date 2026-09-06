@@ -320,7 +320,10 @@ def _irc_real_ui() -> None:
     applications = read(applications_path)
     want(debug_tools, 'debugL3IrcLocalAddOverrideEnabled', debug_tools_path,
          'L3 IRC local-add override flag')
-    want(debug_tools, 'cleanupGroupState(groupId)', debug_tools_path,
+    # The IRC L3 entries moved into a `part` file (l3_debug_tools.dart sits
+    # at its complexity pin); the cleanup contract follows them.
+    irc_tools_path = 'lib/ui/testing/l3_irc_tools.dart'
+    want(read(irc_tools_path), 'cleanupGroupState(groupId)', irc_tools_path,
          'L3 IRC group cleanup')
     want(applications, 'debugL3IrcLocalAddOverrideEnabled', applications_path,
          'L3 IRC local-add override consumption')
@@ -340,14 +343,27 @@ def _irc_real_ui() -> None:
             body = live.group(0)
             for needle in (
                 'LocalIrcServer.start',
-                'applications_irc_save_config_button',
-                'applications_irc_install_button',
+                '_aeeIrcConfigureLoopbackViaUi',
                 'waitForCommandContaining',
             ):
                 want(body, needle, driver_path,
                      'IRC loopback-live scenario body')
             reject(body, "'localAddOverride': true", driver_path,
                    'IRC loopback-live must not short-circuit via the override')
+            # The config form is driven by a shared helper (the phone shell
+            # needs the IME hidden + the saved endpoint asserted before JOIN);
+            # the real-control needles live in its body now.
+            helper_path = f'{MCP}/drive_real_ui_pair_keyed_gaps_irc.dart'
+            helper = read(helper_path)
+            if helper is not None:
+                for needle in (
+                    'applications_irc_install_button',
+                    'applications_irc_server_field',
+                    'applications_irc_save_config_button',
+                    "'ircServer'",
+                ):
+                    want(helper, needle, helper_path,
+                         'IRC loopback-live config helper')
 
     # 4. macOS debug runner bundles the IRC OpenSSL dependencies
     runner_sh_path = 'run_toxee.sh'

@@ -63,7 +63,7 @@ lib/ui/add_group_dialog.dart:845
 # — the rest is the formatter expanding the constructor's parameter list one
 # per line. A re-pin, not an amnesty.
 lib/ui/applications/applications_page.dart:1460
-lib/ui/group/group_builder_override.dart:935
+lib/ui/group/group_builder_override.dart:888
 lib/ui/home_page.dart:2449
 lib/ui/home_page_bootstrap.dart:1640
 lib/ui/login_page.dart:1591
@@ -91,7 +91,7 @@ lib/util/prefs.dart:2393
 #   l3_presentation_tools.dart precedent; only the import + registration line
 #   land here. A re-pin, not an amnesty — the feature itself did not grow this
 #   file.
-lib/ui/testing/l3_debug_tools.dart:7244
+lib/ui/testing/l3_debug_tools.dart:6828
 lib/util/placeholder_account_migration.dart:664
 # Appended 2026-06-15 (these crossed 500 LOC after the 05-20 baseline via the
 # real-UI automation campaigns; each is just over the cap and is test/login
@@ -168,17 +168,17 @@ tool/mcp_test/drive_fixture_c_network_drop.dart:522
 # mobile_shell past its own pin — the split IS the reason mobile_shell shrank
 # 903 -> 894 below.
 tool/mcp_test/drive_real_ui_pair.dart:1290
-tool/mcp_test/drive_real_ui_pair_app_entry_extra.dart:796
+tool/mcp_test/drive_real_ui_pair_app_entry_extra.dart:790
 tool/mcp_test/drive_real_ui_pair_c2c_extra.dart:546
 tool/mcp_test/drive_real_ui_pair_calls_misc.dart:996
 tool/mcp_test/drive_real_ui_pair_chat.dart:2206
 tool/mcp_test/drive_real_ui_pair_contacts.dart:1776
 tool/mcp_test/drive_real_ui_pair_conv.dart:1031
 tool/mcp_test/drive_real_ui_pair_friends.dart:521
-tool/mcp_test/drive_real_ui_pair_group.dart:980
-tool/mcp_test/drive_real_ui_pair_group2.dart:1950
+tool/mcp_test/drive_real_ui_pair_group.dart:977
+tool/mcp_test/drive_real_ui_pair_group2.dart:1948
 tool/mcp_test/drive_real_ui_pair_group_menu.dart:567
-tool/mcp_test/drive_real_ui_pair_group_profile.dart:738
+tool/mcp_test/drive_real_ui_pair_group_profile.dart:737
 tool/mcp_test/drive_real_ui_pair_high_value_extra.dart:1481
 # [2026-08-15] 1344 -> 1356: +Inst.hideKeyboard, the driver-side wrapper for the
 # ui_hide_keyboard seam above. Inst is the single shared VM-service facade every
@@ -198,7 +198,7 @@ tool/mcp_test/drive_real_ui_pair_p1_relaunch.dart:846
 # unreachable, so the "page covered vs absent" question is answerable from a log.
 # Nothing here is splittable into a part file: both edits are single statements
 # inside existing helpers.
-tool/mcp_test/drive_real_ui_pair_p1_single.dart:1253
+tool/mcp_test/drive_real_ui_pair_p1_single.dart:1251
 tool/mcp_test/drive_real_ui_pair_profile.dart:637
 # [2026-08-15] 645 -> 652: +7, all inside `_settingsIsWide`, fixing a live iPad
 # red. The layout flag is published by a HomePage-registered snapshot reader that

@@ -412,7 +412,7 @@ class Inst {
             callTimeout,
             onTimeout: () => throw DriveError(
               '$name: $method timed out after ${callTimeout.inSeconds}s '
-              '(app isolate unresponsive)',
+              '(frames paused? native cover / backgrounded — or isolate hung)',
             ),
           );
       return (resp.json ?? const <String, dynamic>{}).cast<String, dynamic>();

@@ -77,6 +77,9 @@ Future<int> runAppEntryExtraSweep(Inst a, String nickA) async {
   var failed = 0;
   var skipped = 0;
   var unexpectedSkipped = 0;
+  // Capability, not platform: the live loopback JOIN can only SKIP where the
+  // build bundles no loadable libirc_client (iOS/Android today).
+  final ircLib = await a.l3('l3_irc_native_library_probe');
 
   Future<void> hard(String name, Future<bool?> Function() body) async {
     bool? ok;
@@ -94,9 +97,9 @@ Future<int> runAppEntryExtraSweep(Inst a, String nickA) async {
     if (ok == null) {
       skipped++;
       final expected =
-          (a.isAndroid &&
-              (name == 'add_friend_paste_clipboard' ||
-                  name == 'irc_join_channel_loopback_live')) ||
+          (a.isAndroid && name == 'add_friend_paste_clipboard') ||
+          (ircLib['available'] != true &&
+              name == 'irc_join_channel_loopback_live') ||
           // The two Cmd+Ctrl chords have no mobile input to drive them; their
           // osa* wrappers substitute l3 seams that would assert the wrong
           // subject, so both SKIP rather than pass on a phone/tablet shell.
@@ -251,7 +254,8 @@ Future<bool> _aeeNewEntryMenuSurface(Inst inst) async {
       timeoutSecs: 3,
     );
   }
-  if (!closed) {
+  // Desktop-only fallback: on a mobile shell (50,220) is a list row, not chrome.
+  if (!closed && !inst.isMobileShell) {
     await inst.tapAt(_sidebarTabX, _sidebarChatsY);
     closed = await inst.waitKeyGone(
       'new_entry_add_contact_item',
@@ -522,10 +526,11 @@ Future<bool> _aeeIrcJoinChannelRealControls(Inst inst) async {
 }
 
 Future<bool?> _aeeIrcJoinChannelLoopbackLive(Inst inst) async {
-  if (inst.isAndroid) {
+  final lib = await inst.l3('l3_irc_native_library_probe');
+  if (lib['available'] != true) {
     print(
-      '[pair] irc_join_channel_loopback_live: SKIP — Android fixture lacks '
-      'the bundled native libirc_client',
+      '[pair] irc_join_channel_loopback_live: SKIP — native libirc_client not '
+      'loadable on this build (${lib['path']}: ${lib['error']})',
     );
     return null;
   }
@@ -549,33 +554,10 @@ Future<bool?> _aeeIrcJoinChannelLoopbackLive(Inst inst) async {
       return false;
     }
 
-    await ensureHome(inst, '');
-    if (!await inst.tapKeyCenter('sidebar_applications_tab', timeoutSecs: 4)) {
-      if (!await inst.tapKeyCenter(
-        'bottom_nav_applications_tab',
-        timeoutSecs: 4,
-      )) {
-        print(
-          '[pair] irc_join_channel_loopback_live: applications tab missing',
-        );
-        return false;
-      }
-    }
-    if (await inst.waitKey('applications_irc_install_button', timeoutSecs: 4)) {
-      if (!await inst.tapKeyCenter('applications_irc_install_button')) {
-        await inst.tapKey('applications_irc_install_button');
-      }
-    }
-    if (!await inst.waitKey('applications_irc_server_field', timeoutSecs: 12)) {
-      print('[pair] irc_join_channel_loopback_live: config fields missing');
-      return false;
-    }
-    await inst.focusType('applications_irc_server_field', server.host);
-    await inst.focusType('applications_irc_port_field', '${server.port}');
-    if (!await inst.tapKeyCenter('applications_irc_save_config_button')) {
-      await inst.tapKey('applications_irc_save_config_button');
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    // Real config form + PROOF the save landed (`l3_dump_state.ircServer/Port`
+    // == loopback) before the dialog — see the helper for the iPhone IME trap.
+    const label = 'irc_join_channel_loopback_live';
+    if (!await _aeeIrcConfigureLoopbackViaUi(inst, label, server)) return false;
     if (!await inst.tapKeyCenter('applications_irc_add_channel_button')) {
       await inst.tapKey('applications_irc_add_channel_button');
     }
@@ -589,11 +571,28 @@ Future<bool?> _aeeIrcJoinChannelLoopbackLive(Inst inst) async {
     await inst.focusType('irc_channel_dialog_channel_field', channel);
     await inst.focusType('irc_channel_dialog_password_field', 'rui-secret');
     await inst.focusType('irc_channel_dialog_nickname_field', 'ruiNick');
+    // The dialog is a SingleChildScrollView like AddGroupDialog: with the IME up
+    // a phone's coordinate tap on Join hits the modal barrier and DISMISSES it.
+    await _prepareDialogSubmit(inst, 'irc_channel_dialog_join_button');
     if (!await inst.tapKeyCenter('irc_channel_dialog_join_button')) {
       await inst.tapKey('irc_channel_dialog_join_button');
     }
 
-    final joined = await server.waitForCommandContaining('JOIN $channel');
+    // A missed JOIN is a normal `false` with the discriminating facts printed
+    // (what endpoint the app holds; what the loopback server DID receive — an
+    // empty list means it was never dialled, NICK/USER without JOIN means the
+    // connect ran but the channel join did not), not an uncaught timeout.
+    var joined = '';
+    try {
+      joined = await server.waitForCommandContaining('JOIN $channel');
+    } on TimeoutException {
+      final held = await inst.dumpState();
+      print(
+        '[pair] $label: no JOIN reached the loopback server in 10s — app holds '
+        'ircServer=${held['ircServer']} ircPort=${held['ircPort']} (wanted '
+        '${server.host}:${server.port}); server saw ${server.seenCommands}',
+      );
+    }
     final tileKey = 'applications_irc_channel_tile:$channel';
     final tileShown = await inst.waitKey(tileKey, timeoutSecs: 12);
     final state = await inst.dumpState();
@@ -716,7 +715,9 @@ Future<bool> _aeeRegisterPasswordVisibilityToggle(
 /// its failure path. The native NSOpenPanel is bypassed with the debug-only
 /// `l3_set_account_import_pick_path` override (the same seam
 /// `restore_import_entry_guard` uses — which only RENDERS the import card and taps
-/// RESTORE) pointed at an invalid `.tox`, so tapping the card runs the production
+/// RESTORE) handed an invalid `.tox` via `contentB64` (the app materializes it
+/// in its OWN sandbox, so the same case runs on device where a driver-side
+/// /tmp path is unreadable), so tapping the card runs the production
 /// `_importToxProfile` -> `runL3AwareAccountImportPicker` -> import-failure ->
 /// `login_page_error_banner`. This exercises the real onTap, not a render-only
 /// check that would false-pass on a disabled/wrong handler. The override is set
@@ -730,13 +731,7 @@ Future<bool> _aeeLoginImportAccountCardOpen(Inst inst, String nickA) async {
   }
   var ok = false;
   var marked = false;
-  final invalidTox = File(
-    _portableTmp(
-      '/tmp/rui_aee_import_invalid_${DateTime.now().microsecondsSinceEpoch}.tox',
-    ),
-  );
   try {
-    await invalidTox.writeAsString('not a tox profile');
     // The picker override is test-account-gated; mark to SET it, then unmark (the
     // override persists across unmark — same trick as restore_import_entry_guard).
     marked = await inst.markAccountTest();
@@ -745,7 +740,8 @@ Future<bool> _aeeLoginImportAccountCardOpen(Inst inst, String nickA) async {
       return false;
     }
     final override = await inst.l3('l3_set_account_import_pick_path', {
-      'path': invalidTox.path,
+      'contentB64': base64Encode(utf8.encode('not a tox profile')),
+      'fileName': 'rui_aee_invalid.tox',
     });
     if (override['ok'] != true) {
       print('[pair] login_import_account_card_open: override failed $override');
@@ -788,9 +784,7 @@ Future<bool> _aeeLoginImportAccountCardOpen(Inst inst, String nickA) async {
     if ((await inst.dumpState())['sessionReady'] == true) {
       await ensureHome(inst, nickA);
     }
-    if (await invalidTox.exists()) {
-      await invalidTox.delete();
-    }
+    // Seam-materialized fixture (app sandbox): nothing host-side to clean.
   }
   return ok;
 }
