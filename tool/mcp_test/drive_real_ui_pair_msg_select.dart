@@ -320,7 +320,7 @@ Future<String?> _mselSeedCustomBubble(Inst a, String toxB, String label) async {
 /// custom bubble is the only surviving entry point into select mode, so losing
 /// it silently deletes the coverage of every case in this file).
 Future<bool> _mselEnterSelectMode(Inst a, String msgId, String label) async {
-  if (!await _openMessageMenuReal(a, msgId)) {
+  if (!await _openMessageMenuReal(a, msgId, isSelf: false)) {
     print('[pair] $label: the message menu did not open for $msgId');
     return false;
   }

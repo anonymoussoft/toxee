@@ -432,16 +432,15 @@ Future<_EstablishedGroup?> _establishTwoProcessGroup(
   await ensureHome(b, nickB);
   final toxB = (await b.dumpState())['currentAccountToxId']?.toString() ?? '';
   final toxA = (await a.dumpState())['currentAccountToxId']?.toString() ?? '';
-  final friendsReady = await _retryBool(
-    () async => await areFriends(a, toxB) && await areFriends(b, toxA),
-    label: 'establishGroup friendship ready',
-    attempts: 20,
-    intervalMs: 1000,
+  // Friend list AND friend connection: the invite below rides the friend link.
+  final linkUp = await _waitPairFriendLinkOnline(
+    a,
+    b,
+    toxA,
+    toxB,
+    label: 'establishGroup',
   );
-  if (!friendsReady) {
-    print('[pair] establishGroup requires an existing friendship');
-    return null;
-  }
+  if (!linkUp) return null;
 
   await a.waitState((s) => s['isConnected'] == true, label: 'A connected');
   await b.waitState((s) => s['isConnected'] == true, label: 'B connected');

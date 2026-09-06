@@ -88,6 +88,14 @@ extension InstTapDiagnostics on Inst {
     return null;
   }
 
+  /// [waitKeyCenterSettled] as a landmark wait: true once [key] is in-tree AND
+  /// at rest within [timeoutSecs]. Use it (not `waitKey`) as the open-landmark
+  /// of an overlay whose route slides/fades in, so the FIRST coordinate tap
+  /// after the open samples a settled box — `waitKey` returns on the first
+  /// in-tree frame, ~0 ms into a 300 ms slide-up / dialog re-centre.
+  Future<bool> waitKeySettled(String key, {int timeoutSecs = 6}) async =>
+      await waitKeyCenterSettled(key, timeoutSecs: timeoutSecs) != null;
+
   /// The RAW `ui_key_center` map for [key] (`x`, `y`, `w`, `h`, `onstage`,
   /// `candidates`, and the view's logical `viewWidth`/`viewHeight`), or null
   /// when the resolver could not find the key.

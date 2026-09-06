@@ -76,7 +76,7 @@ Future<bool?> _kg4MentionAtAllInserts(Inst a, _EstablishedGroup est) async {
   await Future<void>.delayed(const Duration(milliseconds: 800));
   // As with the sibling picker cases: composer text has no read seam, so the
   // insertion is asserted in what the group receives.
-  await a.l3('l3_composer_send', const {});
+  if (!await _composerSendInGroup(a, gid, label: label)) return false;
   final sent = await _kg4WaitGroupTextStartingWith(a, gid, prefix);
   await a.shot('/tmp/ui_kg4_atall_${a.name}.png');
   if (sent == null) {
@@ -384,7 +384,7 @@ Future<bool?> _kg4MentionDeletionClearsToken(
     return false;
   }
   await Future<void>.delayed(const Duration(milliseconds: 900));
-  await a.l3('l3_composer_send', const {});
+  if (!await _composerSendInGroup(a, gid, label: label)) return false;
   final sent = await _kg4WaitGroupTextStartingWith(a, gid, prefix);
   await a.shot('/tmp/ui_kg4_mentiondel_${a.name}.png');
   if (sent == null) {

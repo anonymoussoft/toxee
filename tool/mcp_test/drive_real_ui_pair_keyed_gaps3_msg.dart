@@ -78,7 +78,7 @@ Future<bool?> _kg3RevealFileLocationGating(
 
   // --- POSITIVE leg: the FILE bubble's menu offers Location. ---
   await _ensureChatOpen(a, toxB);
-  if (!await _openMessageMenuReal(a, fileMsgId)) {
+  if (!await _openMessageMenuReal(a, fileMsgId, isSelf: false)) {
     print('[pair] $label: the file bubble menu did not open');
     return false;
   }
@@ -189,14 +189,23 @@ Future<bool?> _kg3ReadReceiptGroupGating(
   );
   // A sends through the REAL composer submit path so the UIKit stamps
   // needReadReceipt on the outgoing message.
-  await a.l3('l3_composer_send', {'text': selfText});
+  if (!await _composerSendInGroup(a, gid, text: selfText, label: label)) {
+    return false;
+  }
   final selfId = await _kg3WaitGroupMessageId(
     a,
     gid,
     (m) => m['isSelf'] == true && m['text']?.toString() == selfText,
   );
   if (selfId.isEmpty) {
-    print('[pair] $label: A\'s composer message never reached the group');
+    // The seam reported ok + bound (see _composerSendInGroup), so the text
+    // left the composer: show where the history says it went (or did not).
+    final tail = (await a.dumpState(conversationId: 'group_$gid'))['messages'];
+    final rows = tail is List ? tail : const [];
+    print(
+      '[pair] $label: A\'s composer message never reached the group '
+      '(group rows=${rows.length} tail=${rows.skip(rows.length > 3 ? rows.length - 3 : 0).map((m) => '${m['isSelf']}:${m['text']}').toList()})',
+    );
     return false;
   }
   // B replies so the negative leg has a real inbound bubble.
@@ -246,7 +255,7 @@ Future<bool?> _kg3ReadReceiptGroupGating(
     groupName: est.groupName,
     viaL3Seam: true,
   );
-  if (!await _openMessageMenuReal(a, peerId)) {
+  if (!await _openMessageMenuReal(a, peerId, isSelf: false)) {
     print('[pair] $label: the peer bubble menu did not open');
     return false;
   }

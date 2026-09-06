@@ -375,6 +375,23 @@ inject_ios_ffi_artifacts() {
     codesign --force --sign - "$frameworks_dir/libtim2tox_ffi.dylib" 2>/dev/null || true
   fi
 
+  # Optional native IRC client (tool/build_ios_sim_irc.sh). Resolved by the app
+  # at Runner.app/Frameworks/libirc_client.dylib (IrcAppManager._ircLibraryPath).
+  # Absent → l3_irc_native_library_probe reports unavailable and the real-UI
+  # loopback JOIN case SKIPs honestly, so a missing dylib never fails the deploy.
+  local irc_src="${TIM2TOX_IOS_IRC_DYLIB_PATH:-$FLUTTER_APP_DIR/third_party/tim2tox/build/ios-sim/libirc_client.dylib}"
+  if [[ -f "$irc_src" ]]; then
+    info "Injecting IRC dylib: $irc_src"
+    cp "$irc_src" "$frameworks_dir/libirc_client.dylib"
+    codesign --force --sign - "$frameworks_dir/libirc_client.dylib" 2>/dev/null || true
+  else
+    # Never let an earlier injection survive an incremental build: absent source
+    # must mean absent artifact, or the probe SKIP claim (and the native code the
+    # app would dlopen) would be stale.
+    rm -f "$frameworks_dir/libirc_client.dylib"
+    info "No iOS libirc_client.dylib at $irc_src (tool/build_ios_sim_irc.sh builds it); IRC live case will SKIP"
+  fi
+
   if [[ ! -d "$frameworks_dir/tim2tox_ffi.framework" && ! -f "$frameworks_dir/libtim2tox_ffi.dylib" ]]; then
     error "Missing iOS tim2tox FFI artifact in app bundle."
     echo "Provide one of:"

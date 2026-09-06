@@ -457,4 +457,44 @@ extension InstOsInput on Inst {
     await _osaForProcess('keystroke "a" using command down');
     await _osaForProcess('key code 51');
   }
+
+  /// iOS twin of the Android native-cover recovery (adb BACK): a natively
+  /// PRESENTED controller (document preview, share sheet, alert) pauses Flutter
+  /// frames, so frame-awaiting seams time out while `l3_dump_state` answers.
+  /// Positive `l3_native_cover_probe` → `l3_native_cover_dismiss` (= its Done)
+  /// → re-probe; [waitSecs] polls first for a case that JUST tapped an opener.
+  /// True only if the SEAM dismissed it (not merely "gone") and it is gone,
+  /// and — with [expectController] — the controller class matches.
+  Future<bool> recoverIosNativeCover({
+    int waitSecs = 0,
+    Pattern? expectController,
+  }) async {
+    if (!isIos) return false;
+    var probe = await l3('l3_native_cover_probe');
+    for (var i = 0; i < waitSecs * 2 && probe['presented'] != true; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      probe = await l3('l3_native_cover_probe');
+    }
+    if (probe['presented'] != true) return false;
+    final controller = '${probe['controller']}';
+    print('[$name] ios native cover detected: $controller');
+    final r = await l3('l3_native_cover_dismiss');
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    final gone = (await l3('l3_native_cover_probe'))['presented'] != true;
+    final matched =
+        expectController == null || controller.contains(expectController);
+    print(
+      '[$name] ios native-cover dismiss => dismissed=${r['dismissed']} '
+      'gone=$gone matched=$matched',
+    );
+    return r['dismissed'] == true && gone && matched;
+  }
+
+  /// The file bubble's iOS open: `_openFile()` presents a QuickLook /
+  /// UIDocumentInteractionController preview. Wait for it, dismiss it, and
+  /// count ONLY a preview-class controller (an unrelated alert must not pass).
+  Future<bool> dismissIosDocumentPreview() => recoverIosNativeCover(
+    waitSecs: 6,
+    expectController: RegExp('Preview|Document|QL'),
+  );
 }

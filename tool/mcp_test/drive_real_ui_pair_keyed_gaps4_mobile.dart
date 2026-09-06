@@ -385,7 +385,7 @@ Future<bool?> _kg4MentionPicker(
 
   // The composer text is not readable through any seam, so the insertion is
   // asserted where it is genuinely observable: in what the GROUP receives.
-  await a.l3('l3_composer_send', const {});
+  if (!await _composerSendInGroup(a, gid, label: label)) return false;
   final sent = await _kg4WaitGroupTextStartingWith(a, gid, prefix);
   await a.shot(
     '/tmp/ui_kg4_mention_${confirm ? 'confirm' : 'back'}_${a.name}.png',

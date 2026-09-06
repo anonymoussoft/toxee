@@ -1,6 +1,7 @@
 import 'package:tim2tox_dart/service/ffi_chat_service.dart';
 import 'ffi_chat_service_account_key.dart';
 import 'prefs.dart';
+import 'dart:ffi';
 import 'dart:io';
 import 'logger.dart';
 
@@ -204,10 +205,40 @@ class IrcAppManager {
       final exeDir = File(Platform.resolvedExecutable).parent;
       final candidate = File('${exeDir.path}/$fileName');
       if (candidate.existsSync()) return candidate.path;
+      if (Platform.isIOS) {
+        // An embedded iOS dylib lives in `Runner.app/Frameworks/` (the Xcode
+        // embed phase's destination and the bundle's @rpath), not beside the
+        // executable — resolve it explicitly rather than trusting the loader.
+        final embedded = File('${exeDir.path}/Frameworks/$fileName');
+        if (embedded.existsSync()) return embedded.path;
+      }
     } catch (_) {
       // Fall through to the bare name (let the dynamic loader search).
     }
     return fileName;
+  }
+
+  /// Whether the native IRC client library can be loaded by THIS build, at
+  /// the path [_ircLibraryPath] resolves. A capability probe — not a platform
+  /// list — so callers (the L3 `l3_irc_native_library_probe` seam and, through
+  /// it, the real-UI loopback IRC case) SKIP honestly where nothing bundles
+  /// `libirc_client` yet (iOS, Android) and run for real the day it ships.
+  /// `dlopen` is reference-counted, so a probe does not interfere with the
+  /// C++ side's later real load (the handle is deliberately kept open; the
+  /// library has no load-time initializer). Never throws for loader failures:
+  /// a missing / wrong-arch / unsigned library is reported as
+  /// `available: false` with the loader's message.
+  /// [libraryPath] overrides the resolved path (tests only).
+  ({bool available, String path, String? error}) nativeLibraryProbe({
+    String? libraryPath,
+  }) {
+    final path = libraryPath ?? _ircLibraryPath();
+    try {
+      DynamicLibrary.open(path);
+      return (available: true, path: path, error: null);
+    } on ArgumentError catch (e) {
+      return (available: false, path: path, error: '${e.message}');
+    }
   }
 
   /// Add an IRC channel and create/join the corresponding group.

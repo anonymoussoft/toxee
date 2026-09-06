@@ -166,7 +166,8 @@ Future<String?> _androidTopFocusPackage(Inst inst) async {
   }
 }
 
-/// Recover an Android instance covered by a NATIVE activity (the SAF save
+/// Recover an instance under a NATIVE cover. iOS → `Inst.recoverIosNativeCover`
+/// (a presented controller pauses frames). Android: a NATIVE activity (the SAF
 /// dialog the backup wizard's export opens, an OS picker): the Flutter
 /// activity is paused, so EVERY onstage probe dies while l3 calls still
 /// succeed (observed live: register -> mis-tapped Export now -> SAF ->
@@ -175,7 +176,8 @@ Future<String?> _androidTopFocusPackage(Inst inst) async {
 /// legitimately blank Flutter root is never sent BACK. System BACK dismisses
 /// the native activity; if that lands back on the backup wizard (export
 /// cancelled), dismiss it properly too.
-Future<bool> _recoverAndroidNativeCover(Inst inst) async {
+Future<bool> _recoverNativeCover(Inst inst) async {
+  if (inst.isIos) return inst.recoverIosNativeCover();
   if (!inst.isAndroid) return false;
   final topPkg = await _androidTopFocusPackage(inst);
   if (topPkg == null || topPkg == 'com.toxee.app') return false;
@@ -282,7 +284,7 @@ Future<bool> _popMobileCoveringRoute(Inst inst) async {
     await Future<void>.delayed(const Duration(milliseconds: 700));
     if (!await _mobileHomeShellCovered(inst)) return true;
   }
-  if (await _recoverAndroidNativeCover(inst)) return true;
+  if (await _recoverNativeCover(inst)) return true;
   print(
     '[pair] _popMobileCoveringRoute: shell still covered — '
     '${await _convShellDiag(inst)}',

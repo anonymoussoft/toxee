@@ -98,8 +98,8 @@ Behavior to know:
   accepted handshake (`handshake` / `handshake_detail`) or restores
   `paired_for_e2e` for a focused replay.
 - `--real-ui-campaign=...` expands named merged batches of compatible
-  scenarios. The current discoverable catalog has 100 built-in campaigns
-  (verified 2026-08-08 by brace-balanced parse of `_realUiCampaigns` in
+  scenarios. The current discoverable catalog has 198 built-in campaigns
+  (verified 2026-09-05 via `--list-real-ui-campaigns`; 100 on 2026-08-08 in
   `fixture_c_unified_runner.dart`; it read 96 before the form-factor campaigns
   below, 88 before that). Treat `--list-real-ui-campaigns` as the exact source
   of truth for names and counts.
@@ -217,7 +217,14 @@ Behavior to know:
   - `irc_join_channel_loopback_live` drives the REAL connect path
     (`IrcAppManager.addChannel → service.connectIrcChannel`), which dlopens the
     native `libirc_client` library to open the TCP socket and send `JOIN`. That
-    library is built + bundled **on macOS only** (`run_toxee.sh`). The app loader
+    library is built + bundled **on macOS only** (`run_toxee.sh`). Since
+    2026-09-05 the case gates on a CAPABILITY, not a platform list: the
+    ungated `l3_irc_native_library_probe` seam reports whether
+    `IrcAppManager.nativeLibraryProbe()` can `dlopen` the library at the path
+    the app resolves, and `irc_join_channel_loopback_live` SKIPs (declared,
+    with the path + loader message) when it cannot — so it is honest on iOS
+    and Android today and runs for real the day a `.dylib`/`.so` is bundled.
+    The app loader
     `IrcAppManager._ircLibraryPath()` is platform-aware (`.dll` Windows / `.so`
     Android+Linux / `.dylib` macOS+iOS), and the C++
     (`third_party/tim2tox/source/IrcClientManager.cpp`) is cross-platform
@@ -784,18 +791,24 @@ The mobile half of the campaign catalog was split out of
 as before). Read that file for the per-campaign rationale; the load-bearing
 rules are:
 
-**Inventory** — **53** mobile campaigns as of 2026-08-16. **Re-derive, do not
-trust this table**: `--list-real-ui-campaigns` is the authority. The previous
-version claimed 38 and carried hand-maintained per-sweep CASE counts that
-nothing regenerates; only the figures a script can produce from
-`mobileRealUiCampaigns` are kept, because a hand-maintained number is a stale
-number waiting to happen.
+**Inventory** — **77** mobile campaigns as of 2026-09-05 (53 on 2026-08-16,
+38 before that). **Re-derive, do not trust this table**:
+`--list-real-ui-campaigns` is the authority, and the rows below are generated
+from `mobileRealUiCampaigns` (campaign count per family + the de-duplicated
+scenario names each family's chains contain, `sweep_` prefix dropped) — only
+figures a script can produce are kept, because a hand-maintained number is a
+stale number waiting to happen.
 
 | family | campaigns | sweeps covered |
 | --- | --- | --- |
-| iPhone (`rui-ios-*` + `rui-mobile-shell`) | 22 | account_conf_extra, account_deep_extra, c2c_deep_extra, c2c_extra, calls_misc, chat, contacts, conv, group2, group_conf_deep_extra, ios_settings_main, keyed_gaps, keyed_gaps3, keyed_gaps4, keyed_gaps4_login, login, mobile_shell, msg_select, native_boundary_guards, p1_single, p2_reply, p3_writable, profile, settings2 |
-| iPad (`rui-ipad-*`) | 20 | account_conf_extra, c2c_deep_extra, c2c_extra, calls_misc, chat, contacts, conv, group2, group_conf_deep_extra, group_conf_member_extra, ios_settings_main, keyed_gaps, keyed_gaps3, keyed_gaps4, keyed_gaps4_login, login, msg_select, p1_chat, p1_single, profile, settings2, tablet_layout |
-| Android (`rui-android-*`) | 11 | chat, contacts, conv, keyed_gaps, keyed_gaps3, keyed_gaps4, keyed_gaps4_login, login, mobile_shell, msg_select, profile, settings2 |
+| iPhone (`rui-ios-*` + `rui-mobile-shell`) | 26 | account_conf_extra, account_deep_extra, app_entry_extra, c2c_deep_extra, c2c_extra, calls_misc, chat, contacts, conv, group2, group_conf_deep_extra, group_conf_member_extra, ios_settings_main, keyed_gaps, keyed_gaps3, keyed_gaps4, keyed_gaps4_login, login, mobile_mention_multi_select_inserts, mobile_shell, msg_select, native_boundary_guards, p1_chat, p1_extra, p1_single, p2_reply, p3_writable, profile, settings2 |
+| iPad (`rui-ipad-*`) | 25 | account_conf_extra, account_deep_extra, app_entry_extra, c2c_deep_extra, c2c_extra, calls_misc, chat, contacts, conv, group2, group_conf_deep_extra, group_conf_member_extra, ios_settings_main, keyed_gaps, keyed_gaps3, keyed_gaps4, keyed_gaps4_login, login, mobile_mention_multi_select_inserts, msg_select, native_boundary_guards, p1_chat, p1_extra, p1_single, p2_reply, p3_writable, profile, settings2, tablet_layout |
+| Android (`rui-android-*`) | 26 | account_conf_extra, account_deep_extra, app_entry_extra, c2c_deep_extra, c2c_extra, calls_misc, chat, contacts, conv, group2, group_conf_deep_extra, group_conf_member_extra, ios_settings_main, keyed_gaps, keyed_gaps3, keyed_gaps4, keyed_gaps4_login, login, mobile_mention_multi_select_inserts, mobile_shell, msg_select, native_boundary_guards, p1_chat, p1_extra, p1_single, p2_reply, p3_writable, profile, settings2 |
+
+The only sweeps macOS runs that no mobile family lists are the deliberate
+exclusions in the table below (`p1_relaunch`, `p2_keys`, `p2_verify`,
+`group_mention`, the `*_optimized` bundles); `sweep_mobile_shell` is
+phone-only and `sweep_tablet_layout` tablet-only by design.
 
 **Ordering is free.** Every `sweep_*` scenario in `_requiredRealUiState` (all 32
 of them, mobile-registered or not) declares `required=no-friend`, and the
@@ -851,23 +864,22 @@ bottom-bar / coordinate work. They are all REGISTERED so the catalog is the
 single description of the intended matrix — registration is not a claim that
 they pass.
 
-**Two sweeps are iPad-only on purpose.** `sweep_group_conf_member_extra` has
-zero `isMobileShell` branches, so its member-list / peer-menu navigation is only
-known-good on a wide shell; `sweep_p1_chat`'s narrow-shell branches (recall /
-forward / draft-restore across a pushed route) are not written yet, so an iPhone
-run would drive the wrong surface instead of SKIPping. Add `rui-ios-group-member`
-/ `rui-ios-p1-chat` once those branches exist — do not assume them.
+**Two sweeps WERE iPad-only (closed 2026-08-28, PR #76).**
+`sweep_group_conf_member_extra` and `sweep_p1_chat` used to be kept off the
+phone campaigns because their narrow-shell navigation branches did not exist.
+Both are per-shell now and proven on an iPhone pair (`rui-ios-group-member`
+5/5 first try; `rui-ios-p1-chat` 7/0/1 after the unread-badge key was made to
+follow the LAYOUT and compact search was routed through the real header
+magnifier) — see "Mobile parity batch (2026-09-05)" for the Android twin.
 
 `sweep_p1_chat` itself is **live-green on iPad (7 PASS / 0 FAIL / 1 SKIP,
 2026-08-16)**. It got there through ONE root cause, not four: the non-desktop
 recall-confirm dialog carried no `confirm_dialog_primary_button` key, and because
 `showAdaptiveDialog` defaults to `barrierDismissible: false` the abandoned dialog
 stayed on the Navigator stack and swallowed every subsequent tap — which is why
-four unrelated-looking cases failed together. Green on iPad is NOT a claim about
-iPhone: the sweep stays `rui-ipad-p1-chat`-only until its `isMobileShell`
-navigation branches are written (the `osa*` objection to running it on a phone
-was a red herring — every `osa*` wrapper already gates on `_usesSyntheticInput`,
-which includes iOS).
+four unrelated-looking cases failed together. (The `osa*` objection to running
+it on a phone was a red herring — every `osa*` wrapper already gates on
+`_usesSyntheticInput`, which includes iOS.)
 
 ### iPad mounts the MOBILE composer (corrects several claims above)
 
@@ -1120,11 +1132,11 @@ already scrolls in bands) rather than a missing verdict. iPad passes this case
 through its reachable/unreachable branches, which is why the udp-less branch had
 never been executed anywhere.
 
-Two sweeps stay iPad-only for the reasons in "Two sweeps are iPad-only on
-purpose": `sweep_p1_chat` (no `isMobileShell` branches for recall / forward /
-draft-restore across a pushed route) and `sweep_group_conf_member_extra` (zero
-`isMobileShell` branches at all). `home_tabs_cycle_state_retained` remains a
-by-design SKIP on a phone — there is no master-detail pane to retain.
+Two sweeps stayed iPad-only at the time (`sweep_p1_chat`,
+`sweep_group_conf_member_extra`); both have since been made per-shell and
+proven on iPhone (PR #76 — see "Two sweeps WERE iPad-only").
+`home_tabs_cycle_state_retained` remains a by-design SKIP on a phone — there
+is no master-detail pane to retain.
 
 ### Back-to-back iOS pairs MUST be torn down between campaigns
 
@@ -2276,3 +2288,273 @@ in-sweep (fresh standalone runs always passed). Fixed to `min(length, 20)`
 (cap without dropping). Verification matrix for the batch: iPhone 11/0,
 Android 11/0 (first Android kg4 run ever recorded green), iPad 8/0/4
 (designed skips), each with zero first-attempt failures on the final run.
+
+### Mobile parity batch (2026-09-05) — the mobile matrix now mirrors macOS
+
+A diff of the macOS `rui-*` catalog against `rui-ios-*` / `rui-ipad-*` /
+`rui-android-*` found the sweeps still absent by OMISSION (not by the
+documented contracts above). All are now registered in
+`fixture_c_real_ui_mobile_campaigns.dart`; the deliberate exclusions
+(`sweep_p1_relaunch`, `sweep_p2_keys`, `sweep_p2_verify`,
+`sweep_group_mention`, the `*_optimized` bundles, wrong-form-factor sweeps)
+are unchanged and the regression script still asserts them.
+
+| campaign | sweeps | what it adds |
+| --- | --- | --- |
+| `rui-ios-app-entry-extra`, `rui-ipad-app-entry-extra`, `rui-android-app-entry-extra` | `sweep_app_entry_extra` → `sweep_p1_extra` | the "+" popup surface, the add-friend Paste button, the register visibility toggle, the login Import card, both IRC cases, the Arabic locale walk — on ONE launch (both single-instance, no-friend → no-friend) |
+| `rui-ipad-p2` | `sweep_p2_reply` → `sweep_p3_writable` | C2C real Reply + P3 burst timing on the tablet shell |
+| `rui-ipad-boundary-guards` | `sweep_native_boundary_guards` | the OS-seam probes on the wide shell |
+| `rui-ipad-account-deep` | `sweep_account_deep_extra` | multi-account state isolation on the wide shell |
+| `rui-ipad-mention-multi` | `mobile_mention_multi_select_inserts` | the three-instance picker case (iPad mounts the MOBILE composer, so it runs rather than SKIPs) |
+| `rui-android-group-member` | `sweep_group_conf_member_extra` | the per-shell member-menu chain proven on iPhone, on the Android phone shell |
+
+Driver changes the batch needed (each a contract fix, none a re-pointing):
+
+- **`irc_join_channel_loopback_live` gates on a capability, not a platform.**
+  It used to SKIP on `isAndroid` and would have gone RED on iOS (the live JOIN
+  needs `libirc_client`, which only the macOS build bundles). New ungated L3
+  seam `l3_irc_native_library_probe` → `IrcAppManager.nativeLibraryProbe()`
+  (`dlopen` at the resolved path; never throws; `dart:ffi` refcounts, so the
+  later real load is unaffected). The case and the sweep's expected-skip set
+  both read the probe, so the SKIP is declared with the path + loader message
+  and flips to a real run the day the library is bundled. Unit-gated by
+  `test/util/irc_native_library_probe_test.dart`. Building + embedding the
+  dylib for the iOS Simulator (Xcode embed phase + signing) is the recorded
+  follow-up that turns the SKIP into coverage.
+- **`login_import_account_card_open` ships its invalid `.tox` via
+  `contentB64`** (the `restore_import_entry_guard` contract) instead of a
+  driver-side `/tmp` path: on device the host path is unreadable and the case
+  would have passed for the WRONG reason (missing ≠ invalid). Same production
+  path on macOS, no host temp file to clean.
+- **`new_entry_menu_surface`'s last-resort dismiss is desktop-only.** The
+  `(50,220)` coordinate is sidebar chrome on desktop but a LIST ROW on a
+  phone; `osaEscape` already routes to `popToRoot` on synthetic-input shells,
+  so the fallback is now guarded by `!isMobileShell`.
+- The IRC L3 tools moved to `lib/ui/testing/l3_irc_tools.dart` (a `part` of
+  `l3_debug_tools.dart`, which was at its complexity pin; re-pinned lower).
+
+Expected declared SKIPs on the new chains: `keyboard_new_conversation_shortcut`,
+`keyboard_open_settings_shortcut`, `keyboard_global_search_shortcut` (Cmd+Ctrl
+chords are the subject under test; no mobile input can produce them),
+`irc_join_channel_loopback_live` (probe: no bundled library) and, on Android
+only, `add_friend_paste_clipboard` (emulator clipboard readback). Anything else
+that skips fails the sweep.
+
+**Live results (2026-09-05, `TOXEE_IOS_KEEP_SIMULATOR_FRONT=1`, one pair
+launch each, pair torn down between campaigns, every campaign rc=0 with
+`first-attempt-failures=0`):**
+
+| campaign | pair | result |
+| --- | --- | --- |
+| `rui-ios-app-entry-extra` | iPhone 16 Pro / 16 Pro Max (iOS 18.4) | `sweep_app_entry_extra` 5 P / 0 F / 3 declared S · `sweep_p1_extra` 1 P / 0 F / 1 declared S |
+| `rui-ipad-app-entry-extra` | iPad Pro 11-inch (M4) ×2 | identical tallies to the iPhone run (the Arabic walk sees the labelled 200pt rail on the tablet, the bottom-nav labels on the phone) |
+| `rui-ipad-p2` | iPad | `sweep_p2_reply` 1 P · in-place reset · `sweep_p3_writable` 1 P |
+| `rui-ipad-boundary-guards` | iPad | 6 P / 0 F / 2 S (`system_back_unbinds_chat` Android-only real BACK; `mobile_smoke_playbook_guard` by design) |
+| `rui-ipad-account-deep` | iPad | 1 P |
+| `rui-ipad-mention-multi` | iPad + macOS C | 1 P (iPad mounts the mobile composer, so the picker case runs rather than SKIPs) |
+
+The loopback-IRC SKIP line now prints the resolved path AND the loader's full
+search list, e.g. `dlopen(libirc_client.dylib) tried: …/Runner.app/
+libirc_client.dylib, …/Runner.app/Frameworks/libirc_client.dylib, …` — which
+is exactly the embed location the iOS follow-up must populate.
+
+#### Matrix finding #1 — a native iOS cover freezes every frame-awaiting seam
+
+The broad `rui-ios-*` re-run after the parity batch red-lined
+`rui-ios-chat-main` from `sweep_group2` onward with a symptom that reads like
+a hung app: `flutter_skill.screenshot` and `l3_force_home_root` "timed out
+after 45s" on A, `reset_friendship` reported "home recovery failed", every
+group / conference dialog "did not open". It was NOT a hang. Forensics on the
+live instance (`sample <pid>`: main thread idle in `mach_msg`, 3% CPU;
+`l3_dump_state` answering instantly; `simctl io screenshot`) showed a NATIVE
+`UIDocumentInteractionController` preview — title `rui11482`, a Done button,
+a share icon, blank body — sitting over the Flutter view. `sweep_chat`'s last
+case, `chat_file_bubble_present_open`, tapped the file bubble "best-effort"
+(on desktop the open hands off to another process), and on iOS that presents
+the preview modally. Under a presented controller Flutter stops producing
+frames, so anything that awaits `endOfFrame` (the screenshot, the pop-to-root
+invoker's retry loop) never returns, while plain state seams still do. The
+Simulator has no touch injection, so nothing could press Done, and the cover
+outlived the sweep, the reset and the next sweep.
+
+Fixes (all at the layer that owns the seam):
+
+- **Runner (Swift) seam `toxee/native_cover`** (`ios/Runner/AppDelegate.swift`):
+  `probe` walks `presentedViewController` from the FlutterViewController and
+  reports `presented` + the controller class; `dismiss` pops the chain from
+  the root — exactly what the preview's Done does. Compiled only under
+  `#if DEBUG` (release Dart must never be able to pop arbitrary UIKit flows);
+  its only caller is the L3 surface below. TRAP found live: the Runner APP
+  target's Debug configuration did not define the Swift `DEBUG` condition
+  (only RunnerTests had `SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG`), so
+  the first guarded build compiled the channel OUT and the seam answered
+  `MissingPluginException` on the iPad pair; `project.pbxproj` now sets
+  `SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG"` on the app's
+  Debug config. Verify with `strings Runner.debug.dylib | grep native_cover`.
+- **L3 tools** `l3_native_cover_probe` / `l3_native_cover_dismiss`
+  (`lib/ui/testing/l3_native_cover_tools.dart`, ungated like `l3_dump_state`;
+  `supported:false` off-iOS or when the Runner lacks the channel).
+- **Driver** `Inst.recoverIosNativeCover({waitSecs})` (positive probe →
+  dismiss → re-probe) wired into the SAME recovery chain as the Android
+  native-cover leg: `_recoverAndroidNativeCover` became `_recoverNativeCover`
+  and dispatches per platform, so `ensureNewEntryShell` /
+  `_popMobileCoveringRoute` heal an iOS cover the way they heal an Android
+  SAF activity.
+- **The case closes what it opens**: `chat_file_bubble_present_open` on iOS
+  now REQUIRES the presented→dismissed round trip (`coverOk`: the SEAM reported
+  `dismissed`, the re-probe is clear, and the controller class is a
+  preview — `Inst.dismissIosDocumentPreview`), which turns the
+  former "tap-open best-effort" into a real assertion that the bubble's
+  `_openFile()` reaches the native preview.
+- The driver's timeout label no longer says "app isolate unresponsive" (it
+  was responsive); it names the two real causes (frames paused under a native
+  cover / backgrounded, or a genuinely hung isolate).
+
+Mobile parity: Android's equivalent cover is a separate Activity and keeps
+the adb BACK leg; macOS/Windows/Linux file opens never cover the window.
+
+#### Matrix findings #2–#5 — geometry misses, settle waits, and the IRC dylib (2026-09-05/06)
+
+The broad iPhone + iPad re-run (33 campaigns, every one rc=0 except the iPad
+chat-main described under #1 and #4) left a handful of FIRST-ATTEMPT reds that
+were green on the runner's retry. Each was root-caused in parallel and fixed at
+its layer; none was a product defect.
+
+- **#2 Message menu on an inbound bubble (`sweep_msg_select`, iPhone).** Two
+  stacked harness defects in `_openMessageMenuReal` (now in
+  `drive_real_ui_pair_geom.dart`): the phone-width fraction ladder never
+  landed on a LEFT-aligned inbound bubble until its last rung (0.15 fell in the
+  avatar/bubble gap, 0.72/0.85/0.5 in empty space), and the message list is
+  REMOUNTED (`_messageListKey = UniqueKey()` when the conversation id appears)
+  on a fresh chat's first inbound message — a `key_not_found` window that ate
+  the one good hit. Fix: re-resolve the row box per attempt and require it
+  STABLE (`_stableKeyBox`), aim at pixel offsets from the bubble-side row edge
+  (86/116 pt; `isSelf` picks the side first), keyed centre last. The forward
+  case now waits for the bottom-sheet item to settle before tapping
+  (`waitKeyCenterSettled`) — its first-frame centre was mid slide-up.
+- **#3 Profile taps after a route transition (`sweep_profile`, iPhone + iPad).**
+  `_openSelfProfile` returned on the first IN-TREE frame of the 300 ms
+  fullscreen-dialog slide-up (phone) / the `AnimatedSize` header growth that
+  re-centres the wide-shell dialog (iPad), so the very next coordinate tap
+  (copy Tox ID, avatar default, edit toggle OFF) landed beside a moving
+  control while reporting `tapped=true`. Fix: `Inst.waitKeySettled` (in-tree
+  AND at rest) for the open landmarks, `waitKeyCenterSettled` before the
+  toggle-off and close taps. The recorded save/edit-mode race is on the SAVE
+  path only (`_handleSave` awaits `onSave`); the toggle-off path is a
+  synchronous setState.
+- **#4 File bubble tap on the wide pane (`chat_file_bubble_present_open`,
+  iPad).** The iPhone re-run proved the native-cover round trip (`ios native
+  cover detected: QLPreviewController` → `coverOk=true`), but the iPad never
+  presented a preview: the case tapped the ROW centre, which on the
+  master-detail pane is empty space beside the left-aligned bubble — the same
+  class as #2, and the reason the iPad matrix had never cascaded on this case
+  before. Fix: `_tapInboundBubble` (stable row box, 116 pt in from the left
+  edge) with the keyed centre as fallback.
+- **#5 `libirc_client` for the iOS Simulator.** `tool/build_ios_sim_irc.sh`
+  (new) cross-builds a universal arm64+x86_64 simulator dylib with a static
+  OpenSSL 3.6.2 (checksum-pinned, cached per arch under
+  `third_party/tim2tox/build/ios-sim-<arch>/deps-prefix`; only `/usr/lib`
+  dependencies; ad-hoc signed; `LC_BUILD_VERSION` = IOSSIMULATOR) into
+  `third_party/tim2tox/build/ios-sim/libirc_client.dylib`, and
+  `run_toxee_ios.sh` injects it into `Runner.app/Frameworks/` when present
+  (absent → the probe SKIP stays honest). `IrcAppManager._ircLibraryPath()`
+  resolves that path, so `irc_join_channel_loopback_live` runs the REAL
+  `dlopen` + socket + `JOIN` on iOS once the injection lands.
+- **Group-invite / group-send first-attempt reds (`sweep_group_conf_deep_extra`,
+  `sweep_keyed_gaps3`).** Root-caused by a read-only investigation: the
+  harness invited right after `reset_friendship` while the relayed friend link
+  was still rebuilding, and a failed `tox_group_invite_friend` is reported as
+  success (per-member FAIL results under an `OnSuccess`); the kg3 case
+  ignored `l3_composer_send`'s result while the process-global composer seam
+  could still belong to the previous chat. Fixes (friend-online gates both
+  ways, per-member invite results, a composer seam that reports its bound
+  conversation) are recorded with their live results below.
+
+Two side traps for the next person: editing a tracked `*.sh` over the CIFS
+mount DROPS its exec bit (git keeps 755 in the index, so nothing reports it —
+`chmod +x` on the Mac before the launcher runs it), and the iOS Runner's Debug
+configuration needed `SWIFT_ACTIVE_COMPILATION_CONDITIONS` before any
+`#if DEBUG` seam existed (see #1).
+
+**Verification runs for findings #2–#5 (2026-09-06, one launch each, pair
+torn down between campaigns):**
+
+| campaign | shell | result |
+| --- | --- | --- |
+| `rui-ios-msg-select` | iPhone | 4 P / 0 F, `first-attempt-failures=0` (#2 proven: no ladder past the bubble-side offsets) |
+| `rui-ios-profile` | iPhone | 7 P / 0 F / 1 S, first attempt (#3 proven) |
+| `rui-ipad-app-entry-extra` | iPad | `sweep_app_entry_extra` 6 P / 0 F / 2 S — `irc_join_channel_loopback_live` now PASSES live (`joined=JOIN #rui-live-…` against the loopback server, #5 proven); `sweep_p1_extra` 1 P / 1 S |
+| `rui-ios-app-entry-extra` | iPhone | `irc_join_channel_loopback_live` RED: the JOIN never reached the loopback server within the 10 s wait (the dylib loaded — the case ran instead of SKIPping). Root cause (2026-09-06, from the code path, not yet re-run live): the two `focusType`s leave the SOFT KEYBOARD up and the phone layout puts the config card BELOW the app card in the `CustomScrollView`, so the coordinate tap on `applications_irc_save_config_button` landed on the IME — nothing saved, the app connected to what `l3_irc_set_state reset` leaves behind (`.invalid:6667`), and the case never checked. Now `_aeeIrcConfigureLoopbackViaUi` (drive_real_ui_pair_keyed_gaps_irc.dart) hides the keyboard, taps Save, ASSERTS `l3_dump_state.ircServer/ircPort` == loopback (one element-resolved `tapKey` retry) before the dialog; Join gets `_prepareDialogSubmit`; a missed JOIN is a plain FAIL printing the app-held endpoint and the server's `seenCommands` instead of an uncaught TimeoutException. Owed: one live re-run of this campaign |
+| `rui-android-app-entry-extra` | Android emulators | `sweep_app_entry_extra` 4 P / 0 F / 4 declared S (clipboard, two chords, IRC — no `.so`), `sweep_p1_extra` 1 P / 1 S |
+| `rui-android-group-member` | Android emulators | `sweep_group_conf_member_extra` 5 P / 0 F |
+
+Codex review (2026-09-06) of the whole batch: APPROVE after two rounds. Its
+one withdrawn objection is worth keeping: `waitKeyCenterSettled` does NOT
+require `onstage == true` on purpose — the resolver reports `onstage:false`
+for every target found only by the full-tree walk, which includes genuinely
+visible routes in the master-detail nested Navigator (verified live: the
+file-bubble row on an iPad pane resolved `onstage:false`, and a tap at its box
+opened the QLPreviewController). Deferred follow-up: fold `_stableKeyBox`
+(bounds, two reads) and `waitKeyCenterSettled` (position, three reads) into
+one settle helper once the message-menu path has a few more green runs.
+
+#### Matrix finding #6 — the image preview the iPad never closed (why #4 kept failing)
+
+Three tablet re-runs of `chat_file_bubble_present_open` stayed red after the
+bubble-aimed tap (#4) and after waiting for the transfer to land (`filePath`
+set): aim `(648, 1058.5)` was inside the file card, the seam was live, and a
+hands-on probe with the same aim on a fresh chat DID present
+`QLPreviewController`. The pre-tap screenshot the helper now takes settled it:
+the whole screen was the fork's full-screen **message viewer** (black,
+"Save As") — pushed by the PREVIOUS case, `chat_image_bubble_open_preview`,
+whose "best-effort" image tap does open the viewer on the iPad and never
+closed it. On the wide shell nothing downstream pops that route:
+`returnToChatsHome` finds the pane's landmarks UNDER it (the full-tree
+resolver, `onstage:false`) and reports ready, so every later tap landed on
+black. On the phone the compact-shell recovery pops it, which is why the same
+chain was green there. Fix: `_closeImagePreviewIfOpen` (geom.dart) — wait for
+`message_viewer_root`, tap it (its own `onTap` is `closeViewer`, `goBack` as
+fallback), require it gone; the image case now returns `rowRendered &&
+preview.closed` and prints `previewOpened/closed`. The transfer-landed wait
+(`localReady`) stays: tapping the download variant of a file bubble is not the
+open path. Rule restated: a case that opens a route, sheet or native cover
+closes it before it returns, on every shell.
+
+#### Matrix finding #7 — the group-rename dialog could wipe every route (product)
+
+`conference_rename_leave`'s first-attempt reds on BOTH iOS shells were the
+harness's back-tap/tree-wide-text defects (see the case) — and, underneath
+them, a real product bug the new on-stage header assertion exposed
+deterministically on the iPad: after the rename dialog closed, the root
+`Overlay` contained NOTHING but an `ErrorWidget` (`'_dependents.isEmpty'`,
+framework.dart:6268) — home shell, chat pane and profile all gone. Chain (app
+log `flutter_client.log`): `_changeGroupName` disposed the rename
+`TextEditingController` in `showDialog(...).whenComplete(addPostFrameCallback
+(dispose))`, one frame after `didPop`, while the dialog's `TextField` was
+still mounted for its dismiss transition; the soft keyboard leaving changed
+`MediaQuery.viewInsets` the builder depended on, the field rebuilt,
+`Listenable.merge([focusNode, controller])` re-listened on the disposed
+controller (`A TextEditingController was used after being disposed`), the
+`RawGestureDetector` swapped in an `ErrorWidget` and orphaned the subtree with
+its `InheritedElement` registrations intact, and removing the dialog's overlay
+entry then tripped `_Theater.updateChildren → InheritedElement.debugDeactivated`
+→ the whole theater replaced. Shared Dart, so every shell was exposed; the
+phone was green by timing only. Fix: `lib/ui/group/group_name_edit_dialog.dart`
+— a `StatefulWidget` that owns the controller and disposes it in `dispose()`
+(same keys, insets, trim/empty/cancel semantics). Pinned by
+`test/ui/group/group_name_edit_dialog_test.dart`, whose CONTROL runs the old
+caller-owned-controller pattern through the same timeline and asserts both
+stages (the disposed-controller error, the `_dependents` assertion, host route
+gone, one `ErrorWidget`), while the new dialog survives the identical timeline.
+
+**Later verification runs (2026-09-06):** `rui-ios-p1-single` 5/0 first
+attempt (harness back-tap fix); `rui-ios-deep-extra` 2/0 first attempt (the
+friend-link-online gate: previously 3 lost invites); `rui-ios-keyed-gaps3` 9/0/1
+first attempt; tablet `sweep_chat` 13/0/3 (viewer closed → file preview
+presented and dismissed); `rui-ios-app-entry-extra` 6/0/2 with the live IRC
+JOIN (keyboard hidden before Save, saved config asserted); `rui-ipad-chat-main`
+sweep_chat 13/0/3 + group2 14/0 + msg_select 4/0 + kg3 flaky (below).
+Remaining first-attempt flake: `msgmenu_read_receipt_group_gating` on the iPad
+— the composer seam reports ok + bound to the group, yet A's own row never
+appears in the group history within the wait; the case now prints the group
+history tail on failure so the next red names where the text went.

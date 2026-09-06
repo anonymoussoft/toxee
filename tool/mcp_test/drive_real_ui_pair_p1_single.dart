@@ -500,13 +500,11 @@ Future<bool> _p1ConferenceRenameLeave(Inst inst) async {
     return false;
   }
   // Renamed: the conversation-LIST row showName refreshes (dump) AND the
-  // OPEN-chat header title renders the new name (keyed header text — the
-  // cheap header check, batch-7 rename precedent).
+  // OPEN-chat header title renders the new name — read from the keyed header
+  // Text ITSELF after popping the profile (`_p1ConfHeaderShowsName`; the old
+  // blind tapAt(28, 52) + tree-wide text match never proved the header).
   final renamed = await _waitGroupShowName(inst, gid, newName, timeoutSecs: 20);
-  await inst.tapAt(28, 52);
-  await Future<void>.delayed(const Duration(milliseconds: 700));
-  final headerOk = await _waitChatHeaderTitle(inst, newName, timeoutSecs: 12);
-  await inst.shot('/tmp/ui_p1_conf_rename_${inst.name}.png');
+  final headerOk = await _p1ConfHeaderShowsName(inst, gid, newName);
   // 3. Leave via the real profile leave button + Confirm label; the row must
   // leave the sidebar. Attempted even when the rename asserts failed so the
   // launch does not accumulate conferences (the leave is itself asserted).

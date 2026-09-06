@@ -36,12 +36,17 @@ part of 'drive_real_ui_pair.dart';
 
 /// Open the self-profile overlay by tapping the persistent sidebar user-avatar
 /// InkWell, then wait for the overlay landmark (the edit toggle, which only
-/// renders when `isEditable:true` — i.e. the self profile). Robust against a
+/// renders when `isEditable:true` — i.e. the self profile) to be in-tree AND
+/// AT REST (`waitKeySettled`): the phone overlay is a 300 ms slide-up route,
+/// and a coordinate tap sampled mid-slide lands beside the control (iPhone
+/// 2026-09-05 first-attempt reds on copy-toxid + avatar). Robust against a
 /// transient backgrounded window: re-foreground + re-tap a few rounds.
 Future<bool> _openSelfProfile(Inst inst) async {
   for (var round = 0; round < 4; round++) {
     await inst.foreground();
-    if (await inst.waitKey('profile_edit_toggle', timeoutSecs: 2)) return true;
+    if (await inst.waitKeySettled('profile_edit_toggle', timeoutSecs: 2)) {
+      return true;
+    }
     if (inst.isMobileShell && !await _settingsIsWide(inst)) {
       await _openSettings(inst);
       final profileTileKey = 'settings_mobile_profile_tile';
@@ -49,7 +54,7 @@ Future<bool> _openSelfProfile(Inst inst) async {
           await inst.tapKeyCenter(profileTileKey, timeoutSecs: 4) ||
           await inst.tryTapKey(profileTileKey, retries: 2);
       if ((tappedByKey || await _tryTapText(inst, 'Profile')) &&
-          await inst.waitKey('profile_edit_toggle', timeoutSecs: 6)) {
+          await inst.waitKeySettled('profile_edit_toggle')) {
         return true;
       }
       await Future<void>.delayed(const Duration(milliseconds: 800));
@@ -71,7 +76,7 @@ Future<bool> _openSelfProfile(Inst inst) async {
       'sidebar_user_avatar',
       timeoutSecs: 4,
     );
-    if (tapped && await inst.waitKey('profile_edit_toggle', timeoutSecs: 6)) {
+    if (tapped && await inst.waitKeySettled('profile_edit_toggle')) {
       return true;
     }
     await Future<void>.delayed(const Duration(milliseconds: 800));
@@ -88,10 +93,11 @@ Future<bool> _openSelfProfile(Inst inst) async {
 /// gone). Best-effort; never throws.
 Future<bool> _closeSelfProfile(Inst inst) async {
   await inst.foreground();
-  if (!await inst.waitKey('profile_edit_toggle', timeoutSecs: 1)) {
-    return true; // already closed
-  }
-  if (await inst.tapKeyCenter('profile_close_button', timeoutSecs: 4)) {
+  if (!await inst.waitKey('profile_edit_toggle', timeoutSecs: 1)) return true;
+  // The dialog re-centres while an edit-mode collapse (AnimatedSize) shrinks
+  // it, carrying the close button with it — sample the button at rest first.
+  if (await inst.waitKeyCenterSettled('profile_close_button') != null &&
+      await inst.tapKeyCenter('profile_close_button', timeoutSecs: 4)) {
     if (await inst.waitKeyGone('profile_edit_toggle', timeoutSecs: 4)) {
       return true;
     }
@@ -179,13 +185,15 @@ Future<bool> _profileEditToggleRoundtrip(Inst inst) async {
   final entered = await _enterProfileEditMode(inst);
   final saveShown =
       entered && await inst.waitKey('profile_save_button', timeoutSecs: 3);
-  // OFF: SINGLE-FIRE the toggle again (now showing the close/cancel icon) →
-  // fields unmount.
+  // OFF: SINGLE-FIRE the toggle again (now the close/cancel icon) → fields
+  // unmount. Edit mode grew the header (AnimatedSize 250 ms) and the wide-shell
+  // dialog re-centres with it, so the toggle still MOVES right after
+  // `saveShown` (iPad 2026-09-05: `exited=false`) — sample it at rest first.
   var exited = false;
-  if (entered) {
-    if (await inst.tapKeyCenter('profile_edit_toggle', timeoutSecs: 4)) {
-      exited = await inst.waitKeyGone('profile_nickname_field', timeoutSecs: 4);
-    }
+  if (entered &&
+      await inst.waitKeyCenterSettled('profile_edit_toggle') != null &&
+      await inst.tapKeyCenter('profile_edit_toggle', timeoutSecs: 4)) {
+    exited = await inst.waitKeyGone('profile_nickname_field', timeoutSecs: 4);
   }
   final saveGone =
       exited && await inst.waitKeyGone('profile_save_button', timeoutSecs: 3);
@@ -353,10 +361,7 @@ Future<bool> _profileCopyToxIdSnackbar(Inst inst) async {
   await inst.waitTextGone('ID copied to clipboard', timeoutSecs: 5);
   // The copy button is a TextButton.icon (not a toggle / not route-popping) so
   // a double-fire is harmless; tapKeyCenter keeps the single-tap convention.
-  final tapped = await inst.tapKeyCenter(
-    'profile_tox_id_copy_button',
-    timeoutSecs: 4,
-  );
+  final tapped = await inst.tapKeyCenter('profile_tox_id_copy_button');
   final snackbar =
       tapped && await inst.waitText('ID copied to clipboard', timeoutSecs: 8);
   final closed = await _closeSelfProfile(inst);
@@ -396,9 +401,7 @@ Future<bool?> _profileQrCopy(Inst inst) async {
     await _closeSelfProfile(inst);
     return false;
   }
-  final tapped =
-      qrShown &&
-      await inst.tapKeyCenter('profile_qr_copy_button', timeoutSecs: 4);
+  final tapped = qrShown && await inst.tapKeyCenter('profile_qr_copy_button');
   final snackbar =
       tapped && await inst.waitText('ID copied to clipboard', timeoutSecs: 8);
   final closed = await _closeSelfProfile(inst);
@@ -452,10 +455,7 @@ Future<bool?> _driveAvatarChange(
     // Tap the REAL camera "change avatar" affordance on the editable self
     // profile → _pickAvatar → pickAndPersistAvatar → the L3-aware picker returns
     // the materialized image and persists it.
-    if (!await inst.tapKeyCenter(
-          'profile_avatar_edit_button',
-          timeoutSecs: 6,
-        ) &&
+    if (!await inst.tapKeyCenter('profile_avatar_edit_button') &&
         !await inst.tryTapKey('profile_avatar_edit_button')) {
       print('[pair] $label: FAIL — avatar edit affordance not tappable');
       return false;

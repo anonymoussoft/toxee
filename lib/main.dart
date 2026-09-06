@@ -155,7 +155,16 @@ Future<void> main() async {
 
       final result = await AppBootstrap.initialize();
 
+      // A binding installed above (flutter_skill records every FlutterError
+      // into its `getErrors` buffer) must keep receiving errors: iOS builds
+      // have no file log, so that buffer is the ONLY place a real-UI campaign
+      // can read a framework assertion's stack from afterwards. The stock
+      // handler is `presentError`, which this handler already calls itself.
+      final priorOnError = FlutterError.onError;
       FlutterError.onError = (FlutterErrorDetails details) {
+        if (priorOnError != null && priorOnError != FlutterError.presentError) {
+          priorOnError(details);
+        }
         // Capture the widget that triggered the error and (for RenderFlex
         // overflow) the offending RenderObject's brief description. Without
         // this, the log only sees the message ("A RenderFlex overflowed by

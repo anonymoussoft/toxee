@@ -226,6 +226,13 @@ const mobileRealUiCampaigns = <String, List<String>>{
   // P1 chat octet on the PHONE shell (draft-restore stays a documented
   // keyboard-capability SKIP here; the other 7 cases run for real).
   'rui-ios-p1-chat': ['sweep_p1_chat'],
+  // macOS-parity fill (2026-09-05): app-entry extra + P1 extra on ONE launch
+  // (both single-instance, required=no-friend / result=no-friend, so no reset
+  // in between). The two Cmd+Ctrl chords and the desktop search chord SKIP by
+  // contract on a mobile shell; the live loopback IRC JOIN SKIPs where the
+  // build bundles no libirc_client — the `l3_irc_native_library_probe` gate,
+  // not a platform list. Same chain on iPad / Android below.
+  'rui-ios-app-entry-extra': ['sweep_app_entry_extra', 'sweep_p1_extra'],
 
   // ---- iPad (rui-ipad-*; forces TOXEE_IOS_DEVICE_TYPE=tablet) ----
   // iPad true-App coverage: the SAME sweeps as the iPhone campaigns — the
@@ -321,11 +328,17 @@ const mobileRealUiCampaigns = <String, List<String>>{
   // Focused C2C expansion: 5 cases, two-process,
   // required=no-friend / result=friends.
   'rui-ipad-c2c-extra': ['sweep_c2c_extra'],
-  // NOTE: sweep_native_boundary_guards / sweep_account_deep_extra stay
-  // iPhone-only for now — both are about phone-shaped OS seams (permission
-  // sheets, notification routing) where the tablet run would assert the same
-  // thing at twice the launch cost. Promote them here if a tablet-specific
-  // seam appears.
+  // macOS-parity fill (2026-09-05): these were iPhone/Android-only by
+  // omission. All are zero-`osa*` chains that gate on the LIVE shell, so the
+  // tablet run is a second layout data point (wide dialogs, master-detail
+  // binds, the tablet composer's inline forward buttons), not a duplicate.
+  // rui-ipad-p2 chains the two one-case sweeps on ONE launch (both
+  // required=no-friend / result=friends, one internal reset between them).
+  'rui-ipad-boundary-guards': ['sweep_native_boundary_guards'],
+  'rui-ipad-account-deep': ['sweep_account_deep_extra'],
+  'rui-ipad-p2': ['sweep_p2_reply', 'sweep_p3_writable'],
+  'rui-ipad-mention-multi': ['mobile_mention_multi_select_inserts'],
+  'rui-ipad-app-entry-extra': ['sweep_app_entry_extra', 'sweep_p1_extra'],
 
   // iPad WAVE 3 — additionally gated on the long-press menu / bottom-bar /
   // coordinate work. One long chain per campaign.
@@ -472,4 +485,10 @@ const mobileRealUiCampaigns = <String, List<String>>{
   // friend link (host relay port: fixtureCTcpRelayHostPort). Own campaign —
   // the extra-instance lifecycle must not leak into chained sweeps.
   'rui-android-mention-multi': ['mobile_mention_multi_select_inserts'],
+  // macOS-parity fill (2026-09-05). Group/conference member management is
+  // per-shell (the phone action sheet is the proven rui-ios-group-member
+  // path; an Android phone takes the same one). App-entry + P1 extra as on
+  // iOS; add_friend_paste_clipboard keeps its documented emulator SKIP.
+  'rui-android-group-member': ['sweep_group_conf_member_extra'],
+  'rui-android-app-entry-extra': ['sweep_app_entry_extra', 'sweep_p1_extra'],
 };

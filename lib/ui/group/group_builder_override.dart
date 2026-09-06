@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-// ignore: directives_ordering
-import '../widgets/safe_dialog_pop.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:tencent_cloud_chat_common/base/tencent_cloud_chat_state_widget.dart';
@@ -22,6 +20,7 @@ import '../../util/app_paths.dart';
 import '../../util/logger.dart';
 import '../../util/prefs.dart';
 import '../testing/ui_keys.dart';
+import 'group_name_edit_dialog.dart';
 
 /// Capture+install+restore for toxee's group-profile builder overrides.
 ///
@@ -595,64 +594,18 @@ class _ToxeeGroupProfileContentState
   }
 
   void _changeGroupName() {
-    final controller = TextEditingController(text: groupName);
+    // The dialog widget owns the TextEditingController's lifetime (disposed
+    // in ITS dispose, after the last possible rebuild). The old inline
+    // `.whenComplete(addPostFrameCallback(controller.dispose))` disposed it
+    // mid dismiss-transition and tore down the whole Navigator Overlay on the
+    // iPad — see GroupNameEditDialog.
     showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          key: UiKeys.groupProfileEditNameDialog,
-          title: Text(tL10n.setGroupName),
-          // `TextField.scrollPadding` only nudges the field's own internal
-          // cursor scroll — it does NOT move the AlertDialog out from under
-          // the soft keyboard. The dialog itself must be padded by the
-          // bottom view-insets. Apply `EdgeInsets.only(bottom: viewInsets)`
-          // on the SingleChildScrollView so the content (and the action
-          // buttons below, which AlertDialog lays out from the content's
-          // measured size) sit above the keyboard on small phones. Cap
-          // maxLines so very long names don't push the buttons off-screen.
-          content: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(dialogContext).bottom,
-            ),
-            child: TextField(
-              key: UiKeys.groupProfileEditNameField,
-              controller: controller,
-              autofocus: true,
-              maxLines: 3,
-              minLines: 1,
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => popDialogIfCurrent(dialogContext),
-              child: Text(tL10n.cancel),
-            ),
-            TextButton(
-              key: UiKeys.groupProfileEditNameConfirmButton,
-              onPressed: () {
-                final trimmed = controller.text.trim();
-                if (trimmed.isEmpty) {
-                  popDialogIfCurrent(dialogContext);
-                  return;
-                }
-                _onChangeGroupName(trimmed);
-                popDialogIfCurrent(dialogContext);
-              },
-              child: Text(tL10n.confirm),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(() {
-      // The dialog close animation can still rebuild the TextField for a frame
-      // after Navigator.pop() resolves. Disposing the controller immediately in
-      // whenComplete() can trip "used after dispose" assertions in tests and
-      // on slow frames. Defer cleanup until the next frame so the route is
-      // fully torn down first.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        controller.dispose();
-      });
-    });
+      builder: (_) => GroupNameEditDialog(
+        initialName: groupName,
+        onConfirm: _onChangeGroupName,
+      ),
+    );
   }
 
   @override

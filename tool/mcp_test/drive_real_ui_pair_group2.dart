@@ -255,6 +255,9 @@ Future<String?> _keyedText(Inst inst, String key) async {
 /// Poll until the OPEN chat's header title (`chat_header_title_text`) renders
 /// [expected]. The header must be open (the chat surface ready) for the key to be
 /// present.
+/// CAVEAT: the `waitText` fallback below is a TREE-WIDE `Text.data` match, so a
+/// sidebar row / profile title / buried route carrying [expected] also passes;
+/// to read the header widget itself use `_keyedTextData` (p1_extra).
 Future<bool> _waitChatHeaderTitle(
   Inst inst,
   String expected, {

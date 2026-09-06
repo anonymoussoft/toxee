@@ -384,7 +384,7 @@ Future<int> runMentionMultiCase(
     }
     await _kg4WaitKeyCenterGone(a, confirmKey, timeoutSecs: 10);
     await Future<void>.delayed(const Duration(milliseconds: 900));
-    await a.l3('l3_composer_send', const {});
+    if (!await _composerSendInGroup(a, gid, label: _mmCase)) return 1;
     final sent = await _kg4WaitGroupTextStartingWith(a, gid, prefix);
     await a.shot('/tmp/ui_msel_${a.name}.png');
     if (sent == null) {
